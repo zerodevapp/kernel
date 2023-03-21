@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "./IPolicy.sol";
-import "@openzeppelin/contracts/utils/Create2.sol";
+import "openzeppelin-contracts/contracts/utils/Create2.sol";
 
 struct Policy {
     address to;
@@ -23,7 +23,7 @@ contract FunctionSignaturePolicy is IPolicy {
         address to,
         uint256 value,
         bytes calldata data,
-        Enum.Operation
+        Operation
     ) external view override returns (bool)
     {
         if(

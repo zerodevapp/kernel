@@ -2,12 +2,12 @@
 
 pragma solidity ^0.8.0;
 
-import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
+import "src/utils/Exec.sol";
 interface IPolicy {
     function executeAndRevert(
         address to,
         uint256 value,
         bytes calldata data,
-        Enum.Operation operation
+        Operation operation
     ) external view returns (bool);
 }

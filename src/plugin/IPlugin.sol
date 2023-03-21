@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "../../interfaces/UserOperation.sol";
+import "account-abstraction/interfaces/UserOperation.sol";
 
 interface IPlugin {
     function validatePluginData(        

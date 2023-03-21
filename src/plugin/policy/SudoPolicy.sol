@@ -7,7 +7,7 @@ contract SudoPolicy is IPolicy {
         address ,
         uint256 ,
         bytes calldata ,
-        Enum.Operation 
+        Operation 
     ) external pure override returns (bool) {
         return true;
     }

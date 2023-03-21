@@ -1,14 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
-import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import "@gnosis.pm/safe-contracts/contracts/GnosisSafe.sol";
-import "@gnosis.pm/safe-contracts/contracts/base/Executor.sol";
-import "@openzeppelin/contracts/utils/cryptography/draft-EIP712.sol";
-import "../../interfaces/IAccount.sol";
-import "../../interfaces/IEntryPoint.sol";
+import "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
+import "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
+import "account-abstraction/interfaces/IAccount.sol";
+import "account-abstraction/interfaces/IEntryPoint.sol";
 import "./IPlugin.sol";
 
-abstract contract ZeroDevBasePlugin is IPlugin, Executor, EIP712 {
+abstract contract ZeroDevBasePlugin is IPlugin, EIP712 {
     function validatePluginData(
         UserOperation calldata userOp,
         bytes32 userOpHash,

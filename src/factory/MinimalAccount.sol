@@ -1,0 +1,85 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
+import "account-abstraction/interfaces/UserOperation.sol";
+import "account-abstraction/interfaces/IAccount.sol";
+import "account-abstraction/interfaces/IEntryPoint.sol";
+import "src/utils/ExtendedUserOpLib.sol";
+import "src/utils/Exec.sol";
+import "src/abstract/KernelStorage.sol";
+
+
+contract MinimalAccount is IAccount, KernelStorage {
+    IEntryPoint public immutable entryPoint;
+
+    uint256 public constant SIG_VALIDATION_FAILED = 1;
+
+    error InvalidNonce();
+
+    constructor(IEntryPoint _entryPoint) {
+        entryPoint = _entryPoint;
+        getKernelStorage().owner = address(1);
+    }
+
+    function initialize(address _owner) external {
+        require(getKernelStorage().owner == address(0), "Already initialized");
+        getKernelStorage().owner = _owner;
+    }
+
+    function getOwner() external view returns (address) {
+        return getKernelStorage().owner;
+    }
+
+    function getNonce() external view returns (uint256) {
+        return getKernelStorage().nonce;
+    }
+
+    function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256 missingFunds) external returns (uint256) {
+        require(ExtendedUserOpLib.checkUserOpOffset(userOp), "Invalid userOp");
+        require(msg.sender == address(entryPoint), "account: not from entrypoint");
+        bytes32 hash = ECDSA.toEthSignedMessageHash(userOpHash);
+        address recovered = ECDSA.recover(hash,userOp.signature);
+        WalletKernelStorage storage ws = getKernelStorage();
+        if (ws.owner != recovered) {
+            return SIG_VALIDATION_FAILED;
+        }
+
+        if(ws.nonce++ != userOp.nonce) {
+            revert InvalidNonce();
+        }
+  
+        if(missingFunds > 0 ) {
+            (bool success, ) = msg.sender.call{value: missingFunds}("");
+            (success);
+        }
+        return 0;
+    }
+
+    /// @notice execute function call to external contract
+    /// @dev this function will execute function call to external contract
+    /// @param to target contract address
+    /// @param value value to be sent
+    /// @param data data to be sent
+    /// @param operation operation type (call or delegatecall)
+    function executeAndRevert(
+        address to,
+        uint256 value,
+        bytes calldata data,
+        Operation operation
+    ) external {
+        require(msg.sender == address(entryPoint) || msg.sender == getKernelStorage().owner, "account: not from entrypoint or owner");
+        bool success;
+        bytes memory ret;
+        if(operation == Operation.DelegateCall) {
+            (success, ret) = Exec.delegateCall(to, data);
+        } else {
+            (success, ret) = Exec.call(to, value, data);
+        }
+        if (!success) {
+            assembly {
+                revert(add(ret, 32), mload(ret))
+            }
+        }
+    }
+}

@@ -1,28 +1,20 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/utils/cryptography/draft-EIP712.sol";
-import "../../plugin/IPlugin.sol";
-import "../../../core/Helpers.sol";
-import "../../../interfaces/IAccount.sol";
-import "../../utils/OpinionatedExec.sol";
-import "./Compatibility.sol";
-
-struct WalletKernelStorage {
-    address owner;
-    uint256 nonce;
-}
-
-enum Operation {
-    Call,
-    DelegateCall
-}
+import "openzeppelin-contracts/contracts/utils/cryptography/draft-EIP712.sol";
+import "./plugin/IPlugin.sol";
+import "account-abstraction/core/Helpers.sol";
+import "account-abstraction/interfaces/IAccount.sol";
+import "./utils/Exec.sol";
+import "./utils/ExtendedUserOpLib.sol";
+import "./abstract/Compatibility.sol";
+import "./abstract/KernelStorage.sol";
 
 /// @title Kernel
 /// @author taek<leekt216@gmail.com>
 /// @notice wallet kernel for minimal wallet functionality
 /// @dev supports only 1 owner and 1 threshold, multiple plugins
-contract Kernel is IAccount, EIP712, Compatibility {
+contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
     error InvalidNonce();
     error InvalidSignatureLength();
     error QueryResult(bytes result);
@@ -34,16 +26,6 @@ contract Kernel is IAccount, EIP712, Compatibility {
     constructor(address _entryPoint) EIP712("Kernel", "0.0.1") {
         entryPoint = _entryPoint;
         getKernelStorage().owner = address(1);
-    }
-
-    /// @notice get wallet kernel storage
-    /// @dev used to get wallet kernel storage
-    /// @return ws wallet kernel storage, consists of owner and nonces
-    function getKernelStorage() internal pure returns (WalletKernelStorage storage ws) {
-        bytes32 storagePosition = bytes32(uint256(keccak256("zero-dev.kernel")) - 1);
-        assembly {
-            ws.slot := storagePosition
-        }
     }
 
     /// @notice initialize wallet kernel
@@ -60,7 +42,7 @@ contract Kernel is IAccount, EIP712, Compatibility {
     /// @param _plugin Plugin address
     /// @param _data Data to query
     function queryPlugin(address _plugin, bytes calldata _data) external {
-        (bool success, bytes memory _ret) = OpinionatedExec.delegateCall(_plugin, _data);
+        (bool success, bytes memory _ret) = Exec.delegateCall(_plugin, _data);
         if(success) {
             revert QueryResult(_ret);
         } else {
@@ -86,9 +68,9 @@ contract Kernel is IAccount, EIP712, Compatibility {
         bool success;
         bytes memory ret;
         if(operation == Operation.DelegateCall) {
-            (success, ret) = OpinionatedExec.delegateCall(to, data);
+            (success, ret) = Exec.delegateCall(to, data);
         } else {
-            (success, ret) = OpinionatedExec.call(to, value, data);
+            (success, ret) = Exec.call(to, value, data);
         }
         if (!success) {
             assembly {
@@ -105,7 +87,7 @@ contract Kernel is IAccount, EIP712, Compatibility {
     /// @return validationData validation data
     function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256 missingAccountFunds)
     external returns (uint256 validationData) {
-        require(UserOperationLib.checkUserOpOffset(userOp), "userOp: invalid offset");
+        require(ExtendedUserOpLib.checkUserOpOffset(userOp), "userOp: invalid offset");
         require(msg.sender == entryPoint, "account: not from entryPoint");
         if(userOp.signature.length == 65){
             validationData = _validateUserOp(userOp, userOpHash);
@@ -160,10 +142,8 @@ contract Kernel is IAccount, EIP712, Compatibility {
             return SIG_VALIDATION_FAILED;
         }
 
-        if (userOp.initCode.length == 0) {
-            if(ws.nonce++ != userOp.nonce) {
-                revert InvalidNonce();
-            }
+        if(ws.nonce++ != userOp.nonce) {
+            revert InvalidNonce();
         }
     }
 
@@ -181,7 +161,7 @@ contract Kernel is IAccount, EIP712, Compatibility {
             opHash,
             missingAccountFunds
         );
-        (bool success, bytes memory ret) = OpinionatedExec.delegateCall(plugin, data); // Q: should we allow value > 0?
+        (bool success, bytes memory ret) = Exec.delegateCall(plugin, data); // Q: should we allow value > 0?
         if (!success) {
             assembly {
                 revert(add(ret, 32), mload(ret))
@@ -190,6 +170,10 @@ contract Kernel is IAccount, EIP712, Compatibility {
         return ret;
     }
 
+    /// @notice validate signature using eip1271
+    /// @dev this function will validate signature using eip1271
+    /// @param _hash hash to be signed
+    /// @param _signature signature
     function isValidSignature(
         bytes32 _hash,
         bytes memory _signature

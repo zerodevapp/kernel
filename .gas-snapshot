@@ -1,0 +1,2 @@
+AccountFactoryTest:testAccountFactory(uint256) (runs: 256, μ: 130276, ~: 130276)
+KernelTest:testKernel() (gas: 190)
