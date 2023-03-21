@@ -9,30 +9,15 @@ import "src/utils/ExtendedUserOpLib.sol";
 import "src/utils/Exec.sol";
 import "src/abstract/KernelStorage.sol";
 
-
 contract MinimalAccount is IAccount, KernelStorage {
-    IEntryPoint public immutable entryPoint;
-
-    uint256 public constant SIG_VALIDATION_FAILED = 1;
-
     error InvalidNonce();
 
-    constructor(IEntryPoint _entryPoint) {
-        entryPoint = _entryPoint;
-        getKernelStorage().owner = address(1);
+    constructor(IEntryPoint _entryPoint) KernelStorage(_entryPoint){
     }
 
     function initialize(address _owner) external {
         require(getKernelStorage().owner == address(0), "Already initialized");
         getKernelStorage().owner = _owner;
-    }
-
-    function getOwner() external view returns (address) {
-        return getKernelStorage().owner;
-    }
-
-    function getNonce() external view returns (uint256) {
-        return getKernelStorage().nonce;
     }
 
     function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256 missingFunds) external returns (uint256) {
@@ -44,9 +29,10 @@ contract MinimalAccount is IAccount, KernelStorage {
         if (ws.owner != recovered) {
             return SIG_VALIDATION_FAILED;
         }
-
-        if(ws.nonce++ != userOp.nonce) {
-            revert InvalidNonce();
+        if(userOp.initCode.length > 0) {
+            if(ws.nonce++ != userOp.nonce) {
+                revert InvalidNonce();
+            }
         }
   
         if(missingFunds > 0 ) {

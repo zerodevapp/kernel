@@ -12,7 +12,7 @@ contract AccountFactory {
         accountTemplate = new MinimalAccount(_entryPoint);
     }
 
-    function createAccount(address _owner, uint256 _index) external returns(address) {
+    function createAccount(address _owner, uint256 _index) external returns(EIP1967Proxy proxy) {
         bytes32 salt = keccak256(abi.encodePacked(_owner, _index));
         address addr = Create2.computeAddress(salt, keccak256(abi.encodePacked(
                 type(EIP1967Proxy).creationCode,
@@ -22,10 +22,9 @@ contract AccountFactory {
                 )
             )));
         if(addr.code.length > 0) {
-            return addr;
+            return EIP1967Proxy(payable(addr));
         }
-        EIP1967Proxy proxy = new EIP1967Proxy{salt: salt}(address(accountTemplate), abi.encodeWithSelector(MinimalAccount.initialize.selector, _owner));
-        return address(proxy);
+        proxy = new EIP1967Proxy{salt: salt}(address(accountTemplate), abi.encodeWithSelector(MinimalAccount.initialize.selector, _owner));
     }
 
     function getAccountAddress(address _owner, uint256 _index) public view returns(address) {

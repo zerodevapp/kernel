@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "openzeppelin-contracts/contracts/utils/cryptography/draft-EIP712.sol";
+import "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
 import "./plugin/IPlugin.sol";
 import "account-abstraction/core/Helpers.sol";
 import "account-abstraction/interfaces/IAccount.sol";
+import "account-abstraction/interfaces/IEntryPoint.sol";
 import "./utils/Exec.sol";
 import "./utils/ExtendedUserOpLib.sol";
 import "./abstract/Compatibility.sol";
@@ -19,13 +20,11 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
     error InvalidSignatureLength();
     error QueryResult(bytes result);
 
-    uint256 constant private SIG_VALIDATION_FAILED = 1;
+    string public constant name = "Kernel";
 
-    address public immutable entryPoint;
+    string public constant version = "0.0.1";
 
-    constructor(address _entryPoint) EIP712("Kernel", "0.0.1") {
-        entryPoint = _entryPoint;
-        getKernelStorage().owner = address(1);
+    constructor(IEntryPoint _entryPoint) EIP712(name, version) KernelStorage(_entryPoint){
     }
 
     /// @notice initialize wallet kernel
@@ -64,7 +63,7 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         bytes calldata data,
         Operation operation
     ) external {
-        require(msg.sender == entryPoint || msg.sender == getKernelStorage().owner, "account: not from entrypoint or owner");
+        require(msg.sender == address(entryPoint) || msg.sender == getKernelStorage().owner, "account: not from entrypoint or owner");
         bool success;
         bytes memory ret;
         if(operation == Operation.DelegateCall) {
@@ -88,7 +87,7 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
     function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256 missingAccountFunds)
     external returns (uint256 validationData) {
         require(ExtendedUserOpLib.checkUserOpOffset(userOp), "userOp: invalid offset");
-        require(msg.sender == entryPoint, "account: not from entryPoint");
+        require(msg.sender == address(entryPoint), "account: not from entryPoint");
         if(userOp.signature.length == 65){
             validationData = _validateUserOp(userOp, userOpHash);
         } else if(userOp.signature.length > 97) {
