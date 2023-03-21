@@ -1,0 +1,4 @@
+[submodule "lib/account-abstraction"]
+	path = lib/account-abstraction
+	url = https://github.com/eth-infinitism/account-abstraction
+	branch = 556f03fadcaba0d7d04cd901e6eb9601db50a998
