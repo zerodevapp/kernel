@@ -42,7 +42,7 @@ contract AccountFactoryTest is Test {
     }
 
     function testAccountFactory(uint256 i) public {
-        address account = address(accountFactory.createAccount(user1, i));
+        address payable account = payable(address(accountFactory.createAccount(user1, i)));
         assertEq(account, address(accountFactory.getAccountAddress(user1, i)));
         assertEq(account.code.length > 0, true);
         assertEq(MinimalAccount(account).getOwner(), user1);

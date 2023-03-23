@@ -14,7 +14,7 @@ import "./abstract/KernelStorage.sol";
 /// @title Kernel
 /// @author taek<leekt216@gmail.com>
 /// @notice wallet kernel for minimal wallet functionality
-/// @dev supports only 1 owner and 1 threshold, multiple plugins
+/// @dev supports only 1 owner, multiple plugins
 contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
     error InvalidNonce();
     error InvalidSignatureLength();
@@ -177,9 +177,12 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         bytes32 _hash,
         bytes memory _signature
     ) public override view returns (bytes4) {
+        WalletKernelStorage storage ws = getKernelStorage();
+        if(ws.owner ==ECDSA.recover(_hash, _signature)) {
+            return 0x1626ba7e;
+        }
         bytes32 hash = ECDSA.toEthSignedMessageHash(_hash);
         address recovered = ECDSA.recover(hash, _signature);
-        WalletKernelStorage storage ws = getKernelStorage();
         // Validate signatures
         if (ws.owner == recovered) {
             return 0x1626ba7e;
