@@ -12,29 +12,34 @@ contract AccountFactory {
         accountTemplate = new MinimalAccount(_entryPoint);
     }
 
-    function createAccount(address _owner, uint256 _index) external returns(EIP1967Proxy proxy) {
+    function createAccount(address _owner, uint256 _index) external returns (EIP1967Proxy proxy) {
         bytes32 salt = keccak256(abi.encodePacked(_owner, _index));
-        address addr = Create2.computeAddress(salt, keccak256(abi.encodePacked(
-                type(EIP1967Proxy).creationCode,
-                abi.encode(
-                    address(accountTemplate),
-                    abi.encodeCall(MinimalAccount.initialize, (_owner))
+        address addr = Create2.computeAddress(
+            salt,
+            keccak256(
+                abi.encodePacked(
+                    type(EIP1967Proxy).creationCode,
+                    abi.encode(address(accountTemplate), abi.encodeCall(MinimalAccount.initialize, (_owner)))
                 )
-            )));
-        if(addr.code.length > 0) {
+            )
+        );
+        if (addr.code.length > 0) {
             return EIP1967Proxy(payable(addr));
         }
-        proxy = new EIP1967Proxy{salt: salt}(address(accountTemplate), abi.encodeWithSelector(MinimalAccount.initialize.selector, _owner));
+        proxy =
+        new EIP1967Proxy{salt: salt}(address(accountTemplate), abi.encodeWithSelector(MinimalAccount.initialize.selector, _owner));
     }
 
-    function getAccountAddress(address _owner, uint256 _index) public view returns(address) {
+    function getAccountAddress(address _owner, uint256 _index) public view returns (address) {
         bytes32 salt = keccak256(abi.encodePacked(_owner, _index));
-        return Create2.computeAddress(salt, keccak256(abi.encodePacked(
-                type(EIP1967Proxy).creationCode,
-                abi.encode(
-                    address(accountTemplate),
-                    abi.encodeCall(MinimalAccount.initialize, (_owner))
+        return Create2.computeAddress(
+            salt,
+            keccak256(
+                abi.encodePacked(
+                    type(EIP1967Proxy).creationCode,
+                    abi.encode(address(accountTemplate), abi.encodeCall(MinimalAccount.initialize, (_owner)))
                 )
-            )));
+            )
+        );
     }
 }

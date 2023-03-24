@@ -16,7 +16,7 @@ contract EIP1967Proxy {
             sstore(slot, _logic)
         }
         if (_data.length > 0) {
-            (bool success, ) = _logic.delegatecall(_data);
+            (bool success,) = _logic.delegatecall(_data);
             require(success, "EIP1967Proxy: constructor call failed");
         }
     }
@@ -38,16 +38,12 @@ contract EIP1967Proxy {
 
             switch result
             // delegatecall returns 0 on error.
-            case 0 {
-                revert(0, returndatasize())
-            }
-            default {
-                return(0, returndatasize())
-            }
+            case 0 { revert(0, returndatasize()) }
+            default { return(0, returndatasize()) }
         }
     }
 
-    function _implementation() internal view returns(address impl) {
+    function _implementation() internal view returns (address impl) {
         bytes32 slot = _IMPLEMENTATION_SLOT;
         assembly {
             impl := sload(slot)

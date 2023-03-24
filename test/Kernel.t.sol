@@ -9,10 +9,11 @@ import "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 
 import {AccountFactory, MinimalAccount} from "src/factory/AccountFactory.sol";
 import {Kernel, KernelStorage} from "src/Kernel.sol";
-import { SimpleAccountFactory, SimpleAccount } from "account-abstraction/samples/SimpleAccountFactory.sol";
-import { TestCounter } from "account-abstraction/test/TestCounter.sol";
+import {SimpleAccountFactory, SimpleAccount} from "account-abstraction/samples/SimpleAccountFactory.sol";
+import {TestCounter} from "account-abstraction/test/TestCounter.sol";
 
 using ECDSA for bytes32;
+
 contract KernelTest is Test {
     EntryPoint entryPoint;
     AccountFactory accountFactory;
@@ -22,6 +23,7 @@ contract KernelTest is Test {
     address payable bundler;
     address user1;
     uint256 user1PrivKey;
+
     function setUp() public {
         entryPoint = new EntryPoint();
         accountFactory = new AccountFactory(entryPoint);
@@ -31,14 +33,14 @@ contract KernelTest is Test {
         testCounter = new TestCounter();
     }
 
-    function signUserOp(
-        UserOperation memory op,
-        address addr,
-        uint256 key
-    ) public view returns(bytes memory signature) {
+    function signUserOp(UserOperation memory op, address addr, uint256 key)
+        public
+        view
+        returns (bytes memory signature)
+    {
         bytes32 hash = entryPoint.getUserOpHash(op);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(key, hash.toEthSignedMessageHash());
-        require(addr == ECDSA.recover(hash.toEthSignedMessageHash(), v,r,s));
+        require(addr == ECDSA.recover(hash.toEthSignedMessageHash(), v, r, s));
         signature = abi.encodePacked(r, s, v);
         require(addr == ECDSA.recover(hash.toEthSignedMessageHash(), signature));
     }
@@ -48,17 +50,17 @@ contract KernelTest is Test {
         entryPoint.depositTo{value: 1000000000000000000}(account);
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = UserOperation({
-            sender : account,
-            nonce : 0,
-            initCode : hex"",
-            callData : abi.encodeCall(KernelStorage.upgradeTo, (address(kernelTemplate))),
-            callGasLimit : 100000,
-            verificationGasLimit : 100000,
-            preVerificationGas : 100000,
-            maxFeePerGas : 100000,
-            maxPriorityFeePerGas : 100000,
+            sender: account,
+            nonce: 0,
+            initCode: hex"",
+            callData: abi.encodeCall(KernelStorage.upgradeTo, (address(kernelTemplate))),
+            callGasLimit: 100000,
+            verificationGasLimit: 100000,
+            preVerificationGas: 100000,
+            maxFeePerGas: 100000,
+            maxPriorityFeePerGas: 100000,
             paymasterAndData: hex"",
-            signature : hex""
+            signature: hex""
         });
         ops[0].signature = signUserOp(ops[0], user1, user1PrivKey);
 
@@ -73,17 +75,17 @@ contract KernelTest is Test {
         entryPoint.depositTo{value: 1000000000000000000}(account);
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = UserOperation({
-            sender : account,
-            nonce : 0,
-            initCode : abi.encodePacked(accountFactory, abi.encodeCall(AccountFactory.createAccount, (user1, 0))),
-            callData : abi.encodeCall(KernelStorage.upgradeTo, (address(kernelTemplate))),
-            callGasLimit : 100000,
-            verificationGasLimit :200000,
-            preVerificationGas : 200000,
-            maxFeePerGas : 100000,
-            maxPriorityFeePerGas : 100000,
+            sender: account,
+            nonce: 0,
+            initCode: abi.encodePacked(accountFactory, abi.encodeCall(AccountFactory.createAccount, (user1, 0))),
+            callData: abi.encodeCall(KernelStorage.upgradeTo, (address(kernelTemplate))),
+            callGasLimit: 100000,
+            verificationGasLimit: 200000,
+            preVerificationGas: 200000,
+            maxFeePerGas: 100000,
+            maxPriorityFeePerGas: 100000,
             paymasterAndData: hex"",
-            signature : hex""
+            signature: hex""
         });
         ops[0].signature = signUserOp(ops[0], user1, user1PrivKey);
         entryPoint.handleOps(ops, bundler);
@@ -92,17 +94,19 @@ contract KernelTest is Test {
         assertEq(Kernel(account).version(), "0.0.1");
 
         ops[0] = UserOperation({
-            sender : account,
-            nonce : 1,
-            initCode : hex"",
-            callData : abi.encodeCall(SimpleAccount.execute, (address(testCounter), 0, abi.encodeCall(TestCounter.count,()))),
-            callGasLimit : 100000,
-            verificationGasLimit :200000,
-            preVerificationGas : 200000,
-            maxFeePerGas : 100000,
-            maxPriorityFeePerGas : 100000,
+            sender: account,
+            nonce: 1,
+            initCode: hex"",
+            callData: abi.encodeCall(
+                SimpleAccount.execute, (address(testCounter), 0, abi.encodeCall(TestCounter.count, ()))
+                ),
+            callGasLimit: 100000,
+            verificationGasLimit: 200000,
+            preVerificationGas: 200000,
+            maxFeePerGas: 100000,
+            maxPriorityFeePerGas: 100000,
             paymasterAndData: hex"",
-            signature : hex""
+            signature: hex""
         });
         ops[0].signature = signUserOp(ops[0], user1, user1PrivKey);
         entryPoint.handleOps(ops, bundler);
@@ -114,47 +118,53 @@ contract KernelTest is Test {
         entryPoint.depositTo{value: 1000000000000000000}(account);
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = UserOperation({
-            sender : account,
-            nonce : 0,
-            initCode : abi.encodePacked(simpleAccountFactory, abi.encodeCall(SimpleAccountFactory.createAccount, (user1, 0))),
-            callData : abi.encodeCall(SimpleAccount.execute, (address(testCounter), 0, abi.encodeCall(TestCounter.count,()))),
-            callGasLimit : 100000,
-            verificationGasLimit :200000,
-            preVerificationGas : 200000,
-            maxFeePerGas : 100000,
-            maxPriorityFeePerGas : 100000,
+            sender: account,
+            nonce: 0,
+            initCode: abi.encodePacked(simpleAccountFactory, abi.encodeCall(SimpleAccountFactory.createAccount, (user1, 0))),
+            callData: abi.encodeCall(
+                SimpleAccount.execute, (address(testCounter), 0, abi.encodeCall(TestCounter.count, ()))
+                ),
+            callGasLimit: 100000,
+            verificationGasLimit: 200000,
+            preVerificationGas: 200000,
+            maxFeePerGas: 100000,
+            maxPriorityFeePerGas: 100000,
             paymasterAndData: hex"",
-            signature : hex""
+            signature: hex""
         });
         ops[0].signature = signUserOp(ops[0], user1, user1PrivKey);
         entryPoint.handleOps(ops, bundler);
         ops[0] = UserOperation({
-            sender : account,
-            nonce : 0,
-            initCode : hex"",
-            callData : abi.encodeCall(SimpleAccount.execute, (address(testCounter), 0, abi.encodeCall(TestCounter.count,()))),
-            callGasLimit : 100000,
-            verificationGasLimit :200000,
-            preVerificationGas : 200000,
-            maxFeePerGas : 100000,
-            maxPriorityFeePerGas : 100000,
+            sender: account,
+            nonce: 0,
+            initCode: hex"",
+            callData: abi.encodeCall(
+                SimpleAccount.execute, (address(testCounter), 0, abi.encodeCall(TestCounter.count, ()))
+                ),
+            callGasLimit: 100000,
+            verificationGasLimit: 200000,
+            preVerificationGas: 200000,
+            maxFeePerGas: 100000,
+            maxPriorityFeePerGas: 100000,
             paymasterAndData: hex"",
-            signature : hex""
+            signature: hex""
         });
         ops[0].signature = signUserOp(ops[0], user1, user1PrivKey);
         entryPoint.handleOps(ops, bundler);
         ops[0] = UserOperation({
-            sender : account,
-            nonce : 1,
-            initCode : hex"",
-            callData : abi.encodeCall(SimpleAccount.execute, (address(testCounter), 0, abi.encodeCall(TestCounter.count,()))),
-            callGasLimit : 100000,
-            verificationGasLimit :200000,
-            preVerificationGas : 200000,
-            maxFeePerGas : 100000,
-            maxPriorityFeePerGas : 100000,
+            sender: account,
+            nonce: 1,
+            initCode: hex"",
+            callData: abi.encodeCall(
+                SimpleAccount.execute, (address(testCounter), 0, abi.encodeCall(TestCounter.count, ()))
+                ),
+            callGasLimit: 100000,
+            verificationGasLimit: 200000,
+            preVerificationGas: 200000,
+            maxFeePerGas: 100000,
+            maxPriorityFeePerGas: 100000,
             paymasterAndData: hex"",
-            signature : hex""
+            signature: hex""
         });
         ops[0].signature = signUserOp(ops[0], user1, user1PrivKey);
         entryPoint.handleOps(ops, bundler);

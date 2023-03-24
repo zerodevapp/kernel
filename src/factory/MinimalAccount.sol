@@ -13,31 +13,33 @@ import "src/abstract/Compatibility.sol";
 contract MinimalAccount is IAccount, KernelStorage, Compatibility {
     error InvalidNonce();
 
-    constructor(IEntryPoint _entryPoint) KernelStorage(_entryPoint){
-    }
+    constructor(IEntryPoint _entryPoint) KernelStorage(_entryPoint) {}
 
     function initialize(address _owner) external {
         require(getKernelStorage().owner == address(0), "Already initialized");
         getKernelStorage().owner = _owner;
     }
 
-    function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256 missingFunds) external returns (uint256) {
+    function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256 missingFunds)
+        external
+        returns (uint256)
+    {
         require(ExtendedUserOpLib.checkUserOpOffset(userOp), "Invalid userOp");
         require(msg.sender == address(entryPoint), "account: not from entrypoint");
         bytes32 hash = ECDSA.toEthSignedMessageHash(userOpHash);
-        address recovered = ECDSA.recover(hash,userOp.signature);
+        address recovered = ECDSA.recover(hash, userOp.signature);
         WalletKernelStorage storage ws = getKernelStorage();
         if (ws.owner != recovered) {
             return SIG_VALIDATION_FAILED;
         }
-        if(userOp.initCode.length > 0) {
-            if(ws.nonce++ != userOp.nonce) {
+        if (userOp.initCode.length > 0) {
+            if (ws.nonce++ != userOp.nonce) {
                 revert InvalidNonce();
             }
         }
-  
-        if(missingFunds > 0 ) {
-            (bool success, ) = msg.sender.call{value: missingFunds}("");
+
+        if (missingFunds > 0) {
+            (bool success,) = msg.sender.call{value: missingFunds}("");
             (success);
         }
         return 0;
@@ -49,16 +51,14 @@ contract MinimalAccount is IAccount, KernelStorage, Compatibility {
     /// @param value value to be sent
     /// @param data data to be sent
     /// @param operation operation type (call or delegatecall)
-    function executeAndRevert(
-        address to,
-        uint256 value,
-        bytes calldata data,
-        Operation operation
-    ) external {
-        require(msg.sender == address(entryPoint) || msg.sender == getKernelStorage().owner, "account: not from entrypoint or owner");
+    function executeAndRevert(address to, uint256 value, bytes calldata data, Operation operation) external {
+        require(
+            msg.sender == address(entryPoint) || msg.sender == getKernelStorage().owner,
+            "account: not from entrypoint or owner"
+        );
         bool success;
         bytes memory ret;
-        if(operation == Operation.DelegateCall) {
+        if (operation == Operation.DelegateCall) {
             (success, ret) = Exec.delegateCall(to, data);
         } else {
             (success, ret) = Exec.call(to, value, data);
@@ -74,12 +74,9 @@ contract MinimalAccount is IAccount, KernelStorage, Compatibility {
     /// @dev this function will validate signature using eip1271
     /// @param _hash hash to be signed
     /// @param _signature signature
-    function isValidSignature(
-        bytes32 _hash,
-        bytes memory _signature
-    ) public override view returns (bytes4) {
+    function isValidSignature(bytes32 _hash, bytes memory _signature) public view override returns (bytes4) {
         WalletKernelStorage storage ws = getKernelStorage();
-        if(ws.owner ==ECDSA.recover(_hash, _signature)) {
+        if (ws.owner == ECDSA.recover(_hash, _signature)) {
             return 0x1626ba7e;
         }
         bytes32 hash = ECDSA.toEthSignedMessageHash(_hash);

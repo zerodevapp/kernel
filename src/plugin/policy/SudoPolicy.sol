@@ -1,14 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
+
 import "./IPolicy.sol";
 
 contract SudoPolicy is IPolicy {
-    function executeAndRevert(
-        address ,
-        uint256 ,
-        bytes calldata ,
-        Operation 
-    ) external pure override returns (bool) {
+    function executeAndRevert(address, uint256, bytes calldata, Operation) external pure override returns (bool) {
         return true;
     }
 }

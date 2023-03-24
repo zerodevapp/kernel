@@ -9,8 +9,7 @@ struct WalletKernelStorage {
 }
 
 contract KernelStorage {
-
-    uint256 constant internal SIG_VALIDATION_FAILED = 1;
+    uint256 internal constant SIG_VALIDATION_FAILED = 1;
 
     IEntryPoint public immutable entryPoint;
 
@@ -23,6 +22,7 @@ contract KernelStorage {
     /// @notice get wallet kernel storage
     /// @dev used to get wallet kernel storage
     /// @return ws wallet kernel storage, consists of owner and nonces
+
     function getKernelStorage() internal pure returns (WalletKernelStorage storage ws) {
         bytes32 storagePosition = bytes32(uint256(keccak256("zero-dev.kernel")) - 1);
         assembly {
@@ -39,7 +39,10 @@ contract KernelStorage {
     }
 
     function upgradeTo(address _newImplementation) external {
-        require(msg.sender == address(entryPoint) || msg.sender == getKernelStorage().owner, "account: not from entrypoint or owner");
+        require(
+            msg.sender == address(entryPoint) || msg.sender == getKernelStorage().owner,
+            "account: not from entrypoint or owner"
+        );
         bytes32 slot = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
         assembly {
             sstore(slot, _newImplementation)

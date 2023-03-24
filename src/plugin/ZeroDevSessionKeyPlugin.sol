@@ -15,21 +15,20 @@ using ECDSA for bytes32;
  * so must implement validateUserOp
  * holds an immutable reference to the EntryPoint
  */
+
 struct ZeroDevSessionKeyStorageStruct {
     mapping(address => bool) revoked;
     mapping(address => uint256) sessionNonce;
 }
 
 contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
-
     // return value in case of signature failure, with no time-range.
     // equivalent to packSigTimeRange(true,0,0);
-    uint256 constant internal SIG_VALIDATION_FAILED = 1;
+    uint256 internal constant SIG_VALIDATION_FAILED = 1;
 
     event SessionKeyRevoked(address indexed key);
 
-    constructor() EIP712("ZeroDevSessionKeyPlugin", "1.0.0") {
-    }
+    constructor() EIP712("ZeroDevSessionKeyPlugin", "1.0.0") {}
 
     function getPolicyStorage() internal pure returns (ZeroDevSessionKeyStorageStruct storage s) {
         bytes32 position = bytes32(uint256(keccak256("zero-dev.account.eip4337.sessionkey")) - 1);
@@ -62,20 +61,24 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
         bytes calldata signature
     ) internal override returns (bool) {
         address sessionKey = address(bytes20(data[0:20]));
-        if(getPolicyStorage().revoked[sessionKey]) {
+        if (getPolicyStorage().revoked[sessionKey]) {
             return false;
         }
 
         address policy = address(bytes20(data[20:40]));
-        if(!_checkPolicy(policy, userOp.callData)) {
+        if (!_checkPolicy(policy, userOp.callData)) {
             return false;
         }
 
-        bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(
-            keccak256("Session(bytes32 userOpHash,uint256 nonce)"), // we are going to trust plugin for verification
-            userOpHash,
-            getPolicyStorage().sessionNonce[sessionKey]++
-        )));
+        bytes32 digest = _hashTypedDataV4(
+            keccak256(
+                abi.encode(
+                    keccak256("Session(bytes32 userOpHash,uint256 nonce)"), // we are going to trust plugin for verification
+                    userOpHash,
+                    getPolicyStorage().sessionNonce[sessionKey]++
+                )
+            )
+        );
         address recovered = digest.recover(signature);
         require(recovered == sessionKey, "account: invalid signature");
         return true;
