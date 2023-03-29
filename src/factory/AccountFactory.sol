@@ -8,6 +8,8 @@ import "./MinimalAccount.sol";
 contract AccountFactory {
     MinimalAccount public immutable accountTemplate;
 
+    event AccountCreated(address indexed account, address indexed owner, uint256 index);
+
     constructor(IEntryPoint _entryPoint) {
         accountTemplate = new MinimalAccount(_entryPoint);
     }
@@ -28,6 +30,7 @@ contract AccountFactory {
         }
         proxy =
         new EIP1967Proxy{salt: salt}(address(accountTemplate), abi.encodeWithSelector(MinimalAccount.initialize.selector, _owner));
+        emit AccountCreated(address(proxy), _owner, _index);
     }
 
     function getAccountAddress(address _owner, uint256 _index) public view returns (address) {

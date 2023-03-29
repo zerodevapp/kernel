@@ -64,17 +64,19 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
         require(!getPolicyStorage().revoked[sessionKey], "session key revoked");
         require(getPolicyStorage().sessionNonce[sessionKey] == userOp.nonce, "nonce mismatch");
         bytes32 merkleRoot = bytes32(data[20:52]);
-        uint8 leafLength = uint8(data[52]);
+        uint8 leafLength = uint8(signature[0]);
         bytes32[] memory proof;
         bytes32 leaf;
         if(leafLength == 20) {
-            leaf = bytes32(data[53:73]);
-            proof = abi.decode(data[73:], (bytes32[]));
-            require(keccak256(userOp.callData[16:36]) == keccak256(data[53:73]), "invalid session key");
+            leaf = bytes32(signature[1:21]);
+            proof = abi.decode(signature[21:], (bytes32[]));
+            require(keccak256(userOp.callData[16:36]) == keccak256(data[1:21]), "invalid session key");
+            signature = signature[21:];
         } else if(leafLength == 24) {
-            leaf = bytes32(data[53:77]);
-            proof = abi.decode(data[77:], (bytes32[]));
-            require(keccak256(userOp.callData[16:40]) == keccak256(data[53:77]), "invalid session key");
+            leaf = bytes32(signature[1:25]);
+            proof = abi.decode(signature[25:], (bytes32[]));
+            require(keccak256(userOp.callData[16:40]) == keccak256(signature[1:25]), "invalid session key");
+            signature = signature[25:];
         } else {
             return false;
         }
