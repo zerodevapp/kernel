@@ -24,7 +24,7 @@ contract KernelStorage {
     /// @return ws wallet kernel storage, consists of owner and nonces
 
     function getKernelStorage() internal pure returns (WalletKernelStorage storage ws) {
-        bytes32 storagePosition = bytes32(uint256(keccak256("zero-dev.kernel")) - 1);
+        bytes32 storagePosition = bytes32(uint256(keccak256("zerodev.kernel")) - 1);
         assembly {
             ws.slot := storagePosition
         }
