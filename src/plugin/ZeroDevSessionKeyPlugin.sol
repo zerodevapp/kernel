@@ -6,7 +6,7 @@ pragma solidity ^0.8.7;
 /* solhint-disable reason-string */
 
 import "./ZeroDevBasePlugin.sol";
-import "./policy/IPolicy.sol";
+import "openzeppelin-contracts/contracts/utils/cryptography/MerkleProof.sol";
 
 using ECDSA for bytes32;
 /**
@@ -61,15 +61,24 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
         bytes calldata signature
     ) internal override returns (bool) {
         address sessionKey = address(bytes20(data[0:20]));
-        if (getPolicyStorage().revoked[sessionKey]) {
+        require(!getPolicyStorage().revoked[sessionKey], "session key revoked");
+        require(getPolicyStorage().sessionNonce[sessionKey] == userOp.nonce, "nonce mismatch");
+        bytes32 merkleRoot = bytes32(data[20:52]);
+        uint8 leafLength = uint8(data[52]);
+        bytes32[] memory proof;
+        bytes32 leaf;
+        if(leafLength == 20) {
+            leaf = bytes32(data[53:73]);
+            proof = abi.decode(data[73:], (bytes32[]));
+            require(keccak256(userOp.callData[16:36]) == keccak256(data[53:73]), "invalid session key");
+        } else if(leafLength == 24) {
+            leaf = bytes32(data[53:77]);
+            proof = abi.decode(data[77:], (bytes32[]));
+            require(keccak256(userOp.callData[16:40]) == keccak256(data[53:77]), "invalid session key");
+        } else {
             return false;
         }
-
-        address policy = address(bytes20(data[20:40]));
-        if (!_checkPolicy(policy, userOp.callData)) {
-            return false;
-        }
-
+        MerkleProof.verify(proof, merkleRoot, leaf);
         bytes32 digest = _hashTypedDataV4(
             keccak256(
                 abi.encode(
