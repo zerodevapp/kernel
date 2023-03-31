@@ -6,15 +6,17 @@ import "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
 import "account-abstraction/interfaces/IAccount.sol";
 import "account-abstraction/interfaces/IEntryPoint.sol";
 import "./IPlugin.sol";
-
+import "forge-std/console.sol";
 abstract contract ZeroDevBasePlugin is IPlugin, EIP712 {
     function validatePluginData(UserOperation calldata userOp, bytes32 userOpHash, uint256 missingAccountFunds)
         external
         override
         returns (bool validated)
     {
+        console.log("let's see");
         // data offset starts at 97
         (bytes calldata data, bytes calldata signature) = parseDataAndSignature(userOp.signature[97:]);
+        console.log("done?");
         validated = _validatePluginData(userOp, userOpHash, data, signature);
         if (missingAccountFunds > 0) {
             //TODO: MAY pay more than the minimum, to deposit for future transactions

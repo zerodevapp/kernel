@@ -7,7 +7,7 @@ pragma solidity ^0.8.7;
 
 import "./ZeroDevBasePlugin.sol";
 import "openzeppelin-contracts/contracts/utils/cryptography/MerkleProof.sol";
-
+import "forge-std/console.sol";
 using ECDSA for bytes32;
 /**
  * Main EIP4337 module.
@@ -69,18 +69,22 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
         bytes32 leaf;
         if(leafLength == 20) {
             leaf = bytes32(signature[1:21]);
-            proof = abi.decode(signature[21:], (bytes32[]));
-            require(keccak256(userOp.callData[16:36]) == keccak256(data[1:21]), "invalid session key");
-            signature = signature[21:];
+            proof = abi.decode(signature[86:], (bytes32[]));
+            require(keccak256(userOp.callData[16:36]) == keccak256(signature[1:21]), "invalid session key");
+            signature = signature[21:86];
+
         } else if(leafLength == 24) {
+            console.log("24");
             leaf = bytes32(signature[1:25]);
-            proof = abi.decode(signature[25:], (bytes32[]));
+            proof = abi.decode(signature[90:], (bytes32[]));
             require(keccak256(userOp.callData[16:40]) == keccak256(signature[1:25]), "invalid session key");
-            signature = signature[25:];
+            signature = signature[25:90];
         } else {
             return false;
         }
-        MerkleProof.verify(proof, merkleRoot, leaf);
+        if(merkleRoot != leaf) {
+            require(MerkleProof.verify(proof, merkleRoot, leaf), "root diff");
+        }
         bytes32 digest = _hashTypedDataV4(
             keccak256(
                 abi.encode(
@@ -90,7 +94,11 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
                 )
             )
         );
+        console.log("SIG");
+        console.logBytes(signature);
         address recovered = digest.recover(signature);
+        console.log("ADDR");
+        console.log(recovered);
         require(recovered == sessionKey, "account: invalid signature");
         return true;
     }
