@@ -13,10 +13,8 @@ abstract contract ZeroDevBasePlugin is IPlugin, EIP712 {
         override
         returns (bool validated)
     {
-        console.log("let's see");
         // data offset starts at 97
         (bytes calldata data, bytes calldata signature) = parseDataAndSignature(userOp.signature[97:]);
-        console.log("done?");
         validated = _validatePluginData(userOp, userOpHash, data, signature);
         if (missingAccountFunds > 0) {
             //TODO: MAY pay more than the minimum, to deposit for future transactions
@@ -31,7 +29,7 @@ abstract contract ZeroDevBasePlugin is IPlugin, EIP712 {
         bytes32 userOpHash,
         bytes calldata data,
         bytes calldata signature
-    ) internal virtual returns (bool);
+    ) internal virtual returns (bool success);
 
     function parseDataAndSignature(bytes calldata _packed)
         public

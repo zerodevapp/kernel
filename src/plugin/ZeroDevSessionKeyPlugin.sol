@@ -28,7 +28,7 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
 
     event SessionKeyRevoked(address indexed key);
 
-    constructor() EIP712("ZeroDevSessionKeyPlugin", "1.0.0") {}
+    constructor() EIP712("ZeroDevSessionKeyPlugin", "0.0.1") {}
 
     function getPolicyStorage() internal pure returns (ZeroDevSessionKeyStorageStruct storage s) {
         bytes32 position = bytes32(uint256(keccak256("zero-dev.account.eip4337.sessionkey")) - 1);
@@ -74,7 +74,6 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
             signature = signature[21:86];
 
         } else if(leafLength == 24) {
-            console.log("24");
             leaf = bytes32(signature[1:25]);
             proof = abi.decode(signature[90:], (bytes32[]));
             require(keccak256(userOp.callData[16:40]) == keccak256(signature[1:25]), "invalid session key");
@@ -82,8 +81,8 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
         } else {
             return false;
         }
-        if(merkleRoot != leaf) {
-            require(MerkleProof.verify(proof, merkleRoot, leaf), "root diff");
+        if(!MerkleProof.verify(proof, merkleRoot, leaf)) {
+            return false;
         }
         bytes32 digest = _hashTypedDataV4(
             keccak256(
@@ -94,11 +93,7 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
                 )
             )
         );
-        console.log("SIG");
-        console.logBytes(signature);
         address recovered = digest.recover(signature);
-        console.log("ADDR");
-        console.log(recovered);
         require(recovered == sessionKey, "account: invalid signature");
         return true;
     }

@@ -10,6 +10,7 @@ import "./utils/Exec.sol";
 import "./utils/ExtendedUserOpLib.sol";
 import "./abstract/Compatibility.sol";
 import "./abstract/KernelStorage.sol";
+import "hardhat/console.sol";
 
 /// @title Kernel
 /// @author taek<leekt216@gmail.com>
@@ -96,17 +97,15 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
             uint48 validAfter = uint48(bytes6(userOp.signature[26:32]));
             bytes memory signature = userOp.signature[32:97];
             (bytes memory data,) = abi.decode(userOp.signature[97:], (bytes, bytes));
-
             bytes32 digest = _hashTypedDataV4(
                 keccak256(
                     abi.encode(
                         keccak256(
-                            "ValidateUserOpPlugin(address sender,uint48 validUntil,uint48 validAfter,address plugin,bytes data)"
+                            "ValidateUserOpPlugin(address plugin,uint48 validUntil,uint48 validAfter,bytes data)"
                         ), // we are going to trust plugin for verification
-                        userOp.sender,
+                        plugin,
                         validUntil,
                         validAfter,
-                        plugin,
                         keccak256(data)
                     )
                 )
@@ -114,11 +113,13 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
 
             address signer = ECDSA.recover(digest, signature);
             if (getKernelStorage().owner != signer) {
+                console.log("mismatch");
                 return SIG_VALIDATION_FAILED;
             }
             bytes memory ret = _delegateToPlugin(plugin, userOp, userOpHash, missingAccountFunds);
             bool res = abi.decode(ret, (bool));
-            if (res) {
+            if (!res) {
+                console.log("Failed");
                 return SIG_VALIDATION_FAILED;
             }
             validationData = _packValidationData(!res, validUntil, validAfter);
