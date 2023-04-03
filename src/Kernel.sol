@@ -7,10 +7,8 @@ import "account-abstraction/core/Helpers.sol";
 import "account-abstraction/interfaces/IAccount.sol";
 import "account-abstraction/interfaces/IEntryPoint.sol";
 import "./utils/Exec.sol";
-import "./utils/ExtendedUserOpLib.sol";
 import "./abstract/Compatibility.sol";
 import "./abstract/KernelStorage.sol";
-import "hardhat/console.sol";
 
 /// @title Kernel
 /// @author taek<leekt216@gmail.com>
@@ -86,7 +84,6 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         external
         returns (uint256 validationData)
     {
-        require(ExtendedUserOpLib.checkUserOpOffset(userOp), "userOp: invalid offset");
         require(msg.sender == address(entryPoint), "account: not from entryPoint");
         if (userOp.signature.length == 65) {
             validationData = _validateUserOp(userOp, userOpHash);
@@ -113,13 +110,11 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
 
             address signer = ECDSA.recover(digest, signature);
             if (getKernelStorage().owner != signer) {
-                console.log("mismatch");
                 return SIG_VALIDATION_FAILED;
             }
             bytes memory ret = _delegateToPlugin(plugin, userOp, userOpHash, missingAccountFunds);
             bool res = abi.decode(ret, (bool));
             if (!res) {
-                console.log("Failed");
                 return SIG_VALIDATION_FAILED;
             }
             validationData = _packValidationData(!res, validUntil, validAfter);

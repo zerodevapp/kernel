@@ -95,7 +95,7 @@ contract KernelTest is Test {
 
         ops[0] = UserOperation({
             sender: account,
-            nonce: 1,
+            nonce: 0,
             initCode: hex"",
             callData: abi.encodeCall(
                 SimpleAccount.execute, (address(testCounter), 0, abi.encodeCall(TestCounter.count, ()))
