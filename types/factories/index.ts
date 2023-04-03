@@ -10,6 +10,7 @@ export { IEntryPoint__factory } from "./IEntryPoint__factory";
 export { IPlugin__factory } from "./IPlugin__factory";
 export { IStakeManager__factory } from "./IStakeManager__factory";
 export { Kernel__factory } from "./Kernel__factory";
+export { KernelFactory__factory } from "./KernelFactory__factory";
 export { KernelStorage__factory } from "./KernelStorage__factory";
 export { MinimalAccount__factory } from "./MinimalAccount__factory";
 export { ZeroDevBasePlugin__factory } from "./ZeroDevBasePlugin__factory";

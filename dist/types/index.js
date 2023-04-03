@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ZeroDevSessionKeyPlugin__factory = exports.ZeroDevBasePlugin__factory = exports.MinimalAccount__factory = exports.KernelStorage__factory = exports.Kernel__factory = exports.IStakeManager__factory = exports.IPlugin__factory = exports.IEntryPoint__factory = exports.IAggregator__factory = exports.IAccount__factory = exports.EIP1967Proxy__factory = exports.Compatibility__factory = exports.AccountFactory__factory = exports.factories = void 0;
+exports.ZeroDevSessionKeyPlugin__factory = exports.ZeroDevBasePlugin__factory = exports.MinimalAccount__factory = exports.KernelStorage__factory = exports.KernelFactory__factory = exports.Kernel__factory = exports.IStakeManager__factory = exports.IPlugin__factory = exports.IEntryPoint__factory = exports.IAggregator__factory = exports.IAccount__factory = exports.EIP1967Proxy__factory = exports.Compatibility__factory = exports.AccountFactory__factory = exports.factories = void 0;
 exports.factories = require("./factories");
 var AccountFactory__factory_1 = require("./factories/AccountFactory__factory");
 Object.defineProperty(exports, "AccountFactory__factory", { enumerable: true, get: function () { return AccountFactory__factory_1.AccountFactory__factory; } });
@@ -20,6 +20,8 @@ var IStakeManager__factory_1 = require("./factories/IStakeManager__factory");
 Object.defineProperty(exports, "IStakeManager__factory", { enumerable: true, get: function () { return IStakeManager__factory_1.IStakeManager__factory; } });
 var Kernel__factory_1 = require("./factories/Kernel__factory");
 Object.defineProperty(exports, "Kernel__factory", { enumerable: true, get: function () { return Kernel__factory_1.Kernel__factory; } });
+var KernelFactory__factory_1 = require("./factories/KernelFactory__factory");
+Object.defineProperty(exports, "KernelFactory__factory", { enumerable: true, get: function () { return KernelFactory__factory_1.KernelFactory__factory; } });
 var KernelStorage__factory_1 = require("./factories/KernelStorage__factory");
 Object.defineProperty(exports, "KernelStorage__factory", { enumerable: true, get: function () { return KernelStorage__factory_1.KernelStorage__factory; } });
 var MinimalAccount__factory_1 = require("./factories/MinimalAccount__factory");
