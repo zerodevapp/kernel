@@ -7,7 +7,7 @@ pragma solidity ^0.8.7;
 
 import "./ZeroDevBasePlugin.sol";
 import "openzeppelin-contracts/contracts/utils/cryptography/MerkleProof.sol";
-import "forge-std/console.sol";
+import "hardhat/console.sol";
 using ECDSA for bytes32;
 /**
  * Main EIP4337 module.
@@ -68,22 +68,22 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
         bytes32[] memory proof;
         bytes32 leaf;
         if(leafLength == 20) {
-            leaf = bytes32(signature[1:21]);
+            leaf = keccak256(signature[1:21]);
             proof = abi.decode(signature[86:], (bytes32[]));
             require(keccak256(userOp.callData[16:36]) == keccak256(signature[1:21]), "invalid session key");
             signature = signature[21:86];
 
         } else if(leafLength == 24) {
-            leaf = bytes32(signature[1:25]);
+            leaf = keccak256(signature[1:25]);
             proof = abi.decode(signature[90:], (bytes32[]));
             require(keccak256(userOp.callData[16:40]) == keccak256(signature[1:25]), "invalid session key");
             signature = signature[25:90];
         } else {
             return false;
         }
-        if(!MerkleProof.verify(proof, merkleRoot, leaf)) {
-            return false;
-        }
+        console.log("LEAF");
+        console.logBytes32(leaf);
+        require(MerkleProof.verify(proof, merkleRoot, leaf), "invalide merkle root");
         bytes32 digest = _hashTypedDataV4(
             keccak256(
                 abi.encode(

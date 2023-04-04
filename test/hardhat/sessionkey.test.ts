@@ -89,20 +89,13 @@ describe('SessionKey', function() {
     const userOpHash = ethers.utils.randomBytes(32);
     merkle = new MerkleTree(
       [
-        hexConcat([
-          hexZeroPad(testCounter.address, 20),
-          hexZeroPad("0x00", 12)
-        ]),
-        ethers.utils.randomBytes(32)
+        hexZeroPad(testCounter.address, 20),
+        hexZeroPad(ethers.utils.randomBytes(20),20)
       ],
       keccak256,
-      { sortPairs: true }
+      { sortPairs: true, hashLeaves: true }
     );
-    const proof = merkle.getHexProof(hexConcat([
-      hexZeroPad(testCounter.address, 20),
-      hexZeroPad("0x00", 12)
-    ]));
-    merkle.getHexProof(hexConcat([ethers.utils.randomBytes(32)]));
+    const proof = merkle.getHexProof(ethers.utils.keccak256(testCounter.address));
     console.log("testCounter :",testCounter.address);
     console.log("merkle root :",merkle.getRoot().toString('hex'));
     console.log(proof);
@@ -158,5 +151,5 @@ describe('SessionKey', function() {
           ])
         ])]),
     },userOpHash,0)
-  })
+ })
 })

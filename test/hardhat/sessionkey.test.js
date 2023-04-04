@@ -81,17 +81,10 @@ describe('SessionKey', function () {
     it("test", async function () {
         const userOpHash = hardhat_1.ethers.utils.randomBytes(32);
         merkle = new merkletreejs_1.MerkleTree([
-            (0, utils_1.hexConcat)([
-                (0, utils_1.hexZeroPad)(testCounter.address, 20),
-                (0, utils_1.hexZeroPad)("0x00", 12)
-            ]),
-            hardhat_1.ethers.utils.randomBytes(32)
-        ], keccak256_1.default, { sortPairs: true });
-        const proof = merkle.getHexProof((0, utils_1.hexConcat)([
             (0, utils_1.hexZeroPad)(testCounter.address, 20),
-            (0, utils_1.hexZeroPad)("0x00", 12)
-        ]));
-        merkle.getHexProof((0, utils_1.hexConcat)([hardhat_1.ethers.utils.randomBytes(32)]));
+            (0, utils_1.hexZeroPad)(hardhat_1.ethers.utils.randomBytes(20), 20)
+        ], keccak256_1.default, { sortPairs: true, hashLeaves: true });
+        const proof = merkle.getHexProof(hardhat_1.ethers.utils.keccak256(testCounter.address));
         console.log("testCounter :", testCounter.address);
         console.log("merkle root :", merkle.getRoot().toString('hex'));
         console.log(proof);
