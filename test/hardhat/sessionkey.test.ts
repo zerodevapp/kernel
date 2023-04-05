@@ -4,6 +4,7 @@ import { expect } from 'chai';
 import { ethers } from 'hardhat'
 import { Signer, BytesLike, BigNumber } from 'ethers';
 import { hexConcat, hexZeroPad } from 'ethers/lib/utils';
+import { EntryPoint, EntryPoint__factory } from '@account-abstraction/contracts'
 import { AccountFactory, AccountFactory__factory, Kernel, Kernel__factory,TestCounter,TestCounter__factory,ZeroDevSessionKeyPlugin, ZeroDevSessionKeyPlugin__factory } from '../../typechain-types';
 
 
@@ -68,7 +69,7 @@ async function getSessionSig(kernel: Kernel, sessionPlugin: ZeroDevSessionKeyPlu
 describe('SessionKey', function() {
   let sessionKey: ZeroDevSessionKeyPlugin;
   let owner: Signer;
-  let entrypoint: Signer;
+  let entrypoint: EntryPoint;
   let accountFactory : AccountFactory;
   let kernelTemplate : Kernel;
   let kernel : Kernel;
@@ -76,25 +77,46 @@ describe('SessionKey', function() {
   let session : Signer;
   let merkle : MerkleTree;
   beforeEach(async function(){
-    [owner, entrypoint, session] = await ethers.getSigners();
+    [owner, session] = await ethers.getSigners();
+    entrypoint = await new EntryPoint__factory(owner).deploy();
     sessionKey = await new ZeroDevSessionKeyPlugin__factory(owner).deploy();
-    accountFactory = await new AccountFactory__factory(owner).deploy(await entrypoint.getAddress());
-    kernelTemplate = await new Kernel__factory(owner).deploy(await entrypoint.getAddress());
+    accountFactory = await new AccountFactory__factory(owner).deploy(entrypoint.address);
+    kernelTemplate = await new Kernel__factory(owner).deploy(entrypoint.address);
     await accountFactory.createAccount(await owner.getAddress(), 0);
     kernel = Kernel__factory.connect(await accountFactory.getAccountAddress(await owner.getAddress(), 0), owner);
     await kernel.upgradeTo(kernelTemplate.address);
     testCounter = await new TestCounter__factory(owner).deploy();
   })
   it("test", async function(){
-    const userOpHash = ethers.utils.randomBytes(32);
+    let op = {
+      sender : kernel.address,
+      nonce : 0,
+      initCode : "0x",
+      callData : kernel.interface.encodeFunctionData("executeAndRevert",[
+        testCounter.address,
+        0,
+        testCounter.interface.encodeFunctionData("increment"),
+        0
+      ]),
+      callGasLimit : 100000,
+      verificationGasLimit : 200000,
+      preVerificationGas : 100000,
+      maxFeePerGas : 100000,
+      maxPriorityFeePerGas : 100000,
+      paymasterAndData: "0x",
+      signature : "0x"
+    }
+    const userOpHash = (await entrypoint.getUserOpHash(op));
+
     merkle = new MerkleTree(
       [
-        hexZeroPad(testCounter.address, 20),
-        hexZeroPad(ethers.utils.randomBytes(20),20)
+        hexZeroPad(testCounter.address, 20)
       ],
       keccak256,
       { sortPairs: true, hashLeaves: true }
     );
+    console.log("hexZeroPad :",hexZeroPad(testCounter.address, 20));
+    console.log("length :",hexZeroPad(testCounter.address, 20).length);
     const proof = merkle.getHexProof(ethers.utils.keccak256(testCounter.address));
     console.log("testCounter :",testCounter.address);
     console.log("merkle root :",merkle.getRoot().toString('hex'));
@@ -107,49 +129,41 @@ describe('SessionKey', function() {
       "0x" + merkle.getRoot().toString('hex')
     );
 
+    await owner.sendTransaction({
+      to: kernel.address,
+      value: ethers.utils.parseEther("10.0")
+    });
+
     const sessionsig = await getSessionSig(kernel, sessionKey, session, userOpHash);
-    await kernel.connect(entrypoint).validateUserOp({
-      sender : ethers.constants.AddressZero,
-      nonce : 0,
-      initCode : "0x",
-      callData : kernel.interface.encodeFunctionData("executeAndRevert",[
-        testCounter.address,
-        0,
-        testCounter.interface.encodeFunctionData("increment"),
-        0
-      ]),
-      callGasLimit : 100000,
-      verificationGasLimit : 100000,
-      preVerificationGas : 100000,
-      maxFeePerGas : 100000,
-      maxPriorityFeePerGas : 100000,
-      paymasterAndData: "0x",
-      signature : 
+    console.log("owner address : ", await owner.getAddress());
+    console.log("owner balance before : ", await owner.getBalance());
+    op.signature = hexConcat([
       hexConcat([
+        sessionKey.address,
+        hexZeroPad("0x00", 12), // validUntil + validAfter
+        ownerSig, // signature
+      ]),
+      ethers.utils.defaultAbiCoder.encode([
+        "bytes",
+        "bytes"
+      ],[
         hexConcat([
-          sessionKey.address,
-          hexZeroPad("0x00", 12), // validUntil + validAfter
-          ownerSig, // signature
+          await session.getAddress(),
+          hexZeroPad("0x" + merkle.getRoot().toString('hex'), 32),
         ]),
-        ethers.utils.defaultAbiCoder.encode([
-          "bytes",
-          "bytes"
-        ],[
-          hexConcat([
-            await session.getAddress(),
-            hexZeroPad("0x" + merkle.getRoot().toString('hex'), 32),
+        hexConcat([
+          hexZeroPad("0x14", 1),
+          testCounter.address,
+          hexZeroPad(sessionsig, 65),
+          ethers.utils.defaultAbiCoder.encode([
+            "bytes32[]"
+          ],[
+            proof
           ]),
-          hexConcat([
-            hexZeroPad("0x14", 1),
-            testCounter.address,
-            hexZeroPad(sessionsig, 65),
-            ethers.utils.defaultAbiCoder.encode([
-              "bytes32[]"
-            ],[
-              proof
-            ]),
-          ])
-        ])]),
-    },userOpHash,0)
+        ])
+      ])]),
+
+    await entrypoint.handleOps([op], await owner.getAddress())
+    console.log("owner balance after : ", await owner.getBalance());
  })
 })

@@ -7,7 +7,6 @@ pragma solidity ^0.8.7;
 
 import "./ZeroDevBasePlugin.sol";
 import "openzeppelin-contracts/contracts/utils/cryptography/MerkleProof.sol";
-import "hardhat/console.sol";
 using ECDSA for bytes32;
 /**
  * Main EIP4337 module.
@@ -51,9 +50,6 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
         return getPolicyStorage().sessionNonce[_key];
     }
 
-    /**
-     * delegate-called (using execFromModule) through the fallback, so "real" msg.sender is attached as last 20 bytes
-     */
     function _validatePluginData(
         UserOperation calldata userOp,
         bytes32 userOpHash,
@@ -76,13 +72,14 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
         } else if(leafLength == 24) {
             leaf = keccak256(signature[1:25]);
             proof = abi.decode(signature[90:], (bytes32[]));
-            require(keccak256(userOp.callData[16:40]) == keccak256(signature[1:25]), "invalid session key");
+            require(keccak256(userOp.callData[16:36]) == keccak256(signature[1:21]), "invalid session key");
+            uint256 offset = uint256(bytes32(userOp.callData[68:100]));
+            bytes calldata sig = userOp.callData[offset + 32: offset + 36];
+            require(keccak256(sig) == keccak256(signature[21:25]));
             signature = signature[25:90];
         } else {
-            return false;
+            revert("invalid leaf length");
         }
-        console.log("LEAF");
-        console.logBytes32(leaf);
         require(MerkleProof.verify(proof, merkleRoot, leaf), "invalide merkle root");
         bytes32 digest = _hashTypedDataV4(
             keccak256(
@@ -96,15 +93,5 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
         address recovered = digest.recover(signature);
         require(recovered == sessionKey, "account: invalid signature");
         return true;
-    }
-
-    function _checkPolicy(address _policy, bytes calldata _calldata) internal view returns (bool) {
-        (bool success, bytes memory returndata) = _policy.staticcall(_calldata);
-        if (!success) {
-            assembly {
-                revert(add(32, returndata), mload(returndata))
-            }
-        }
-        return abi.decode(returndata, (bool));
     }
 }
