@@ -133,9 +133,13 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         internal
         returns (uint256 validationData)
     {
+        WalletKernelStorage storage ws = getKernelStorage();
+        if (ws.owner == ECDSA.recover(userOpHash, userOp.signature)) {
+            return validationData;
+        }
+
         bytes32 hash = ECDSA.toEthSignedMessageHash(userOpHash);
         address recovered = ECDSA.recover(hash, userOp.signature);
-        WalletKernelStorage storage ws = getKernelStorage();
         if (ws.owner != recovered) {
             return SIG_VALIDATION_FAILED;
         }
