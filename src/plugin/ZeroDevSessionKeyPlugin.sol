@@ -62,6 +62,7 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
         bytes32 merkleRoot = bytes32(data[20:52]);
         if(merkleRoot == bytes32(0)) {
             // means this session key has sudo permission
+            signature = signature[33:98];
         } else {
             uint8 leafLength = uint8(signature[0]);
             bytes32[] memory proof;
@@ -71,7 +72,6 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
                 proof = abi.decode(signature[86:], (bytes32[]));
                 require(keccak256(userOp.callData[16:36]) == keccak256(signature[1:21]), "invalid session key");
                 signature = signature[21:86];
-
             } else if(leafLength == 24) {
                 leaf = keccak256(signature[1:25]);
                 proof = abi.decode(signature[90:], (bytes32[]));
@@ -80,8 +80,6 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
                 bytes calldata sig = userOp.callData[offset + 36: offset + 40];
                 require(keccak256(sig) == keccak256(signature[21:25]));
                 signature = signature[25:90];
-            } else {
-                revert("invalid leaf length");
             }
             require(MerkleProof.verify(proof, merkleRoot, leaf), "invalide merkle root");
         }
