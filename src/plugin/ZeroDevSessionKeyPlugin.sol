@@ -7,7 +7,6 @@ pragma solidity ^0.8.7;
 
 import "./ZeroDevBasePlugin.sol";
 import "openzeppelin-contracts/contracts/utils/cryptography/MerkleProof.sol";
-import "hardhat/console.sol";
 using ECDSA for bytes32;
 /**
  * Main EIP4337 module.
@@ -52,7 +51,6 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
         bytes calldata data,
         bytes calldata signature
     ) internal view override returns (bool) {
-        uint256 gas = gasleft();
         address sessionKey = address(bytes20(data[0:20]));
         require(!getPolicyStorage().revoked[sessionKey], "session key revoked");
         bytes32 merkleRoot = bytes32(data[20:52]);
@@ -90,7 +88,6 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
         );
         address recovered = digest.recover(signature);
         require(recovered == sessionKey, "account: invalid signature");
-        console.log("gas used: %s", gas - gasleft());
         return true;
     }
 }
