@@ -7,6 +7,7 @@ pragma solidity ^0.8.7;
 
 import "./ZeroDevBasePlugin.sol";
 import "openzeppelin-contracts/contracts/utils/cryptography/MerkleProof.sol";
+import "hardhat/console.sol";
 using ECDSA for bytes32;
 /**
  * Main EIP4337 module.
@@ -17,7 +18,6 @@ using ECDSA for bytes32;
 
 struct ZeroDevSessionKeyStorageStruct {
     mapping(address => bool) revoked;
-    mapping(address => uint256) sessionNonce;
 }
 
 contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
@@ -46,19 +46,15 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
         return getPolicyStorage().revoked[_key];
     }
 
-    function sessionNonce(address _key) external view returns (uint256) {
-        return getPolicyStorage().sessionNonce[_key];
-    }
-
     function _validatePluginData(
         UserOperation calldata userOp,
         bytes32 userOpHash,
         bytes calldata data,
         bytes calldata signature
-    ) internal override returns (bool) {
+    ) internal view override returns (bool) {
+        uint256 gas = gasleft();
         address sessionKey = address(bytes20(data[0:20]));
         require(!getPolicyStorage().revoked[sessionKey], "session key revoked");
-        require(getPolicyStorage().sessionNonce[sessionKey] == userOp.nonce, "nonce mismatch");
         bytes32 merkleRoot = bytes32(data[20:52]);
         if(merkleRoot == bytes32(0)) {
             // means this session key has sudo permission
@@ -88,12 +84,13 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
                 abi.encode(
                     keccak256("Session(bytes32 userOpHash,uint256 nonce)"), // we are going to trust plugin for verification
                     userOpHash,
-                    getPolicyStorage().sessionNonce[sessionKey]++
+                    userOp.nonce
                 )
             )
         );
         address recovered = digest.recover(signature);
         require(recovered == sessionKey, "account: invalid signature");
+        console.log("gas used: %s", gas - gasleft());
         return true;
     }
 }

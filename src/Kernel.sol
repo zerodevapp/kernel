@@ -6,9 +6,11 @@ import "./plugin/IPlugin.sol";
 import "account-abstraction/core/Helpers.sol";
 import "account-abstraction/interfaces/IAccount.sol";
 import "account-abstraction/interfaces/IEntryPoint.sol";
+import {EntryPoint} from  "account-abstraction/core/EntryPoint.sol";
 import "./utils/Exec.sol";
 import "./abstract/Compatibility.sol";
 import "./abstract/KernelStorage.sol";
+import "hardhat/console.sol";
 
 /// @title Kernel
 /// @author taek<leekt216@gmail.com>
@@ -84,6 +86,7 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         external
         returns (uint256 validationData)
     {
+        uint256 gasBefore = gasleft();
         require(msg.sender == address(entryPoint), "account: not from entryPoint");
         if (userOp.signature.length == 65) {
             validationData = _validateUserOp(userOp, userOpHash);
@@ -121,6 +124,7 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         } else {
             revert InvalidSignatureLength();
         }
+        console.log("gas used for validation", gasBefore - gasleft());
         if (missingAccountFunds > 0) {
             // we are going to assume signature is valid at this point
             (bool success,) = msg.sender.call{value: missingAccountFunds}("");
@@ -131,6 +135,7 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
 
     function _validateUserOp(UserOperation calldata userOp, bytes32 userOpHash)
         internal
+        view
         returns (uint256 validationData)
     {
         WalletKernelStorage storage ws = getKernelStorage();

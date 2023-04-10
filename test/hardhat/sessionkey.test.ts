@@ -4,9 +4,8 @@ import { expect } from 'chai';
 import { ethers } from 'hardhat'
 import { Signer, BytesLike, BigNumber } from 'ethers';
 import { hexConcat, hexZeroPad } from 'ethers/lib/utils';
-import { EntryPoint, EntryPoint__factory } from '@account-abstraction/contracts'
 import { AccountFactory, AccountFactory__factory, Kernel, Kernel__factory,TestCounter,TestCounter__factory,ZeroDevSessionKeyPlugin, ZeroDevSessionKeyPlugin__factory } from '../../typechain-types';
-
+import { EntryPoint, EntryPoint__factory } from "../../typechain-types";
 
 async function signSessionKey(kernel: Kernel, sessionPlugin: ZeroDevSessionKeyPlugin, owner: Signer, sessionKey: Signer, merkleRoot: string) : Promise<any> {
   const ownerSig = await owner._signTypedData(
@@ -37,14 +36,7 @@ async function signSessionKey(kernel: Kernel, sessionPlugin: ZeroDevSessionKeyPl
   return ownerSig;
 }
 
-async function getSessionSig(kernel: Kernel, sessionPlugin: ZeroDevSessionKeyPlugin, sessionKey: Signer, userOpHash : BytesLike) : Promise<any> {
-  const nonce = await kernel.queryPlugin(sessionPlugin.address, sessionPlugin.interface.encodeFunctionData("sessionNonce", [await sessionKey.getAddress()])).catch((e) => {
-    try {
-      return BigNumber.from(e.message.split("QueryResult(\\\"")[1].split("\\\")")[0]);
-    } catch(e: any) {
-      throw Error("Failed to parse nonce : " + e.message);
-    }
-  });
+async function getSessionSig(nonce: BigNumber,  kernel: Kernel, sessionKey: Signer, userOpHash : BytesLike) : Promise<any> {
   const sessionsig = await sessionKey._signTypedData(
     {
       name: "ZeroDevSessionKeyPlugin",
@@ -88,9 +80,10 @@ describe('SessionKey', function() {
     testCounter = await new TestCounter__factory(owner).deploy();
   })
   it("test", async function(){
+    const nonce = await entrypoint.getNonce(kernel.address, await session.getAddress());
     let op = {
       sender : kernel.address,
-      nonce : 0,
+      nonce : nonce,
       initCode : "0x",
       callData : kernel.interface.encodeFunctionData("executeAndRevert",[
         testCounter.address,
@@ -134,7 +127,7 @@ describe('SessionKey', function() {
       value: ethers.utils.parseEther("10.0")
     });
 
-    const sessionsig = await getSessionSig(kernel, sessionKey, session, userOpHash);
+    const sessionsig = await getSessionSig(nonce, kernel, session, userOpHash);
     console.log("owner address : ", await owner.getAddress());
     console.log("owner balance before : ", await owner.getBalance());
     op.signature = hexConcat([
