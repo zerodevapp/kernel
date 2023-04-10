@@ -5,7 +5,6 @@ import "account-abstraction/interfaces/IEntryPoint.sol";
 
 struct WalletKernelStorage {
     address owner;
-    uint256 nonce;
 }
 
 contract KernelStorage {
@@ -32,10 +31,6 @@ contract KernelStorage {
 
     function getOwner() external view returns (address) {
         return getKernelStorage().owner;
-    }
-
-    function getNonce() external view returns (uint256) {
-        return getKernelStorage().nonce;
     }
 
     function upgradeTo(address _newImplementation) external {

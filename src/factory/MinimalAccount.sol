@@ -31,12 +31,6 @@ contract MinimalAccount is IAccount, KernelStorage, Compatibility {
             return SIG_VALIDATION_FAILED;
         }
 
-        if (userOp.initCode.length == 0) {
-            if (ws.nonce++ != userOp.nonce) {
-                revert InvalidNonce();
-            }
-        }
-
         if (missingFunds > 0) {
             (bool success,) = msg.sender.call{value: missingFunds}("");
             (success);

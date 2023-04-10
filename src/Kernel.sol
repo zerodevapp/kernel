@@ -143,10 +143,6 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         if (ws.owner != recovered) {
             return SIG_VALIDATION_FAILED;
         }
-
-        if (ws.nonce++ != userOp.nonce) {
-            revert InvalidNonce();
-        }
     }
 
     /**
