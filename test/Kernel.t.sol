@@ -136,7 +136,7 @@ contract KernelTest is Test {
         entryPoint.handleOps(ops, bundler);
         ops[0] = UserOperation({
             sender: account,
-            nonce: 0,
+            nonce: 1,
             initCode: hex"",
             callData: abi.encodeCall(
                 SimpleAccount.execute, (address(testCounter), 0, abi.encodeCall(TestCounter.count, ()))
@@ -153,7 +153,7 @@ contract KernelTest is Test {
         entryPoint.handleOps(ops, bundler);
         ops[0] = UserOperation({
             sender: account,
-            nonce: 1,
+            nonce: 2,
             initCode: hex"",
             callData: abi.encodeCall(
                 SimpleAccount.execute, (address(testCounter), 0, abi.encodeCall(TestCounter.count, ()))

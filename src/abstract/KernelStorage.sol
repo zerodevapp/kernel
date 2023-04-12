@@ -5,7 +5,6 @@ import "account-abstraction/interfaces/IEntryPoint.sol";
 
 struct WalletKernelStorage {
     address owner;
-    uint256 nonce;
 }
 
 contract KernelStorage {
@@ -24,7 +23,7 @@ contract KernelStorage {
     /// @return ws wallet kernel storage, consists of owner and nonces
 
     function getKernelStorage() internal pure returns (WalletKernelStorage storage ws) {
-        bytes32 storagePosition = bytes32(uint256(keccak256("zero-dev.kernel")) - 1);
+        bytes32 storagePosition = bytes32(uint256(keccak256("zerodev.kernel")) - 1);
         assembly {
             ws.slot := storagePosition
         }
@@ -32,10 +31,6 @@ contract KernelStorage {
 
     function getOwner() external view returns (address) {
         return getKernelStorage().owner;
-    }
-
-    function getNonce() external view returns (uint256) {
-        return getKernelStorage().nonce;
     }
 
     function upgradeTo(address _newImplementation) external {

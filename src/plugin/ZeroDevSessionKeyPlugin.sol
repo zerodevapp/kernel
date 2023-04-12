@@ -6,8 +6,7 @@ pragma solidity ^0.8.7;
 /* solhint-disable reason-string */
 
 import "./ZeroDevBasePlugin.sol";
-import "./policy/IPolicy.sol";
-
+import "openzeppelin-contracts/contracts/utils/cryptography/MerkleProof.sol";
 using ECDSA for bytes32;
 /**
  * Main EIP4337 module.
@@ -18,7 +17,6 @@ using ECDSA for bytes32;
 
 struct ZeroDevSessionKeyStorageStruct {
     mapping(address => bool) revoked;
-    mapping(address => uint256) sessionNonce;
 }
 
 contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
@@ -28,7 +26,7 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
 
     event SessionKeyRevoked(address indexed key);
 
-    constructor() EIP712("ZeroDevSessionKeyPlugin", "1.0.0") {}
+    constructor() EIP712("ZeroDevSessionKeyPlugin", "0.0.1") {}
 
     function getPolicyStorage() internal pure returns (ZeroDevSessionKeyStorageStruct storage s) {
         bytes32 position = bytes32(uint256(keccak256("zero-dev.account.eip4337.sessionkey")) - 1);
@@ -47,50 +45,49 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
         return getPolicyStorage().revoked[_key];
     }
 
-    function sessionNonce(address _key) external view returns (uint256) {
-        return getPolicyStorage().sessionNonce[_key];
-    }
-
-    /**
-     * delegate-called (using execFromModule) through the fallback, so "real" msg.sender is attached as last 20 bytes
-     */
     function _validatePluginData(
         UserOperation calldata userOp,
         bytes32 userOpHash,
         bytes calldata data,
         bytes calldata signature
-    ) internal override returns (bool) {
+    ) internal view override returns (bool) {
         address sessionKey = address(bytes20(data[0:20]));
-        if (getPolicyStorage().revoked[sessionKey]) {
-            return false;
+        require(!getPolicyStorage().revoked[sessionKey], "session key revoked");
+        bytes32 merkleRoot = bytes32(data[20:52]);
+        if(merkleRoot == bytes32(0)) {
+            // means this session key has sudo permission
+            signature = signature[33:98];
+        } else {
+            uint8 leafLength = uint8(signature[0]);
+            bytes32[] memory proof;
+            bytes32 leaf;
+            if(leafLength == 20) {
+                leaf = keccak256(signature[1:21]);
+                proof = abi.decode(signature[86:], (bytes32[]));
+                require(keccak256(userOp.callData[16:36]) == keccak256(signature[1:21]), "invalid session key");
+                signature = signature[21:86];
+            } else if(leafLength == 24) {
+                leaf = keccak256(signature[1:25]);
+                proof = abi.decode(signature[90:], (bytes32[]));
+                require(keccak256(userOp.callData[16:36]) == keccak256(signature[1:21]), "invalid session key");
+                uint256 offset = uint256(bytes32(userOp.callData[68:100]));
+                bytes calldata sig = userOp.callData[offset + 36: offset + 40];
+                require(keccak256(sig) == keccak256(signature[21:25]));
+                signature = signature[25:90];
+            }
+            require(MerkleProof.verify(proof, merkleRoot, leaf), "invalide merkle root");
         }
-
-        address policy = address(bytes20(data[20:40]));
-        if (!_checkPolicy(policy, userOp.callData)) {
-            return false;
-        }
-
         bytes32 digest = _hashTypedDataV4(
             keccak256(
                 abi.encode(
                     keccak256("Session(bytes32 userOpHash,uint256 nonce)"), // we are going to trust plugin for verification
                     userOpHash,
-                    getPolicyStorage().sessionNonce[sessionKey]++
+                    userOp.nonce
                 )
             )
         );
         address recovered = digest.recover(signature);
         require(recovered == sessionKey, "account: invalid signature");
         return true;
-    }
-
-    function _checkPolicy(address _policy, bytes calldata _calldata) internal view returns (bool) {
-        (bool success, bytes memory returndata) = _policy.staticcall(_calldata);
-        if (!success) {
-            assembly {
-                revert(add(32, returndata), mload(returndata))
-            }
-        }
-        return abi.decode(returndata, (bool));
     }
 }

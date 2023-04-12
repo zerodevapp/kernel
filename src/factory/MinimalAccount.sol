@@ -5,7 +5,6 @@ import "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 import "account-abstraction/interfaces/UserOperation.sol";
 import "account-abstraction/interfaces/IAccount.sol";
 import "account-abstraction/interfaces/IEntryPoint.sol";
-import "src/utils/ExtendedUserOpLib.sol";
 import "src/utils/Exec.sol";
 import "src/abstract/KernelStorage.sol";
 import "src/abstract/Compatibility.sol";
@@ -24,18 +23,12 @@ contract MinimalAccount is IAccount, KernelStorage, Compatibility {
         external
         returns (uint256)
     {
-        require(ExtendedUserOpLib.checkUserOpOffset(userOp), "Invalid userOp");
         require(msg.sender == address(entryPoint), "account: not from entrypoint");
         bytes32 hash = ECDSA.toEthSignedMessageHash(userOpHash);
         address recovered = ECDSA.recover(hash, userOp.signature);
         WalletKernelStorage storage ws = getKernelStorage();
         if (ws.owner != recovered) {
             return SIG_VALIDATION_FAILED;
-        }
-        if (userOp.initCode.length > 0) {
-            if (ws.nonce++ != userOp.nonce) {
-                revert InvalidNonce();
-            }
         }
 
         if (missingFunds > 0) {

@@ -6,7 +6,6 @@ import "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
 import "account-abstraction/interfaces/IAccount.sol";
 import "account-abstraction/interfaces/IEntryPoint.sol";
 import "./IPlugin.sol";
-
 abstract contract ZeroDevBasePlugin is IPlugin, EIP712 {
     function validatePluginData(UserOperation calldata userOp, bytes32 userOpHash, uint256 missingAccountFunds)
         external
@@ -16,12 +15,6 @@ abstract contract ZeroDevBasePlugin is IPlugin, EIP712 {
         // data offset starts at 97
         (bytes calldata data, bytes calldata signature) = parseDataAndSignature(userOp.signature[97:]);
         validated = _validatePluginData(userOp, userOpHash, data, signature);
-        if (missingAccountFunds > 0) {
-            //TODO: MAY pay more than the minimum, to deposit for future transactions
-            (bool success,) = payable(msg.sender).call{value: missingAccountFunds}("");
-            (success);
-            //ignore failure (its EntryPoint's job to verify, not account.)
-        }
     }
 
     function _validatePluginData(
@@ -29,7 +22,7 @@ abstract contract ZeroDevBasePlugin is IPlugin, EIP712 {
         bytes32 userOpHash,
         bytes calldata data,
         bytes calldata signature
-    ) internal virtual returns (bool);
+    ) internal virtual returns (bool success);
 
     function parseDataAndSignature(bytes calldata _packed)
         public

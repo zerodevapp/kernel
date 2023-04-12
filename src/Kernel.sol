@@ -6,8 +6,8 @@ import "./plugin/IPlugin.sol";
 import "account-abstraction/core/Helpers.sol";
 import "account-abstraction/interfaces/IAccount.sol";
 import "account-abstraction/interfaces/IEntryPoint.sol";
+import {EntryPoint} from  "account-abstraction/core/EntryPoint.sol";
 import "./utils/Exec.sol";
-import "./utils/ExtendedUserOpLib.sol";
 import "./abstract/Compatibility.sol";
 import "./abstract/KernelStorage.sol";
 
@@ -85,7 +85,6 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         external
         returns (uint256 validationData)
     {
-        require(ExtendedUserOpLib.checkUserOpOffset(userOp), "userOp: invalid offset");
         require(msg.sender == address(entryPoint), "account: not from entryPoint");
         if (userOp.signature.length == 65) {
             validationData = _validateUserOp(userOp, userOpHash);
@@ -96,17 +95,15 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
             uint48 validAfter = uint48(bytes6(userOp.signature[26:32]));
             bytes memory signature = userOp.signature[32:97];
             (bytes memory data,) = abi.decode(userOp.signature[97:], (bytes, bytes));
-
             bytes32 digest = _hashTypedDataV4(
                 keccak256(
                     abi.encode(
                         keccak256(
-                            "ValidateUserOpPlugin(address sender,uint48 validUntil,uint48 validAfter,address plugin,bytes data)"
+                            "ValidateUserOpPlugin(address plugin,uint48 validUntil,uint48 validAfter,bytes data)"
                         ), // we are going to trust plugin for verification
-                        userOp.sender,
+                        plugin,
                         validUntil,
                         validAfter,
-                        plugin,
                         keccak256(data)
                     )
                 )
@@ -118,7 +115,7 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
             }
             bytes memory ret = _delegateToPlugin(plugin, userOp, userOpHash, missingAccountFunds);
             bool res = abi.decode(ret, (bool));
-            if (res) {
+            if (!res) {
                 return SIG_VALIDATION_FAILED;
             }
             validationData = _packValidationData(!res, validUntil, validAfter);
@@ -135,17 +132,18 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
 
     function _validateUserOp(UserOperation calldata userOp, bytes32 userOpHash)
         internal
+        view
         returns (uint256 validationData)
     {
-        bytes32 hash = ECDSA.toEthSignedMessageHash(userOpHash);
-        address recovered = ECDSA.recover(hash, userOp.signature);
         WalletKernelStorage storage ws = getKernelStorage();
-        if (ws.owner != recovered) {
-            return SIG_VALIDATION_FAILED;
+        if (ws.owner == ECDSA.recover(userOpHash, userOp.signature)) {
+            return validationData;
         }
 
-        if (ws.nonce++ != userOp.nonce) {
-            revert InvalidNonce();
+        bytes32 hash = ECDSA.toEthSignedMessageHash(userOpHash);
+        address recovered = ECDSA.recover(hash, userOp.signature);
+        if (ws.owner != recovered) {
+            return SIG_VALIDATION_FAILED;
         }
     }
 

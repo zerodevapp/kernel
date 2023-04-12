@@ -2,16 +2,16 @@
 pragma solidity ^0.8.0;
 
 import "openzeppelin-contracts/contracts/utils/Create2.sol";
-import "./EIP1967Proxy.sol";
-import "./MinimalAccount.sol";
+import "./factory/EIP1967Proxy.sol";
+import "./Kernel.sol";
 
-contract AccountFactory {
-    MinimalAccount public immutable accountTemplate;
+contract KernelFactory {
+    Kernel public immutable kernelTemplate;
 
     event AccountCreated(address indexed account, address indexed owner, uint256 index);
 
     constructor(IEntryPoint _entryPoint) {
-        accountTemplate = new MinimalAccount(_entryPoint);
+        kernelTemplate = new Kernel(_entryPoint);
     }
 
     function createAccount(address _owner, uint256 _index) external returns (EIP1967Proxy proxy) {
@@ -21,7 +21,7 @@ contract AccountFactory {
             keccak256(
                 abi.encodePacked(
                     type(EIP1967Proxy).creationCode,
-                    abi.encode(address(accountTemplate), abi.encodeCall(MinimalAccount.initialize, (_owner)))
+                    abi.encode(address(kernelTemplate), abi.encodeCall(Kernel.initialize, (_owner)))
                 )
             )
         );
@@ -29,7 +29,7 @@ contract AccountFactory {
             return EIP1967Proxy(payable(addr));
         }
         proxy =
-        new EIP1967Proxy{salt: salt}(address(accountTemplate), abi.encodeWithSelector(MinimalAccount.initialize.selector, _owner));
+        new EIP1967Proxy{salt: salt}(address(kernelTemplate), abi.encodeWithSelector(Kernel.initialize.selector, _owner));
         emit AccountCreated(address(proxy), _owner, _index);
     }
 
@@ -40,7 +40,7 @@ contract AccountFactory {
             keccak256(
                 abi.encodePacked(
                     type(EIP1967Proxy).creationCode,
-                    abi.encode(address(accountTemplate), abi.encodeCall(MinimalAccount.initialize, (_owner)))
+                    abi.encode(address(kernelTemplate), abi.encodeCall(Kernel.initialize, (_owner)))
                 )
             )
         );
