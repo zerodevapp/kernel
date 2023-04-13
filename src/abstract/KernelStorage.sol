@@ -14,6 +14,16 @@ contract KernelStorage {
 
     event Upgraded(address indexed newImplementation);
 
+    // modifier for checking if the sender is from the entrypoint
+    // or the owner
+    modifier onlyFromEntryPointOrOwner() {
+        require(
+            msg.sender == address(entryPoint) || msg.sender == getKernelStorage().owner,
+            "account: not from entrypoint or owner"
+        );
+        _;
+    }
+
     constructor(IEntryPoint _entryPoint) {
         entryPoint = _entryPoint;
         getKernelStorage().owner = address(1);
@@ -33,15 +43,19 @@ contract KernelStorage {
         return getKernelStorage().owner;
     }
 
-    function upgradeTo(address _newImplementation) external {
-        require(
-            msg.sender == address(entryPoint) || msg.sender == getKernelStorage().owner,
-            "account: not from entrypoint or owner"
-        );
+    function upgradeTo(address _newImplementation) external onlyFromEntryPointOrOwner {
         bytes32 slot = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
         assembly {
             sstore(slot, _newImplementation)
         }
         emit Upgraded(_newImplementation);
+    }
+
+    function transferOwnership(address _newOwner) external onlyFromEntryPointOrOwner {
+        getKernelStorage().owner = _newOwner;
+    }
+
+    function getNonce() public view virtual returns (uint256) {
+        return entryPoint.getNonce(address(this), 0);
     }
 }
