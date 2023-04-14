@@ -58,5 +58,9 @@ contract KernelStorage {
     function getNonce() public view virtual returns (uint256) {
         return entryPoint.getNonce(address(this), 0);
     }
+
+    function getNonce(uint192 key) public view virtual returns (uint256) {
+        return entryPoint.getNonce(address(this), key);
+    }
 }
  
