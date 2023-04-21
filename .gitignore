@@ -1,6 +1,8 @@
 # Compiler files
 cache/
 out/
+dist/
+types/
 
 # Ignores development broadcast logs
 !/broadcast
