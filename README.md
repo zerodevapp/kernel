@@ -2,7 +2,9 @@
 
 A minimal and efficient ERC-4337-compatible smart contract account designed to be extended.
 
-Read more on our blog: https://docs.zerodev.app/blog/kernel-minimal-extensible-account-for-aa-wallets
+- Intro blog: https://docs.zerodev.app/blog/kernel-minimal-extensible-account-for-aa-wallets
+- Build plugins: https://docs.zerodev.app/use-wallets/use-session-keys
+- Use ZeroDev: https://docs.zerodev.app/
 
 ## Build
 
