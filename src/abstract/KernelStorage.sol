@@ -5,6 +5,9 @@ import "account-abstraction/interfaces/IEntryPoint.sol";
 
 struct WalletKernelStorage {
     address owner;
+    address defaultPlugin;
+    mapping(bytes4 => address) plugins;
+    mapping(bytes4 => address) facets;
 }
 
 contract KernelStorage {
@@ -28,6 +31,16 @@ contract KernelStorage {
         entryPoint = _entryPoint;
         getKernelStorage().owner = address(1);
     }
+
+    /// @notice initialize wallet kernel
+    /// @dev this function should be called only once, implementation initialize is blocked by owner = address(1)
+    /// @param _owner owner address
+    function initialize(address _owner) external {
+        WalletKernelStorage storage ws = getKernelStorage();
+        require(ws.owner == address(0), "account: already initialized");
+        ws.owner = _owner;
+    }
+
     /// @notice get wallet kernel storage
     /// @dev used to get wallet kernel storage
     /// @return ws wallet kernel storage, consists of owner and nonces
@@ -61,6 +74,18 @@ contract KernelStorage {
 
     function getNonce(uint192 key) public view virtual returns (uint256) {
         return entryPoint.getNonce(address(this), key);
+    }
+
+    function setPlugin(bytes4 _selector, address _plugin) external onlyFromEntryPointOrOwnerOrSelf {
+        getKernelStorage().plugins[_selector] = _plugin;
+    }
+
+    function setDefaultPlugin(address _plugin) external onlyFromEntryPointOrOwnerOrSelf {
+        getKernelStorage().defaultPlugin = _plugin;
+    }
+
+    function addFacet(bytes4 _selector, address _facet) external onlyFromEntryPointOrOwnerOrSelf {
+        getKernelStorage().facets[_selector] = _facet;
     }
 }
  

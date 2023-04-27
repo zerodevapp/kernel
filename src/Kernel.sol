@@ -26,13 +26,22 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
 
     constructor(IEntryPoint _entryPoint) EIP712(name, version) KernelStorage(_entryPoint) {}
 
-    /// @notice initialize wallet kernel
-    /// @dev this function should be called only once, implementation initialize is blocked by owner = address(1)
-    /// @param _owner owner address
-    function initialize(address _owner) external {
-        WalletKernelStorage storage ws = getKernelStorage();
-        require(ws.owner == address(0), "account: already initialized");
-        ws.owner = _owner;
+    fallback() external payable {
+        // should we do entrypoint check here?
+        bytes4 sig = msg.sig;
+        address facet = getKernelStorage().facets[sig];
+        assembly {
+            calldatacopy(0,0,calldatasize())
+            let result := delegatecall(gas(), facet, 0, calldatasize(), 0, 0)
+            returndatacopy(0, 0, returndatasize())
+            switch result
+            case 0 {
+                revert(0, returndatasize())
+            }
+            default {
+                return(0, returndatasize())
+            }
+        }
     }
 
     /// @notice Query plugin for data
@@ -86,41 +95,14 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         returns (uint256 validationData)
     {
         require(msg.sender == address(entryPoint), "account: not from entryPoint");
-        if (userOp.signature.length == 65) {
+        address plugin = getKernelStorage().plugins[bytes4(userOp.callData[0:4])];
+        if( plugin == address(0) && getKernelStorage().defaultPlugin != address(0)) {
+            plugin = getKernelStorage().defaultPlugin;
+        }
+        if (plugin == address(0)) {
             validationData = _validateUserOp(userOp, userOpHash);
-        } else if (userOp.signature.length > 97) {
-            // userOp.signature = address(plugin) + validUntil + validAfter + pluginData + pluginSignature
-            address plugin = address(bytes20(userOp.signature[0:20]));
-            uint48 validUntil = uint48(bytes6(userOp.signature[20:26]));
-            uint48 validAfter = uint48(bytes6(userOp.signature[26:32]));
-            bytes memory signature = userOp.signature[32:97];
-            (bytes memory data,) = abi.decode(userOp.signature[97:], (bytes, bytes));
-            bytes32 digest = _hashTypedDataV4(
-                keccak256(
-                    abi.encode(
-                        keccak256(
-                            "ValidateUserOpPlugin(address plugin,uint48 validUntil,uint48 validAfter,bytes data)"
-                        ), // we are going to trust plugin for verification
-                        plugin,
-                        validUntil,
-                        validAfter,
-                        keccak256(data)
-                    )
-                )
-            );
-
-            address signer = ECDSA.recover(digest, signature);
-            if (getKernelStorage().owner != signer) {
-                return SIG_VALIDATION_FAILED;
-            }
-            bytes memory ret = _delegateToPlugin(plugin, userOp, userOpHash, missingAccountFunds);
-            bool res = abi.decode(ret, (bool));
-            if (!res) {
-                return SIG_VALIDATION_FAILED;
-            }
-            validationData = _packValidationData(!res, validUntil, validAfter);
         } else {
-            revert InvalidSignatureLength();
+            validationData = _delegateToPlugin(plugin, userOp, userOpHash, missingAccountFunds);
         }
         if (missingAccountFunds > 0) {
             // we are going to assume signature is valid at this point
@@ -147,24 +129,8 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         }
     }
 
-    /**
-     * delegate the contract call to the plugin
-     */
-    function _delegateToPlugin(
-        address plugin,
-        UserOperation calldata userOp,
-        bytes32 opHash,
-        uint256 missingAccountFunds
-    ) internal returns (bytes memory) {
-        bytes memory data =
-            abi.encodeWithSelector(IPlugin.validatePluginData.selector, userOp, opHash, missingAccountFunds);
-        (bool success, bytes memory ret) = Exec.delegateCall(plugin, data); // Q: should we allow value > 0?
-        if (!success) {
-            assembly {
-                revert(add(ret, 32), mload(ret))
-            }
-        }
-        return ret;
+    function _delegateToPlugin(address _plugin, UserOperation calldata _userOp, bytes32 _userOpHash, uint256 _missingFunds) internal returns(uint256 ret){
+        //
     }
 
     /// @notice validate signature using eip1271
