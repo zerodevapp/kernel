@@ -21,7 +21,7 @@ contract KernelFactory {
             keccak256(
                 abi.encodePacked(
                     type(EIP1967Proxy).creationCode,
-                    abi.encode(address(kernelTemplate), abi.encodeCall(Kernel.initialize, (_owner)))
+                    abi.encode(address(kernelTemplate), abi.encodeCall(KernelStorage.initialize, (_owner)))
                 )
             )
         );
@@ -29,7 +29,7 @@ contract KernelFactory {
             return EIP1967Proxy(payable(addr));
         }
         proxy =
-        new EIP1967Proxy{salt: salt}(address(kernelTemplate), abi.encodeWithSelector(Kernel.initialize.selector, _owner));
+        new EIP1967Proxy{salt: salt}(address(kernelTemplate), abi.encodeWithSelector(KernelStorage.initialize.selector, _owner));
         emit AccountCreated(address(proxy), _owner, _index);
     }
 
@@ -40,7 +40,7 @@ contract KernelFactory {
             keccak256(
                 abi.encodePacked(
                     type(EIP1967Proxy).creationCode,
-                    abi.encode(address(kernelTemplate), abi.encodeCall(Kernel.initialize, (_owner)))
+                    abi.encode(address(kernelTemplate), abi.encodeCall(KernelStorage.initialize, (_owner)))
                 )
             )
         );
