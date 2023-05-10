@@ -19,6 +19,9 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
     error InvalidNonce();
     error InvalidSignatureLength();
     error QueryResult(bytes result);
+    error AlreadyInitialized();
+    error NotFromEntryPoint();
+    error NotFromEntryPointOrOwner();
 
     string public constant name = "Kernel";
 
@@ -31,7 +34,9 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
     /// @param _owner owner address
     function initialize(address _owner) external {
         WalletKernelStorage storage ws = getKernelStorage();
-        require(ws.owner == address(0), "account: already initialized");
+        if (ws.owner != address(0)) {
+            revert AlreadyInitialized();
+        }
         ws.owner = _owner;
     }
 
@@ -57,10 +62,9 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
     /// @param data data to be sent
     /// @param operation operation type (call or delegatecall)
     function executeAndRevert(address to, uint256 value, bytes calldata data, Operation operation) external {
-        require(
-            msg.sender == address(entryPoint) || msg.sender == getKernelStorage().owner,
-            "account: not from entrypoint or owner"
-        );
+        if (msg.sender != address(entryPoint) && msg.sender != getKernelStorage().owner) {
+            revert NotFromEntryPointOrOwner();
+        }
         bool success;
         bytes memory ret;
         if (operation == Operation.DelegateCall) {
@@ -85,7 +89,9 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         external
         returns (uint256 validationData)
     {
-        require(msg.sender == address(entryPoint), "account: not from entryPoint");
+        if (msg.sender != address(entryPoint)) {
+            revert NotFromEntryPoint();
+        }
         if (userOp.signature.length == 65) {
             validationData = _validateUserOp(userOp, userOpHash);
         } else if (userOp.signature.length > 97) {

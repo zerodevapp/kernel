@@ -9,15 +9,22 @@ contract EIP1967Proxy {
      */
     bytes32 internal constant _IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
 
+    error ZeroAddressImplementation();
+    error ConstructorCallFailed();
+
     constructor(address _logic, bytes memory _data) payable {
-        require(_logic != address(0), "EIP1967Proxy: implementation is the zero address");
+        if (_logic == address(0)) {
+            revert ZeroAddressImplementation();
+        }
         bytes32 slot = _IMPLEMENTATION_SLOT;
         assembly {
             sstore(slot, _logic)
         }
         if (_data.length > 0) {
             (bool success,) = _logic.delegatecall(_data);
-            require(success, "EIP1967Proxy: constructor call failed");
+            if (!success) {
+                revert ConstructorCallFailed();
+            }
         }
     }
 

@@ -28,6 +28,10 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
 
     constructor() EIP712("ZeroDevSessionKeyPlugin", "0.0.1") {}
 
+    error SessionKeyRevokedError();
+    error InvalidSessionKey();
+    error InvalidMerkleRoot();
+
     function getPolicyStorage() internal pure returns (ZeroDevSessionKeyStorageStruct storage s) {
         bytes32 position = bytes32(uint256(keccak256("zero-dev.account.eip4337.sessionkey")) - 1);
         assembly {
@@ -52,7 +56,9 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
         bytes calldata signature
     ) internal view override returns (bool) {
         address sessionKey = address(bytes20(data[0:20]));
-        require(!getPolicyStorage().revoked[sessionKey], "session key revoked");
+        if (getPolicyStorage().revoked[sessionKey]) {
+            revert SessionKeyRevokedError();
+        }
         bytes32 merkleRoot = bytes32(data[20:52]);
         if(merkleRoot == bytes32(0)) {
             // means this session key has sudo permission
@@ -64,18 +70,26 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
             if(leafLength == 20) {
                 leaf = keccak256(signature[1:21]);
                 proof = abi.decode(signature[86:], (bytes32[]));
-                require(keccak256(userOp.callData[16:36]) == keccak256(signature[1:21]), "invalid session key");
+                if (keccak256(userOp.callData[16:36]) != keccak256(signature[1:21])) {
+                    revert InvalidSessionKey();
+                }
                 signature = signature[21:86];
             } else if(leafLength == 24) {
                 leaf = keccak256(signature[1:25]);
                 proof = abi.decode(signature[90:], (bytes32[]));
-                require(keccak256(userOp.callData[16:36]) == keccak256(signature[1:21]), "invalid session key");
+                if (keccak256(userOp.callData[16:36]) != keccak256(signature[1:21])) {
+                    revert InvalidSessionKey();
+                }
                 uint256 offset = uint256(bytes32(userOp.callData[68:100]));
                 bytes calldata sig = userOp.callData[offset + 36: offset + 40];
-                require(keccak256(sig) == keccak256(signature[21:25]));
+                if (keccak256(sig) != keccak256(signature[21:25])) {
+                    revert InvalidSessionKey();
+                }
                 signature = signature[25:90];
             }
-            require(MerkleProof.verify(proof, merkleRoot, leaf), "invalide merkle root");
+            if (!MerkleProof.verify(proof, merkleRoot, leaf)) {
+                revert InvalidMerkleRoot();
+            }
         }
         bytes32 digest = _hashTypedDataV4(
             keccak256(
@@ -87,7 +101,9 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
             )
         );
         address recovered = digest.recover(signature);
-        require(recovered == sessionKey, "account: invalid signature");
+        if (recovered != sessionKey) {
+            revert InvalidSignature();
+        }
         return true;
     }
 }

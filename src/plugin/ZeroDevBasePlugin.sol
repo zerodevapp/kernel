@@ -7,6 +7,10 @@ import "account-abstraction/interfaces/IAccount.sol";
 import "account-abstraction/interfaces/IEntryPoint.sol";
 import "./IPlugin.sol";
 abstract contract ZeroDevBasePlugin is IPlugin, EIP712 {
+    error InvalidData();
+    error InvalidSignature();
+
+
     function validatePluginData(UserOperation calldata userOp, bytes32 userOpHash, uint256 missingAccountFunds)
         external
         override
@@ -36,7 +40,11 @@ abstract contract ZeroDevBasePlugin is IPlugin, EIP712 {
         data = _packed[dataPosition + 32:dataPosition + 32 + dataLength];
         signature = _packed[signaturePosition + 32:signaturePosition + 32 + signatureLength];
 
-        require(dataPosition + 64 + ((dataLength) / 32) * 32 == signaturePosition, "invalid data");
-        require(signaturePosition + 64 + ((signatureLength) / 32) * 32 == _packed.length, "invalid signature");
+        if (dataPosition + 64 + ((dataLength) / 32) * 32 != signaturePosition) {
+            revert InvalidData();
+        }
+        if (signaturePosition + 64 + ((signatureLength) / 32) * 32 != _packed.length) {
+            revert InvalidSignature();
+        }
     }
 }
