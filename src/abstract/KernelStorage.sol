@@ -4,10 +4,15 @@ pragma solidity ^0.8.0;
 import "account-abstraction/interfaces/IEntryPoint.sol";
 import "src/validator/IValidator.sol";
 
+struct ExectionDetail {
+    address executor;
+    IKernelValidator validator;
+}
+
 struct WalletKernelStorage {
+    address __deprecated;
     IKernelValidator defaultValidator;
-    mapping(bytes4 => IKernelValidator) validator;
-    mapping(bytes4 => address) action;
+    mapping(bytes4 => ExectionDetail) execution;
 }
 
 contract KernelStorage {
@@ -68,15 +73,13 @@ contract KernelStorage {
         return entryPoint.getNonce(address(this), key);
     }
 
-    function setValidator(bytes4 _selector, IKernelValidator _validator) external onlyFromEntryPointOrOwnerOrSelf {
-        getKernelStorage().validator[_selector] = _validator;
+    function setExecution(bytes4 _selector, address _executor, IKernelValidator _validator) external onlyFromEntryPointOrOwnerOrSelf {
+        getKernelStorage().execution[_selector].executor = _executor;
+        getKernelStorage().execution[_selector].validator = _validator;
     }
 
     function setDefaultValidator(IKernelValidator _defaultValidator) external onlyFromEntryPointOrOwnerOrSelf {
         getKernelStorage().defaultValidator = _defaultValidator;
     }
 
-    function addAction(bytes4 _selector, address _action) external onlyFromEntryPointOrOwnerOrSelf {
-        getKernelStorage().action[_selector] = _action;
-    }
 }

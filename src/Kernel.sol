@@ -29,7 +29,7 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         // should we do entrypoint check here?
         require(msg.sender == address(entryPoint), "account: not from entrypoint");
         bytes4 sig = msg.sig;
-        address facet = getKernelStorage().action[sig];
+        address facet = getKernelStorage().execution[sig].executor;
         assembly {
             calldatacopy(0, 0, calldatasize())
             let result := delegatecall(gas(), facet, 0, calldatasize(), 0, 0)
@@ -77,7 +77,7 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
     {
         require(msg.sender == address(entryPoint), "account: not from entryPoint");
         bytes4 sig = bytes4(userOp.callData[0:4]);
-        IKernelValidator validator = getKernelStorage().validator[sig];
+        IKernelValidator validator = getKernelStorage().execution[sig].validator;
         if(address(validator) == address(0)) {
             validator = getKernelStorage().defaultValidator;
         }
@@ -136,7 +136,6 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         }
     }
 
-    // TODO: this should be forwarded to default validator
     function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4) {
         uint256 validationData = getKernelStorage().defaultValidator.validateSignature(hash, signature);
         ValidationData memory data = _parseValidationData(validationData);
