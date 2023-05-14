@@ -6,6 +6,7 @@ import "src/validator/ECDSAValidator.sol";
 import "src/factory/EIP1967Proxy.sol";
 // test artifacts
 import "src/test/TestValidator.sol";
+import "src/test/TestExecutor.sol";
 // test utils
 import "forge-std/Test.sol";
 import {ERC4337Utils} from "./ERC4337Utils.sol";
@@ -95,6 +96,41 @@ contract KernelExecutionTest is Test {
         ops[0] = op;
         // vm.expectEmit(true, false, false, false);
         // emit TestValidator.TestValidateUserOp(opHash);
+        entryPoint.handleOps(ops, beneficiary);
+    }
+
+    function test_mode_2_1() external {
+        TestValidator testValidator = new TestValidator();
+        TestExecutor testExecutor = new TestExecutor();
+        UserOperation memory op =
+            entryPoint.fillUserOp(address(kernel), abi.encodeWithSelector(TestExecutor.doNothing.selector));
+
+        bytes32 digest = getTypedDataHash(
+            address(kernel), TestExecutor.doNothing.selector, 0, 0, address(testValidator), address(testExecutor), ""
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
+
+        op.signature = abi.encodePacked(
+            bytes4(0x00000002),
+            uint48(0),
+            uint48(0),
+            address(testValidator),
+            address(testExecutor),
+            uint256(0),
+            uint256(65),
+            r,
+            s,
+            v
+        );
+        UserOperation[] memory ops = new UserOperation[](1);
+        ops[0] = op;
+        // vm.expectEmit(true, false, false, false);
+        // emit TestValidator.TestValidateUserOp(opHash);
+        entryPoint.handleOps(ops, beneficiary);
+        op = entryPoint.fillUserOp(address(kernel), abi.encodeWithSelector(TestExecutor.doNothing.selector));
+        // registered
+        op.signature = abi.encodePacked(bytes4(0x00000001));
+        ops[0] = op;
         entryPoint.handleOps(ops, beneficiary);
     }
 }

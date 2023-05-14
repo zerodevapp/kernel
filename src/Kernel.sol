@@ -76,39 +76,37 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         // mode == 0x00000000 use sudo validator
         // mode & 0x00000001 == 0x00000001 use given validator
         // mode & 0x00000002 == 0x00000002 enable validator
+        UserOperation memory op = userOp;
+        IKernelValidator validator;
+        bytes4 sig = bytes4(userOp.callData[0:4]);
         if (mode == 0x00000000) {
             // sudo mode (use default validator)
-            UserOperation memory op = userOp;
+            op = userOp;
             op.signature = userOp.signature[4:];
-            validationData = getKernelStorage().defaultValidator.validateUserOp(op, userOpHash, missingAccountFunds);
-        } else {
-            UserOperation memory op = userOp;
-            bytes4 sig = bytes4(userOp.callData[0:4]);
-            IKernelValidator validator;
-            if (mode == 0x00000001) {
-                ExecutionDetail storage detail = getKernelStorage().execution[sig];
-                validator = detail.validator;
-                if (address(validator) == address(0)) {
-                    validator = getKernelStorage().defaultValidator;
-                }
-                op.signature = userOp.signature[4:];
-                validationData = (uint256(detail.validAfter) << 160) | (uint256(detail.validUntil) << (48 + 160));
-            } else if (mode & 0x00000002 == 0x00000002) {
-                // use given validator
-                // userOp.signature[4:10] = validUntil,
-                // userOp.signature[10:16] = validAfter,
-                // userOp.signature[16:36] = validator address,
-                validator = IKernelValidator(address(bytes20(userOp.signature[16:36])));
-                bytes calldata enableData;
-                bytes calldata remainSig;
-                (validationData, enableData, remainSig) = _approveValidator(sig, userOp.signature);
-                validator.enable(enableData);
-            } else {
-                return SIG_VALIDATION_FAILED;
+            validator = getKernelStorage().defaultValidator;
+        } else if (mode == 0x00000001) {
+            ExecutionDetail storage detail = getKernelStorage().execution[sig];
+            validator = detail.validator;
+            if (address(validator) == address(0)) {
+                validator = getKernelStorage().defaultValidator;
             }
-            validationData =
-                _intersectValidationData(validationData, validator.validateUserOp(op, userOpHash, missingAccountFunds));
+            op.signature = userOp.signature[4:];
+            validationData = (uint256(detail.validAfter) << 160) | (uint256(detail.validUntil) << (48 + 160));
+        } else if (mode == 0x00000002) {
+            // use given validator
+            // userOp.signature[4:10] = validUntil,
+            // userOp.signature[10:16] = validAfter,
+            // userOp.signature[16:36] = validator address,
+            validator = IKernelValidator(address(bytes20(userOp.signature[16:36])));
+            bytes calldata enableData;
+            bytes calldata remainSig;
+            (validationData, enableData, remainSig) = _approveValidator(sig, userOp.signature);
+            validator.enable(enableData);
+        } else {
+            return SIG_VALIDATION_FAILED;
         }
+        validationData =
+            _intersectValidationData(validationData, validator.validateUserOp(op, userOpHash, missingAccountFunds));
         if (missingAccountFunds > 0) {
             // we are going to assume signature is valid at this point
             (bool success,) = msg.sender.call{value: missingAccountFunds}("");
