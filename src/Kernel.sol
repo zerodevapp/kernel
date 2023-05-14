@@ -74,8 +74,8 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         bytes4 mode = bytes4(userOp.signature[0:4]); // mode == 00..00 use validators
         require(mode & getKernelStorage().disabledMode == 0x00000000, "kernel: mode disabled");
         // mode == 0x00000000 use sudo validator
-        // mode & 0x00000001 == 0x00000001 use given validator
-        // mode & 0x00000002 == 0x00000002 enable validator
+        // mode == 0x00000001 use given validator
+        // mode == 0x00000002 enable validator
         UserOperation memory op = userOp;
         IKernelValidator validator;
         bytes4 sig = bytes4(userOp.callData[0:4]);

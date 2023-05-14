@@ -70,14 +70,25 @@ contract KernelExecutionTest is Test {
         entryPoint.handleOps(ops, beneficiary);
     }
 
+    function test_sudo() external {
+        UserOperation memory op =
+            entryPoint.fillUserOp(address(kernel), abi.encodeWithSelector(TestExecutor.doNothing.selector));
+        op.signature = abi.encodePacked(bytes4(0x00000000), entryPoint.signUserOpHash(vm, ownerKey, op));
+        UserOperation[] memory ops = new UserOperation[](1);
+        ops[0] = op;
+        logGas(op);
+        entryPoint.handleOps(ops, beneficiary);
+    }
+
     function test_mode_2() external {
         TestValidator testValidator = new TestValidator();
-        UserOperation memory op = entryPoint.fillUserOp(
-            address(kernel), abi.encodeWithSelector(Kernel.execute.selector, address(0xdeadbeef), 1, "")
-        );
+        TestExecutor testExecutor = new TestExecutor();
+        UserOperation memory op =
+            entryPoint.fillUserOp(address(kernel), abi.encodeWithSelector(TestExecutor.doNothing.selector));
 
-        bytes32 digest =
-            getTypedDataHash(address(kernel), Kernel.execute.selector, 0, 0, address(testValidator), address(0), "");
+        bytes32 digest = getTypedDataHash(
+            address(kernel), TestExecutor.doNothing.selector, 0, 0, address(testValidator), address(testExecutor), ""
+        );
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
 
         op.signature = abi.encodePacked(
@@ -85,7 +96,7 @@ contract KernelExecutionTest is Test {
             uint48(0),
             uint48(0),
             address(testValidator),
-            address(0),
+            address(testExecutor),
             uint256(0),
             uint256(65),
             r,
@@ -96,6 +107,8 @@ contract KernelExecutionTest is Test {
         ops[0] = op;
         // vm.expectEmit(true, false, false, false);
         // emit TestValidator.TestValidateUserOp(opHash);
+        logGas(op);
+
         entryPoint.handleOps(ops, beneficiary);
     }
 
@@ -131,7 +144,25 @@ contract KernelExecutionTest is Test {
         // registered
         op.signature = abi.encodePacked(bytes4(0x00000001));
         ops[0] = op;
+        logGas(op);
         entryPoint.handleOps(ops, beneficiary);
+    }
+
+    function logGas(UserOperation memory op) internal returns(uint256 used) {
+        try this.consoleGasUsage(op) {
+            revert("should revert");
+        } catch Error(string memory reason) {
+            used = abi.decode(bytes(reason), (uint256));
+            console.log("validation gas usage :", used);
+        }
+    }
+
+    function consoleGasUsage(UserOperation memory op) external {
+        uint256 gas = gasleft();
+        vm.startPrank(address(entryPoint));
+        kernel.validateUserOp(op, entryPoint.getUserOpHash(op), 0);
+        vm.stopPrank();
+        revert(string(abi.encodePacked(gas - gasleft())));
     }
 }
 
