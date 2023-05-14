@@ -7,6 +7,7 @@ contract TestValidator is IKernelValidator {
     event TestValidateUserOp(bytes32 indexed opHash);
     event TestEnable(bytes data);
     event TestDisable(bytes data);
+
     function validateSignature(bytes32, bytes calldata) external pure override returns (uint256) {
         return 0;
     }

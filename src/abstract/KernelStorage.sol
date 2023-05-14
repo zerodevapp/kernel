@@ -94,17 +94,26 @@ contract KernelStorage {
     }
 
     // change storage
-    function setExecution(bytes4 _selector, address _executor, IKernelValidator _validator, uint48 _validUntil, uint48 _validAfter)
-        external
-        onlyFromEntryPointOrOwnerOrSelf
-    {
+    function setExecution(
+        bytes4 _selector,
+        address _executor,
+        IKernelValidator _validator,
+        uint48 _validUntil,
+        uint48 _validAfter
+    ) external onlyFromEntryPointOrOwnerOrSelf {
         getKernelStorage().execution[_selector] = ExecutionDetail({
-            executor: _executor, validator: _validator, validUntil: _validUntil, validAfter: _validAfter
+            executor: _executor,
+            validator: _validator,
+            validUntil: _validUntil,
+            validAfter: _validAfter
         });
         emit ExecutionChanged(_selector, _executor, address(_validator));
     }
 
-    function setDefaultValidator(IKernelValidator _defaultValidator, bytes calldata _data) external onlyFromEntryPointOrOwnerOrSelf {
+    function setDefaultValidator(IKernelValidator _defaultValidator, bytes calldata _data)
+        external
+        onlyFromEntryPointOrOwnerOrSelf
+    {
         IKernelValidator oldValidator = getKernelStorage().defaultValidator;
         getKernelStorage().defaultValidator = _defaultValidator;
         emit DefaultValidatorChanged(address(oldValidator), address(_defaultValidator));

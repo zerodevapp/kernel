@@ -84,27 +84,30 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         } else {
             UserOperation memory op = userOp;
             bytes4 sig = bytes4(userOp.callData[0:4]);
-            if (mode == 0x00000000) {
-                IKernelValidator validator = getKernelStorage().execution[sig].validator;
+            IKernelValidator validator;
+            if (mode == 0x00000001) {
+                ExecutionDetail storage detail = getKernelStorage().execution[sig];
+                validator = detail.validator;
                 if (address(validator) == address(0)) {
                     validator = getKernelStorage().defaultValidator;
                 }
-            } else if (mode & 0x00000001 == 0x00000001) {
+                op.signature = userOp.signature[4:];
+                validationData = (uint256(detail.validAfter) << 160) | (uint256(detail.validUntil) << (48 + 160));
+            } else if (mode & 0x00000002 == 0x00000002) {
                 // use given validator
                 // userOp.signature[4:10] = validUntil,
                 // userOp.signature[10:16] = validAfter,
                 // userOp.signature[16:36] = validator address,
-                IKernelValidator validator = IKernelValidator(address(bytes20(userOp.signature[16:36])));
+                validator = IKernelValidator(address(bytes20(userOp.signature[16:36])));
                 bytes calldata enableData;
                 bytes calldata remainSig;
                 (validationData, enableData, remainSig) = _approveValidator(sig, userOp.signature);
                 validator.enable(enableData);
-                validationData = _intersectValidationData(
-                    validationData, validator.validateUserOp(op, userOpHash, missingAccountFunds)
-                );
             } else {
                 return SIG_VALIDATION_FAILED;
             }
+            validationData =
+                _intersectValidationData(validationData, validator.validateUserOp(op, userOpHash, missingAccountFunds));
         }
         if (missingAccountFunds > 0) {
             // we are going to assume signature is valid at this point
@@ -127,12 +130,12 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
                     keccak256("ValidatorApproved(bytes4 sig,uint256 validatorData,address executor,bytes enableData)"),
                     bytes4(sig),
                     uint256(bytes32(signature[4:36])),
-                    address(bytes20(signature[36: 56])),
+                    address(bytes20(signature[36:56])),
                     keccak256(enableData)
                 )
             )
         );
-        
+
         validationData = _intersectValidationData(
             getKernelStorage().defaultValidator.validateSignature(
                 enableDigest, signature[120 + enableDataLength:120 + enableDataLength + enableSignatureLength]
@@ -141,7 +144,7 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         );
         validationSig = signature[120 + enableDataLength + enableSignatureLength:];
         getKernelStorage().execution[sig] = ExecutionDetail({
-            executor: address(bytes20(signature[36: 56])),
+            executor: address(bytes20(signature[36:56])),
             validator: IKernelValidator(address(bytes20(signature[16:36]))),
             validUntil: uint48(bytes6(signature[4:10])),
             validAfter: uint48(bytes6(signature[10:16]))
