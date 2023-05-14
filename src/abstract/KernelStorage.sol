@@ -4,7 +4,9 @@ pragma solidity ^0.8.0;
 import "account-abstraction/interfaces/IEntryPoint.sol";
 import "src/validator/IValidator.sol";
 
-struct ExectionDetail {
+struct ExecutionDetail {
+    uint48 validUntil;
+    uint48 validAfter;
     address executor;
     IKernelValidator validator;
 }
@@ -13,7 +15,7 @@ struct WalletKernelStorage {
     bytes32 __deprecated;
     IKernelValidator defaultValidator;
     bytes4 disabledMode;
-    mapping(bytes4 => ExectionDetail) execution;
+    mapping(bytes4 => ExecutionDetail) execution;
 }
 
 contract KernelStorage {
@@ -22,6 +24,8 @@ contract KernelStorage {
     IEntryPoint public immutable entryPoint;
 
     event Upgraded(address indexed newImplementation);
+    event DefaultValidatorChanged(address indexed oldValidator, address indexed newValidator);
+    event ExecutionChanged(bytes4 indexed selector, address indexed executor, address indexed validator);
 
     // modifier for checking if the sender is the entrypoint or
     // the account itself
@@ -45,6 +49,7 @@ contract KernelStorage {
         WalletKernelStorage storage ws = getKernelStorage();
         require(address(ws.defaultValidator) == address(0), "account: already initialized");
         ws.defaultValidator = _defaultValidator;
+        emit DefaultValidatorChanged(address(0), address(_defaultValidator));
         _defaultValidator.enable(_data);
     }
 
@@ -84,20 +89,26 @@ contract KernelStorage {
         return getKernelStorage().disabledMode;
     }
 
-    function getExecution(bytes4 _selector) public view returns (ExectionDetail memory) {
+    function getExecution(bytes4 _selector) public view returns (ExecutionDetail memory) {
         return getKernelStorage().execution[_selector];
     }
 
     // change storage
-    function setExecution(bytes4 _selector, address _executor, IKernelValidator _validator)
+    function setExecution(bytes4 _selector, address _executor, IKernelValidator _validator, uint48 _validUntil, uint48 _validAfter)
         external
         onlyFromEntryPointOrOwnerOrSelf
     {
-        getKernelStorage().execution[_selector] = ExectionDetail({executor: _executor, validator: _validator});
+        getKernelStorage().execution[_selector] = ExecutionDetail({
+            executor: _executor, validator: _validator, validUntil: _validUntil, validAfter: _validAfter
+        });
+        emit ExecutionChanged(_selector, _executor, address(_validator));
     }
 
-    function setDefaultValidator(IKernelValidator _defaultValidator) external onlyFromEntryPointOrOwnerOrSelf {
+    function setDefaultValidator(IKernelValidator _defaultValidator, bytes calldata _data) external onlyFromEntryPointOrOwnerOrSelf {
+        IKernelValidator oldValidator = getKernelStorage().defaultValidator;
         getKernelStorage().defaultValidator = _defaultValidator;
+        emit DefaultValidatorChanged(address(oldValidator), address(_defaultValidator));
+        _defaultValidator.enable(_data);
     }
 
     function disableMode(bytes4 _disableFlag) external onlyFromEntryPointOrOwnerOrSelf {

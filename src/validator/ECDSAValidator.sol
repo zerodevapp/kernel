@@ -13,7 +13,7 @@ struct ECDSAValidatorStorage {
 uint256 constant SIG_VALIDATION_FAILED = 1;
 
 contract ECDSAValidator is IKernelValidator {
-    event OwnerChanged(address indexed oldOwner, address indexed newOwner);
+    event OwnerChanged(address indexed kernel, address indexed oldOwner, address indexed newOwner);
 
     mapping(address => ECDSAValidatorStorage) public ecdsaValidatorStorage;
 
@@ -25,7 +25,7 @@ contract ECDSAValidator is IKernelValidator {
         address owner = address(bytes20(_data[0:20]));
         address oldOwner = ecdsaValidatorStorage[msg.sender].owner;
         ecdsaValidatorStorage[msg.sender].owner = owner;
-        emit OwnerChanged(oldOwner, owner);
+        emit OwnerChanged(msg.sender, oldOwner, owner);
     }
 
     function validateUserOp(UserOperation calldata _userOp, bytes32 _userOpHash, uint256)

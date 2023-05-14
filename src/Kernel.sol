@@ -11,14 +11,12 @@ import "./abstract/Compatibility.sol";
 import "./abstract/KernelStorage.sol";
 import "./utils/KernelHelper.sol";
 
+import "forge-std/console.sol";
+
 /// @title Kernel
 /// @author taek<leekt216@gmail.com>
 /// @notice wallet kernel for minimal wallet functionality
 contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
-    error InvalidNonce();
-    error InvalidSignatureLength();
-    error QueryResult(bytes result);
-
     string public constant name = "Kernel";
 
     string public constant version = "0.0.2";
@@ -74,10 +72,7 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         require(msg.sender == address(entryPoint), "account: not from entryPoint");
         // mode based signature
         bytes4 mode = bytes4(userOp.signature[0:4]); // mode == 00..00 use validators
-        if (mode & getKernelStorage().disabledMode != 0x00000000) {
-            // disabled mode
-            return SIG_VALIDATION_FAILED;
-        }
+        require(mode & getKernelStorage().disabledMode == 0x00000000, "kernel: mode disabled");
         // mode == 0x00000000 use sudo validator
         // mode & 0x00000001 == 0x00000001 use given validator
         // mode & 0x00000002 == 0x00000002 enable validator
@@ -101,10 +96,9 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
                 // userOp.signature[16:36] = validator address,
                 IKernelValidator validator = IKernelValidator(address(bytes20(userOp.signature[16:36])));
                 bytes calldata enableData;
-                (validationData, enableData, op.signature) = _approveValidator(sig, userOp.signature);
-                if (mode & 0x00000002 == 0x00000002) {
-                    validator.enable(enableData);
-                }
+                bytes calldata remainSig;
+                (validationData, enableData, remainSig) = _approveValidator(sig, userOp.signature);
+                validator.enable(enableData);
                 validationData = _intersectValidationData(
                     validationData, validator.validateUserOp(op, userOpHash, missingAccountFunds)
                 );
@@ -122,30 +116,37 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
 
     function _approveValidator(bytes4 sig, bytes calldata signature)
         internal
-        view
         returns (uint256 validationData, bytes calldata enableData, bytes calldata validationSig)
     {
-        uint256 enableDataLength = uint256(bytes32(signature[36:68]));
-        enableData = signature[68:68 + enableDataLength];
-        uint256 enableSignatureLength = uint256(bytes32(signature[68 + enableDataLength:100 + enableDataLength]));
+        uint256 enableDataLength = uint256(bytes32(signature[56:88]));
+        enableData = signature[88:88 + enableDataLength];
+        uint256 enableSignatureLength = uint256(bytes32(signature[88 + enableDataLength:120 + enableDataLength]));
         bytes32 enableDigest = _hashTypedDataV4(
             keccak256(
                 abi.encode(
-                    keccak256("ValidatorApproved(bytes4 sig,uint256 validatorData,bytes enableData)"),
+                    keccak256("ValidatorApproved(bytes4 sig,uint256 validatorData,address executor,bytes enableData)"),
                     bytes4(sig),
                     uint256(bytes32(signature[4:36])),
+                    address(bytes20(signature[36: 56])),
                     keccak256(enableData)
                 )
             )
         );
+        
         validationData = _intersectValidationData(
             getKernelStorage().defaultValidator.validateSignature(
-                enableDigest, signature[100 + enableDataLength:100 + enableDataLength + enableSignatureLength]
+                enableDigest, signature[120 + enableDataLength:120 + enableDataLength + enableSignatureLength]
             ),
             uint256(bytes32(signature[4:36])) & (uint256(type(uint96).max) << 160)
         );
-        validationSig = signature[76 + enableDataLength + enableSignatureLength:];
-        return (validationData, signature[68:68 + enableDataLength], validationSig);
+        validationSig = signature[120 + enableDataLength + enableSignatureLength:];
+        getKernelStorage().execution[sig] = ExecutionDetail({
+            executor: address(bytes20(signature[36: 56])),
+            validator: IKernelValidator(address(bytes20(signature[16:36]))),
+            validUntil: uint48(bytes6(signature[4:10])),
+            validAfter: uint48(bytes6(signature[10:16]))
+        });
+        return (validationData, signature[88:88 + enableDataLength], validationSig);
     }
 
     function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4) {

@@ -78,8 +78,9 @@ contract KernelTest is Test {
 
     function test_set_default_validator() external {
         TestValidator newValidator = new TestValidator();
+        bytes memory empty;
         UserOperation memory op = entryPoint.fillUserOp(
-            address(kernel), abi.encodeWithSelector(KernelStorage.setDefaultValidator.selector, address(newValidator))
+            address(kernel), abi.encodeWithSelector(KernelStorage.setDefaultValidator.selector, address(newValidator), empty)
         );
         op.signature = abi.encodePacked(bytes4(0x00000000), entryPoint.signUserOpHash(vm, ownerKey, op));
         UserOperation[] memory ops = new UserOperation[](1);
@@ -103,15 +104,17 @@ contract KernelTest is Test {
         UserOperation memory op = entryPoint.fillUserOp(
             address(kernel),
             abi.encodeWithSelector(
-                KernelStorage.setExecution.selector, bytes4(0xdeadbeef), address(0xdead), address(0xbeef)
+                KernelStorage.setExecution.selector, bytes4(0xdeadbeef), address(0xdead), address(0xbeef), uint48(0), uint48(0)
             )
         );
         op.signature = abi.encodePacked(bytes4(0x00000000), entryPoint.signUserOpHash(vm, ownerKey, op));
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = op;
         entryPoint.handleOps(ops, beneficiary);
-        ExectionDetail memory execution = KernelStorage(address(kernel)).getExecution(bytes4(0xdeadbeef));
+        ExecutionDetail memory execution = KernelStorage(address(kernel)).getExecution(bytes4(0xdeadbeef));
         assertEq(execution.executor, address(0xdead));
         assertEq(address(execution.validator), address(0xbeef));
+        assertEq(uint256(execution.validUntil), uint256(0));
+        assertEq(uint256(execution.validAfter), uint256(0));
     }
 }
