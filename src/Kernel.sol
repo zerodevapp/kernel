@@ -102,6 +102,7 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
             bytes calldata remainSig;
             (validationData, enableData, remainSig) = _approveValidator(sig, userOp.signature);
             validator.enable(enableData);
+            op.signature = remainSig;
         } else {
             return SIG_VALIDATION_FAILED;
         }

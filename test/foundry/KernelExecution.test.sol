@@ -7,9 +7,13 @@ import "src/factory/EIP1967Proxy.sol";
 // test artifacts
 import "src/test/TestValidator.sol";
 import "src/test/TestExecutor.sol";
+import "src/test/TestERC721.sol";
 // test utils
 import "forge-std/Test.sol";
 import {ERC4337Utils} from "./ERC4337Utils.sol";
+// test actions/validators
+import "src/validator/ERC165SessionKeyValidator.sol";
+import "src/actions/ERC721Actions.sol";
 
 using ERC4337Utils for EntryPoint;
 
@@ -146,6 +150,51 @@ contract KernelExecutionTest is Test {
         ops[0] = op;
         logGas(op);
         entryPoint.handleOps(ops, beneficiary);
+    }
+
+    function test_mode_2_erc165() external {
+        ERC165SessionKeyValidator sessionKeyValidator = new ERC165SessionKeyValidator();
+        ERC721Actions action = new ERC721Actions();
+        TestERC721 erc721 = new TestERC721();
+        erc721.mint(address(kernel), 0);
+        UserOperation memory op =
+            entryPoint.fillUserOp(address(kernel), abi.encodeWithSelector(ERC721Actions.transferERC721Action.selector, address(erc721), 0, address(0xdead)));
+        address sessionKeyAddr;
+        uint256 sessionKeyPriv;
+        (sessionKeyAddr, sessionKeyPriv) = makeAddrAndKey("sessionKey");
+        bytes memory enableData = abi.encodePacked(sessionKeyAddr, type(IERC721).interfaceId, ERC721Actions.transferERC721Action.selector, uint48(0), uint48(0), uint32(16));
+        {
+        bytes32 digest = getTypedDataHash(
+            address(kernel), ERC721Actions.transferERC721Action.selector, 0, 0, address(sessionKeyValidator), address(action),
+            enableData
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
+
+        op.signature = abi.encodePacked(
+            bytes4(0x00000002),
+            uint48(0),
+            uint48(0),
+            address(sessionKeyValidator),
+            address(action),
+            uint256(enableData.length),
+            enableData,
+            uint256(65),
+            r,
+            s,
+            v
+        );
+        }
+
+        op.signature = bytes.concat(
+            op.signature,
+            entryPoint.signUserOpHash(vm, sessionKeyPriv, op)
+        );
+
+        UserOperation[] memory ops = new UserOperation[](1);
+        ops[0] = op;
+        entryPoint.handleOps(ops, beneficiary);
+
+        assertEq(erc721.ownerOf(0), address(0xdead));
     }
 
     function logGas(UserOperation memory op) internal returns(uint256 used) {

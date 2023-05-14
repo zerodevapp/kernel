@@ -5,12 +5,11 @@ pragma solidity ^0.8.0;
 import "./IValidator.sol";
 import "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
 import "forge-std/console.sol";
+import "src/utils/KernelHelper.sol";
 
 struct ECDSAValidatorStorage {
     address owner;
 }
-
-uint256 constant SIG_VALIDATION_FAILED = 1;
 
 contract ECDSAValidator is IKernelValidator {
     event OwnerChanged(address indexed kernel, address indexed oldOwner, address indexed newOwner);
