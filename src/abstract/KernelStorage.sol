@@ -121,7 +121,8 @@ contract KernelStorage {
         address _executor,
         IKernelValidator _validator,
         uint48 _validUntil,
-        uint48 _validAfter
+        uint48 _validAfter,
+        bytes calldata _enableData
     ) external onlyFromEntryPointOrOwnerOrSelf {
         getKernelStorage().execution[_selector] = ExecutionDetail({
             executor: _executor,
@@ -129,6 +130,7 @@ contract KernelStorage {
             validUntil: _validUntil,
             validAfter: _validAfter
         });
+        _validator.enable(_enableData);
         emit ExecutionChanged(_selector, _executor, address(_validator));
     }
 
