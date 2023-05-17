@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 import "src/Kernel.sol";
 import "src/validator/ECDSAValidator.sol";
 import "src/factory/EIP1967Proxy.sol";
+import "src/factory/KernelFactory.sol";
 // test artifacts
 import "src/test/TestValidator.sol";
 import "src/test/TestExecutor.sol";
@@ -18,8 +19,8 @@ import "src/actions/ERC721Actions.sol";
 using ERC4337Utils for EntryPoint;
 
 contract KernelExecutionTest is Test {
-    Kernel implementation;
     Kernel kernel;
+    KernelFactory factory;
     EntryPoint entryPoint;
     ECDSAValidator validator;
     address owner;
@@ -29,30 +30,18 @@ contract KernelExecutionTest is Test {
     function setUp() public {
         (owner, ownerKey) = makeAddrAndKey("owner");
         entryPoint = new EntryPoint();
-        implementation = new Kernel(entryPoint);
+        factory = new KernelFactory(entryPoint);
         validator = new ECDSAValidator();
 
-        kernel = Kernel(
-            payable(
-                address(
-                    new EIP1967Proxy(
-                    address(implementation),
-                    abi.encodeWithSelector(
-                    implementation.initialize.selector,
-                    validator,
-                    abi.encodePacked(owner)
-                    )
-                    )
-                )
-            )
-        );
+        kernel = Kernel(payable(address(factory.createAccount(owner, 0))));
         vm.deal(address(kernel), 1e30);
         beneficiary = payable(address(makeAddr("beneficiary")));
     }
 
     function test_revert_when_mode_disabled() external {
+        bytes memory empty;
         UserOperation memory op = entryPoint.fillUserOp(
-            address(kernel), abi.encodeWithSelector(KernelStorage.disableMode.selector, bytes4(0x00000001))
+            address(kernel), abi.encodeWithSelector(KernelStorage.disableMode.selector, bytes4(0x00000001), address(0), empty)
         );
         op.signature = abi.encodePacked(bytes4(0x00000000), entryPoint.signUserOpHash(vm, ownerKey, op));
         UserOperation[] memory ops = new UserOperation[](1);
@@ -157,6 +146,7 @@ contract KernelExecutionTest is Test {
         ERC721Actions action = new ERC721Actions();
         TestERC721 erc721 = new TestERC721();
         erc721.mint(address(kernel), 0);
+        erc721.mint(address(kernel), 1);
         UserOperation memory op =
             entryPoint.fillUserOp(address(kernel), abi.encodeWithSelector(ERC721Actions.transferERC721Action.selector, address(erc721), 0, address(0xdead)));
         address sessionKeyAddr;
@@ -192,6 +182,13 @@ contract KernelExecutionTest is Test {
 
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = op;
+        logGas(op);
+        entryPoint.handleOps(ops, beneficiary);
+
+        op = entryPoint.fillUserOp(address(kernel), abi.encodeWithSelector(ERC721Actions.transferERC721Action.selector, address(erc721), 1, address(0xdead)));
+        op.signature = abi.encodePacked(bytes4(0x00000001), entryPoint.signUserOpHash(vm, sessionKeyPriv, op));
+        ops[0] = op;
+        logGas(op);
         entryPoint.handleOps(ops, beneficiary);
 
         assertEq(erc721.ownerOf(0), address(0xdead));

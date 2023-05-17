@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+// Importing external libraries and contracts
 import "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
 import "account-abstraction/core/Helpers.sol";
 import "account-abstraction/interfaces/IAccount.sol";
@@ -11,8 +12,6 @@ import "./abstract/Compatibility.sol";
 import "./abstract/KernelStorage.sol";
 import "./utils/KernelHelper.sol";
 
-import "forge-std/console.sol";
-
 /// @title Kernel
 /// @author taek<leekt216@gmail.com>
 /// @notice wallet kernel for minimal wallet functionality
@@ -21,8 +20,11 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
 
     string public constant version = "0.0.2";
 
+    /// @dev Sets up the EIP712 and KernelStorage with the provided entry point
     constructor(IEntryPoint _entryPoint) EIP712(name, version) KernelStorage(_entryPoint) {}
 
+    /// @notice Accepts incoming Ether transactions and calls from the EntryPoint contract
+    /// @dev This function will delegate any call to the appropriate executor based on the function signature.
     fallback() external payable {
         require(msg.sender == address(entryPoint), "account: not from entrypoint");
         bytes4 sig = msg.sig;
@@ -37,12 +39,12 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         }
     }
 
-    /// @notice execute function call to external contract
-    /// @dev this function will execute function call to external contract
-    /// @param to target contract address
-    /// @param value value to be sent
-    /// @param data data to be sent
-    /// @param operation operation type (call or delegatecall)
+    /// @notice Executes a function call to an external contract
+    /// @dev The type of operation (call or delegatecall) is specified as an argument.
+    /// @param to The address of the target contract
+    /// @param value The amount of Ether to send
+    /// @param data The call data to be sent
+    /// @param operation The type of operation (call or delegatecall)
     function execute(address to, uint256 value, bytes calldata data, Operation operation) external {
         require(msg.sender == address(entryPoint), "account: not from entrypoint");
         bool success;
@@ -59,12 +61,12 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         }
     }
 
-    /// @notice validate user operation
-    /// @dev this function will validate user operation and be called by EntryPoint
-    /// @param userOp user operation
-    /// @param userOpHash user operation hash
-    /// @param missingAccountFunds funds needed to be reimbursed
-    /// @return validationData validation data
+    /// @notice Validates a user operation based on its mode
+    /// @dev This function will validate user operation and be called by EntryPoint
+    /// @param userOp The user operation to be validated
+    /// @param userOpHash The hash of the user operation
+    /// @param missingAccountFunds The funds needed to be reimbursed
+    /// @return validationData The data used for validation
     function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256 missingAccountFunds)
         external
         returns (uint256 validationData)
@@ -150,7 +152,12 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         });
         return (validationData, signature[88:88 + enableDataLength], validationSig);
     }
-
+    
+    /// @notice Checks if a signature is valid
+    /// @dev This function checks if a signature is valid based on the hash of the data signed.
+    /// @param hash The hash of the data that was signed
+    /// @param signature The signature to be validated
+    /// @return The magic value 0x1626ba7e if the signature is valid, otherwise returns 0xffffffff.
     function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4) {
         uint256 validationData = getKernelStorage().defaultValidator.validateSignature(hash, signature);
         ValidationData memory data = _parseValidationData(validationData);
