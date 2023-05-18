@@ -27,8 +27,9 @@ contract KillSwitchValidator is IKernelValidator {
         delete killSwitchValidatorStorage[msg.sender];
     }
 
-    function validateSignature(bytes32, bytes calldata) external pure override returns (uint256) {
-        return SIG_VALIDATION_FAILED;
+    function validateSignature(bytes32 hash, bytes calldata signature) external view override returns (uint256) {
+        KillSwitchValidatorStorage storage validatorStorage = killSwitchValidatorStorage[msg.sender];
+        return _packValidationData(validatorStorage.owner == ECDSA.recover(hash, signature), 0, validatorStorage.pausedUntil);
     }
 
     function validateUserOp(UserOperation calldata _userOp, bytes32 _userOpHash, uint256) external override returns (uint256) {
