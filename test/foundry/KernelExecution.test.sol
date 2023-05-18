@@ -5,6 +5,7 @@ import "src/Kernel.sol";
 import "src/validator/ECDSAValidator.sol";
 import "src/factory/EIP1967Proxy.sol";
 import "src/factory/KernelFactory.sol";
+import "src/factory/ECDSAKernelFactory.sol";
 // test artifacts
 import "src/test/TestValidator.sol";
 import "src/test/TestExecutor.sol";
@@ -21,6 +22,7 @@ using ERC4337Utils for EntryPoint;
 contract KernelExecutionTest is Test {
     Kernel kernel;
     KernelFactory factory;
+    ECDSAKernelFactory ecdsaFactory;
     EntryPoint entryPoint;
     ECDSAValidator validator;
     address owner;
@@ -31,9 +33,11 @@ contract KernelExecutionTest is Test {
         (owner, ownerKey) = makeAddrAndKey("owner");
         entryPoint = new EntryPoint();
         factory = new KernelFactory(entryPoint);
-        validator = new ECDSAValidator();
 
-        kernel = Kernel(payable(address(factory.createAccount(owner, 0))));
+        validator = new ECDSAValidator();
+        ecdsaFactory = new ECDSAKernelFactory(factory, validator);
+
+        kernel = Kernel(payable(address(ecdsaFactory.createAccount(owner, 0))));
         vm.deal(address(kernel), 1e30);
         beneficiary = payable(address(makeAddr("beneficiary")));
     }

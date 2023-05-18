@@ -1,6 +1,6 @@
 pragma solidity ^0.8.0;
 
-import "src/KernelFactory.sol";
+import "src/factory/KernelFactory.sol";
 import "forge-std/Script.sol";
 contract DeployKernel is Script {
     function run() public {

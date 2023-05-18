@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "src/factory/KernelFactory.sol";
+import "src/factory/ECDSAKernelFactory.sol";
 import "src/Kernel.sol";
 import "src/validator/ECDSAValidator.sol";
 import "src/factory/EIP1967Proxy.sol";
@@ -16,6 +17,7 @@ using ERC4337Utils for EntryPoint;
 contract KernelTest is Test {
     Kernel kernel;
     KernelFactory factory;
+    ECDSAKernelFactory ecdsaFactory;
     EntryPoint entryPoint;
     ECDSAValidator validator;
     address owner;
@@ -26,9 +28,11 @@ contract KernelTest is Test {
         (owner, ownerKey) = makeAddrAndKey("owner");
         entryPoint = new EntryPoint();
         factory = new KernelFactory(entryPoint);
-        validator = new ECDSAValidator();
 
-        kernel = Kernel(payable(address(factory.createAccount(owner, 0))));
+        validator = new ECDSAValidator();
+        ecdsaFactory = new ECDSAKernelFactory(factory, validator);
+
+        kernel = Kernel(payable(address(ecdsaFactory.createAccount(owner, 0))));
         vm.deal(address(kernel), 1e30);
         beneficiary = payable(address(makeAddr("beneficiary")));
     }
@@ -91,15 +95,17 @@ contract KernelTest is Test {
     }
 
     function test_set_execution() external {
+        TestValidator newValidator = new TestValidator();
         UserOperation memory op = entryPoint.fillUserOp(
             address(kernel),
             abi.encodeWithSelector(
                 KernelStorage.setExecution.selector,
                 bytes4(0xdeadbeef),
                 address(0xdead),
-                address(0xbeef),
+                address(newValidator),
                 uint48(0),
-                uint48(0)
+                uint48(0),
+                bytes("")
             )
         );
         op.signature = abi.encodePacked(bytes4(0x00000000), entryPoint.signUserOpHash(vm, ownerKey, op));
@@ -108,7 +114,7 @@ contract KernelTest is Test {
         entryPoint.handleOps(ops, beneficiary);
         ExecutionDetail memory execution = KernelStorage(address(kernel)).getExecution(bytes4(0xdeadbeef));
         assertEq(execution.executor, address(0xdead));
-        assertEq(address(execution.validator), address(0xbeef));
+        assertEq(address(execution.validator), address(newValidator));
         assertEq(uint256(execution.validUntil), uint256(0));
         assertEq(uint256(execution.validAfter), uint256(0));
     }
