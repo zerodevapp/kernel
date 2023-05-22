@@ -12,6 +12,7 @@ import "./abstract/Compatibility.sol";
 import "./abstract/KernelStorage.sol";
 import "./utils/KernelHelper.sol";
 
+
 /// @title Kernel
 /// @author taek<leekt216@gmail.com>
 /// @notice wallet kernel for minimal wallet functionality
@@ -108,14 +109,14 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         } else {
             return SIG_VALIDATION_FAILED;
         }
-        validationData =
-            _intersectValidationData(validationData, validator.validateUserOp(op, userOpHash, missingAccountFunds));
         if (missingAccountFunds > 0) {
             // we are going to assume signature is valid at this point
             (bool success,) = msg.sender.call{value: missingAccountFunds}("");
             (success);
-            return validationData;
         }
+        validationData =
+            _intersectValidationData(validationData, validator.validateUserOp(op, userOpHash, missingAccountFunds));
+        return validationData;
     }
 
     function _approveValidator(bytes4 sig, bytes calldata signature)
@@ -136,7 +137,6 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
                 )
             )
         );
-
         validationData = _intersectValidationData(
             getKernelStorage().defaultValidator.validateSignature(
                 enableDigest, signature[120 + enableDataLength:120 + enableDataLength + enableSignatureLength]

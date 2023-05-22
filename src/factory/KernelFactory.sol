@@ -9,7 +9,7 @@ import "src/validator/ECDSAValidator.sol";
 contract KernelFactory {
     Kernel public immutable kernelTemplate;
 
-    event AccountCreated(address indexed account, address indexed owner, uint256 index);
+    event AccountCreated(address indexed account, address indexed validator, bytes data, uint256 index);
 
     constructor(IEntryPoint _entryPoint) {
         kernelTemplate = new Kernel(_entryPoint);
@@ -31,6 +31,7 @@ contract KernelFactory {
         }
         proxy =
         new EIP1967Proxy{salt: salt}(address(kernelTemplate), abi.encodeWithSelector(KernelStorage.initialize.selector, _validator, _data));
+        emit AccountCreated(address(proxy), address(_validator), _data, _index);
     }
 
     function getAccountAddress(IKernelValidator _validator, bytes calldata _data, uint256 _index) public view returns (address) {
