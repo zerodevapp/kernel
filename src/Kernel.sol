@@ -1,66 +1,52 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+// Importing external libraries and contracts
 import "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
-import "./plugin/IPlugin.sol";
 import "account-abstraction/core/Helpers.sol";
 import "account-abstraction/interfaces/IAccount.sol";
 import "account-abstraction/interfaces/IEntryPoint.sol";
-import {EntryPoint} from  "account-abstraction/core/EntryPoint.sol";
+import {EntryPoint} from "account-abstraction/core/EntryPoint.sol";
 import "./utils/Exec.sol";
 import "./abstract/Compatibility.sol";
 import "./abstract/KernelStorage.sol";
+import "./utils/KernelHelper.sol";
 
 /// @title Kernel
 /// @author taek<leekt216@gmail.com>
 /// @notice wallet kernel for minimal wallet functionality
-/// @dev supports only 1 owner, multiple plugins
 contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
-    error InvalidNonce();
-    error InvalidSignatureLength();
-    error QueryResult(bytes result);
-
     string public constant name = "Kernel";
 
-    string public constant version = "0.0.1";
+    string public constant version = "0.0.2";
 
+    /// @dev Sets up the EIP712 and KernelStorage with the provided entry point
     constructor(IEntryPoint _entryPoint) EIP712(name, version) KernelStorage(_entryPoint) {}
 
-    /// @notice initialize wallet kernel
-    /// @dev this function should be called only once, implementation initialize is blocked by owner = address(1)
-    /// @param _owner owner address
-    function initialize(address _owner) external {
-        WalletKernelStorage storage ws = getKernelStorage();
-        require(ws.owner == address(0), "account: already initialized");
-        ws.owner = _owner;
-    }
-
-    /// @notice Query plugin for data
-    /// @dev this function will always fail, it should be used only to query plugin for data using error message
-    /// @param _plugin Plugin address
-    /// @param _data Data to query
-    function queryPlugin(address _plugin, bytes calldata _data) external {
-        (bool success, bytes memory _ret) = Exec.delegateCall(_plugin, _data);
-        if (success) {
-            revert QueryResult(_ret);
-        } else {
-            assembly {
-                revert(add(_ret, 32), mload(_ret))
-            }
+    /// @notice Accepts incoming Ether transactions and calls from the EntryPoint contract
+    /// @dev This function will delegate any call to the appropriate executor based on the function signature.
+    fallback() external payable {
+        require(msg.sender == address(entryPoint), "account: not from entrypoint");
+        bytes4 sig = msg.sig;
+        address facet = getKernelStorage().execution[sig].executor;
+        assembly {
+            calldatacopy(0, 0, calldatasize())
+            let result := delegatecall(gas(), facet, 0, calldatasize(), 0, 0)
+            returndatacopy(0, 0, returndatasize())
+            switch result
+            case 0 { revert(0, returndatasize()) }
+            default { return(0, returndatasize()) }
         }
     }
 
-    /// @notice execute function call to external contract
-    /// @dev this function will execute function call to external contract
-    /// @param to target contract address
-    /// @param value value to be sent
-    /// @param data data to be sent
-    /// @param operation operation type (call or delegatecall)
-    function executeAndRevert(address to, uint256 value, bytes calldata data, Operation operation) external {
-        require(
-            msg.sender == address(entryPoint) || msg.sender == getKernelStorage().owner,
-            "account: not from entrypoint or owner"
-        );
+    /// @notice Executes a function call to an external contract
+    /// @dev The type of operation (call or delegatecall) is specified as an argument.
+    /// @param to The address of the target contract
+    /// @param value The amount of Ether to send
+    /// @param data The call data to be sent
+    /// @param operation The type of operation (call or delegatecall)
+    function execute(address to, uint256 value, bytes calldata data, Operation operation) external {
+        require(msg.sender == address(entryPoint), "account: not from entrypoint");
         bool success;
         bytes memory ret;
         if (operation == Operation.DelegateCall) {
@@ -75,53 +61,55 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         }
     }
 
-    /// @notice validate user operation
-    /// @dev this function will validate user operation and be called by EntryPoint
-    /// @param userOp user operation
-    /// @param userOpHash user operation hash
-    /// @param missingAccountFunds funds needed to be reimbursed
-    /// @return validationData validation data
+    /// @notice Validates a user operation based on its mode
+    /// @dev This function will validate user operation and be called by EntryPoint
+    /// @param userOp The user operation to be validated
+    /// @param userOpHash The hash of the user operation
+    /// @param missingAccountFunds The funds needed to be reimbursed
+    /// @return validationData The data used for validation
     function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256 missingAccountFunds)
         external
         returns (uint256 validationData)
     {
         require(msg.sender == address(entryPoint), "account: not from entryPoint");
-        if (userOp.signature.length == 65) {
-            validationData = _validateUserOp(userOp, userOpHash);
-        } else if (userOp.signature.length > 97) {
-            // userOp.signature = address(plugin) + validUntil + validAfter + pluginData + pluginSignature
-            address plugin = address(bytes20(userOp.signature[0:20]));
-            uint48 validUntil = uint48(bytes6(userOp.signature[20:26]));
-            uint48 validAfter = uint48(bytes6(userOp.signature[26:32]));
-            bytes memory signature = userOp.signature[32:97];
-            (bytes memory data,) = abi.decode(userOp.signature[97:], (bytes, bytes));
-            bytes32 digest = _hashTypedDataV4(
-                keccak256(
-                    abi.encode(
-                        keccak256(
-                            "ValidateUserOpPlugin(address plugin,uint48 validUntil,uint48 validAfter,bytes data)"
-                        ), // we are going to trust plugin for verification
-                        plugin,
-                        validUntil,
-                        validAfter,
-                        keccak256(data)
-                    )
-                )
-            );
-
-            address signer = ECDSA.recover(digest, signature);
-            if (getKernelStorage().owner != signer) {
-                return SIG_VALIDATION_FAILED;
+        // mode based signature
+        bytes4 mode = bytes4(userOp.signature[0:4]); // mode == 00..00 use validators
+        require(mode & getKernelStorage().disabledMode == 0x00000000, "kernel: mode disabled");
+        // mode == 0x00000000 use sudo validator
+        // mode == 0x00000001 use given validator
+        // mode == 0x00000002 enable validator
+        UserOperation memory op = userOp;
+        IKernelValidator validator;
+        bytes4 sig = bytes4(userOp.callData[0:4]);
+        if (mode == 0x00000000) {
+            // sudo mode (use default validator)
+            op = userOp;
+            op.signature = userOp.signature[4:];
+            validator = getKernelStorage().defaultValidator;
+        } else if (mode == 0x00000001) {
+            ExecutionDetail storage detail = getKernelStorage().execution[sig];
+            validator = detail.validator;
+            if (address(validator) == address(0)) {
+                validator = getKernelStorage().defaultValidator;
             }
-            bytes memory ret = _delegateToPlugin(plugin, userOp, userOpHash, missingAccountFunds);
-            bool res = abi.decode(ret, (bool));
-            if (!res) {
-                return SIG_VALIDATION_FAILED;
-            }
-            validationData = _packValidationData(!res, validUntil, validAfter);
+            op.signature = userOp.signature[4:];
+            validationData = (uint256(detail.validAfter) << 160) | (uint256(detail.validUntil) << (48 + 160));
+        } else if (mode == 0x00000002) {
+            // use given validator
+            // userOp.signature[4:10] = validUntil,
+            // userOp.signature[10:16] = validAfter,
+            // userOp.signature[16:36] = validator address,
+            validator = IKernelValidator(address(bytes20(userOp.signature[16:36])));
+            bytes calldata enableData;
+            bytes calldata remainSig;
+            (validationData, enableData, remainSig) = _approveValidator(sig, userOp.signature);
+            validator.enable(enableData);
+            op.signature = remainSig;
         } else {
-            revert InvalidSignatureLength();
+            return SIG_VALIDATION_FAILED;
         }
+        validationData =
+            _intersectValidationData(validationData, validator.validateUserOp(op, userOpHash, missingAccountFunds));
         if (missingAccountFunds > 0) {
             // we are going to assume signature is valid at this point
             (bool success,) = msg.sender.call{value: missingAccountFunds}("");
@@ -130,59 +118,59 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         }
     }
 
-    function _validateUserOp(UserOperation calldata userOp, bytes32 userOpHash)
+    function _approveValidator(bytes4 sig, bytes calldata signature)
         internal
-        view
-        returns (uint256 validationData)
+        returns (uint256 validationData, bytes calldata enableData, bytes calldata validationSig)
     {
-        WalletKernelStorage storage ws = getKernelStorage();
-        if (ws.owner == ECDSA.recover(userOpHash, userOp.signature)) {
-            return validationData;
-        }
+        uint256 enableDataLength = uint256(bytes32(signature[56:88]));
+        enableData = signature[88:88 + enableDataLength];
+        uint256 enableSignatureLength = uint256(bytes32(signature[88 + enableDataLength:120 + enableDataLength]));
+        bytes32 enableDigest = _hashTypedDataV4(
+            keccak256(
+                abi.encode(
+                    keccak256("ValidatorApproved(bytes4 sig,uint256 validatorData,address executor,bytes enableData)"),
+                    bytes4(sig),
+                    uint256(bytes32(signature[4:36])),
+                    address(bytes20(signature[36:56])),
+                    keccak256(enableData)
+                )
+            )
+        );
 
-        bytes32 hash = ECDSA.toEthSignedMessageHash(userOpHash);
-        address recovered = ECDSA.recover(hash, userOp.signature);
-        if (ws.owner != recovered) {
-            return SIG_VALIDATION_FAILED;
-        }
+        validationData = _intersectValidationData(
+            getKernelStorage().defaultValidator.validateSignature(
+                enableDigest, signature[120 + enableDataLength:120 + enableDataLength + enableSignatureLength]
+            ),
+            uint256(bytes32(signature[4:36])) & (uint256(type(uint96).max) << 160)
+        );
+        validationSig = signature[120 + enableDataLength + enableSignatureLength:];
+        getKernelStorage().execution[sig] = ExecutionDetail({
+            executor: address(bytes20(signature[36:56])),
+            validator: IKernelValidator(address(bytes20(signature[16:36]))),
+            validUntil: uint48(bytes6(signature[4:10])),
+            validAfter: uint48(bytes6(signature[10:16]))
+        });
+        return (validationData, signature[88:88 + enableDataLength], validationSig);
     }
-
-    /**
-     * delegate the contract call to the plugin
-     */
-    function _delegateToPlugin(
-        address plugin,
-        UserOperation calldata userOp,
-        bytes32 opHash,
-        uint256 missingAccountFunds
-    ) internal returns (bytes memory) {
-        bytes memory data =
-            abi.encodeWithSelector(IPlugin.validatePluginData.selector, userOp, opHash, missingAccountFunds);
-        (bool success, bytes memory ret) = Exec.delegateCall(plugin, data); // Q: should we allow value > 0?
-        if (!success) {
-            assembly {
-                revert(add(ret, 32), mload(ret))
-            }
-        }
-        return ret;
-    }
-
-    /// @notice validate signature using eip1271
-    /// @dev this function will validate signature using eip1271
-    /// @param _hash hash to be signed
-    /// @param _signature signature
-    function isValidSignature(bytes32 _hash, bytes memory _signature) public view override returns (bytes4) {
-        WalletKernelStorage storage ws = getKernelStorage();
-        if (ws.owner == ECDSA.recover(_hash, _signature)) {
-            return 0x1626ba7e;
-        }
-        bytes32 hash = ECDSA.toEthSignedMessageHash(_hash);
-        address recovered = ECDSA.recover(hash, _signature);
-        // Validate signatures
-        if (ws.owner == recovered) {
-            return 0x1626ba7e;
-        } else {
+    
+    /// @notice Checks if a signature is valid
+    /// @dev This function checks if a signature is valid based on the hash of the data signed.
+    /// @param hash The hash of the data that was signed
+    /// @param signature The signature to be validated
+    /// @return The magic value 0x1626ba7e if the signature is valid, otherwise returns 0xffffffff.
+    function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4) {
+        uint256 validationData = getKernelStorage().defaultValidator.validateSignature(hash, signature);
+        ValidationData memory data = _parseValidationData(validationData);
+        if (data.validAfter > block.timestamp) {
             return 0xffffffff;
         }
+        if (data.validUntil < block.timestamp) {
+            return 0xffffffff;
+        }
+        if (data.aggregator != address(0)) {
+            return 0xffffffff;
+        }
+
+        return 0x1626ba7e;
     }
 }

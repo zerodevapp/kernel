@@ -30,3 +30,5 @@ artifacts
 artifacts-selected
 
 cache_hardhat
+
+lcov.info
