@@ -31,13 +31,13 @@ const deployKernel: DeployFunction = async function (hre: HardhatRuntimeEnvironm
     from: deployerAddress,
     args: [entrypoint],
     log: true,
-    deterministicDeployment: true
+    deterministicDeployment: true,
   });
 
   await deploy('ZeroDevSessionKeyPlugin', {
     from: deployerAddress,
     log: true,
-    deterministicDeployment: true
+    deterministicDeployment: true,
   });
 }
 
