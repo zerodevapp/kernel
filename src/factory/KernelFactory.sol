@@ -8,11 +8,36 @@ import "src/validator/ECDSAValidator.sol";
 
 contract KernelFactory {
     Kernel public immutable kernelTemplate;
+    IEntryPoint public immutable entryPoint;
+
+    address public staker;
 
     event AccountCreated(address indexed account, address indexed validator, bytes data, uint256 index);
 
     constructor(IEntryPoint _entryPoint) {
         kernelTemplate = new Kernel(_entryPoint);
+        entryPoint = _entryPoint;
+        staker = msg.sender;
+    }
+
+    function setStaker(address _staker) external {
+        require(msg.sender == staker, "KernelFactory: forbidden");
+        staker = _staker;
+    }
+
+    function addStake(uint32 _delay) external payable {
+        require(msg.sender == staker, "KernelFactory: forbidden");
+        entryPoint.addStake{value: msg.value}(_delay);
+    }
+
+    function unlockStake() external {
+        require(msg.sender == staker, "KernelFactory: forbidden");
+        entryPoint.unlockStake();
+    }
+
+    function withdrawStake(address payable _to) external {
+        require(msg.sender == staker, "KernelFactory: forbidden");
+        entryPoint.withdrawStake(_to);
     }
 
     function createAccount(IKernelValidator _validator, bytes calldata _data, uint256 _index) external returns (EIP1967Proxy proxy) {
