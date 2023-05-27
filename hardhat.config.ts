@@ -4,6 +4,7 @@ import "@nomicfoundation/hardhat-foundry";
 import "@nomiclabs/hardhat-ethers";
 import "hardhat-deploy";
 import '@typechain/hardhat'
+import "./tasks/test_userOp"
 dotenv.config()
 
 
