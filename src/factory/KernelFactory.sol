@@ -6,8 +6,10 @@ import "./EIP1967Proxy.sol";
 import "src/Kernel.sol";
 import "src/validator/ECDSAValidator.sol";
 
+import "./KernelTempTemplate.sol";
 contract KernelFactory {
-    Kernel public immutable kernelTemplate;
+    KernelTempTemplate public immutable kernelTemplate;
+    Kernel public immutable nextTemplate;
     IEntryPoint public immutable entryPoint;
 
     address public staker;
@@ -15,29 +17,10 @@ contract KernelFactory {
     event AccountCreated(address indexed account, address indexed validator, bytes data, uint256 index);
 
     constructor(IEntryPoint _entryPoint) {
-        kernelTemplate = new Kernel(_entryPoint);
+        kernelTemplate = new KernelTempTemplate(_entryPoint);
+        nextTemplate = new Kernel(_entryPoint);
         entryPoint = _entryPoint;
         staker = msg.sender;
-    }
-
-    function setStaker(address _staker) external {
-        require(msg.sender == staker, "KernelFactory: forbidden");
-        staker = _staker;
-    }
-
-    function addStake(uint32 _delay) external payable {
-        require(msg.sender == staker, "KernelFactory: forbidden");
-        entryPoint.addStake{value: msg.value}(_delay);
-    }
-
-    function unlockStake() external {
-        require(msg.sender == staker, "KernelFactory: forbidden");
-        entryPoint.unlockStake();
-    }
-
-    function withdrawStake(address payable _to) external {
-        require(msg.sender == staker, "KernelFactory: forbidden");
-        entryPoint.withdrawStake(_to);
     }
 
     function createAccount(IKernelValidator _validator, bytes calldata _data, uint256 _index) external returns (EIP1967Proxy proxy) {
@@ -47,7 +30,7 @@ contract KernelFactory {
             keccak256(
                 abi.encodePacked(
                     type(EIP1967Proxy).creationCode,
-                    abi.encode(address(kernelTemplate), abi.encodeCall(KernelStorage.initialize, (_validator, _data)))
+                    abi.encode(address(kernelTemplate), abi.encodeCall(KernelTempTemplate.initialize, (_validator, address(nextTemplate), _data)))
                 )
             )
         );
@@ -55,7 +38,7 @@ contract KernelFactory {
             return EIP1967Proxy(payable(addr));
         }
         proxy =
-        new EIP1967Proxy{salt: salt}(address(kernelTemplate), abi.encodeWithSelector(KernelStorage.initialize.selector, _validator, _data));
+        new EIP1967Proxy{salt: salt}(address(kernelTemplate), abi.encodeCall(KernelTempTemplate.initialize, (_validator, address(nextTemplate), _data)));
         emit AccountCreated(address(proxy), address(_validator), _data, _index);
     }
 
@@ -66,7 +49,7 @@ contract KernelFactory {
             keccak256(
                 abi.encodePacked(
                     type(EIP1967Proxy).creationCode,
-                    abi.encode(address(kernelTemplate), abi.encodeCall(KernelStorage.initialize, (_validator, _data))
+                    abi.encode(address(kernelTemplate), abi.encodeCall(KernelTempTemplate.initialize, (_validator, address(nextTemplate), _data))
                 )
             )
         ));

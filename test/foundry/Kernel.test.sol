@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "src/factory/KernelFactory.sol";
+import "src/factory/KernelTempTemplate.sol";
 import "src/factory/ECDSAKernelFactory.sol";
 import "src/Kernel.sol";
 import "src/validator/ECDSAValidator.sol";
@@ -47,7 +48,7 @@ contract KernelTest is Test {
             payable(
                 address(
                     new EIP1967Proxy(
-                    address(factory.kernelTemplate()),
+                    address(factory.nextTemplate()),
                     abi.encodeWithSelector(
                     KernelStorage.initialize.selector,
                     validator,
@@ -96,6 +97,7 @@ contract KernelTest is Test {
     }
 
     function test_set_execution() external {
+        console.log("owner", owner);
         TestValidator newValidator = new TestValidator();
         UserOperation memory op = entryPoint.fillUserOp(
             address(kernel),
