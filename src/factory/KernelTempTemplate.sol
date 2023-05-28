@@ -15,7 +15,7 @@ struct TempStorage {
 
 using ECDSA for bytes32;
 
-contract KernelTempTemplate is EIP712, IAccount {
+contract TempKernel is EIP712, IAccount {
     string public constant name = "Kernel";
 
     string public constant version = "0.0.2";

@@ -33,7 +33,7 @@ contract KernelTest is Test {
         validator = new ECDSAValidator();
         ecdsaFactory = new ECDSAKernelFactory(factory, validator, entryPoint);
 
-        kernel = Kernel(payable(address(ecdsaFactory.createAccount(owner, 0))));
+        kernel = Kernel(payable(ecdsaFactory.createAccount(owner, 0)));
         vm.deal(address(kernel), 1e30);
         beneficiary = payable(address(makeAddr("beneficiary")));
     }
