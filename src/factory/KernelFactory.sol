@@ -6,7 +6,7 @@ import "./EIP1967Proxy.sol";
 import "src/Kernel.sol";
 import "src/validator/ECDSAValidator.sol";
 
-import "./KernelTempTemplate.sol";
+import "./TempKernel.sol";
 contract KernelFactory {
     TempKernel public immutable kernelTemplate;
     Kernel public immutable nextTemplate;

@@ -213,5 +213,6 @@ contract TempKernel is EIP712, IAccount {
             ret := ptr
             success := result
         }
+        require(success, string(ret));
     }
 }

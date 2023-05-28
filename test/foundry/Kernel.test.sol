@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "src/factory/KernelFactory.sol";
-import "src/factory/KernelTempTemplate.sol";
+import "src/factory/TempKernel.sol";
 import "src/factory/ECDSAKernelFactory.sol";
 import "src/Kernel.sol";
 import "src/validator/ECDSAValidator.sol";
