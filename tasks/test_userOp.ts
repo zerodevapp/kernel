@@ -11,15 +11,15 @@ task("test-userop", "deploy erc20 paymaster")
       console.log("signer address: ", addr);
       const entrypoint = await hre.ethers.getContractAt("EntryPoint", "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789");
       const ecdsaFactory = await hre.ethers.getContractAt("ECDSAKernelFactory", "0x08e627ca6a0593c807091726a7fbb2887a1cb556");
-      const account = await ecdsaFactory.getAccountAddress(addr, 0);
+      const account = await ecdsaFactory.getAccountAddress(addr, 2);
       const kernel = await hre.ethers.getContractAt("Kernel", account);
       console.log("maxFeePerGas : ", await hre.ethers.provider.getGasPrice());
       const userOp = {
         sender : account,
         nonce : 0,
-        initCode : hexConcat([ecdsaFactory.address, ecdsaFactory.interface.encodeFunctionData("createAccount", [addr, 0])]),
+        initCode : hexConcat([ecdsaFactory.address, ecdsaFactory.interface.encodeFunctionData("createAccount", [addr, 2])]),
         callData : kernel.interface.encodeFunctionData("execute", [addr,0,"0x",0]),
-        callGasLimit : 33100,
+        callGasLimit : 100000,
         verificationGasLimit : 300000,
         preVerificationGas : 45100,
         maxFeePerGas: (await hre.ethers.provider.getGasPrice()).toHexString(),
@@ -60,7 +60,7 @@ task("create-kernel", "create kernel")
         nonce : 0,
         initCode : "0x",
         callData : kernel.interface.encodeFunctionData("execute", [addr,0,"0x",0]),
-        callGasLimit : 33100,
+        callGasLimit : 100000,
         verificationGasLimit : 300000,
         preVerificationGas : 45100,
         maxFeePerGas: (await hre.ethers.provider.getGasPrice()).toHexString(),
