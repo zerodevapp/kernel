@@ -87,7 +87,8 @@ contract KernelTest is Test {
     function test_disable_mode() external {
         bytes memory empty;
         UserOperation memory op = entryPoint.fillUserOp(
-            address(kernel), abi.encodeWithSelector(KernelStorage.disableMode.selector, bytes4(0x00000001), address(0), empty)
+            address(kernel),
+            abi.encodeWithSelector(KernelStorage.disableMode.selector, bytes4(0x00000001), address(0), empty)
         );
         op.signature = abi.encodePacked(bytes4(0x00000000), entryPoint.signUserOpHash(vm, ownerKey, op));
         UserOperation[] memory ops = new UserOperation[](1);

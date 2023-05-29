@@ -7,6 +7,7 @@ import "src/Kernel.sol";
 import "src/validator/ECDSAValidator.sol";
 
 import "./TempKernel.sol";
+
 contract KernelFactory {
     TempKernel public immutable kernelTemplate;
     Kernel public immutable nextTemplate;
@@ -23,14 +24,20 @@ contract KernelFactory {
         staker = msg.sender;
     }
 
-    function createAccount(IKernelValidator _validator, bytes calldata _data, uint256 _index) external returns (EIP1967Proxy proxy) {
+    function createAccount(IKernelValidator _validator, bytes calldata _data, uint256 _index)
+        external
+        returns (EIP1967Proxy proxy)
+    {
         bytes32 salt = keccak256(abi.encodePacked(_validator, _data, _index));
         address addr = Create2.computeAddress(
             salt,
             keccak256(
                 abi.encodePacked(
                     type(EIP1967Proxy).creationCode,
-                    abi.encode(address(kernelTemplate), abi.encodeCall(TempKernel.initialize, (_validator, address(nextTemplate), _data)))
+                    abi.encode(
+                        address(kernelTemplate),
+                        abi.encodeCall(TempKernel.initialize, (_validator, address(nextTemplate), _data))
+                    )
                 )
             )
         );
@@ -42,16 +49,23 @@ contract KernelFactory {
         emit AccountCreated(address(proxy), address(_validator), _data, _index);
     }
 
-    function getAccountAddress(IKernelValidator _validator, bytes calldata _data, uint256 _index) public view returns (address) {
+    function getAccountAddress(IKernelValidator _validator, bytes calldata _data, uint256 _index)
+        public
+        view
+        returns (address)
+    {
         bytes32 salt = keccak256(abi.encodePacked(_validator, _data, _index));
         return Create2.computeAddress(
             salt,
             keccak256(
                 abi.encodePacked(
                     type(EIP1967Proxy).creationCode,
-                    abi.encode(address(kernelTemplate), abi.encodeCall(TempKernel.initialize, (_validator, address(nextTemplate), _data))
+                    abi.encode(
+                        address(kernelTemplate),
+                        abi.encodeCall(TempKernel.initialize, (_validator, address(nextTemplate), _data))
+                    )
                 )
             )
-        ));
+        );
     }
 }

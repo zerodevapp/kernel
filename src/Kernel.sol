@@ -12,7 +12,6 @@ import "./abstract/Compatibility.sol";
 import "./abstract/KernelStorage.sol";
 import "./utils/KernelHelper.sol";
 
-
 /// @title Kernel
 /// @author taek<leekt216@gmail.com>
 /// @notice wallet kernel for minimal wallet functionality
@@ -152,7 +151,7 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         });
         return (validationData, signature[88:88 + enableDataLength], validationSig);
     }
-    
+
     /// @notice Checks if a signature is valid
     /// @dev This function checks if a signature is valid based on the hash of the data signed.
     /// @param hash The hash of the data that was signed

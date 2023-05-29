@@ -5,9 +5,9 @@ import "./KernelFactory.sol";
 import "src/validator/ECDSAValidator.sol";
 
 contract ECDSAKernelFactory {
-    KernelFactory immutable public singletonFactory;
-    ECDSAValidator immutable public validator;
-    IEntryPoint immutable public entryPoint;
+    KernelFactory public immutable singletonFactory;
+    ECDSAValidator public immutable validator;
+    IEntryPoint public immutable entryPoint;
 
     constructor(KernelFactory _singletonFactory, ECDSAValidator _validator, IEntryPoint _entryPoint) {
         singletonFactory = _singletonFactory;

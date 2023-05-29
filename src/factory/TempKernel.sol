@@ -5,7 +5,9 @@ import "account-abstraction/interfaces/IAccount.sol";
 import "src/Kernel.sol";
 import "src/abstract/KernelStorage.sol";
 import "forge-std/console.sol";
+
 bytes32 constant _IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+
 struct TempStorage {
     address newTemplate;
     address validator;
@@ -36,7 +38,8 @@ contract TempKernel is EIP712, IAccount {
         getStorage().newTemplate = _newTemplate;
         getStorage().data = _data;
 
-        (bool success, ) = _callCode(address(_defaultValidator) , abi.encodeWithSelector(IKernelValidator.enable.selector, _data)); // to NOT preserve msg.sender
+        (bool success,) =
+            _callCode(address(_defaultValidator), abi.encodeWithSelector(IKernelValidator.enable.selector, _data)); // to NOT preserve msg.sender
         require(success, "account: enable failed with defaultvalidator");
     }
 
@@ -83,7 +86,8 @@ contract TempKernel is EIP712, IAccount {
             op = userOp;
             op.signature = userOp.signature[4:];
             validator = getKernelStorage().defaultValidator;
-        } else if (mode == 0x00000002) { // no plugin mode
+        } else if (mode == 0x00000002) {
+            // no plugin mode
             // use given validator
             // userOp.signature[4:10] = validUntil,
             // userOp.signature[10:16] = validAfter,
@@ -92,7 +96,8 @@ contract TempKernel is EIP712, IAccount {
             bytes calldata enableData;
             bytes calldata remainSig;
             (validationData, enableData, remainSig) = _approveValidator(sig, userOp.signature);
-            (bool s, ) = _callCode(address(validator),abi.encodeWithSelector(IKernelValidator.enable.selector, enableData)); // callcode for NOT preserving msg.sender
+            (bool s,) =
+                _callCode(address(validator), abi.encodeWithSelector(IKernelValidator.enable.selector, enableData)); // callcode for NOT preserving msg.sender
             require(s, "account: enable mode enable failed");
             op.signature = remainSig;
         } else {
@@ -103,10 +108,11 @@ contract TempKernel is EIP712, IAccount {
             (bool s,) = msg.sender.call{value: missingAccountFunds}("");
             (s);
         }
-        (, bytes memory ret) = _callCode(address(validator), abi.encodeWithSelector(IKernelValidator.validateUserOp.selector, op, userOpHash, missingAccountFunds));
-        validationData =
-            _intersectValidationData(validationData,
-            abi.decode(ret, (uint256)));
+        (, bytes memory ret) = _callCode(
+            address(validator),
+            abi.encodeWithSelector(IKernelValidator.validateUserOp.selector, op, userOpHash, missingAccountFunds)
+        );
+        validationData = _intersectValidationData(validationData, abi.decode(ret, (uint256)));
 
         return validationData;
     }
@@ -129,12 +135,18 @@ contract TempKernel is EIP712, IAccount {
                 )
             )
         );
-        (, bytes memory ret) = _callCode(address(getKernelStorage().defaultValidator), (
-                abi.encodeWithSelector(IKernelValidator.validateSignature.selector, enableDigest, signature[120 + enableDataLength:120 + enableDataLength + enableSignatureLength])
-        ));
+        (, bytes memory ret) = _callCode(
+            address(getKernelStorage().defaultValidator),
+            (
+                abi.encodeWithSelector(
+                    IKernelValidator.validateSignature.selector,
+                    enableDigest,
+                    signature[120 + enableDataLength:120 + enableDataLength + enableSignatureLength]
+                )
+            )
+        );
         validationData = _intersectValidationData(
-            abi.decode(ret, (uint256)),
-            uint256(bytes32(signature[4:36])) & (uint256(type(uint96).max) << 160)
+            abi.decode(ret, (uint256)), uint256(bytes32(signature[4:36])) & (uint256(type(uint96).max) << 160)
         );
         validationSig = signature[120 + enableDataLength + enableSignatureLength:];
         getKernelStorage().execution[sig] = ExecutionDetail({
@@ -147,8 +159,8 @@ contract TempKernel is EIP712, IAccount {
         getStorage().validatorData = enableData;
         return (validationData, signature[88:88 + enableDataLength], validationSig);
     }
-    receive() external payable {
-    }
+
+    receive() external payable {}
 
     fallback() external payable {
         TempStorage storage strg = getStorage();
@@ -162,7 +174,7 @@ contract TempKernel is EIP712, IAccount {
         defaultValidator.enable(strg.data);
 
         IKernelValidator validator = IKernelValidator(getStorage().validator);
-        if(address(validator) != address(0)) {
+        if (address(validator) != address(0)) {
             validator.enable(getStorage().validatorData);
         }
 
@@ -177,10 +189,10 @@ contract TempKernel is EIP712, IAccount {
     /// @param signature The signature to be validated
     /// @return The magic value 0x1626ba7e if the signature is valid, otherwise returns 0xffffffff.
     function isValidSignature(bytes32 hash, bytes calldata signature) external returns (bytes4) {
-        (, bytes memory ret) =
-            _callCode(address(getKernelStorage().defaultValidator),
+        (, bytes memory ret) = _callCode(
+            address(getKernelStorage().defaultValidator),
             abi.encodeWithSelector(IKernelValidator.validateSignature.selector, hash, signature)
-            );
+        );
         uint256 validationData = abi.decode(ret, (uint256));
         ValidationData memory data = _parseValidationData(validationData);
         if (data.validAfter > block.timestamp) {
@@ -196,10 +208,9 @@ contract TempKernel is EIP712, IAccount {
         return 0x1626ba7e;
     }
 
-
-    function _callCode(address _target, bytes memory data) internal returns(bool success, bytes memory ret) {
+    function _callCode(address _target, bytes memory data) internal returns (bool success, bytes memory ret) {
         assembly {
-            let result := callcode(gas(), _target,0, add(data, 0x20), mload(data), 0, 0)
+            let result := callcode(gas(), _target, 0, add(data, 0x20), mload(data), 0, 0)
             // Load free memory location
             let ptr := mload(0x40)
             // We allocate memory for the return data by setting the free memory location to
