@@ -6,8 +6,6 @@ import "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 import "openzeppelin-contracts/contracts/utils/introspection/IERC165.sol";
 import "src/utils/KernelHelper.sol";
 
-import "forge-std/console.sol";
-
 // idea, we can make this merkle root
 struct ERC165SessionKeyStorage {
     bool enabled;
