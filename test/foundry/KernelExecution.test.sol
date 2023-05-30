@@ -15,7 +15,7 @@ import "forge-std/Test.sol";
 import {ERC4337Utils} from "./ERC4337Utils.sol";
 // test actions/validators
 import "src/validator/ERC165SessionKeyValidator.sol";
-import "src/actions/ERC721Actions.sol";
+import "src/executor/ERC721Actions.sol";
 
 using ERC4337Utils for EntryPoint;
 
