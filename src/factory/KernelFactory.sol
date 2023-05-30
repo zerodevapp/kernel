@@ -13,15 +13,12 @@ contract KernelFactory {
     Kernel public immutable nextTemplate;
     IEntryPoint public immutable entryPoint;
 
-    address public staker;
-
     event AccountCreated(address indexed account, address indexed validator, bytes data, uint256 index);
 
     constructor(IEntryPoint _entryPoint) {
         kernelTemplate = new TempKernel(_entryPoint);
         nextTemplate = new Kernel(_entryPoint);
         entryPoint = _entryPoint;
-        staker = msg.sender;
     }
 
     function createAccount(IKernelValidator _validator, bytes calldata _data, uint256 _index)
