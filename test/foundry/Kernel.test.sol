@@ -63,9 +63,10 @@ contract KernelTest is Test {
     }
 
     function test_validate_signature() external {
+        Kernel kernel2 = Kernel(payable(address(ecdsaFactory.createAccount(owner, 1))));
         bytes32 hash = keccak256(abi.encodePacked("hello world"));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, hash);
-        assertEq(kernel.isValidSignature(hash, abi.encodePacked(r, s, v)), Kernel.isValidSignature.selector);
+        assertEq(kernel2.isValidSignature(hash, abi.encodePacked(r, s, v)), Kernel.isValidSignature.selector);
     }
 
     function test_set_default_validator() external {

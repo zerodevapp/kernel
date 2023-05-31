@@ -47,6 +47,14 @@ contract ECDSAValidator is IKernelValidator {
 
     function validateSignature(bytes32 hash, bytes calldata signature) public view override returns (uint256) {
         address owner = ecdsaValidatorStorage[msg.sender].owner;
-        return owner == ECDSA.recover(hash, signature) ? 0 : 1;
+        if( owner == ECDSA.recover(hash, signature) ) {
+            return 0;
+        }
+        bytes32 ethHash = ECDSA.toEthSignedMessageHash(hash);
+        address recovered = ECDSA.recover(ethHash, signature);
+        if (owner != recovered) {
+            return SIG_VALIDATION_FAILED;
+        }
+        return 0;
     }
 }
