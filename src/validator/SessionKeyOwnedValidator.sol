@@ -15,7 +15,7 @@ struct SessionKeyStorage {
 contract SessionKeyOwnedValidator is IKernelValidator {
     event OwnerChanged(address indexed kernel, address indexed oldOwner, address indexed newOwner);
 
-    mapping(address => mapping(address => SessionKeyStorage)) public sessionKeyStorage;
+    mapping(address sessionKey => mapping(address kernel => SessionKeyStorage)) public sessionKeyStorage;
 
     function disable(bytes calldata _data) external override {
         address sessionKey = address(bytes20(_data[0:20]));
