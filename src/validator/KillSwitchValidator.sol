@@ -42,7 +42,7 @@ contract KillSwitchValidator is IKernelValidator {
         address signer;
         bytes calldata signature;
         KillSwitchValidatorStorage storage validatorStorage = killSwitchValidatorStorage[_userOp.sender];
-        if (_userOp.signature.length == 6 + 20 + 65) {
+        if (_userOp.signature.length == 6 + 65) {
             require(bytes4(_userOp.callData[0:4]) != KernelStorage.disableMode.selector);
             signer = validatorStorage.guardian;
             uint48 pausedUntil = uint48(bytes6(_userOp.signature[0:6]));
