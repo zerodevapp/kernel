@@ -4,7 +4,6 @@ pragma solidity ^0.8.0;
 
 import "./IValidator.sol";
 import "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
-import "forge-std/console.sol";
 import "src/utils/KernelHelper.sol";
 
 struct ECDSAValidatorStorage {

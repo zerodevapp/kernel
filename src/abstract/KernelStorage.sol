@@ -87,7 +87,6 @@ contract KernelStorage {
         return entryPoint.getNonce(address(this), key);
     }
 
-
     // query storage
     function getDefaultValidator() public view returns (IKernelValidator) {
         return getKernelStorage().defaultValidator;

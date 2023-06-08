@@ -2,7 +2,6 @@
 pragma solidity ^0.8.0;
 
 import "src/validator/IValidator.sol";
-import "forge-std/console.sol";
 
 contract TestValidator is IKernelValidator {
     event TestValidateUserOp(bytes32 indexed opHash);

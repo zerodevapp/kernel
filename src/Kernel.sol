@@ -12,7 +12,6 @@ import "./abstract/Compatibility.sol";
 import "./abstract/KernelStorage.sol";
 import "./utils/KernelHelper.sol";
 
-
 /// @title Kernel
 /// @author taek<leekt216@gmail.com>
 /// @notice wallet kernel for minimal wallet functionality
@@ -29,10 +28,10 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
     fallback() external payable {
         require(msg.sender == address(entryPoint), "account: not from entrypoint");
         bytes4 sig = msg.sig;
-        address facet = getKernelStorage().execution[sig].executor;
+        address executor = getKernelStorage().execution[sig].executor;
         assembly {
             calldatacopy(0, 0, calldatasize())
-            let result := delegatecall(gas(), facet, 0, calldatasize(), 0, 0)
+            let result := delegatecall(gas(), executor, 0, calldatasize(), 0, 0)
             returndatacopy(0, 0, returndatasize())
             switch result
             case 0 { revert(0, returndatasize()) }
@@ -152,7 +151,7 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         });
         return (validationData, signature[88:88 + enableDataLength], validationSig);
     }
-    
+
     /// @notice Checks if a signature is valid
     /// @dev This function checks if a signature is valid based on the hash of the data signed.
     /// @param hash The hash of the data that was signed

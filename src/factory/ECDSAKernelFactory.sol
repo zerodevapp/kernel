@@ -5,12 +5,14 @@ import "./KernelFactory.sol";
 import "src/validator/ECDSAValidator.sol";
 
 contract ECDSAKernelFactory {
-    KernelFactory immutable public singletonFactory;
-    ECDSAValidator immutable public validator;
+    KernelFactory public immutable singletonFactory;
+    ECDSAValidator public immutable validator;
+    IEntryPoint public immutable entryPoint;
 
-    constructor(KernelFactory _singletonFactory, ECDSAValidator _validator) {
+    constructor(KernelFactory _singletonFactory, ECDSAValidator _validator, IEntryPoint _entryPoint) {
         singletonFactory = _singletonFactory;
         validator = _validator;
+        entryPoint = _entryPoint;
     }
 
     function createAccount(address _owner, uint256 _index) external returns (EIP1967Proxy proxy) {
