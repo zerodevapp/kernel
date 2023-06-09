@@ -23,7 +23,7 @@ struct WalletKernelStorage {
 }
 
 /// @title Kernel Storage Contract
-/// @author Your Name
+/// @author taek<leekt216@gmail.com>
 /// @notice This contract serves as the storage module for the Kernel contract.
 /// @dev This contract should only be used by the main Kernel contract.
 contract KernelStorage {
