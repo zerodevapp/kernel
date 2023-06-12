@@ -2,7 +2,7 @@
   "name": "@zerodevapp/contracts",
   "description": "ZeroDev Account Abstraction (EIP 4337) contracts",
   "main": "./dist/index.js",
-  "version": "4.0.0-beta.9",
+  "version": "4.0.0-beta.10",
   "scripts": {
     "prepack": "./scripts/prepack-contracts-package.sh",
     "postpack": "./scripts/postpack-contracts-package.sh"
