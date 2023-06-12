@@ -15,7 +15,7 @@ import "forge-std/Test.sol";
 import {ERC4337Utils} from "./ERC4337Utils.sol";
 // test actions/validators
 import "src/validator/ERC165SessionKeyValidator.sol";
-import "src/executor/ERC721Actions.sol";
+import "src/executor/TokenActions.sol";
 
 using ERC4337Utils for EntryPoint;
 
@@ -148,13 +148,13 @@ contract KernelExecutionTest is Test {
 
     function test_mode_2_erc165() external {
         ERC165SessionKeyValidator sessionKeyValidator = new ERC165SessionKeyValidator();
-        ERC721Actions action = new ERC721Actions();
+        TokenActions action = new TokenActions();
         TestERC721 erc721 = new TestERC721();
         erc721.mint(address(kernel), 0);
         erc721.mint(address(kernel), 1);
         UserOperation memory op = entryPoint.fillUserOp(
             address(kernel),
-            abi.encodeWithSelector(ERC721Actions.transferERC721Action.selector, address(erc721), 0, address(0xdead))
+            abi.encodeWithSelector(TokenActions.transferERC721Action.selector, address(erc721), 0, address(0xdead))
         );
         address sessionKeyAddr;
         uint256 sessionKeyPriv;
@@ -162,7 +162,7 @@ contract KernelExecutionTest is Test {
         bytes memory enableData = abi.encodePacked(
             sessionKeyAddr,
             type(IERC721).interfaceId,
-            ERC721Actions.transferERC721Action.selector,
+            TokenActions.transferERC721Action.selector,
             uint48(0),
             uint48(0),
             uint32(16)
@@ -170,7 +170,7 @@ contract KernelExecutionTest is Test {
         {
             bytes32 digest = getTypedDataHash(
                 address(kernel),
-                ERC721Actions.transferERC721Action.selector,
+                TokenActions.transferERC721Action.selector,
                 0,
                 0,
                 address(sessionKeyValidator),
@@ -203,7 +203,7 @@ contract KernelExecutionTest is Test {
 
         op = entryPoint.fillUserOp(
             address(kernel),
-            abi.encodeWithSelector(ERC721Actions.transferERC721Action.selector, address(erc721), 1, address(0xdead))
+            abi.encodeWithSelector(TokenActions.transferERC721Action.selector, address(erc721), 1, address(0xdead))
         );
         op.signature = abi.encodePacked(bytes4(0x00000001), entryPoint.signUserOpHash(vm, sessionKeyPriv, op));
         ops[0] = op;
