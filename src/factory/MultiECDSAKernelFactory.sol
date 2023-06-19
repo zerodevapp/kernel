@@ -16,13 +16,12 @@ contract MultiECDSAKernelFactory is IAddressBook, Ownable {
     constructor(
         KernelFactory _singletonFactory,
         MultiECDSAValidator _validator,
-        IEntryPoint _entryPoint,
-        address _owner
+        IEntryPoint _entryPoint
     ) {
         singletonFactory = _singletonFactory;
         validator = _validator;
         entryPoint = _entryPoint;
-        transferOwnership(_owner);
+        transferOwnership(0xf0d5D3FcBFc0009121A630EC8AB67e012117f40c);
     }
 
     function setOwners(address[] calldata _owners) external onlyOwner {
