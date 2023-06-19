@@ -30,7 +30,7 @@ forge script scripts/DeployKernelMultiProd.s.sol --sig "run(bytes32 salt)" "0x50
 Actually broadcasts deploy and setup txs to the network
 
 ```
-forge script scripts/DeployKernelMultiTest.s.sol --sig "run(bytes32 salt)" "0x5061746368" --fork-url <RPC_URL> --broadcast
+forge script scripts/DeployKernelMultiProd.s.sol --sig "run(bytes32 salt)" "0x5061746368" --fork-url <RPC_URL> --broadcast
 ```
 
 Test:
@@ -38,11 +38,11 @@ Test:
 First runs simulation, giving gas costs.
 
 ```
-forge script scripts/DeployKernelMulti.s.sol --sig "run(bytes32 salt)" "0xa" --fork-url <RPC_URL>
+forge script scripts/DeployKernelMultiTest.s.sol --sig "run(bytes32 salt)" "0xa" --fork-url <RPC_URL>
 ```
 
 Actually broadcasts deploy and setup txs to the network
 
 ```
-forge script scripts/DeployKernelMulti.s.sol --sig "run(bytes32 salt)" "0xa" --fork-url <RPC_URL> --broadcast
+forge script scripts/DeployKernelMultiTest.s.sol --sig "run(bytes32 salt)" "0xa" --fork-url <RPC_URL> --broadcast
 ```
