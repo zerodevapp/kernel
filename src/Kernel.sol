@@ -18,7 +18,7 @@ import "./utils/KernelHelper.sol";
 contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
     string public constant name = "Kernel";
 
-    string public constant version = "0.0.2";
+    string public constant version = "0.2.1";
 
     /// @dev Sets up the EIP712 and KernelStorage with the provided entry point
     constructor(IEntryPoint _entryPoint) EIP712(name, version) KernelStorage(_entryPoint) {}
