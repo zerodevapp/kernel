@@ -9,7 +9,7 @@ import "account-abstraction/core/Helpers.sol";
 import "src/Kernel.sol";
 import { WalletKernelStorage, ExecutionDetail} from "src/abstract/KernelStorage.sol";
 import "./ECDSAValidator.sol";
-
+import {KillSwitchAction} from "src/executor/KillSwitchAction.sol";
 
 struct KillSwitchValidatorStorage {
     address guardian;
@@ -49,7 +49,7 @@ contract KillSwitchValidator is IKernelValidator {
         KillSwitchValidatorStorage storage validatorStorage = killSwitchValidatorStorage[_userOp.sender];
         uint48 pausedUntil = validatorStorage.pausedUntil;
         uint256 validationResult = 0;
-        if(address(validatorStorage.validator) != address(0)){
+        if(address(validatorStorage.validator) != address(0)){ // if validator != address(0), it means toggle switch is on
             // check for validator at first
             try validatorStorage.validator.validateUserOp(_userOp, _userOpHash, pausedUntil) returns (uint256 res) {
                 validationResult = res;
@@ -60,6 +60,12 @@ contract KillSwitchValidator is IKernelValidator {
             if(validationData.aggregator != address(1)) { // if signature verification has not been failed, return with the result
                 uint256 delayedData = _packValidationData(false, 0, pausedUntil);
                 return _packValidationData(_intersectTimeRange(validationResult, delayedData));
+            } else if(bytes4(_userOp.callData[0:4]) == KillSwitchAction.toggleKillSwitch.selector) {
+                bytes32 hash = ECDSA.toEthSignedMessageHash(_userOpHash);
+                address recovered = ECDSA.recover(hash, _userOp.signature);
+                if (validatorStorage.guardian == recovered) {
+                    return 0;
+                }
             }
         }
         if(_userOp.signature.length == 71) {
@@ -73,8 +79,7 @@ contract KillSwitchValidator is IKernelValidator {
                 return SIG_VALIDATION_FAILED;
             }
             return _packValidationData(false, 0, pausedUntil);
-        } else {
-            return SIG_VALIDATION_FAILED;
         }
+        return SIG_VALIDATION_FAILED;
     }
 }
