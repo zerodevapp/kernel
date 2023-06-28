@@ -15,6 +15,7 @@ struct KillSwitchValidatorStorage {
     address guardian;
     IKernelValidator validator;
     uint48 pausedUntil;
+    bytes4 disableMode;
 }
 
 contract KillSwitchValidator is IKernelValidator {
@@ -37,6 +38,7 @@ contract KillSwitchValidator is IKernelValidator {
             uint256 delayedData = _packValidationData(false, 0, pausedUntil);
             return _packValidationData(_intersectTimeRange(res, delayedData));
         }
+        return SIG_VALIDATION_FAILED;
     }
 
     function validateUserOp(UserOperation calldata _userOp, bytes32 _userOpHash, uint256)
@@ -64,6 +66,7 @@ contract KillSwitchValidator is IKernelValidator {
             // save data to this storage
             validatorStorage.pausedUntil = uint48(bytes6(_userOp.signature[0:6]));
             validatorStorage.validator = KernelStorage(msg.sender).getDefaultValidator();
+            validatorStorage.disableMode = KernelStorage(msg.sender).getDisabledMode();
             bytes32 hash = ECDSA.toEthSignedMessageHash(keccak256(bytes.concat(_userOp.signature[0:6],_userOpHash)));
             address recovered = ECDSA.recover(hash, _userOp.signature[6:]);
             if (validatorStorage.guardian != recovered) {

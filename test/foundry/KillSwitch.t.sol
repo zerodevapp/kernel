@@ -57,7 +57,7 @@ contract KernelExecutionTest is Test {
 
         op = entryPoint.fillUserOp(
             address(kernel),
-            abi.encodeWithSelector(KillSwitchAction.activateKillSwitch.selector)
+            abi.encodeWithSelector(KillSwitchAction.toggleKillSwitch.selector)
         );
         address guardianKeyAddr;
         uint256 guardianKeyPriv;
@@ -68,7 +68,7 @@ contract KernelExecutionTest is Test {
         {
             bytes32 digest = getTypedDataHash(
                 address(kernel),
-                KillSwitchAction.activateKillSwitch.selector,
+                KillSwitchAction.toggleKillSwitch.selector,
                 0,
                 0,
                 address(killSwitch),
