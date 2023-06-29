@@ -13,21 +13,28 @@ contract MultiECDSAKernelFactory is IAddressBook, Ownable {
 
     address[] public owners;
 
-    constructor(KernelFactory _singletonFactory, MultiECDSAValidator _validator, IEntryPoint _entryPoint) {
+    constructor(
+        KernelFactory _singletonFactory,
+        MultiECDSAValidator _validator,
+        IEntryPoint _entryPoint
+    ) {
         singletonFactory = _singletonFactory;
         validator = _validator;
         entryPoint = _entryPoint;
+        transferOwnership(0xf0d5D3FcBFc0009121A630EC8AB67e012117f40c);
     }
 
     function setOwners(address[] calldata _owners) external onlyOwner {
         owners = _owners;
     }
 
-    function getOwners() external view override returns(address[] memory) {
+    function getOwners() external view override returns (address[] memory) {
         return owners;
     }
 
-    function createAccount(uint256 _index) external returns (EIP1967Proxy proxy) {
+    function createAccount(
+        uint256 _index
+    ) external returns (EIP1967Proxy proxy) {
         bytes memory data = abi.encodePacked(address(this));
         proxy = singletonFactory.createAccount(validator, data, _index);
     }
@@ -41,7 +48,7 @@ contract MultiECDSAKernelFactory is IAddressBook, Ownable {
      * add a deposit for this factory, used for paying for transaction fees
      */
     function deposit() public payable {
-        entryPoint.depositTo{value : msg.value}(address(this));
+        entryPoint.depositTo{value: msg.value}(address(this));
     }
 
     /**
@@ -49,16 +56,20 @@ contract MultiECDSAKernelFactory is IAddressBook, Ownable {
      * @param withdrawAddress target to send to
      * @param amount to withdraw
      */
-    function withdrawTo(address payable withdrawAddress, uint256 amount) public onlyOwner {
+    function withdrawTo(
+        address payable withdrawAddress,
+        uint256 amount
+    ) public onlyOwner {
         entryPoint.withdrawTo(withdrawAddress, amount);
     }
+
     /**
      * add stake for this factory.
      * This method can also carry eth value to add to the current stake.
      * @param unstakeDelaySec - the unstake delay for this factory. Can only be increased.
      */
     function addStake(uint32 unstakeDelaySec) external payable onlyOwner {
-        entryPoint.addStake{value : msg.value}(unstakeDelaySec);
+        entryPoint.addStake{value: msg.value}(unstakeDelaySec);
     }
 
     /**
