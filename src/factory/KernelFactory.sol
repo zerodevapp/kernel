@@ -6,18 +6,14 @@ import "./EIP1967Proxy.sol";
 import "src/Kernel.sol";
 import "src/validator/ECDSAValidator.sol";
 
-import "./TempKernel.sol";
-
 contract KernelFactory {
-    TempKernel public immutable kernelTemplate;
-    Kernel public immutable nextTemplate;
+    Kernel public immutable kernelTemplate;
     IEntryPoint public immutable entryPoint;
 
     event AccountCreated(address indexed account, address indexed validator, bytes data, uint256 index);
 
     constructor(IEntryPoint _entryPoint) {
-        kernelTemplate = new TempKernel(_entryPoint);
-        nextTemplate = new Kernel(_entryPoint);
+        kernelTemplate = new Kernel(_entryPoint);
         entryPoint = _entryPoint;
     }
 
@@ -33,7 +29,7 @@ contract KernelFactory {
                     type(EIP1967Proxy).creationCode,
                     abi.encode(
                         address(kernelTemplate),
-                        abi.encodeCall(TempKernel.initialize, (_validator, address(nextTemplate), _data))
+                        abi.encodeCall(KernelStorage.initialize, (_validator, _data))
                     )
                 )
             )
@@ -42,7 +38,7 @@ contract KernelFactory {
             return EIP1967Proxy(payable(addr));
         }
         proxy =
-        new EIP1967Proxy{salt: salt}(address(kernelTemplate), abi.encodeCall(TempKernel.initialize, (_validator, address(nextTemplate), _data)));
+        new EIP1967Proxy{salt: salt}(address(kernelTemplate), abi.encodeCall(KernelStorage.initialize, (_validator, _data)));
         emit AccountCreated(address(proxy), address(_validator), _data, _index);
     }
 
@@ -59,7 +55,7 @@ contract KernelFactory {
                     type(EIP1967Proxy).creationCode,
                     abi.encode(
                         address(kernelTemplate),
-                        abi.encodeCall(TempKernel.initialize, (_validator, address(nextTemplate), _data))
+                        abi.encodeCall(KernelStorage.initialize, (_validator, _data))
                     )
                 )
             )

@@ -2,7 +2,6 @@
 pragma solidity ^0.8.0;
 
 import "src/factory/KernelFactory.sol";
-import "src/factory/TempKernel.sol";
 import "src/factory/ECDSAKernelFactory.sol";
 import "src/Kernel.sol";
 import "src/validator/ECDSAValidator.sol";
@@ -41,26 +40,6 @@ contract KernelTest is Test {
     function test_initialize_twice() external {
         vm.expectRevert();
         kernel.initialize(validator, abi.encodePacked(owner));
-    }
-
-    function test_initialize() public {
-        Kernel newKernel = Kernel(
-            payable(
-                address(
-                    new EIP1967Proxy(
-                    address(factory.nextTemplate()),
-                    abi.encodeWithSelector(
-                    KernelStorage.initialize.selector,
-                    validator,
-                    abi.encodePacked(owner)
-                    )
-                    )
-                )
-            )
-        );
-        ECDSAValidatorStorage memory storage_ =
-            ECDSAValidatorStorage(validator.ecdsaValidatorStorage(address(newKernel)));
-        assertEq(storage_.owner, owner);
     }
 
     function test_validate_signature() external {
