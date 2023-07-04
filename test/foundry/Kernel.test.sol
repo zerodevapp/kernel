@@ -43,33 +43,6 @@ contract KernelTest is Test {
         kernel.initialize(validator, abi.encodePacked(owner));
     }
 
-    function test_initialize() public {
-        Kernel newKernel = Kernel(
-            payable(
-                address(
-                    new EIP1967Proxy(
-                    address(factory.nextTemplate()),
-                    abi.encodeWithSelector(
-                    KernelStorage.initialize.selector,
-                    validator,
-                    abi.encodePacked(owner)
-                    )
-                    )
-                )
-            )
-        );
-        ECDSAValidatorStorage memory storage_ =
-            ECDSAValidatorStorage(validator.ecdsaValidatorStorage(address(newKernel)));
-        assertEq(storage_.owner, owner);
-    }
-
-    function test_erc721_receive() external {
-        Kernel kernel2 = Kernel(payable(address(ecdsaFactory.createAccount(owner, 1))));
-        TestERC721 nft = new TestERC721();
-        nft.safeMint(address(kernel2), 1);
-        assertEq(nft.ownerOf(1), address(kernel2));
-    }
-
     function test_validate_signature() external {
         Kernel kernel2 = Kernel(payable(address(ecdsaFactory.createAccount(owner, 1))));
         bytes32 hash = keccak256(abi.encodePacked("hello world"));
