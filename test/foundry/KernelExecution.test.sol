@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+import "solady/utils/ERC1967Factory.sol";
 import "src/Kernel.sol";
 import "src/validator/ECDSAValidator.sol";
-import "src/factory/EIP1967Proxy.sol";
 import "src/factory/KernelFactory.sol";
 import "src/factory/ECDSAKernelFactory.sol";
 // test artifacts
@@ -21,6 +21,7 @@ using ERC4337Utils for EntryPoint;
 
 contract KernelExecutionTest is Test {
     Kernel kernel;
+    ERC1967Factory erc1967factory;
     KernelFactory factory;
     ECDSAKernelFactory ecdsaFactory;
     EntryPoint entryPoint;
@@ -32,7 +33,8 @@ contract KernelExecutionTest is Test {
     function setUp() public {
         (owner, ownerKey) = makeAddrAndKey("owner");
         entryPoint = new EntryPoint();
-        factory = new KernelFactory(entryPoint);
+        erc1967factory = new ERC1967Factory();
+        factory = new KernelFactory(erc1967factory, entryPoint);
 
         validator = new ECDSAValidator();
         ecdsaFactory = new ECDSAKernelFactory(factory, validator, entryPoint);
@@ -264,7 +266,7 @@ function getTypedDataHash(
     return keccak256(
         abi.encodePacked(
             "\x19\x01",
-            _buildDomainSeparator("Kernel", "0.0.2", sender),
+            _buildDomainSeparator("Kernel", "0.2.1", sender),
             getStructHash(sig, validUntil, validAfter, validator, executor, enableData)
         )
     );
