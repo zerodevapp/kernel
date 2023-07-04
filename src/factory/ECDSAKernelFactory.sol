@@ -15,7 +15,7 @@ contract ECDSAKernelFactory {
         entryPoint = _entryPoint;
     }
 
-    function createAccount(address _owner, uint256 _index) external returns (EIP1967Proxy proxy) {
+    function createAccount(address _owner, uint256 _index) external returns (address proxy) {
         bytes memory data = abi.encodePacked(_owner);
         proxy = singletonFactory.createAccount(validator, data, _index);
     }

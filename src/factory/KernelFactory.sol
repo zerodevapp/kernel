@@ -1,45 +1,39 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+import "solady/utils/ERC1967Factory.sol";
+
 import "openzeppelin-contracts/contracts/utils/Create2.sol";
-import "./EIP1967Proxy.sol";
 import "src/Kernel.sol";
 import "src/validator/ECDSAValidator.sol";
 
 contract KernelFactory {
+    ERC1967Factory public immutable erc1967factory;
     Kernel public immutable kernelTemplate;
     IEntryPoint public immutable entryPoint;
+    // TODO add kernel admin
+    address public admin;
 
     event AccountCreated(address indexed account, address indexed validator, bytes data, uint256 index);
 
-    constructor(IEntryPoint _entryPoint) {
-        kernelTemplate = new Kernel(_entryPoint);
+    constructor(ERC1967Factory _erc1967factory, IEntryPoint _entryPoint) {
+        erc1967factory = _erc1967factory;
         entryPoint = _entryPoint;
+        kernelTemplate = new Kernel(_entryPoint);
     }
 
     function createAccount(IKernelValidator _validator, bytes calldata _data, uint256 _index)
         external
-        returns (EIP1967Proxy proxy)
+        returns (address proxy)
     {
-        bytes32 salt = keccak256(abi.encodePacked(_validator, _data, _index));
-        address addr = Create2.computeAddress(
+        bytes memory initData = abi.encodeWithSelector(KernelStorage.initialize.selector, _validator, _data);
+        bytes32 salt = bytes32(uint256(keccak256(abi.encodePacked(_validator, _data, _index))) & type(uint96).max);
+        proxy = erc1967factory.deployDeterministicAndCall(
+            address(kernelTemplate),
+            admin,
             salt,
-            keccak256(
-                abi.encodePacked(
-                    type(EIP1967Proxy).creationCode,
-                    abi.encode(
-                        address(kernelTemplate),
-                        abi.encodeCall(KernelStorage.initialize, (_validator, _data))
-                    )
-                )
-            )
+            initData 
         );
-        if (addr.code.length > 0) {
-            return EIP1967Proxy(payable(addr));
-        }
-        proxy =
-        new EIP1967Proxy{salt: salt}(address(kernelTemplate), abi.encodeCall(KernelStorage.initialize, (_validator, _data)));
-        emit AccountCreated(address(proxy), address(_validator), _data, _index);
     }
 
     function getAccountAddress(IKernelValidator _validator, bytes calldata _data, uint256 _index)
@@ -47,18 +41,7 @@ contract KernelFactory {
         view
         returns (address)
     {
-        bytes32 salt = keccak256(abi.encodePacked(_validator, _data, _index));
-        return Create2.computeAddress(
-            salt,
-            keccak256(
-                abi.encodePacked(
-                    type(EIP1967Proxy).creationCode,
-                    abi.encode(
-                        address(kernelTemplate),
-                        abi.encodeCall(KernelStorage.initialize, (_validator, _data))
-                    )
-                )
-            )
-        );
+        bytes32 salt = bytes32(uint256(keccak256(abi.encodePacked(_validator, _data, _index))) & type(uint96).max);
+        return erc1967factory.predictDeterministicAddress(salt);
     }
 }

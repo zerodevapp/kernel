@@ -27,7 +27,7 @@ contract MultiECDSAKernelFactory is IAddressBook, Ownable {
         return owners;
     }
 
-    function createAccount(uint256 _index) external returns (EIP1967Proxy proxy) {
+    function createAccount(uint256 _index) external returns (address proxy) {
         bytes memory data = abi.encodePacked(address(this));
         proxy = singletonFactory.createAccount(validator, data, _index);
     }
