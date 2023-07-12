@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 import "src/factory/KernelFactory.sol";
 import "src/validator/ECDSAValidator.sol";
 import "src/factory/ECDSAKernelFactory.sol";
-import "src/executor/ERC721Actions.sol";
+import "src/executor/TokenActions.sol";
 import "src/validator/ERC165SessionKeyValidator.sol";
 import "forge-std/Script.sol";
 import "forge-std/console.sol";
@@ -12,7 +12,7 @@ contract DeploySessionKey is Script {
     function run() public {
         uint256 key = vm.envUint("DEPLOYER_PRIVATE_KEY");
         vm.startBroadcast(key);
-        ERC721Actions action = new ERC721Actions();
+        TokenActions action = new TokenActions();
         
         bytes memory bytecode = type(ERC165SessionKeyValidator).creationCode; 
         (bool success, bytes memory returnData) = DETERMINISTIC_CREATE2_FACTORY.call(abi.encodePacked(bytecode, abi.encode(action)));
