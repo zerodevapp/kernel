@@ -2,13 +2,13 @@
 pragma solidity ^0.8.0;
 
 import "src/factory/KernelFactory.sol";
-import "src/factory/TempKernel.sol";
 import "src/factory/ECDSAKernelFactory.sol";
 import "src/Kernel.sol";
 import "src/validator/ECDSAValidator.sol";
 import "src/factory/EIP1967Proxy.sol";
 // test artifacts
 import "src/test/TestValidator.sol";
+import "src/test/TestERC721.sol";
 // test utils
 import "forge-std/Test.sol";
 import {ERC4337Utils} from "./ERC4337Utils.sol";
@@ -61,6 +61,13 @@ contract KernelTest is Test {
         ECDSAValidatorStorage memory storage_ =
             ECDSAValidatorStorage(validator.ecdsaValidatorStorage(address(newKernel)));
         assertEq(storage_.owner, owner);
+    }
+
+    function test_erc721_receive() external {
+        Kernel kernel2 = Kernel(payable(address(ecdsaFactory.createAccount(owner, 1))));
+        TestERC721 nft = new TestERC721();
+        nft.safeMint(address(kernel2), 1);
+        assertEq(nft.ownerOf(1), address(kernel2));
     }
 
     function test_validate_signature() external {
