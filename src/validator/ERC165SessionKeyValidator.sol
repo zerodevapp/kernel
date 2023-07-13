@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "./IValidator.sol";
 import "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 import "openzeppelin-contracts/contracts/utils/introspection/IERC165.sol";
 import "src/utils/KernelHelper.sol";
+import "src/interfaces/IValidator.sol";
 
 // idea, we can make this merkle root
 struct ERC165SessionKeyStorage {
@@ -55,5 +55,9 @@ contract ERC165SessionKeyValidator is IKernelValidator {
         address token = address(bytes20(_userOp.callData[sessionKey.addressOffset:sessionKey.addressOffset + 20]));
         require(IERC165(token).supportsInterface(sessionKey.interfaceId), "does not support interface");
         return (uint256(sessionKey.validAfter) << 160) | (uint256(sessionKey.validUntil) << (48 + 160));
+    }
+
+    function validCaller(address _caller, bytes calldata _data) external view override returns (bool) {
+        revert("not implemented");
     }
 }

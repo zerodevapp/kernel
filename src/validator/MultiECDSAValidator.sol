@@ -2,10 +2,10 @@
 
 pragma solidity ^0.8.0;
 
-import "./IValidator.sol";
 import "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
 import "src/utils/KernelHelper.sol";
 import "src/interfaces/IAddressBook.sol";
+import "src/interfaces/IValidator.sol";
 
 contract MultiECDSAValidator is IKernelValidator {
     event OwnerAdded(address indexed kernel, address indexed owner);
@@ -60,5 +60,9 @@ contract MultiECDSAValidator is IKernelValidator {
             return SIG_VALIDATION_FAILED;
         }
         return 0;
+    }
+    
+    function validCaller(address _caller, bytes calldata _data) external view override returns (bool) {
+        return isOwner[_caller][msg.sender];
     }
 }

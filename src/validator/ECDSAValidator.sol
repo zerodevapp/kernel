@@ -2,9 +2,9 @@
 
 pragma solidity ^0.8.0;
 
-import "./IValidator.sol";
 import "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
 import "src/utils/KernelHelper.sol";
+import "src/interfaces/IValidator.sol";
 
 struct ECDSAValidatorStorage {
     address owner;
@@ -55,5 +55,9 @@ contract ECDSAValidator is IKernelValidator {
             return SIG_VALIDATION_FAILED;
         }
         return 0;
+    }
+
+    function validCaller(address _caller, bytes calldata) external view override returns (bool) {
+        return ecdsaValidatorStorage[msg.sender].owner == _caller;
     }
 }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "src/validator/IValidator.sol";
+import "src/interfaces/IValidator.sol";
 
 contract TestValidator is IKernelValidator {
     event TestValidateUserOp(bytes32 indexed opHash);
@@ -23,5 +23,9 @@ contract TestValidator is IKernelValidator {
 
     function disable(bytes calldata data) external override {
         emit TestDisable(data);
+    }
+
+    function validCaller(address, bytes calldata) external pure override returns (bool) {
+        return true;
     }
 }

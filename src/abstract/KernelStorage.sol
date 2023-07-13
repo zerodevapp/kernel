@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 // Importing necessary interfaces
 import "account-abstraction/interfaces/IEntryPoint.sol";
-import "src/validator/IValidator.sol";
+import "src/interfaces/IValidator.sol";
 
 // Defining a struct for execution details
 struct ExecutionDetail {
@@ -27,9 +27,12 @@ struct WalletKernelStorage {
 /// @notice This contract serves as the storage module for the Kernel contract.
 /// @dev This contract should only be used by the main Kernel contract.
 contract KernelStorage {
+    bytes32 internal constant KERNEL_STORAGE_SLOT = bytes32(uint256(keccak256("zerodev.kernel")) - 1);
     uint256 internal constant SIG_VALIDATION_FAILED = 1; // Signature validation failed error code
 
     IEntryPoint public immutable entryPoint; // The entry point of the contract
+    //TEMP
+    IKernelValidator public defaultValidator;
 
     // Event declarations
     event Upgraded(address indexed newImplementation);
@@ -63,7 +66,7 @@ contract KernelStorage {
 
     // Function to get the wallet kernel storage
     function getKernelStorage() internal pure returns (WalletKernelStorage storage ws) {
-        bytes32 storagePosition = bytes32(uint256(keccak256("zerodev.kernel")) - 1);
+        bytes32 storagePosition = KERNEL_STORAGE_SLOT;
         assembly {
             ws.slot := storagePosition
         }

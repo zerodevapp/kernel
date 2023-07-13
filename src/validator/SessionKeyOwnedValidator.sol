@@ -2,10 +2,10 @@
 
 pragma solidity ^0.8.0;
 
-import "./IValidator.sol";
 import "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
-import "src/utils/KernelHelper.sol";
 import "account-abstraction/core/Helpers.sol";
+import "src/utils/KernelHelper.sol";
+import "src/interfaces/IValidator.sol";
 
 struct SessionKeyStorage {
     uint48 validUntil;
@@ -55,5 +55,16 @@ contract SessionKeyOwnedValidator is IKernelValidator {
             return SIG_VALIDATION_FAILED;
         }
         return _packValidationData(false, sessionKey.validUntil, sessionKey.validAfter);
+    }
+
+    function validCaller(address _caller, bytes calldata _data) external view override returns (bool) {
+        SessionKeyStorage storage sessionKey = sessionKeyStorage[_caller][msg.sender];
+        if (block.timestamp <= sessionKey.validAfter) {
+            return false;
+        }
+        if (block.timestamp > sessionKey.validUntil) {
+            return false;
+        }
+        return true;
     }
 }

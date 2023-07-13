@@ -20,15 +20,19 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
 
     string public constant version = "0.2.1";
 
+    error NotAuthorizedCaller();
+
     /// @dev Sets up the EIP712 and KernelStorage with the provided entry point
     constructor(IEntryPoint _entryPoint) EIP712(name, version) KernelStorage(_entryPoint) {}
 
     /// @notice Accepts incoming Ether transactions and calls from the EntryPoint contract
     /// @dev This function will delegate any call to the appropriate executor based on the function signature.
     fallback() external payable {
-        require(msg.sender == address(entryPoint), "account: not from entrypoint");
         bytes4 sig = msg.sig;
         address executor = getKernelStorage().execution[sig].executor;
+        if(msg.sender != address(entryPoint) || _checkCaller()) {
+            revert NotAuthorizedCaller();
+        }
         assembly {
             calldatacopy(0, 0, calldatasize())
             let result := delegatecall(gas(), executor, 0, calldatasize(), 0, 0)
@@ -80,13 +84,13 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         // mode == 0x00000002 enable validator
         UserOperation memory op = userOp;
         IKernelValidator validator;
-        bytes4 sig = bytes4(userOp.callData[0:4]);
         if (mode == 0x00000000) {
             // sudo mode (use default validator)
             op = userOp;
             op.signature = userOp.signature[4:];
             validator = getKernelStorage().defaultValidator;
         } else if (mode == 0x00000001) {
+            bytes4 sig = bytes4(userOp.callData[0:4]);
             ExecutionDetail storage detail = getKernelStorage().execution[sig];
             validator = detail.validator;
             if (address(validator) == address(0)) {
@@ -95,6 +99,7 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
             op.signature = userOp.signature[4:];
             validationData = (uint256(detail.validAfter) << 160) | (uint256(detail.validUntil) << (48 + 160));
         } else if (mode == 0x00000002) {
+            bytes4 sig = bytes4(userOp.callData[0:4]);
             // use given validator
             // userOp.signature[4:10] = validUntil,
             // userOp.signature[10:16] = validAfter,
@@ -171,5 +176,19 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         }
 
         return 0x1626ba7e;
+    }
+
+
+    function _checkCaller() internal view returns(bool) {
+        if(getKernelStorage().defaultValidator.validCaller(msg.sender, msg.data)){
+            return true;
+        }
+        bytes4 sig = msg.sig;
+        ExecutionDetail storage detail = getKernelStorage().execution[sig];
+        if (address(detail.validator) == address(0)) {
+            return false;
+        } else {
+            return detail.validator.validCaller(msg.sender, msg.data);
+        }
     }
 }
