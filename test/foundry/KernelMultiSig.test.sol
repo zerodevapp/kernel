@@ -110,6 +110,21 @@ contract KernelMultiSigTest is Test, SignatureDecoder {
         assertEq(kernel2.isValidSignature(hash, signatures), bytes4(0xffffffff));
     }
 
+    function test_revert_when_duplicate_signatures() external {
+        Kernel kernel2 = Kernel(payable(address(multiSigFactory.createAccount(1))));
+        bytes32 hash = keccak256(abi.encodePacked("hello world"));
+        bytes memory signatures;
+        {
+            (uint8 v, bytes32 r, bytes32 s) = vm.sign(owner2Key, hash);
+            signatures = abi.encodePacked(r, s, v);
+        }
+        {
+            (uint8 v, bytes32 r, bytes32 s) = vm.sign(owner2Key, hash);
+            signatures = abi.encodePacked(signatures, r, s, v);
+        }
+        assertEq(kernel2.isValidSignature(hash, signatures), bytes4(0xffffffff));
+    }
+
     function test_revert_when_signatures_below_threshold() external {
         Kernel kernel2 = Kernel(payable(address(multiSigFactory.createAccount(1))));
         bytes32 hash = keccak256(abi.encodePacked("hello world"));
