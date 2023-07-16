@@ -9,12 +9,12 @@ function _intersectValidationData(uint256 a, uint256 b) pure returns (uint256 va
     }
     uint48 validAfterA = uint48(a >> (160 + 48));
     uint48 validUntilA = uint48(a >> 160);
-    if(validUntilA == 0) {
+    if (validUntilA == 0) {
         validUntilA = type(uint48).max;
     }
     uint48 validAfterB = uint48(b >> (160 + 48));
     uint48 validUntilB = uint48(b >> 160);
-    if(validUntilB == 0) {
+    if (validUntilB == 0) {
         validUntilB = type(uint48).max;
     }
 

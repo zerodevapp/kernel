@@ -40,7 +40,8 @@ contract SessionKeyOwnedValidator is IKernelValidator {
         address recovered = ECDSA.recover(hash, _userOp.signature);
 
         SessionKeyStorage storage sessionKey = sessionKeyStorage[recovered][msg.sender];
-        if (sessionKey.validUntil == 0 ) { // we do not allow validUntil == 0 here
+        if (sessionKey.validUntil == 0) {
+            // we do not allow validUntil == 0 here
             return SIG_VALIDATION_FAILED;
         }
         return _packValidationData(false, sessionKey.validUntil, sessionKey.validAfter);
@@ -51,7 +52,8 @@ contract SessionKeyOwnedValidator is IKernelValidator {
         address recovered = ECDSA.recover(ethhash, signature);
 
         SessionKeyStorage storage sessionKey = sessionKeyStorage[recovered][msg.sender];
-        if (sessionKey.validUntil == 0 ) { // we do not allow validUntil == 0 here
+        if (sessionKey.validUntil == 0) {
+            // we do not allow validUntil == 0 here
             return SIG_VALIDATION_FAILED;
         }
         return _packValidationData(false, sessionKey.validUntil, sessionKey.validAfter);

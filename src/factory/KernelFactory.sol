@@ -28,12 +28,7 @@ contract KernelFactory {
     {
         bytes memory initData = abi.encodeWithSelector(KernelStorage.initialize.selector, _validator, _data);
         bytes32 salt = bytes32(uint256(keccak256(abi.encodePacked(_validator, _data, _index))) & type(uint96).max);
-        proxy = erc1967factory.deployDeterministicAndCall(
-            address(kernelTemplate),
-            admin,
-            salt,
-            initData 
-        );
+        proxy = erc1967factory.deployDeterministicAndCall(address(kernelTemplate), admin, salt, initData);
     }
 
     function getAccountAddress(IKernelValidator _validator, bytes calldata _data, uint256 _index)

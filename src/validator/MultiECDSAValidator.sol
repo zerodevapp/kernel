@@ -51,7 +51,7 @@ contract MultiECDSAValidator is IKernelValidator {
 
     function validateSignature(bytes32 hash, bytes calldata signature) public view override returns (uint256) {
         address signer = ECDSA.recover(hash, signature);
-        if(isOwner[signer][msg.sender]) {
+        if (isOwner[signer][msg.sender]) {
             return 0;
         }
         bytes32 ethHash = ECDSA.toEthSignedMessageHash(hash);
@@ -61,7 +61,7 @@ contract MultiECDSAValidator is IKernelValidator {
         }
         return 0;
     }
-    
+
     function validCaller(address _caller, bytes calldata _data) external view override returns (bool) {
         return isOwner[_caller][msg.sender];
     }

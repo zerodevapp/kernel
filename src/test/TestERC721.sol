@@ -9,7 +9,7 @@ contract TestERC721 is ERC721 {
     function mint(address _to, uint256 _id) external {
         _mint(_to, _id);
     }
-    
+
     function safeMint(address _to, uint256 _id) external {
         _safeMint(_to, _id);
     }

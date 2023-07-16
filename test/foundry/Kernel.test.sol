@@ -120,8 +120,9 @@ contract KernelTest is Test {
 contract CallCodeTester {
     uint256 public slot1;
     uint256 public slot2;
-    receive() external payable {
-    }
+
+    receive() external payable {}
+
     function callcodeTest(address _target) external {
         bool success;
         bytes memory ret;
@@ -149,8 +150,9 @@ contract CallCodeTester {
 contract Target {
     uint256 public count;
     uint256 public amount;
+
     fallback() external payable {
         count++;
-        amount += msg.value; 
+        amount += msg.value;
     }
 }

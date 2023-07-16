@@ -176,7 +176,7 @@ contract TempKernel is EIP712, IAccount {
         if (address(validator) != address(0)) {
             validator.enable(getStorage().validatorData);
         }
-        
+
         assembly {
             // Copy msg.data. We take full control of memory in this inline assembly
             // block because it will not return to Solidity code. We overwrite the
@@ -192,12 +192,8 @@ contract TempKernel is EIP712, IAccount {
 
             switch result
             // delegatecall returns 0 on error.
-            case 0 {
-                revert(0, returndatasize())
-            }
-            default {
-                return(0, returndatasize())
-            }
+            case 0 { revert(0, returndatasize()) }
+            default { return(0, returndatasize()) }
         }
     }
 
@@ -243,7 +239,7 @@ contract TempKernel is EIP712, IAccount {
             ret := ptr
             success := result
         }
-        if(!success) {
+        if (!success) {
             revert(string(ret));
         }
     }

@@ -30,7 +30,7 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
     fallback() external payable {
         bytes4 sig = msg.sig;
         address executor = getKernelStorage().execution[sig].executor;
-        if(msg.sender != address(entryPoint) || _checkCaller()) {
+        if (msg.sender != address(entryPoint) || _checkCaller()) {
             revert NotAuthorizedCaller();
         }
         assembly {
@@ -178,9 +178,8 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         return 0x1626ba7e;
     }
 
-
-    function _checkCaller() internal view returns(bool) {
-        if(getKernelStorage().defaultValidator.validCaller(msg.sender, msg.data)){
+    function _checkCaller() internal view returns (bool) {
+        if (getKernelStorage().defaultValidator.validCaller(msg.sender, msg.data)) {
             return true;
         }
         bytes4 sig = msg.sig;

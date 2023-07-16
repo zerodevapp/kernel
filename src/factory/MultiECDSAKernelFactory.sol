@@ -23,7 +23,7 @@ contract MultiECDSAKernelFactory is IAddressBook, Ownable {
         owners = _owners;
     }
 
-    function getOwners() external view override returns(address[] memory) {
+    function getOwners() external view override returns (address[] memory) {
         return owners;
     }
 
@@ -41,7 +41,7 @@ contract MultiECDSAKernelFactory is IAddressBook, Ownable {
      * add a deposit for this factory, used for paying for transaction fees
      */
     function deposit() public payable {
-        entryPoint.depositTo{value : msg.value}(address(this));
+        entryPoint.depositTo{value: msg.value}(address(this));
     }
 
     /**
@@ -57,8 +57,9 @@ contract MultiECDSAKernelFactory is IAddressBook, Ownable {
      * This method can also carry eth value to add to the current stake.
      * @param unstakeDelaySec - the unstake delay for this factory. Can only be increased.
      */
+
     function addStake(uint32 unstakeDelaySec) external payable onlyOwner {
-        entryPoint.addStake{value : msg.value}(unstakeDelaySec);
+        entryPoint.addStake{value: msg.value}(unstakeDelaySec);
     }
 
     /**

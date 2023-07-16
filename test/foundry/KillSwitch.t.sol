@@ -46,8 +46,7 @@ contract KernelExecutionTest is Test {
 
     function test_mode_2() external {
         UserOperation memory op = entryPoint.fillUserOp(
-            address(kernel),
-            abi.encodeWithSelector(Kernel.execute.selector, owner, 0, "", Operation.Call)
+            address(kernel), abi.encodeWithSelector(Kernel.execute.selector, owner, 0, "", Operation.Call)
         );
 
         op.signature = bytes.concat(bytes4(0), entryPoint.signUserOpHash(vm, ownerKey, op));
@@ -55,17 +54,11 @@ contract KernelExecutionTest is Test {
         ops[0] = op;
         entryPoint.handleOps(ops, beneficiary);
 
-
-        op = entryPoint.fillUserOp(
-            address(kernel),
-            abi.encodeWithSelector(KillSwitchAction.toggleKillSwitch.selector)
-        );
+        op = entryPoint.fillUserOp(address(kernel), abi.encodeWithSelector(KillSwitchAction.toggleKillSwitch.selector));
         address guardianKeyAddr;
         uint256 guardianKeyPriv;
         (guardianKeyAddr, guardianKeyPriv) = makeAddrAndKey("guardianKey");
-        bytes memory enableData = abi.encodePacked(
-            guardianKeyAddr
-        );
+        bytes memory enableData = abi.encodePacked(guardianKeyAddr);
         {
             bytes32 digest = getTypedDataHash(
                 address(kernel),
@@ -97,7 +90,10 @@ contract KernelExecutionTest is Test {
 
         bytes32 hash = entryPoint.getUserOpHash(op);
         {
-            (uint8 v, bytes32 r, bytes32 s) = vm.sign(guardianKeyPriv, ECDSA.toEthSignedMessageHash(keccak256(bytes.concat(bytes6(uint48(pausedUntil)),hash))));
+            (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+                guardianKeyPriv,
+                ECDSA.toEthSignedMessageHash(keccak256(bytes.concat(bytes6(uint48(pausedUntil)), hash)))
+            );
             bytes memory sig = abi.encodePacked(r, s, v);
 
             op.signature = bytes.concat(op.signature, bytes6(uint48(pausedUntil)), sig);
@@ -108,8 +104,7 @@ contract KernelExecutionTest is Test {
         entryPoint.handleOps(ops, beneficiary);
         assertEq(address(kernel.getDefaultValidator()), address(killSwitch));
         op = entryPoint.fillUserOp(
-            address(kernel),
-            abi.encodeWithSelector(Kernel.execute.selector, owner, 0, "", Operation.Call)
+            address(kernel), abi.encodeWithSelector(Kernel.execute.selector, owner, 0, "", Operation.Call)
         );
 
         op.signature = bytes.concat(bytes4(0), entryPoint.signUserOpHash(vm, ownerKey, op));

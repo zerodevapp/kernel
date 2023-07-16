@@ -14,7 +14,7 @@ interface IKernelValidator {
 
     function validateSignature(bytes32 hash, bytes calldata signature) external view returns (uint256);
 
-    function validCaller(address caller, bytes calldata data) external view returns(bool);
+    function validCaller(address caller, bytes calldata data) external view returns (bool);
 }
 
 // 3 modes
