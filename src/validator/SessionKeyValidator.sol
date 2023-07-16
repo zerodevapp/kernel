@@ -58,7 +58,7 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
         returns (uint256)
     {
         // userOp.signature = signature + permission + merkleProof
-        bytes calldata signature = userOp.signature[0:65];
+        bytes calldata signature = userOp.signature[0:65]; // this may be problematic with stackup
         address sessionKey = ECDSA.recover(userOpHash, signature);
         SessionData storage session = sessionData[sessionKey][msg.sender];
         require(session.enabled, "SessionKeyValidator: session key not enabled");
@@ -73,32 +73,31 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
         require(target == permission.target, "SessionKeyValidator: target mismatch");
         uint256 value = uint256(bytes32(userOp.callData[36:68]));
         require(value <= permission.valueLimit, "SessionKeyValidator: value limit exceeded");
-        {
-            uint256 dataOffset = uint256(bytes32(userOp.callData[68:100]));
-            uint256 dataLength = uint256(bytes32(userOp.callData[dataOffset:dataOffset + 32]));
-            bytes calldata data = userOp.callData[dataOffset + 32:dataOffset + 32 + dataLength];
-            bytes4 sig = bytes4(data[0:4]);
-            require(sig == permission.sig, "SessionKeyValidator: sig mismatch");
-            for (uint256 i = 0; i < permission.rules.length; i++) {
-                ParamRule memory rule = permission.rules[i];
-                bytes32 param = bytes32(data[4 + rule.index * 32:4 + rule.index * 32 + 32]);
-                if (rule.condition == ParamCondition.EQUAL) {
-                    require(param == rule.param, "SessionKeyValidator: param mismatch");
-                } else if (rule.condition == ParamCondition.GREATER_THAN) {
-                    require(param > rule.param, "SessionKeyValidator: param mismatch");
-                } else if (rule.condition == ParamCondition.LESS_THAN) {
-                    require(param < rule.param, "SessionKeyValidator: param mismatch");
-                } else if (rule.condition == ParamCondition.GREATER_THAN_OR_EQUAL) {
-                    require(param >= rule.param, "SessionKeyValidator: param mismatch");
-                } else if (rule.condition == ParamCondition.LESS_THAN_OR_EQUAL) {
-                    require(param <= rule.param, "SessionKeyValidator: param mismatch");
-                } else if (rule.condition == ParamCondition.NOT_EQUAL) {
-                    require(param != rule.param, "SessionKeyValidator: param mismatch");
-                }
+        uint256 dataOffset = uint256(bytes32(userOp.callData[68:100]));
+        uint256 dataLength = uint256(bytes32(userOp.callData[dataOffset:dataOffset + 32]));
+        bytes calldata data = userOp.callData[dataOffset + 32:dataOffset + 32 + dataLength];
+        bytes4 sig = bytes4(data[0:4]);
+        require(sig == permission.sig, "SessionKeyValidator: sig mismatch");
+        for (uint256 i = 0; i < permission.rules.length; i++) {
+            ParamRule memory rule = permission.rules[i];
+            bytes32 param = bytes32(data[4 + rule.index * 32:4 + rule.index * 32 + 32]);
+            if (rule.condition == ParamCondition.EQUAL) {
+                require(param == rule.param, "SessionKeyValidator: param mismatch");
+            } else if (rule.condition == ParamCondition.GREATER_THAN) {
+                require(param > rule.param, "SessionKeyValidator: param mismatch");
+            } else if (rule.condition == ParamCondition.LESS_THAN) {
+                require(param < rule.param, "SessionKeyValidator: param mismatch");
+            } else if (rule.condition == ParamCondition.GREATER_THAN_OR_EQUAL) {
+                require(param >= rule.param, "SessionKeyValidator: param mismatch");
+            } else if (rule.condition == ParamCondition.LESS_THAN_OR_EQUAL) {
+                require(param <= rule.param, "SessionKeyValidator: param mismatch");
+            } else if (rule.condition == ParamCondition.NOT_EQUAL) {
+                require(param != rule.param, "SessionKeyValidator: param mismatch");
             }
-            bytes32 leaf = keccak256(abi.encodePacked(target, value, data));
-            MerkleProof.verify(merkleProof, session.merkleRoot, leaf);
         }
+        bytes32 leaf = keccak256(abi.encodePacked(target, value, data));
+        bool result = MerkleProof.verify(merkleProof, session.merkleRoot, leaf);
+        return _packValidationData(result, session.validUntil, session.validAfter);
     }
 
     function validCaller(address caller, bytes calldata _data) external view returns (bool) {
