@@ -30,7 +30,7 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
     fallback() external payable {
         bytes4 sig = msg.sig;
         address executor = getKernelStorage().execution[sig].executor;
-        if (msg.sender != address(entryPoint) || _checkCaller()) {
+        if (msg.sender != address(entryPoint) && !_checkCaller()) {
             revert NotAuthorizedCaller();
         }
         assembly {
