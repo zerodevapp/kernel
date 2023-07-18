@@ -106,6 +106,4 @@ contract KernelTest is Test {
         assertEq(uint256(execution.validUntil), uint256(0));
         assertEq(uint256(execution.validAfter), uint256(0));
     }
-
 }
-

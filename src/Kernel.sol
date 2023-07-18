@@ -78,7 +78,7 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         external
         returns (uint256 validationData)
     {
-        if(msg.sender != address(entryPoint)) {
+        if (msg.sender != address(entryPoint)) {
             revert NotEntryPoint();
         }
         // mode based signature
