@@ -107,54 +107,5 @@ contract KernelTest is Test {
         assertEq(uint256(execution.validAfter), uint256(0));
     }
 
-    function test_callcode() external {
-        CallCodeTester t = new CallCodeTester();
-        address(t).call{value: 1e18}("");
-        Target target = new Target();
-        t.callcodeTest(address(target));
-        console.log("target balance", address(target).balance);
-        console.log("t balance", address(t).balance);
-        console.log("t slot1", t.slot1());
-        console.log("t slot2", t.slot2());
-    }
 }
 
-contract CallCodeTester {
-    uint256 public slot1;
-    uint256 public slot2;
-
-    receive() external payable {}
-
-    function callcodeTest(address _target) external {
-        bool success;
-        bytes memory ret;
-        uint256 b = address(this).balance / 1000;
-        bytes memory data;
-        assembly {
-            let result := callcode(gas(), _target, b, add(data, 0x20), mload(data), 0, 0)
-            // Load free memory location
-            let ptr := mload(0x40)
-            // We allocate memory for the return data by setting the free memory location to
-            // current free memory location + data size + 32 bytes for data size value
-            mstore(0x40, add(ptr, add(returndatasize(), 0x20)))
-            // Store the size
-            mstore(ptr, returndatasize())
-            // Store the data
-            returndatacopy(add(ptr, 0x20), 0, returndatasize())
-            // Point the return data to the correct memory location
-            ret := ptr
-            success := result
-        }
-        require(success, "callcode failed");
-    }
-}
-
-contract Target {
-    uint256 public count;
-    uint256 public amount;
-
-    fallback() external payable {
-        count++;
-        amount += msg.value;
-    }
-}

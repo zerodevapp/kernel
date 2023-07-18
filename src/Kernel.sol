@@ -21,6 +21,7 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
     string public constant version = "0.2.1";
 
     error NotAuthorizedCaller();
+    error NotEntryPoint();
 
     /// @dev Sets up the EIP712 and KernelStorage with the provided entry point
     constructor(IEntryPoint _entryPoint) EIP712(name, version) KernelStorage(_entryPoint) {}
@@ -50,7 +51,9 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
     /// @param data The call data to be sent
     /// @param operation The type of operation (call or delegatecall)
     function execute(address to, uint256 value, bytes calldata data, Operation operation) external {
-        require(msg.sender == address(entryPoint), "account: not from entrypoint");
+        if (msg.sender != address(entryPoint) && !_checkCaller()) {
+            revert NotAuthorizedCaller();
+        }
         bool success;
         bytes memory ret;
         if (operation == Operation.DelegateCall) {
@@ -75,7 +78,9 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         external
         returns (uint256 validationData)
     {
-        require(msg.sender == address(entryPoint), "account: not from entryPoint");
+        if(msg.sender != address(entryPoint)) {
+            revert NotEntryPoint();
+        }
         // mode based signature
         bytes4 mode = bytes4(userOp.signature[0:4]); // mode == 00..00 use validators
         require(mode & getKernelStorage().disabledMode == 0x00000000, "kernel: mode disabled");
