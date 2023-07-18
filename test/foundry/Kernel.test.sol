@@ -47,7 +47,7 @@ contract KernelTest is Test {
 
     function test_external_call_default() external {
         vm.startPrank(owner);
-        (bool success, ) = address(kernel).call(abi.encodePacked("Hello world"));
+        (bool success,) = address(kernel).call(abi.encodePacked("Hello world"));
         assertEq(success, true);
     }
 
@@ -139,13 +139,13 @@ contract KernelTest is Test {
         address randomAddr = makeAddr("random");
         newValidator.sudoSetCaller(address(kernel), randomAddr);
         vm.startPrank(randomAddr);
-        (bool success, ) = address(kernel).call(abi.encodePacked(bytes4(0xdeadbeef)));
+        (bool success,) = address(kernel).call(abi.encodePacked(bytes4(0xdeadbeef)));
         assertEq(success, true);
         vm.stopPrank();
 
         address notAllowed = makeAddr("notAllowed");
         vm.startPrank(notAllowed);
-        (bool success2, ) = address(kernel).call(abi.encodePacked(bytes4(0xdeadbeef)));
+        (bool success2,) = address(kernel).call(abi.encodePacked(bytes4(0xdeadbeef)));
         assertEq(success2, false);
         vm.stopPrank();
     }

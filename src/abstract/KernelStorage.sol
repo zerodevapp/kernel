@@ -40,7 +40,7 @@ contract KernelStorage {
     event ExecutionChanged(bytes4 indexed selector, address indexed executor, address indexed validator);
 
     // Modifier to check if the function is called by the entry point, the contract itself or the owner
-    modifier onlyFromEntryPointOrOwnerOrSelf() {
+    modifier onlyFromEntryPointOrSelf() {
         require(
             msg.sender == address(entryPoint) || msg.sender == address(this),
             "account: not from entrypoint or owner or self"
@@ -73,7 +73,7 @@ contract KernelStorage {
     }
 
     // Function to upgrade the contract to a new implementation
-    function upgradeTo(address _newImplementation) external onlyFromEntryPointOrOwnerOrSelf {
+    function upgradeTo(address _newImplementation) external onlyFromEntryPointOrSelf {
         bytes32 slot = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
         assembly {
             sstore(slot, _newImplementation)
@@ -125,7 +125,7 @@ contract KernelStorage {
         uint48 _validUntil,
         uint48 _validAfter,
         bytes calldata _enableData
-    ) external onlyFromEntryPointOrOwnerOrSelf {
+    ) external onlyFromEntryPointOrSelf {
         getKernelStorage().execution[_selector] = ExecutionDetail({
             executor: _executor,
             validator: _validator,
@@ -138,7 +138,7 @@ contract KernelStorage {
 
     function setDefaultValidator(IKernelValidator _defaultValidator, bytes calldata _data)
         external
-        onlyFromEntryPointOrOwnerOrSelf
+        onlyFromEntryPointOrSelf
     {
         IKernelValidator oldValidator = getKernelStorage().defaultValidator;
         getKernelStorage().defaultValidator = _defaultValidator;
@@ -149,7 +149,7 @@ contract KernelStorage {
     /// @notice Updates the disabled mode
     /// @dev This function can be used to update the disabled mode
     /// @param _disableFlag The new disabled mode
-    function disableMode(bytes4 _disableFlag) external onlyFromEntryPointOrOwnerOrSelf {
+    function disableMode(bytes4 _disableFlag) external onlyFromEntryPointOrSelf {
         getKernelStorage().disabledMode = _disableFlag;
         getKernelStorage().lastDisabledTime = uint48(block.timestamp);
     }
