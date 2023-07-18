@@ -8,6 +8,12 @@ contract TestValidator is IKernelValidator {
     event TestEnable(bytes data);
     event TestDisable(bytes data);
 
+    mapping(address kernel => address) public caller;
+
+    function sudoSetCaller(address _kernel, address _caller) external {
+        caller[_kernel] = _caller;
+    }
+
     function validateSignature(bytes32, bytes calldata) external pure override returns (uint256) {
         return 0;
     }
@@ -25,7 +31,7 @@ contract TestValidator is IKernelValidator {
         emit TestDisable(data);
     }
 
-    function validCaller(address, bytes calldata) external pure override returns (bool) {
-        return true;
+    function validCaller(address _caller, bytes calldata) external view override returns (bool) {
+        return _caller == caller[msg.sender];
     }
 }

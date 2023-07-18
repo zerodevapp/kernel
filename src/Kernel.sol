@@ -184,7 +184,7 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         }
         bytes4 sig = msg.sig;
         ExecutionDetail storage detail = getKernelStorage().execution[sig];
-        if (address(detail.validator) == address(0)) {
+        if (address(detail.validator) == address(0) || (detail.validUntil != 0 && detail.validUntil < block.timestamp) || detail.validAfter > block.timestamp) {
             return false;
         } else {
             return detail.validator.validCaller(msg.sender, msg.data);

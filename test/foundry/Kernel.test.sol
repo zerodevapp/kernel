@@ -45,6 +45,12 @@ contract KernelTest is Test {
         kernel.initialize(validator, abi.encodePacked(owner));
     }
 
+    function test_external_call_default() external {
+        vm.startPrank(owner);
+        (bool success, ) = address(kernel).call(abi.encodePacked("Hello world"));
+        assertEq(success, true);
+    }
+
     function test_validate_signature() external {
         Kernel kernel2 = Kernel(payable(address(ecdsaFactory.createAccount(owner, 1))));
         bytes32 hash = keccak256(abi.encodePacked("hello world"));
@@ -103,6 +109,45 @@ contract KernelTest is Test {
         assertEq(address(execution.validator), address(newValidator));
         assertEq(uint256(execution.validUntil), uint256(0));
         assertEq(uint256(execution.validAfter), uint256(0));
+    }
+
+    function test_external_call_execution() external {
+        console.log("owner", owner);
+        TestValidator newValidator = new TestValidator();
+        UserOperation memory op = entryPoint.fillUserOp(
+            address(kernel),
+            abi.encodeWithSelector(
+                KernelStorage.setExecution.selector,
+                bytes4(0xdeadbeef),
+                address(0xdead),
+                address(newValidator),
+                uint48(0),
+                uint48(0),
+                bytes("")
+            )
+        );
+        op.signature = abi.encodePacked(bytes4(0x00000000), entryPoint.signUserOpHash(vm, ownerKey, op));
+        UserOperation[] memory ops = new UserOperation[](1);
+        ops[0] = op;
+        entryPoint.handleOps(ops, beneficiary);
+        ExecutionDetail memory execution = KernelStorage(address(kernel)).getExecution(bytes4(0xdeadbeef));
+        assertEq(execution.executor, address(0xdead));
+        assertEq(address(execution.validator), address(newValidator));
+        assertEq(uint256(execution.validUntil), uint256(0));
+        assertEq(uint256(execution.validAfter), uint256(0));
+
+        address randomAddr = makeAddr("random");
+        newValidator.sudoSetCaller(address(kernel), randomAddr);
+        vm.startPrank(randomAddr);
+        (bool success, ) = address(kernel).call(abi.encodePacked(bytes4(0xdeadbeef)));
+        assertEq(success, true);
+        vm.stopPrank();
+
+        address notAllowed = makeAddr("notAllowed");
+        vm.startPrank(notAllowed);
+        (bool success2, ) = address(kernel).call(abi.encodePacked(bytes4(0xdeadbeef)));
+        assertEq(success2, false);
+        vm.stopPrank();
     }
 
     function test_callcode() external {
