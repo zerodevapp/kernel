@@ -1,22 +1,20 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "solady/utils/ERC1967Factory.sol";
+import "./AdminLessERC1967Factory.sol";
 
 import "openzeppelin-contracts/contracts/utils/Create2.sol";
 import "src/Kernel.sol";
 import "src/validator/ECDSAValidator.sol";
 
 contract KernelFactory {
-    ERC1967Factory public immutable erc1967factory;
+    AdminLessERC1967Factory public immutable erc1967factory;
     Kernel public immutable kernelTemplate;
     IEntryPoint public immutable entryPoint;
-    // TODO add kernel admin
-    address public admin;
 
     event AccountCreated(address indexed account, address indexed validator, bytes data, uint256 index);
 
-    constructor(ERC1967Factory _erc1967factory, IEntryPoint _entryPoint) {
+    constructor(AdminLessERC1967Factory _erc1967factory, IEntryPoint _entryPoint) {
         erc1967factory = _erc1967factory;
         entryPoint = _entryPoint;
         kernelTemplate = new Kernel(_entryPoint);
@@ -29,7 +27,7 @@ contract KernelFactory {
     {
         bytes memory initData = abi.encodeWithSelector(KernelStorage.initialize.selector, _validator, _data);
         bytes32 salt = bytes32(uint256(keccak256(abi.encodePacked(_validator, _data, _index))) & type(uint96).max);
-        proxy = erc1967factory.deployDeterministicAndCall(address(kernelTemplate), admin, salt, initData);
+        proxy = erc1967factory.deployDeterministicAndCall(address(kernelTemplate), salt, initData);
     }
 
     function getAccountAddress(IKernelValidator _validator, bytes calldata _data, uint256 _index)

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "solady/utils/ERC1967Factory.sol";
+import "src/factory/AdminLessERC1967Factory.sol";
 import "src/factory/KernelFactory.sol";
 import "src/factory/MultiECDSAKernelFactory.sol";
 import "src/Kernel.sol";
@@ -16,7 +16,7 @@ using ERC4337Utils for EntryPoint;
 
 contract KernelTest is Test {
     Kernel kernel;
-    ERC1967Factory erc1967factory;
+    AdminLessERC1967Factory erc1967factory;
     KernelFactory factory;
     MultiECDSAKernelFactory ecdsaFactory;
     EntryPoint entryPoint;
@@ -27,7 +27,7 @@ contract KernelTest is Test {
 
     function setUp() public {
         (owner, ownerKey) = makeAddrAndKey("owner");
-        erc1967factory = new ERC1967Factory();
+        erc1967factory = new AdminLessERC1967Factory();
         entryPoint = new EntryPoint();
         factory = new KernelFactory(erc1967factory, entryPoint);
 

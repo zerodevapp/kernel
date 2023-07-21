@@ -7,7 +7,7 @@ Running 7 tests for test/foundry/Kernel.t.sol:KernelTest
 [32m[PASS][0m test_initialize_twice() (gas: 20491)
 [32m[PASS][0m test_set_default_validator() (gas: 424393)
 [32m[PASS][0m test_set_execution() (gas: 474685)
-[32m[PASS][0m test_validate_signature() (gas: 171428)
+[32m[PASS][0m test_validate_signature() (gas: 166441)
 Test result: [32mok[0m. 7 passed; 0 failed; 0 skipped; finished in 2.88ms
 | src/Kernel.sol:Kernel contract |                 |       |        |       |         |
 |--------------------------------|-----------------|-------|--------|-------|---------|
@@ -28,9 +28,9 @@ Test result: [32mok[0m. 7 passed; 0 failed; 0 skipped; finished in 2.88ms
 | src/factory/KernelFactory.sol:KernelFactory contract |                 |        |        |        |         |
 |------------------------------------------------------|-----------------|--------|--------|--------|---------|
 | Deployment Cost                                      | Deployment Size |        |        |        |         |
-| 2277136                                              | 12036           |        |        |        |         |
+| 2265330                                              | 11977           |        |        |        |         |
 | Function Name                                        | min             | avg    | median | max    | # calls |
-| createAccount                                        | 139832          | 140769 | 139832 | 147332 | 8       |
+| createAccount                                        | 134845          | 135782 | 134845 | 142345 | 8       |
 
 
 
