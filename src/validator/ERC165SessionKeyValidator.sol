@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 import "openzeppelin-contracts/contracts/utils/introspection/IERC165.sol";
+import "solady/utils/ECDSA.sol";
 import "src/utils/KernelHelper.sol";
 import "src/interfaces/IValidator.sol";
 

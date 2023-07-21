@@ -2,9 +2,9 @@
 pragma solidity ^0.8.0;
 
 // Importing external libraries and contracts
-import "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
+import "solady/utils/EIP712.sol";
+import "solady/utils/ECDSA.sol";
 import "account-abstraction/core/Helpers.sol";
-import "account-abstraction/interfaces/IAccount.sol";
 import "account-abstraction/interfaces/IEntryPoint.sol";
 import {EntryPoint} from "account-abstraction/core/EntryPoint.sol";
 import "./abstract/Compatibility.sol";
@@ -28,7 +28,11 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     error DisabledMode();
 
     /// @dev Sets up the EIP712 and KernelStorage with the provided entry point
-    constructor(IEntryPoint _entryPoint) EIP712(name, version) KernelStorage(_entryPoint) {}
+    constructor(IEntryPoint _entryPoint) KernelStorage(_entryPoint) {}
+
+    function _domainNameAndVersion() internal pure override returns(string memory, string memory) {
+        return (name, version);
+    }
 
     /// @notice Accepts incoming Ether transactions and calls from the EntryPoint contract
     /// @dev This function will delegate any call to the appropriate executor based on the function signature.
@@ -147,7 +151,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         uint256 enableDataLength = uint256(bytes32(signature[56:88]));
         enableData = signature[88:88 + enableDataLength];
         uint256 enableSignatureLength = uint256(bytes32(signature[88 + enableDataLength:120 + enableDataLength]));
-        bytes32 enableDigest = _hashTypedDataV4(
+        bytes32 enableDigest = _hashTypedData(
             keccak256(
                 abi.encode(
                     keccak256("ValidatorApproved(bytes4 sig,uint256 validatorData,address executor,bytes enableData)"),

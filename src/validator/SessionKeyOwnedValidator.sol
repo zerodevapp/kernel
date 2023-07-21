@@ -2,7 +2,8 @@
 
 pragma solidity ^0.8.0;
 
-import "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
+import "solady/utils/ECDSA.sol";
+import "solady/utils/EIP712.sol";
 import "account-abstraction/core/Helpers.sol";
 import "src/utils/KernelHelper.sol";
 import "src/interfaces/IValidator.sol";

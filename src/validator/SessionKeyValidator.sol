@@ -1,9 +1,9 @@
 pragma solidity ^0.8.0;
 
+import "solady/utils/ECDSA.sol";
 import "src/interfaces/IValidator.sol";
 import "account-abstraction/core/Helpers.sol";
 import "openzeppelin-contracts/contracts/utils/cryptography/MerkleProof.sol";
-import "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
 
 contract ExecuteSessionKeyValidator is IKernelValidator {
     enum ParamCondition {
