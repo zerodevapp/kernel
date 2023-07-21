@@ -16,6 +16,8 @@ enum Operation {
     DelegateCall
 }
 
+bytes32 constant VALIDATOR_APPROVED_STRUCT_HASH = 0x3ce406685c1b3551d706d85a68afdaa49ac4e07b451ad9b8ff8b58c3ee964176;
+
 /// @title Kernel
 /// @author taek<leekt216@gmail.com>
 /// @notice wallet kernel for minimal wallet functionality
@@ -119,7 +121,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
                 validator = kernelStorage.defaultValidator;
             }
             op.signature = userOp.signature[4:];
-            validationData = (uint256(detail.validAfter) << 160) | (uint256(detail.validUntil) << (48 + 160));
+            validationData = (uint256(detail.validAfter) << 160) | (uint256(detail.validUntil) << (208));
         } else if (mode == 0x00000002) {
             bytes4 sig = bytes4(userOp.callData[0:4]);
             // use given validator
@@ -150,34 +152,36 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         internal
         returns (uint256 validationData, bytes calldata enableData, bytes calldata validationSig)
     {
-        uint256 enableDataLength = uint256(bytes32(signature[56:88]));
-        enableData = signature[88:88 + enableDataLength];
-        uint256 enableSignatureLength = uint256(bytes32(signature[88 + enableDataLength:120 + enableDataLength]));
-        bytes32 enableDigest = _hashTypedData(
-            keccak256(
-                abi.encode(
-                    keccak256("ValidatorApproved(bytes4 sig,uint256 validatorData,address executor,bytes enableData)"),
-                    bytes4(sig),
-                    uint256(bytes32(signature[4:36])),
-                    address(bytes20(signature[36:56])),
-                    keccak256(enableData)
+        unchecked {
+            uint256 enableDataLength = uint256(bytes32(signature[56:88]));
+            enableData = signature[88:88 + enableDataLength];
+            uint256 enableSignatureLength = uint256(bytes32(signature[88 + enableDataLength:120 + enableDataLength]));
+            bytes32 enableDigest = _hashTypedData(
+                keccak256(
+                    abi.encode(
+                        VALIDATOR_APPROVED_STRUCT_HASH,
+                        bytes4(sig),
+                        uint256(bytes32(signature[4:36])),
+                        address(bytes20(signature[36:56])),
+                        keccak256(enableData)
+                    )
                 )
-            )
-        );
-        validationData = _intersectValidationData(
-            getKernelStorage().defaultValidator.validateSignature(
-                enableDigest, signature[120 + enableDataLength:120 + enableDataLength + enableSignatureLength]
-            ),
-            uint256(bytes32(signature[4:36])) & (uint256(type(uint96).max) << 160)
-        );
-        validationSig = signature[120 + enableDataLength + enableSignatureLength:];
-        getKernelStorage().execution[sig] = ExecutionDetail({
-            executor: address(bytes20(signature[36:56])),
-            validator: IKernelValidator(address(bytes20(signature[16:36]))),
-            validUntil: uint48(bytes6(signature[4:10])),
-            validAfter: uint48(bytes6(signature[10:16]))
-        });
-        return (validationData, signature[88:88 + enableDataLength], validationSig);
+            );
+            validationData = _intersectValidationData(
+                getKernelStorage().defaultValidator.validateSignature(
+                    enableDigest, signature[120 + enableDataLength:120 + enableDataLength + enableSignatureLength]
+                ),
+                uint256(bytes32(signature[4:36])) & (uint256(type(uint96).max) << 160)
+            );
+            validationSig = signature[120 + enableDataLength + enableSignatureLength:];
+            getKernelStorage().execution[sig] = ExecutionDetail({
+                executor: address(bytes20(signature[36:56])),
+                validator: IKernelValidator(address(bytes20(signature[16:36]))),
+                validUntil: uint48(bytes6(signature[4:10])),
+                validAfter: uint48(bytes6(signature[10:16]))
+            });
+            return (validationData, signature[88:88 + enableDataLength], validationSig);
+        }
     }
 
     /// @notice Checks if a signature is valid

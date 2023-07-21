@@ -8,11 +8,11 @@ Running 7 tests for test/foundry/Kernel.t.sol:KernelTest
 [32m[PASS][0m test_set_default_validator() (gas: 424393)
 [32m[PASS][0m test_set_execution() (gas: 474685)
 [32m[PASS][0m test_validate_signature() (gas: 166441)
-Test result: [32mok[0m. 7 passed; 0 failed; 0 skipped; finished in 2.88ms
+Test result: [32mok[0m. 7 passed; 0 failed; 0 skipped; finished in 2.86ms
 | src/Kernel.sol:Kernel contract |                 |       |        |       |         |
 |--------------------------------|-----------------|-------|--------|-------|---------|
 | Deployment Cost                | Deployment Size |       |        |       |         |
-| 1977535                        | 10375           |       |        |       |         |
+| 1958514                        | 10280           |       |        |       |         |
 | Function Name                  | min             | avg   | median | max   | # calls |
 | disableMode                    | 4059            | 4059  | 4059   | 4059  | 1       |
 | getDefaultValidator            | 535             | 535   | 535    | 535   | 1       |
@@ -28,7 +28,7 @@ Test result: [32mok[0m. 7 passed; 0 failed; 0 skipped; finished in 2.88ms
 | src/factory/KernelFactory.sol:KernelFactory contract |                 |        |        |        |         |
 |------------------------------------------------------|-----------------|--------|--------|--------|---------|
 | Deployment Cost                                      | Deployment Size |        |        |        |         |
-| 2265330                                              | 11977           |        |        |        |         |
+| 2246287                                              | 11882           |        |        |        |         |
 | Function Name                                        | min             | avg    | median | max    | # calls |
 | createAccount                                        | 134845          | 135782 | 134845 | 142345 | 8       |
 
