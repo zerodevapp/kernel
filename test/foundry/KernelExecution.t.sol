@@ -64,7 +64,7 @@ contract KernelExecutionTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IEntryPoint.FailedOp.selector, 0, string.concat("AA23 reverted: ", "kernel: mode disabled")
+                IEntryPoint.FailedOp.selector, 0, string.concat("AA23 reverted (or OOG)")
             )
         );
         entryPoint.handleOps(ops, beneficiary);

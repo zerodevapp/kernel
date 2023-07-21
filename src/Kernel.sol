@@ -122,7 +122,7 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         }
         if (missingAccountFunds != 0) {
             assembly {
-                pop(call(sub(0x00, 0x01), caller(), missingAccountFunds, 0, 0, 0, 0))
+                pop(call(gas(), caller(), missingAccountFunds, 0, 0, 0, 0))
             }
             //ignore failure (its EntryPoint's job to verify, not account.)
         }
