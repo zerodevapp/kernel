@@ -61,7 +61,7 @@ contract KernelStorage {
     }
 
     // Function to initialize the wallet kernel
-    function initialize(IKernelValidator _defaultValidator, bytes calldata _data) external {
+    function initialize(IKernelValidator _defaultValidator, bytes calldata _data) external payable {
         WalletKernelStorage storage ws = getKernelStorage();
         if(address(ws.defaultValidator) != address(0)){
             revert AlreadyInitialized();
@@ -80,7 +80,7 @@ contract KernelStorage {
     }
 
     // Function to upgrade the contract to a new implementation
-    function upgradeTo(address _newImplementation) external onlyFromEntryPointOrSelf {
+    function upgradeTo(address _newImplementation) external payable onlyFromEntryPointOrSelf {
         bytes32 slot = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
         assembly {
             sstore(slot, _newImplementation)
@@ -132,7 +132,7 @@ contract KernelStorage {
         uint48 _validUntil,
         uint48 _validAfter,
         bytes calldata _enableData
-    ) external onlyFromEntryPointOrSelf {
+    ) external payable onlyFromEntryPointOrSelf {
         getKernelStorage().execution[_selector] = ExecutionDetail({
             executor: _executor,
             validator: _validator,
@@ -144,7 +144,7 @@ contract KernelStorage {
     }
 
     function setDefaultValidator(IKernelValidator _defaultValidator, bytes calldata _data)
-        external
+        external payable
         onlyFromEntryPointOrSelf
     {
         IKernelValidator oldValidator = getKernelStorage().defaultValidator;
@@ -156,7 +156,7 @@ contract KernelStorage {
     /// @notice Updates the disabled mode
     /// @dev This function can be used to update the disabled mode
     /// @param _disableFlag The new disabled mode
-    function disableMode(bytes4 _disableFlag) external onlyFromEntryPointOrSelf {
+    function disableMode(bytes4 _disableFlag) external payable onlyFromEntryPointOrSelf {
         getKernelStorage().disabledMode = _disableFlag;
         getKernelStorage().lastDisabledTime = uint48(block.timestamp);
     }

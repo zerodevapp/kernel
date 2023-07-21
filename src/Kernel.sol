@@ -19,7 +19,7 @@ enum Operation {
 /// @title Kernel
 /// @author taek<leekt216@gmail.com>
 /// @notice wallet kernel for minimal wallet functionality
-contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
+contract Kernel is EIP712, Compatibility, KernelStorage {
     string public constant name = "Kernel";
 
     string public constant version = "0.2.1";
@@ -54,7 +54,7 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
     /// @param value The amount of Ether to send
     /// @param data The call data to be sent
     /// @param operation The type of operation (call or delegatecall)
-    function execute(address to, uint256 value, bytes calldata data, Operation operation) external {
+    function execute(address to, uint256 value, bytes calldata data, Operation operation) external payable {
         if (msg.sender != address(entryPoint) && !_checkCaller()) {
             revert NotAuthorizedCaller();
         }
@@ -85,7 +85,7 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
     /// @param missingAccountFunds The funds needed to be reimbursed
     /// @return validationData The data used for validation
     function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256 missingAccountFunds)
-        external
+        external payable
         returns (uint256 validationData)
     {
         if (msg.sender != address(entryPoint)) {

@@ -62,7 +62,7 @@ contract MultiECDSAValidator is IKernelValidator {
         return 0;
     }
 
-    function validCaller(address _caller, bytes calldata _data) external view override returns (bool) {
+    function validCaller(address _caller, bytes calldata) external view override returns (bool) {
         return isOwner[_caller][msg.sender];
     }
 }

@@ -57,7 +57,7 @@ contract ERC165SessionKeyValidator is IKernelValidator {
         return (uint256(sessionKey.validAfter) << 160) | (uint256(sessionKey.validUntil) << (48 + 160));
     }
 
-    function validCaller(address _caller, bytes calldata _data) external view override returns (bool) {
+    function validCaller(address, bytes calldata) external pure override returns (bool) {
         revert("not implemented");
     }
 }
