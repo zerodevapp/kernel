@@ -31,7 +31,7 @@ contract KernelStorage {
     uint256 internal constant SIG_VALIDATION_FAILED = 1; // Signature validation failed error code
 
     IEntryPoint public immutable entryPoint; // The entry point of the contract
-    //TEMP
+    
     IKernelValidator public defaultValidator;
 
     // Event declarations
@@ -39,12 +39,17 @@ contract KernelStorage {
     event DefaultValidatorChanged(address indexed oldValidator, address indexed newValidator);
     event ExecutionChanged(bytes4 indexed selector, address indexed executor, address indexed validator);
 
+    // Error declarations
+    error NotAuthorizedCaller();
+    error AlreadyInitialized();
+
     // Modifier to check if the function is called by the entry point, the contract itself or the owner
     modifier onlyFromEntryPointOrSelf() {
-        require(
-            msg.sender == address(entryPoint) || msg.sender == address(this),
-            "account: not from entrypoint or owner or self"
-        );
+        if(
+            msg.sender != address(entryPoint) && msg.sender != address(this)
+        ) {
+            revert NotAuthorizedCaller();
+        }
         _;
     }
 
@@ -58,7 +63,9 @@ contract KernelStorage {
     // Function to initialize the wallet kernel
     function initialize(IKernelValidator _defaultValidator, bytes calldata _data) external {
         WalletKernelStorage storage ws = getKernelStorage();
-        require(address(ws.defaultValidator) == address(0), "account: already initialized");
+        if(address(ws.defaultValidator) != address(0)){
+            revert AlreadyInitialized();
+        }
         ws.defaultValidator = _defaultValidator;
         emit DefaultValidatorChanged(address(0), address(_defaultValidator));
         _defaultValidator.enable(_data);

@@ -27,7 +27,7 @@ contract KillSwitchAction {
             getKernelStorage().disabledMode = bytes4(0xffffffff);
             getKernelStorage().lastDisabledTime = uint48(block.timestamp);
         } else {
-            (address guardian, IKernelValidator prevValidator,, bytes4 prevDisableMode) =
+            (, IKernelValidator prevValidator,, bytes4 prevDisableMode) =
                 killSwitchValidator.killSwitchValidatorStorage(address(this));
             // this means it is activated
             ws.defaultValidator = prevValidator;

@@ -20,8 +20,8 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
 
     string public constant version = "0.2.1";
 
-    error NotAuthorizedCaller();
     error NotEntryPoint();
+    error DisabledMode();
 
     /// @dev Sets up the EIP712 and KernelStorage with the provided entry point
     constructor(IEntryPoint _entryPoint) EIP712(name, version) KernelStorage(_entryPoint) {}
@@ -83,7 +83,9 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         }
         // mode based signature
         bytes4 mode = bytes4(userOp.signature[0:4]); // mode == 00..00 use validators
-        require(mode & getKernelStorage().disabledMode == 0x00000000, "kernel: mode disabled");
+        if (mode & getKernelStorage().disabledMode != 0x00000000) {
+            revert DisabledMode();
+        }
         // mode == 0x00000000 use sudo validator
         // mode == 0x00000001 use given validator
         // mode == 0x00000002 enable validator
@@ -118,10 +120,11 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         } else {
             return SIG_VALIDATION_FAILED;
         }
-        if (missingAccountFunds > 0) {
-            // we are going to assume signature is valid at this point
-            (bool success,) = msg.sender.call{value: missingAccountFunds}("");
-            (success);
+        if (missingAccountFunds != 0) {
+            assembly {
+                pop(call(sub(0x00, 0x01), caller(), missingAccountFunds, 0, 0, 0, 0))
+            }
+            //ignore failure (its EntryPoint's job to verify, not account.)
         }
         validationData =
             _intersectValidationData(validationData, validator.validateUserOp(op, userOpHash, missingAccountFunds));
