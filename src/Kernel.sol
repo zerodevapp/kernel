@@ -7,10 +7,14 @@ import "account-abstraction/core/Helpers.sol";
 import "account-abstraction/interfaces/IAccount.sol";
 import "account-abstraction/interfaces/IEntryPoint.sol";
 import {EntryPoint} from "account-abstraction/core/EntryPoint.sol";
-import "./utils/Exec.sol";
 import "./abstract/Compatibility.sol";
 import "./abstract/KernelStorage.sol";
 import "./utils/KernelHelper.sol";
+
+enum Operation {
+    Call,
+    DelegateCall
+}
 
 /// @title Kernel
 /// @author taek<leekt216@gmail.com>
@@ -54,16 +58,22 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         if (msg.sender != address(entryPoint) && !_checkCaller()) {
             revert NotAuthorizedCaller();
         }
-        bool success;
-        bytes memory ret;
+        bytes memory callData = data;
         if (operation == Operation.DelegateCall) {
-            (success, ret) = Exec.delegateCall(to, data);
-        } else {
-            (success, ret) = Exec.call(to, value, data);
-        }
-        if (!success) {
             assembly {
-                revert(add(ret, 32), mload(ret))
+                let success := delegatecall(gas(), to, add(callData, 0x20), mload(callData), 0, 0)
+                returndatacopy(0, 0, returndatasize())
+                switch success
+                case 0 { revert(0, returndatasize()) }
+                default { return(0, returndatasize()) }
+            }
+        } else {
+            assembly {
+                let success := call(gas(), to, value, add(callData, 0x20), mload(callData), 0, 0)
+                returndatacopy(0, 0, returndatasize())
+                switch success
+                case 0 { revert(0, returndatasize()) }
+                default { return(0, returndatasize()) }
             }
         }
     }
@@ -93,7 +103,6 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         IKernelValidator validator;
         if (mode == 0x00000000) {
             // sudo mode (use default validator)
-            op = userOp;
             op.signature = userOp.signature[4:];
             validator = getKernelStorage().defaultValidator;
         } else if (mode == 0x00000001) {
