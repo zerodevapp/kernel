@@ -23,7 +23,8 @@ contract KernelFactory {
     }
 
     function createAccount(IKernelValidator _validator, bytes calldata _data, uint256 _index)
-        external payable
+        external
+        payable
         returns (address proxy)
     {
         bytes memory initData = abi.encodeWithSelector(KernelStorage.initialize.selector, _validator, _data);

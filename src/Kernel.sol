@@ -30,7 +30,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     /// @dev Sets up the EIP712 and KernelStorage with the provided entry point
     constructor(IEntryPoint _entryPoint) KernelStorage(_entryPoint) {}
 
-    function _domainNameAndVersion() internal pure override returns(string memory, string memory) {
+    function _domainNameAndVersion() internal pure override returns (string memory, string memory) {
         return (name, version);
     }
 
@@ -89,7 +89,8 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     /// @param missingAccountFunds The funds needed to be reimbursed
     /// @return validationData The data used for validation
     function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256 missingAccountFunds)
-        external payable
+        external
+        payable
         returns (uint256 validationData)
     {
         if (msg.sender != address(entryPoint)) {

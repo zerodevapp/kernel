@@ -31,7 +31,7 @@ contract KernelStorage {
     uint256 internal constant SIG_VALIDATION_FAILED = 1; // Signature validation failed error code
 
     IEntryPoint public immutable entryPoint; // The entry point of the contract
-    
+
     IKernelValidator public defaultValidator;
 
     // Event declarations
@@ -45,9 +45,7 @@ contract KernelStorage {
 
     // Modifier to check if the function is called by the entry point, the contract itself or the owner
     modifier onlyFromEntryPointOrSelf() {
-        if(
-            msg.sender != address(entryPoint) && msg.sender != address(this)
-        ) {
+        if (msg.sender != address(entryPoint) && msg.sender != address(this)) {
             revert NotAuthorizedCaller();
         }
         _;
@@ -63,7 +61,7 @@ contract KernelStorage {
     // Function to initialize the wallet kernel
     function initialize(IKernelValidator _defaultValidator, bytes calldata _data) external payable {
         WalletKernelStorage storage ws = getKernelStorage();
-        if(address(ws.defaultValidator) != address(0)){
+        if (address(ws.defaultValidator) != address(0)) {
             revert AlreadyInitialized();
         }
         ws.defaultValidator = _defaultValidator;
@@ -144,7 +142,8 @@ contract KernelStorage {
     }
 
     function setDefaultValidator(IKernelValidator _defaultValidator, bytes calldata _data)
-        external payable
+        external
+        payable
         onlyFromEntryPointOrSelf
     {
         IKernelValidator oldValidator = getKernelStorage().defaultValidator;

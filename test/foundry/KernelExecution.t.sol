@@ -63,9 +63,7 @@ contract KernelExecutionTest is Test {
         ops[0] = op;
 
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IEntryPoint.FailedOp.selector, 0, string.concat("AA23 reverted (or OOG)")
-            )
+            abi.encodeWithSelector(IEntryPoint.FailedOp.selector, 0, string.concat("AA23 reverted (or OOG)"))
         );
         entryPoint.handleOps(ops, beneficiary);
     }
