@@ -171,7 +171,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
                 getKernelStorage().defaultValidator.validateSignature(
                     enableDigest, signature[120 + enableDataLength:120 + enableDataLength + enableSignatureLength]
                 ),
-                uint256(bytes32(signature[4:36])) & (uint256(type(uint96).max) << 160)
+                uint256(bytes32(signature[4:36])) & 0xffffffffffffffffffffffff0000000000000000000000000000000000000000
             );
             validationSig = signature[120 + enableDataLength + enableSignatureLength:];
             getKernelStorage().execution[sig] = ExecutionDetail({

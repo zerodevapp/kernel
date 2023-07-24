@@ -3,16 +3,16 @@ No files changed, compilation skipped
 Running 7 tests for test/foundry/Kernel.t.sol:KernelTest
 [32m[PASS][0m test_disable_mode() (gas: 167485)
 [32m[PASS][0m test_external_call_default() (gas: 28866)
-[32m[PASS][0m test_external_call_execution() (gas: 524713)
+[32m[PASS][0m test_external_call_execution() (gas: 524701)
 [32m[PASS][0m test_initialize_twice() (gas: 20491)
 [32m[PASS][0m test_set_default_validator() (gas: 432154)
-[32m[PASS][0m test_set_execution() (gas: 482446)
+[32m[PASS][0m test_set_execution() (gas: 482434)
 [32m[PASS][0m test_validate_signature() (gas: 166417)
-Test result: [32mok[0m. 7 passed; 0 failed; 0 skipped; finished in 2.88ms
+Test result: [32mok[0m. 7 passed; 0 failed; 0 skipped; finished in 2.89ms
 | src/Kernel.sol:Kernel contract |                 |       |        |       |         |
 |--------------------------------|-----------------|-------|--------|-------|---------|
 | Deployment Cost                | Deployment Size |       |        |       |         |
-| 1958314                        | 10279           |       |        |       |         |
+| 1958107                        | 10278           |       |        |       |         |
 | Function Name                  | min             | avg   | median | max   | # calls |
 | disableMode                    | 4059            | 4059  | 4059   | 4059  | 1       |
 | getDefaultValidator            | 535             | 535   | 535    | 535   | 1       |
@@ -21,14 +21,14 @@ Test result: [32mok[0m. 7 passed; 0 failed; 0 skipped; finished in 2.88ms
 | initialize                     | 2947            | 45043 | 49993  | 52493 | 9       |
 | isValidSignature               | 6231            | 6231  | 6231   | 6231  | 1       |
 | setDefaultValidator            | 8066            | 8066  | 8066   | 8066  | 1       |
-| setExecution                   | 50310           | 50310 | 50310  | 50310 | 2       |
+| setExecution                   | 50298           | 50298 | 50298  | 50298 | 2       |
 | validateUserOp                 | 50410           | 50609 | 50631  | 50764 | 4       |
 
 
 | src/factory/KernelFactory.sol:KernelFactory contract |                 |        |        |        |         |
 |------------------------------------------------------|-----------------|--------|--------|--------|---------|
 | Deployment Cost                                      | Deployment Size |        |        |        |         |
-| 2246087                                              | 11881           |        |        |        |         |
+| 2245880                                              | 11880           |        |        |        |         |
 | Function Name                                        | min             | avg    | median | max    | # calls |
 | createAccount                                        | 134821          | 135758 | 134821 | 142321 | 8       |
 
