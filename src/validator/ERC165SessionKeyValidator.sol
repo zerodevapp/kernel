@@ -19,7 +19,7 @@ struct ERC165SessionKeyStorage {
 contract ERC165SessionKeyValidator is IKernelValidator {
     mapping(address sessionKey => mapping(address kernel => ERC165SessionKeyStorage)) public sessionKeys;
 
-    function enable(bytes calldata _data) external {
+    function enable(bytes calldata _data) external payable {
         address sessionKey = address(bytes20(_data[0:20]));
         bytes4 interfaceId = bytes4(_data[20:24]);
         bytes4 selector = bytes4(_data[24:28]);
@@ -30,7 +30,7 @@ contract ERC165SessionKeyValidator is IKernelValidator {
             ERC165SessionKeyStorage(true, selector, interfaceId, validUntil, validAfter, addressOffset);
     }
 
-    function disable(bytes calldata _data) external {
+    function disable(bytes calldata _data) external payable {
         address sessionKey = address(bytes20(_data[0:20]));
 
         delete sessionKeys[sessionKey][msg.sender];
@@ -42,7 +42,7 @@ contract ERC165SessionKeyValidator is IKernelValidator {
 
     function validateUserOp(UserOperation calldata _userOp, bytes32 _userOpHash, uint256)
         external
-        view
+        payable
         returns (uint256)
     {
         bytes32 hash = ECDSA.toEthSignedMessageHash(_userOpHash);

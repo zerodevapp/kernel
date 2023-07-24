@@ -79,9 +79,8 @@ contract KernelStorage {
 
     // Function to upgrade the contract to a new implementation
     function upgradeTo(address _newImplementation) external payable onlyFromEntryPointOrSelf {
-        bytes32 slot = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
         assembly {
-            sstore(slot, _newImplementation)
+            sstore(0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc, _newImplementation)
         }
         emit Upgraded(_newImplementation);
     }

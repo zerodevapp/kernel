@@ -15,11 +15,11 @@ contract ECDSAValidator is IKernelValidator {
 
     mapping(address => ECDSAValidatorStorage) public ecdsaValidatorStorage;
 
-    function disable(bytes calldata) external override {
+    function disable(bytes calldata) external payable override {
         delete ecdsaValidatorStorage[msg.sender];
     }
 
-    function enable(bytes calldata _data) external override {
+    function enable(bytes calldata _data) external payable override {
         address owner = address(bytes20(_data[0:20]));
         address oldOwner = ecdsaValidatorStorage[msg.sender].owner;
         ecdsaValidatorStorage[msg.sender].owner = owner;
@@ -28,7 +28,7 @@ contract ECDSAValidator is IKernelValidator {
 
     function validateUserOp(UserOperation calldata _userOp, bytes32 _userOpHash, uint256)
         external
-        view
+        payable
         override
         returns (uint256 validationData)
     {

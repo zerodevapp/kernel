@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 import "solady/utils/ECDSA.sol";
 import "src/interfaces/IValidator.sol";
 import "account-abstraction/core/Helpers.sol";
-import "openzeppelin-contracts/contracts/utils/cryptography/MerkleProof.sol";
+import "solady/utils/MerkleProofLib.sol";
 
 contract ExecuteSessionKeyValidator is IKernelValidator {
     enum ParamCondition {
@@ -38,7 +38,7 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
 
     mapping(address sessionKey => mapping(address kernel => SessionData)) public sessionData;
 
-    function enable(bytes calldata _data) external {
+    function enable(bytes calldata _data) external payable {
         address sessionKey = address(bytes20(_data[0:20]));
         bytes32 merkleRoot = bytes32(_data[20:52]);
         uint48 validUntil = uint48(bytes6(_data[52:58]));
@@ -47,7 +47,7 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
         sessionData[sessionKey][msg.sender] = SessionData(true, validUntil, validAfter, merkleRoot);
     }
 
-    function disable(bytes calldata _data) external {
+    function disable(bytes calldata _data) external payable {
         address sessionKey = address(bytes20(_data[0:20]));
         address kernel = msg.sender;
         delete sessionData[sessionKey][kernel];
@@ -55,6 +55,7 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
 
     function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256 missingFunds)
         external
+        payable
         returns (uint256)
     {
         // userOp.signature = signature + permission + merkleProof
@@ -96,7 +97,7 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
             }
         }
         bytes32 leaf = keccak256(abi.encodePacked(target, value, data));
-        bool result = MerkleProof.verify(merkleProof, session.merkleRoot, leaf);
+        bool result = MerkleProofLib.verify(merkleProof, session.merkleRoot, leaf);
         return _packValidationData(result, session.validUntil, session.validAfter);
     }
 

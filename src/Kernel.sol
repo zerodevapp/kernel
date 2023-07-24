@@ -20,7 +20,7 @@ bytes32 constant VALIDATOR_APPROVED_STRUCT_HASH = 0x3ce406685c1b3551d706d85a68af
 
 /// @title Kernel
 /// @author taek<leekt216@gmail.com>
-/// @notice wallet kernel for minimal wallet functionality
+/// @notice wallet kernel for extensible wallet functionality
 contract Kernel is EIP712, Compatibility, KernelStorage {
     string public constant name = "Kernel";
 

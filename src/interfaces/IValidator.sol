@@ -4,12 +4,12 @@ pragma solidity ^0.8.0;
 import "account-abstraction/interfaces/UserOperation.sol";
 
 interface IKernelValidator {
-    function enable(bytes calldata _data) external;
+    function enable(bytes calldata _data) external payable;
 
-    function disable(bytes calldata _data) external;
+    function disable(bytes calldata _data) external payable;
 
     function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256 missingFunds)
-        external
+        external payable
         returns (uint256);
 
     function validateSignature(bytes32 hash, bytes calldata signature) external view returns (uint256);

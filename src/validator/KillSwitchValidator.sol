@@ -19,11 +19,11 @@ struct KillSwitchValidatorStorage {
 contract KillSwitchValidator is IKernelValidator {
     mapping(address => KillSwitchValidatorStorage) public killSwitchValidatorStorage;
 
-    function enable(bytes calldata enableData) external override {
+    function enable(bytes calldata enableData) external payable override {
         killSwitchValidatorStorage[msg.sender].guardian = address(bytes20(enableData[0:20]));
     }
 
-    function disable(bytes calldata) external override {
+    function disable(bytes calldata) external payable override {
         delete killSwitchValidatorStorage[msg.sender];
     }
 
@@ -42,6 +42,7 @@ contract KillSwitchValidator is IKernelValidator {
 
     function validateUserOp(UserOperation calldata _userOp, bytes32 _userOpHash, uint256)
         external
+        payable
         override
         returns (uint256)
     {

@@ -13,7 +13,7 @@ contract MultiECDSAValidator is IKernelValidator {
 
     mapping(address owner => mapping(address kernel => bool) hello) public isOwner;
 
-    function disable(bytes calldata _data) external override {
+    function disable(bytes calldata _data) external payable override {
         address[] memory owners = abi.decode(_data, (address[]));
         for (uint256 i = 0; i < owners.length; i++) {
             isOwner[owners[i]][msg.sender] = false;
@@ -21,7 +21,7 @@ contract MultiECDSAValidator is IKernelValidator {
         }
     }
 
-    function enable(bytes calldata _data) external override {
+    function enable(bytes calldata _data) external payable override {
         address addressBook = address(bytes20(_data));
         address[] memory owners = IAddressBook(addressBook).getOwners();
         for (uint256 i = 0; i < owners.length; i++) {
@@ -32,7 +32,7 @@ contract MultiECDSAValidator is IKernelValidator {
 
     function validateUserOp(UserOperation calldata _userOp, bytes32 _userOpHash, uint256)
         external
-        view
+        payable
         override
         returns (uint256 validationData)
     {
