@@ -121,7 +121,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
                 validator = kernelStorage.defaultValidator;
             }
             op.signature = userOp.signature[4:];
-            validationData = (uint256(detail.validAfter) << 160) | (uint256(detail.validUntil) << (208));
+            validationData = (uint256(detail.validAfter) << 160) | (uint256(detail.validUntil) << 208);
         } else if (mode == 0x00000002) {
             bytes4 sig = bytes4(userOp.callData[0:4]);
             // use given validator
@@ -154,7 +154,10 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     {
         unchecked {
             uint256 enableDataLength = uint256(bytes32(signature[56:88]));
-            enableData = signature[88:88 + enableDataLength];
+            assembly {
+                enableData.offset := add(signature.offset, 88)
+                enableData.length := enableDataLength
+            }
             uint256 enableSignatureLength = uint256(bytes32(signature[88 + enableDataLength:120 + enableDataLength]));
             bytes32 enableDigest = _hashTypedData(
                 keccak256(
@@ -173,14 +176,17 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
                 ),
                 uint256(bytes32(signature[4:36])) & 0xffffffffffffffffffffffff0000000000000000000000000000000000000000
             );
-            validationSig = signature[120 + enableDataLength + enableSignatureLength:];
+            assembly {
+                let offset_from_sig := add(120, add(enableDataLength, enableSignatureLength))
+                validationSig.offset := add(signature.offset, offset_from_sig)
+                validationSig.length := sub(signature.length, offset_from_sig)
+            }
             getKernelStorage().execution[sig] = ExecutionDetail({
                 executor: address(bytes20(signature[36:56])),
                 validator: IKernelValidator(address(bytes20(signature[16:36]))),
                 validUntil: uint48(bytes6(signature[4:10])),
                 validAfter: uint48(bytes6(signature[10:16]))
             });
-            return (validationData, signature[88:88 + enableDataLength], validationSig);
         }
     }
 
