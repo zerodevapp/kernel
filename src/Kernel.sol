@@ -153,12 +153,17 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         returns (uint256 validationData, bytes calldata enableData, bytes calldata validationSig)
     {
         unchecked {
-            uint256 enableDataLength = uint256(bytes32(signature[56:88]));
+            uint256 cursor = 88;
+            uint256 length  = uint256(bytes32(signature[56:88])); // this is enableDataLength
             assembly {
-                enableData.offset := add(signature.offset, 88)
-                enableData.length := enableDataLength
+                enableData.offset := add(signature.offset, cursor)
+                enableData.length := length
+                cursor := add(cursor, length) // 88 + enableDataLength
             }
-            uint256 enableSignatureLength = uint256(bytes32(signature[88 + enableDataLength:120 + enableDataLength]));
+            length = uint256(bytes32(signature[cursor:cursor + 32])); // this is enableSigLength
+            assembly {
+                cursor := add(cursor, 32)
+            }
             bytes32 enableDigest = _hashTypedData(
                 keccak256(
                     abi.encode(
@@ -172,20 +177,20 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
             );
             validationData = _intersectValidationData(
                 getKernelStorage().defaultValidator.validateSignature(
-                    enableDigest, signature[120 + enableDataLength:120 + enableDataLength + enableSignatureLength]
+                    enableDigest, signature[cursor:cursor+length]
                 ),
                 uint256(bytes32(signature[4:36])) & 0xffffffffffffffffffffffff0000000000000000000000000000000000000000
             );
             assembly {
-                let offset_from_sig := add(120, add(enableDataLength, enableSignatureLength))
-                validationSig.offset := add(signature.offset, offset_from_sig)
-                validationSig.length := sub(signature.length, offset_from_sig)
+                cursor := add(cursor, length)
+                validationSig.offset := add(signature.offset, cursor)
+                validationSig.length := sub(signature.length, cursor)
             }
             getKernelStorage().execution[sig] = ExecutionDetail({
                 executor: address(bytes20(signature[36:56])),
-                validator: IKernelValidator(address(bytes20(signature[16:36]))),
                 validUntil: uint48(bytes6(signature[4:10])),
-                validAfter: uint48(bytes6(signature[10:16]))
+                validAfter: uint48(bytes6(signature[10:16])),
+                validator: IKernelValidator(address(bytes20(signature[16:36])))
             });
         }
     }

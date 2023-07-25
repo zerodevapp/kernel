@@ -1,36 +1,28 @@
 No files changed, compilation skipped
 
 Running 7 tests for test/foundry/Kernel.t.sol:KernelTest
-[32m[PASS][0m test_disable_mode() (gas: 167485)
-[32m[PASS][0m test_external_call_default() (gas: 28866)
-[32m[PASS][0m test_external_call_execution() (gas: 524689)
-[32m[PASS][0m test_initialize_twice() (gas: 20491)
-[32m[PASS][0m test_set_default_validator() (gas: 432154)
-[32m[PASS][0m test_set_execution() (gas: 482422)
-[32m[PASS][0m test_validate_signature() (gas: 166417)
-Test result: [32mok[0m. 7 passed; 0 failed; 0 skipped; finished in 2.88ms
+[32m[PASS][0m test_disable_mode() (gas: 166464)
+[32m[PASS][0m test_external_call_default() (gas: 28827)
+[32m[PASS][0m test_external_call_execution() (gas: 457250)
+[32m[PASS][0m test_initialize_twice() (gas: 20862)
+[32m[PASS][0m test_set_default_validator() (gas: 365294)
+[32m[PASS][0m test_set_execution() (gas: 415673)
+[32m[PASS][0m test_validate_signature() (gas: 165793)
+Test result: [32mok[0m. 7 passed; 0 failed; 0 skipped; finished in 2.74ms
 | src/Kernel.sol:Kernel contract |                 |       |        |       |         |
 |--------------------------------|-----------------|-------|--------|-------|---------|
 | Deployment Cost                | Deployment Size |       |        |       |         |
-| 1967521                        | 10325           |       |        |       |         |
+| 1612219                        | 8461            |       |        |       |         |
 | Function Name                  | min             | avg   | median | max   | # calls |
-| disableMode                    | 4059            | 4059  | 4059   | 4059  | 1       |
-| getDefaultValidator            | 535             | 535   | 535    | 535   | 1       |
-| getDisabledMode                | 508             | 508   | 508    | 508   | 1       |
-| getExecution                   | 1339            | 1339  | 1339   | 1339  | 2       |
-| initialize                     | 2947            | 45043 | 49993  | 52493 | 9       |
-| isValidSignature               | 6231            | 6231  | 6231   | 6231  | 1       |
-| setDefaultValidator            | 8066            | 8066  | 8066   | 8066  | 1       |
-| setExecution                   | 50286           | 50286 | 50286  | 50286 | 2       |
-| validateUserOp                 | 50410           | 50609 | 50631  | 50764 | 4       |
-
-
-| src/factory/KernelFactory.sol:KernelFactory contract |                 |        |        |        |         |
-|------------------------------------------------------|-----------------|--------|--------|--------|---------|
-| Deployment Cost                                      | Deployment Size |        |        |        |         |
-| 2255302                                              | 11927           |        |        |        |         |
-| Function Name                                        | min             | avg    | median | max    | # calls |
-| createAccount                                        | 134821          | 135758 | 134821 | 142321 | 8       |
+| disableMode                    | 3787            | 3787  | 3787   | 3787  | 1       |
+| getDefaultValidator            | 350             | 350   | 350    | 350   | 1       |
+| getDisabledMode                | 577             | 577   | 577    | 577   | 1       |
+| getExecution                   | 1249            | 1249  | 1249   | 1249  | 2       |
+| initialize                     | 3105            | 44950 | 49869  | 52369 | 9       |
+| isValidSignature               | 6008            | 6008  | 6008   | 6008  | 1       |
+| setDefaultValidator            | 7870            | 7870  | 7870   | 7870  | 1       |
+| setExecution                   | 49877           | 49877 | 49877  | 49877 | 2       |
+| validateUserOp                 | 50024           | 50218 | 50240  | 50370 | 4       |
 
 
 
