@@ -75,7 +75,7 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
                 require(keccak256(sig) == keccak256(signature[21:25]));
                 signature = signature[25:90];
             }
-            require(MerkleProof.verify(proof, merkleRoot, leaf), "invalide merkle root");
+            require(MerkleProof.verify(proof, merkleRoot, leaf), "invalid merkle root");
         }
         bytes32 digest = _hashTypedDataV4(
             keccak256(
@@ -87,7 +87,6 @@ contract ZeroDevSessionKeyPlugin is ZeroDevBasePlugin {
             )
         );
         address recovered = digest.recover(signature);
-        require(recovered == sessionKey, "account: invalid signature");
-        return true;
+        return recovered == sessionKey;
     }
 }
