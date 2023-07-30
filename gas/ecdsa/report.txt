@@ -1,14 +1,14 @@
 No files changed, compilation skipped
 
 Running 7 tests for test/foundry/Kernel.t.sol:KernelTest
-[32m[PASS][0m test_disable_mode() (gas: 166464)
+[32m[PASS][0m test_disable_mode() (gas: 162757)
 [32m[PASS][0m test_external_call_default() (gas: 28827)
-[32m[PASS][0m test_external_call_execution() (gas: 457250)
+[32m[PASS][0m test_external_call_execution() (gas: 453543)
 [32m[PASS][0m test_initialize_twice() (gas: 20862)
-[32m[PASS][0m test_set_default_validator() (gas: 365294)
-[32m[PASS][0m test_set_execution() (gas: 415673)
-[32m[PASS][0m test_validate_signature() (gas: 165793)
-Test result: [32mok[0m. 7 passed; 0 failed; 0 skipped; finished in 2.74ms
+[32m[PASS][0m test_set_default_validator() (gas: 361660)
+[32m[PASS][0m test_set_execution() (gas: 411966)
+[32m[PASS][0m test_validate_signature() (gas: 165794)
+Test result: [32mok[0m. 7 passed; 0 failed; 0 skipped; finished in 2.76ms
 | src/Kernel.sol:Kernel contract |                 |       |        |       |         |
 |--------------------------------|-----------------|-------|--------|-------|---------|
 | Deployment Cost                | Deployment Size |       |        |       |         |
@@ -22,7 +22,7 @@ Test result: [32mok[0m. 7 passed; 0 failed; 0 skipped; finished in 2.74ms
 | isValidSignature               | 6008            | 6008  | 6008   | 6008  | 1       |
 | setDefaultValidator            | 7870            | 7870  | 7870   | 7870  | 1       |
 | setExecution                   | 49877           | 49877 | 49877  | 49877 | 2       |
-| validateUserOp                 | 50024           | 50218 | 50240  | 50370 | 4       |
+| validateUserOp                 | 46317           | 46511 | 46533  | 46663 | 4       |
 
 
 

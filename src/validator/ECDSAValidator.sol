@@ -33,13 +33,11 @@ contract ECDSAValidator is IKernelValidator {
         returns (uint256 validationData)
     {
         address owner = ecdsaValidatorStorage[_userOp.sender].owner;
-        if (owner == ECDSA.recover(_userOpHash, _userOp.signature)) {
+        bytes32 hash = ECDSA.toEthSignedMessageHash(_userOpHash);
+        if (owner == ECDSA.recover(hash, _userOp.signature)) {
             return 0;
         }
-
-        bytes32 hash = ECDSA.toEthSignedMessageHash(_userOpHash);
-        address recovered = ECDSA.recover(hash, _userOp.signature);
-        if (owner != recovered) {
+        if (owner != ECDSA.recover(_userOpHash, _userOp.signature)) {
             return SIG_VALIDATION_FAILED;
         }
     }
