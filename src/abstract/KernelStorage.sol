@@ -28,6 +28,7 @@ struct WalletKernelStorage {
 /// @dev This contract should only be used by the main Kernel contract.
 contract KernelStorage {
     bytes32 internal constant KERNEL_STORAGE_SLOT = 0x439ffe7df606b78489639bc0b827913bd09e1246fa6802968a5b3694c53e0dd8;
+    bytes32 internal constant KERNEL_STORAGE_SLOT_1 = 0x439ffe7df606b78489639bc0b827913bd09e1246fa6802968a5b3694c53e0dd9;
     bytes32 internal constant IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
     uint256 internal constant SIG_VALIDATION_FAILED = 1; // Signature validation failed error code
 
@@ -93,12 +94,16 @@ contract KernelStorage {
     }
 
     // query storage
-    function getDefaultValidator() public view returns (IKernelValidator) {
-        return getKernelStorage().defaultValidator;
+    function getDefaultValidator() public view returns (IKernelValidator validator) {
+        assembly {
+            validator := shr(80, sload(KERNEL_STORAGE_SLOT_1))
+        }
     }
 
-    function getDisabledMode() public view returns (bytes4) {
-        return getKernelStorage().disabledMode;
+    function getDisabledMode() public view returns (bytes4 disabled) {
+       assembly {
+          disabled := shl(224, sload(KERNEL_STORAGE_SLOT_1))
+       }
     }
 
     function getLastDisabledTime() public view returns (uint48) {

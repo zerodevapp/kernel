@@ -45,6 +45,7 @@ contract KernelExecutionTest is Test {
     }
 
     function test_revert_when_mode_disabled() external {
+        vm.warp(1000);
         bytes memory empty;
         UserOperation memory op = entryPoint.fillUserOp(
             address(kernel),
