@@ -10,23 +10,29 @@ contract DeployKernel is Script {
     function run() public {
         uint256 key = vm.envUint("DEPLOYER_PRIVATE_KEY");
         vm.startBroadcast(key);
-        bytes memory bytecode = type(KernelFactory).creationCode;
+        bytes memory bytecode = type(AdminLessERC1967Factory).creationCode;
         bool success;
         bytes memory returnData;
-        (success, returnData) = DETERMINISTIC_CREATE2_FACTORY.call(abi.encodePacked(bytecode, abi.encode(IEntryPoint(0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789))));
+        (success, returnData) = DETERMINISTIC_CREATE2_FACTORY.call(abi.encodePacked(bytecode));
+        address alfactory = address(bytes20(returnData));
+        require(success, "Failed to deploy AdminLessERC1967Factory");
+        console.log("AdminLessERC1967Factory deployed at: %s", alfactory);
+
+        bytecode = type(KernelFactory).creationCode;
+        (success, returnData) = DETERMINISTIC_CREATE2_FACTORY.call(abi.encodePacked(bytecode, abi.encode(alfactory, IEntryPoint(0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789))));
         require(success, "Failed to deploy KernelFactory");
         console.logBytes(returnData);
         address kernelFactory = address(bytes20(returnData));
         console.log("KernelFactory deployed at: %s", kernelFactory);
 
-        //bytecode = type(ECDSAValidator).creationCode;
-        //(success, returnData) = DETERMINISTIC_CREATE2_FACTORY.call(abi.encodePacked(bytecode));
-        //require(success, "Failed to deploy ECDSAValidator");
-        //address validator = address(bytes20(returnData));
-        //console.log("ECDSAValidator deployed at: %s", validator);
+        bytecode = type(ECDSAValidator).creationCode;
+        (success, returnData) = DETERMINISTIC_CREATE2_FACTORY.call(abi.encodePacked(bytecode));
+        require(success, "Failed to deploy ECDSAValidator");
+        address validator = address(bytes20(returnData));
+        console.log("ECDSAValidator deployed at: %s", validator);
 
         bytecode = type(ECDSAKernelFactory).creationCode;
-        (success, returnData) = DETERMINISTIC_CREATE2_FACTORY.call(abi.encodePacked(bytecode, abi.encode(kernelFactory), abi.encode(address(0x180D6465F921C7E0DEA0040107D342c87455fFF5)), abi.encode(IEntryPoint(0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789))));
+        (success, returnData) = DETERMINISTIC_CREATE2_FACTORY.call(abi.encodePacked(bytecode, abi.encode(kernelFactory, address(validator))));
         require(success, "Failed to deploy ECDSAKernelFactory");
         address ecdsaFactory = address(bytes20(returnData));
         console.log("ECDSAKernelFactory deployed at: %s", ecdsaFactory);

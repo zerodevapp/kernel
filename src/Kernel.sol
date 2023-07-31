@@ -101,9 +101,6 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         WalletKernelStorage storage kernelStorage = getKernelStorage();
         // mode based signature
         bytes4 mode = bytes4(userOp.signature[0:4]); // mode == 00..00 use validators
-        if (mode & kernelStorage.disabledMode != 0x00000000) {
-            revert DisabledMode();
-        }
         // mode == 0x00000000 use sudo validator
         // mode == 0x00000001 use given validator
         // mode == 0x00000002 enable validator
@@ -113,6 +110,8 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
             // sudo mode (use default validator)
             op.signature = userOp.signature[4:];
             validator = kernelStorage.defaultValidator;
+        } else if(mode & kernelStorage.disabledMode != 0x00000000) {
+            revert DisabledMode();
         } else if (mode == 0x00000001) {
             bytes4 sig = bytes4(userOp.callData[0:4]);
             ExecutionDetail storage detail = kernelStorage.execution[sig];

@@ -1,28 +1,28 @@
 No files changed, compilation skipped
 
 Running 7 tests for test/foundry/Kernel.t.sol:KernelTest
-[32m[PASS][0m test_disable_mode() (gas: 162757)
-[32m[PASS][0m test_external_call_default() (gas: 28827)
-[32m[PASS][0m test_external_call_execution() (gas: 453543)
-[32m[PASS][0m test_initialize_twice() (gas: 20862)
-[32m[PASS][0m test_set_default_validator() (gas: 361660)
-[32m[PASS][0m test_set_execution() (gas: 411966)
-[32m[PASS][0m test_validate_signature() (gas: 165794)
-Test result: [32mok[0m. 7 passed; 0 failed; 0 skipped; finished in 2.76ms
+[32m[PASS][0m test_disable_mode() (gas: 162576)
+[32m[PASS][0m test_external_call_default() (gas: 28845)
+[32m[PASS][0m test_external_call_execution() (gas: 453472)
+[32m[PASS][0m test_initialize_twice() (gas: 20840)
+[32m[PASS][0m test_set_default_validator() (gas: 361428)
+[32m[PASS][0m test_set_execution() (gas: 411807)
+[32m[PASS][0m test_validate_signature() (gas: 165810)
+Test result: [32mok[0m. 7 passed; 0 failed; 0 skipped; finished in 2.70ms
 | src/Kernel.sol:Kernel contract |                 |       |        |       |         |
 |--------------------------------|-----------------|-------|--------|-------|---------|
 | Deployment Cost                | Deployment Size |       |        |       |         |
-| 1612219                        | 8461            |       |        |       |         |
+| 1614019                        | 8470            |       |        |       |         |
 | Function Name                  | min             | avg   | median | max   | # calls |
-| disableMode                    | 3787            | 3787  | 3787   | 3787  | 1       |
+| disableMode                    | 3765            | 3765  | 3765   | 3765  | 1       |
 | getDefaultValidator            | 350             | 350   | 350    | 350   | 1       |
 | getDisabledMode                | 577             | 577   | 577    | 577   | 1       |
 | getExecution                   | 1249            | 1249  | 1249   | 1249  | 2       |
-| initialize                     | 3105            | 44950 | 49869  | 52369 | 9       |
-| isValidSignature               | 6008            | 6008  | 6008   | 6008  | 1       |
+| initialize                     | 3083            | 44928 | 49847  | 52347 | 9       |
+| isValidSignature               | 6047            | 6047  | 6047   | 6047  | 1       |
 | setDefaultValidator            | 7870            | 7870  | 7870   | 7870  | 1       |
 | setExecution                   | 49877           | 49877 | 49877  | 49877 | 2       |
-| validateUserOp                 | 46317           | 46511 | 46533  | 46663 | 4       |
+| validateUserOp                 | 46158           | 46352 | 46374  | 46504 | 4       |
 
 
 

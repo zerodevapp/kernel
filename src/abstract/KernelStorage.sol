@@ -27,12 +27,11 @@ struct WalletKernelStorage {
 /// @notice This contract serves as the storage module for the Kernel contract.
 /// @dev This contract should only be used by the main Kernel contract.
 contract KernelStorage {
-    bytes32 internal constant KERNEL_STORAGE_SLOT = bytes32(uint256(keccak256("zerodev.kernel")) - 1);
+    bytes32 internal constant KERNEL_STORAGE_SLOT = 0x439ffe7df606b78489639bc0b827913bd09e1246fa6802968a5b3694c53e0dd8;
+    bytes32 internal constant IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
     uint256 internal constant SIG_VALIDATION_FAILED = 1; // Signature validation failed error code
 
     IEntryPoint public immutable entryPoint; // The entry point of the contract
-
-    IKernelValidator public defaultValidator;
 
     // Event declarations
     event Upgraded(address indexed newImplementation);
@@ -71,16 +70,15 @@ contract KernelStorage {
 
     // Function to get the wallet kernel storage
     function getKernelStorage() internal pure returns (WalletKernelStorage storage ws) {
-        bytes32 storagePosition = KERNEL_STORAGE_SLOT;
         assembly {
-            ws.slot := storagePosition
+            ws.slot := KERNEL_STORAGE_SLOT
         }
     }
 
     // Function to upgrade the contract to a new implementation
     function upgradeTo(address _newImplementation) external payable onlyFromEntryPointOrSelf {
         assembly {
-            sstore(0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc, _newImplementation)
+            sstore(IMPLEMENTATION_SLOT, _newImplementation)
         }
         emit Upgraded(_newImplementation);
     }
