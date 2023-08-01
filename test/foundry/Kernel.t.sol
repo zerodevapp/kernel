@@ -9,6 +9,7 @@ import "src/validator/ECDSAValidator.sol";
 // test artifacts
 import "src/test/TestValidator.sol";
 import "src/test/TestERC721.sol";
+import "src/test/TestKernel.sol";
 // test utils
 import "forge-std/Test.sol";
 import {ERC4337Utils} from "./ERC4337Utils.sol";
@@ -56,6 +57,21 @@ contract KernelTest is Test {
         bytes32 hash = keccak256(abi.encodePacked("hello world"));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, hash);
         assertEq(kernel2.isValidSignature(hash, abi.encodePacked(r, s, v)), Kernel.isValidSignature.selector);
+    }
+
+    function test_validate_userOp() external {
+        TestKernel kernel2 = new TestKernel(entryPoint);
+        kernel2.sudoInitialize(validator, abi.encodePacked(owner));
+
+        UserOperation memory op = entryPoint.fillUserOp(
+            address(kernel),
+            abi.encodeWithSelector(Kernel.execute.selector, address(0), 0, bytes(""))
+        );
+        op.signature = abi.encodePacked(bytes4(0x00000000), entryPoint.signUserOpHash(vm, ownerKey, op));
+        bytes32 hash = entryPoint.getUserOpHash(op);
+        vm.startPrank(address(entryPoint));
+        kernel2.validateUserOp(op, hash, 0);
+        vm.stopPrank();
     }
 
     function test_set_default_validator() external {
