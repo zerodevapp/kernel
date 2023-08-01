@@ -1,18 +1,18 @@
 No files changed, compilation skipped
 
 Running 7 tests for test/foundry/Kernel.t.sol:KernelTest
-[32m[PASS][0m test_disable_mode() (gas: 162990)
+[32m[PASS][0m test_disable_mode() (gas: 162879)
 [32m[PASS][0m test_external_call_default() (gas: 28845)
-[32m[PASS][0m test_external_call_execution() (gas: 453465)
+[32m[PASS][0m test_external_call_execution() (gas: 453354)
 [32m[PASS][0m test_initialize_twice() (gas: 20840)
-[32m[PASS][0m test_set_default_validator() (gas: 361485)
-[32m[PASS][0m test_set_execution() (gas: 411800)
+[32m[PASS][0m test_set_default_validator() (gas: 361374)
+[32m[PASS][0m test_set_execution() (gas: 411689)
 [32m[PASS][0m test_validate_signature() (gas: 165811)
-Test result: [32mok[0m. 7 passed; 0 failed; 0 skipped; finished in 2.70ms
+Test result: [32mok[0m. 7 passed; 0 failed; 0 skipped; finished in 2.67ms
 | src/Kernel.sol:Kernel contract |                 |       |        |       |         |
 |--------------------------------|-----------------|-------|--------|-------|---------|
 | Deployment Cost                | Deployment Size |       |        |       |         |
-| 1603605                        | 8418            |       |        |       |         |
+| 1590591                        | 8353            |       |        |       |         |
 | Function Name                  | min             | avg   | median | max   | # calls |
 | disableMode                    | 3765            | 3765  | 3765   | 3765  | 1       |
 | getDefaultValidator            | 341             | 341   | 341    | 341   | 1       |
@@ -22,7 +22,7 @@ Test result: [32mok[0m. 7 passed; 0 failed; 0 skipped; finished in 2.70ms
 | isValidSignature               | 6047            | 6047  | 6047   | 6047  | 1       |
 | setDefaultValidator            | 7870            | 7870  | 7870   | 7870  | 1       |
 | setExecution                   | 49877           | 49877 | 49877  | 49877 | 2       |
-| validateUserOp                 | 46151           | 46345 | 46367  | 46497 | 4       |
+| validateUserOp                 | 46040           | 46234 | 46256  | 46386 | 4       |
 
 
 

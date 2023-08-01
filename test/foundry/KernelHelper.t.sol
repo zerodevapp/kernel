@@ -14,13 +14,28 @@ contract KernelHelperTest is Test {
         }
         uint256 a = _packValidationData(false, validUntilA, validAfterA);
         uint256 b = _packValidationData(false, validUntilB, validAfterB);
-        ValidationData memory c = _intersectTimeRange(a, b);
+        uint256 c = _intersectValidationData(a, b);
 
         uint256 expected = _packValidationData(
             false,
             validUntilA < validUntilB ? validUntilA : validUntilB,
             validAfterA > validAfterB ? validAfterA : validAfterB
         );
-        assertEq(_packValidationData(c), expected);
+        assertEq(c, expected);
+    }
+
+    function testIntersectDiff(address a, address b) public {
+        uint256 a_packed = _packValidationData(ValidationData({
+            aggregator : a,
+            validAfter : 0,
+            validUntil : 0
+        }));
+        uint256 b_packed = _packValidationData(ValidationData({
+            aggregator : b,
+            validAfter : 0,
+            validUntil : 0
+        }));
+        uint256 c = _intersectValidationData(a_packed, b_packed);
+        assertEq(c, 1);
     }
 }

@@ -4,23 +4,27 @@ pragma solidity ^0.8.0;
 uint256 constant SIG_VALIDATION_FAILED = 1;
 
 function _intersectValidationData(uint256 a, uint256 b) pure returns (uint256 validationData) {
-    unchecked {
-        if (uint160(a) != uint160(b)) {
-            return SIG_VALIDATION_FAILED;
+    assembly {
+        // xor(a,b) == shows only matching bits
+        // and(xor(a,b), 0x000000000000000000000000ffffffffffffffffffffffffffffffffffffffff) == filters out the validAfter and validUntil bits
+        // if the result is not zero, then aggregator part is not matching
+        switch iszero(and(xor(a,b), 0x000000000000000000000000ffffffffffffffffffffffffffffffffffffffff))
+        case 1 {
+            // validAfter
+            let a_vd :=         and(0xffffffffffff000000000000ffffffffffffffffffffffffffffffffffffffff, a)
+            let b_vd :=         and(0xffffffffffff000000000000ffffffffffffffffffffffffffffffffffffffff, b)
+            validationData := xor(a_vd, mul(xor(a_vd, b_vd), gt(b_vd, a_vd)))
+            // validUntil
+            a_vd     :=         and(0x000000000000ffffffffffff0000000000000000000000000000000000000000, a)
+            b_vd     :=         and(0x000000000000ffffffffffff0000000000000000000000000000000000000000, b)
+            let until := xor(a_vd, mul(xor(a_vd, b_vd), lt(b_vd, a_vd)))
+            if iszero(until) {
+                until :=            0x000000000000ffffffffffff0000000000000000000000000000000000000000
+            }
+            validationData := or(validationData, until)
         }
-        uint48 validAfterA = uint48(a >> (160 + 48));
-        uint48 validUntilA = uint48(a >> 160);
-        if (validUntilA == 0) {
-            validUntilA = type(uint48).max;
+        default {
+            validationData := SIG_VALIDATION_FAILED
         }
-        uint48 validAfterB = uint48(b >> (160 + 48));
-        uint48 validUntilB = uint48(b >> 160);
-        if (validUntilB == 0) {
-            validUntilB = type(uint48).max;
-        }
-
-        if (validAfterA < validAfterB) validAfterA = validAfterB;
-        if (validUntilA > validUntilB) validUntilA = validUntilB;
-        validationData = uint256(uint160(a)) | (uint256(validUntilA) << 160) | (uint256(validAfterA) << (48 + 160));
     }
 }
