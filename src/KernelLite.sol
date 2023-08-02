@@ -101,12 +101,8 @@ abstract contract KernelLite is EIP712, Compatibility, KernelStorage {
         // mode == 0x00000000 use sudo validator
         // mode == 0x00000001 use given validator
         // mode == 0x00000002 enable validator
-        UserOperation memory op = userOp;
-        IKernelValidator validator;
         if (mode == 0x00000000) {
             // sudo mode (use default validator)
-            op.signature = userOp.signature[4:];
-
             if (missingAccountFunds != 0) {
                 assembly {
                     pop(call(gas(), caller(), missingAccountFunds, 0, 0, 0, 0))
@@ -116,6 +112,8 @@ abstract contract KernelLite is EIP712, Compatibility, KernelStorage {
             // short circuit here for default validator
             return _validateUserOp(userOp, userOpHash, missingAccountFunds);
         }
+        UserOperation memory op = userOp;
+        IKernelValidator validator;
         
         bytes32 storage_slot_1;
         assembly {

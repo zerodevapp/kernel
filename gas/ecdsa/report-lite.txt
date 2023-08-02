@@ -1,15 +1,15 @@
 No files changed, compilation skipped
 
 Running 8 tests for test/foundry/KernelLite.t.sol:KernelTest
-[32m[PASS][0m test_disable_mode() (gas: 174219)
+[32m[PASS][0m test_disable_mode() (gas: 171425)
 [32m[PASS][0m test_external_call_default() (gas: 22953)
-[32m[PASS][0m test_external_call_execution() (gas: 442499)
+[32m[PASS][0m test_external_call_execution() (gas: 439687)
 [32m[PASS][0m test_initialize_twice() (gas: 20968)
-[32m[PASS][0m test_set_default_validator() (gas: 372577)
-[32m[PASS][0m test_set_execution() (gas: 403664)
+[32m[PASS][0m test_set_default_validator() (gas: 369789)
+[32m[PASS][0m test_set_execution() (gas: 400852)
 [32m[PASS][0m test_validate_signature() (gas: 139666)
 [32m[PASS][0m test_validate_userOp() (gas: 1733019)
-Test result: [32mok[0m. 8 passed; 0 failed; 0 skipped; finished in 2.77ms
+Test result: [32mok[0m. 8 passed; 0 failed; 0 skipped; finished in 2.73ms
 | src/factory/KernelFactory.sol:KernelFactory contract |                 |        |        |        |         |
 |------------------------------------------------------|-----------------|--------|--------|--------|---------|
 | Deployment Cost                                      | Deployment Size |        |        |        |         |
@@ -23,7 +23,7 @@ Test result: [32mok[0m. 8 passed; 0 failed; 0 skipped; finished in 2.77ms
 | src/lite/KernelLiteECDSA.sol:KernelLiteECDSA contract |                 |       |        |       |         |
 |-------------------------------------------------------|-----------------|-------|--------|-------|---------|
 | Deployment Cost                                       | Deployment Size |       |        |       |         |
-| 1601205                                               | 8406            |       |        |       |         |
+| 1598398                                               | 8392            |       |        |       |         |
 | Function Name                                         | min             | avg   | median | max   | # calls |
 | disableMode                                           | 22865           | 22865 | 22865  | 22865 | 1       |
 | getDefaultValidator                                   | 341             | 341   | 341    | 341   | 1       |
@@ -33,7 +33,7 @@ Test result: [32mok[0m. 8 passed; 0 failed; 0 skipped; finished in 2.77ms
 | isValidSignature                                      | 8587            | 8587  | 8587   | 8587  | 1       |
 | setDefaultValidator                                   | 26774           | 26774 | 26774  | 26774 | 1       |
 | setExecution                                          | 49853           | 49853 | 49853  | 49853 | 2       |
-| validateUserOp                                        | 38837           | 38850 | 38852  | 38861 | 4       |
+| validateUserOp                                        | 36049           | 36049 | 36049  | 36049 | 4       |
 
 
 
