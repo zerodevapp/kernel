@@ -18,7 +18,6 @@ using ERC4337Utils for EntryPoint;
 
 contract KernelTest is Test {
     Kernel kernel;
-    AdminLessERC1967Factory erc1967factory;
     KernelFactory factory;
     ECDSAKernelFactory ecdsaFactory;
     EntryPoint entryPoint;
@@ -29,9 +28,8 @@ contract KernelTest is Test {
 
     function setUp() public {
         (owner, ownerKey) = makeAddrAndKey("owner");
-        erc1967factory = new AdminLessERC1967Factory();
         entryPoint = new EntryPoint();
-        factory = new KernelFactory(erc1967factory, entryPoint);
+        factory = new KernelFactory(entryPoint);
 
         validator = new ECDSAValidator();
         ecdsaFactory = new ECDSAKernelFactory(factory, validator);

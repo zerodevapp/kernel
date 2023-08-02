@@ -7,15 +7,13 @@ import "openzeppelin-contracts/contracts/utils/Create2.sol";
 import "src/Kernel.sol";
 import "src/validator/ECDSAValidator.sol";
 
-contract KernelFactory {
-    AdminLessERC1967Factory public immutable erc1967factory;
+contract KernelFactory is AdminLessERC1967Factory{
     Kernel public immutable kernelTemplate;
     IEntryPoint public immutable entryPoint;
 
     event AccountCreated(address indexed account, address indexed validator, bytes data, uint256 index);
 
-    constructor(AdminLessERC1967Factory _erc1967factory, IEntryPoint _entryPoint) {
-        erc1967factory = _erc1967factory;
+    constructor(IEntryPoint _entryPoint) {
         entryPoint = _entryPoint;
         kernelTemplate = new Kernel(_entryPoint);
     }
@@ -27,7 +25,7 @@ contract KernelFactory {
     {
         bytes memory initData = abi.encodeWithSelector(KernelStorage.initialize.selector, _validator, _data);
         bytes32 salt = bytes32(uint256(keccak256(abi.encodePacked(_validator, _data, _index))) & type(uint96).max);
-        proxy = erc1967factory.deployDeterministicAndCall(address(kernelTemplate), salt, initData);
+        proxy = this.deployDeterministicAndCall(address(kernelTemplate), salt, initData);
     }
 
     function getAccountAddress(IKernelValidator _validator, bytes calldata _data, uint256 _index)
@@ -36,6 +34,6 @@ contract KernelFactory {
         returns (address)
     {
         bytes32 salt = bytes32(uint256(keccak256(abi.encodePacked(_validator, _data, _index))) & type(uint96).max);
-        return erc1967factory.predictDeterministicAddress(salt);
+        return predictDeterministicAddress(salt);
     }
 }
