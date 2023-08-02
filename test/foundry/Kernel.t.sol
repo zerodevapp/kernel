@@ -3,7 +3,6 @@ pragma solidity ^0.8.0;
 
 import "src/factory/AdminLessERC1967Factory.sol";
 import "src/factory/KernelFactory.sol";
-import "src/factory/ECDSAKernelFactory.sol";
 import "src/Kernel.sol";
 import "src/validator/ECDSAValidator.sol";
 // test artifacts
@@ -18,23 +17,28 @@ using ERC4337Utils for EntryPoint;
 
 contract KernelTest is Test {
     Kernel kernel;
+    Kernel kernelImpl;
     KernelFactory factory;
-    ECDSAKernelFactory ecdsaFactory;
     EntryPoint entryPoint;
     ECDSAValidator validator;
     address owner;
     uint256 ownerKey;
     address payable beneficiary;
+    address factoryOwner;
 
     function setUp() public {
         (owner, ownerKey) = makeAddrAndKey("owner");
+        (factoryOwner, ) = makeAddrAndKey("factoryOwner");
         entryPoint = new EntryPoint();
-        factory = new KernelFactory(entryPoint);
+        kernelImpl = new Kernel(entryPoint);
+        factory = new KernelFactory(factoryOwner);
+        vm.startPrank(factoryOwner);
+        factory.setImplementation(address(kernelImpl), true);
+        vm.stopPrank();
 
         validator = new ECDSAValidator();
-        ecdsaFactory = new ECDSAKernelFactory(factory, validator);
 
-        kernel = Kernel(payable(ecdsaFactory.createAccount(owner, 0)));
+        kernel = Kernel(payable(address(factory.createAccount(address(kernelImpl), abi.encodeWithSelector(KernelStorage.initialize.selector, validator, abi.encodePacked(owner)), 0))));
         vm.deal(address(kernel), 1e30);
         beneficiary = payable(address(makeAddr("beneficiary")));
     }
@@ -51,7 +55,7 @@ contract KernelTest is Test {
     }
 
     function test_validate_signature() external {
-        Kernel kernel2 = Kernel(payable(address(ecdsaFactory.createAccount(owner, 1))));
+        Kernel kernel2 = Kernel(payable(address(factory.createAccount(address(kernelImpl), abi.encodeWithSelector(KernelStorage.initialize.selector, validator, abi.encodePacked(owner)), 1))));
         bytes32 hash = keccak256(abi.encodePacked("hello world"));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, hash);
         assertEq(kernel2.isValidSignature(hash, abi.encodePacked(r, s, v)), Kernel.isValidSignature.selector);
