@@ -6,14 +6,14 @@ Running 8 tests for test/foundry/Kernel.t.sol:KernelTest
 [32m[PASS][0m test_external_call_execution() (gas: 453376)
 [32m[PASS][0m test_initialize_twice() (gas: 20885)
 [32m[PASS][0m test_set_default_validator() (gas: 361374)
-[32m[PASS][0m test_set_execution() (gas: 411669)
-[32m[PASS][0m test_validate_signature() (gas: 164809)
-[32m[PASS][0m test_validate_userOp() (gas: 1732266)
-Test result: [32mok[0m. 8 passed; 0 failed; 0 skipped; finished in 2.87ms
+[32m[PASS][0m test_set_execution() (gas: 411711)
+[32m[PASS][0m test_validate_signature() (gas: 164810)
+[32m[PASS][0m test_validate_userOp() (gas: 1729466)
+Test result: [32mok[0m. 8 passed; 0 failed; 0 skipped; finished in 2.77ms
 | src/Kernel.sol:Kernel contract |                 |       |        |       |         |
 |--------------------------------|-----------------|-------|--------|-------|---------|
 | Deployment Cost                | Deployment Size |       |        |       |         |
-| 1589391                        | 8347            |       |        |       |         |
+| 1586591                        | 8333            |       |        |       |         |
 | Function Name                  | min             | avg   | median | max   | # calls |
 | disableMode                    | 3765            | 3765  | 3765   | 3765  | 1       |
 | getDefaultValidator            | 341             | 341   | 341    | 341   | 1       |

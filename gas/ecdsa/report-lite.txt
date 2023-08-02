@@ -8,8 +8,8 @@ Running 8 tests for test/foundry/KernelLite.t.sol:KernelTest
 [32m[PASS][0m test_set_default_validator() (gas: 372577)
 [32m[PASS][0m test_set_execution() (gas: 403664)
 [32m[PASS][0m test_validate_signature() (gas: 139666)
-[32m[PASS][0m test_validate_userOp() (gas: 1735819)
-Test result: [32mok[0m. 8 passed; 0 failed; 0 skipped; finished in 2.78ms
+[32m[PASS][0m test_validate_userOp() (gas: 1733019)
+Test result: [32mok[0m. 8 passed; 0 failed; 0 skipped; finished in 2.77ms
 | src/factory/KernelFactory.sol:KernelFactory contract |                 |        |        |        |         |
 |------------------------------------------------------|-----------------|--------|--------|--------|---------|
 | Deployment Cost                                      | Deployment Size |        |        |        |         |
@@ -18,6 +18,22 @@ Test result: [32mok[0m. 8 passed; 0 failed; 0 skipped; finished in 2.78ms
 | createAccount                                        | 106913          | 107413 | 106913 | 111413 | 9       |
 | deployDeterministicAndCall                           | 105350          | 105627 | 105350 | 107850 | 9       |
 | setImplementation                                    | 22862           | 22862  | 22862  | 22862  | 8       |
+
+
+| src/lite/KernelLiteECDSA.sol:KernelLiteECDSA contract |                 |       |        |       |         |
+|-------------------------------------------------------|-----------------|-------|--------|-------|---------|
+| Deployment Cost                                       | Deployment Size |       |        |       |         |
+| 1601205                                               | 8406            |       |        |       |         |
+| Function Name                                         | min             | avg   | median | max   | # calls |
+| disableMode                                           | 22865           | 22865 | 22865  | 22865 | 1       |
+| getDefaultValidator                                   | 341             | 341   | 341    | 341   | 1       |
+| getDisabledMode                                       | 577             | 577   | 577    | 577   | 1       |
+| getExecution                                          | 1249            | 1249  | 1249   | 1249  | 2       |
+| initialize                                            | 3117            | 21073 | 23069  | 23069 | 10      |
+| isValidSignature                                      | 8587            | 8587  | 8587   | 8587  | 1       |
+| setDefaultValidator                                   | 26774           | 26774 | 26774  | 26774 | 1       |
+| setExecution                                          | 49853           | 49853 | 49853  | 49853 | 2       |
+| validateUserOp                                        | 38837           | 38850 | 38852  | 38861 | 4       |
 
 
 

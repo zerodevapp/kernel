@@ -60,14 +60,13 @@ abstract contract KernelLite is EIP712, Compatibility, KernelStorage {
     /// @param value The amount of Ether to send
     /// @param data The call data to be sent
     /// @param operation The type of operation (call or delegatecall)
-    function execute(address to, uint256 value, bytes calldata data, Operation operation) external payable {
+    function execute(address to, uint256 value, bytes memory data, Operation operation) external payable {
         if (msg.sender != address(entryPoint) && !_checkCaller()) {
             revert NotAuthorizedCaller();
         }
-        bytes memory callData = data;
         if (operation == Operation.DelegateCall) {
             assembly {
-                let success := delegatecall(gas(), to, add(callData, 0x20), mload(callData), 0, 0)
+                let success := delegatecall(gas(), to, add(data, 0x20), mload(data), 0, 0)
                 returndatacopy(0, 0, returndatasize())
                 switch success
                 case 0 { revert(0, returndatasize()) }
@@ -75,7 +74,7 @@ abstract contract KernelLite is EIP712, Compatibility, KernelStorage {
             }
         } else {
             assembly {
-                let success := call(gas(), to, value, add(callData, 0x20), mload(callData), 0, 0)
+                let success := call(gas(), to, value, add(data, 0x20), mload(data), 0, 0)
                 returndatacopy(0, 0, returndatasize())
                 switch success
                 case 0 { revert(0, returndatasize()) }
