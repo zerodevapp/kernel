@@ -83,5 +83,8 @@ contract RecoveryTest is Test {
                 )
             )
         );
+        assert(validator.getGuardianByIndex(address(newKernel), 0).guardian == newOwner);
+        assert(validator.getGuardianByIndex(address(newKernel), 0).weight == 100);
+        assert(validator.getGuardianByIndex(address(newKernel),0).approved == false);
     }
 }

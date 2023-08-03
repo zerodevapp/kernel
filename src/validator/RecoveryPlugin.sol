@@ -103,6 +103,14 @@ contract RecoveryPlugin is IKernelValidator {
         emit GuardianAdded(msg.sender, guardians[msg.sender], _thresholdWeight);
     }
 
+    function getGuardianByIndex(address _kernel, uint256 _index)
+        public
+        view
+        returns (Guardian memory)
+    {
+        return guardians[_kernel][_index];
+    }
+
     function verifyGuardians(
         bytes32 hash,
         bytes[] memory signatures
