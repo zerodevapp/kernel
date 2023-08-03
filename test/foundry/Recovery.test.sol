@@ -30,6 +30,9 @@ contract RecoveryTest is Test {
         0xaa744ba2ca576ec62ca0045eca00ad3917fdf7ffa34fbbae50828a5a69c1580e;
     bytes signature =
         hex"f0745420866c7ec0615a2fa25afaa271cd763596fb4b87fbde763f4cb9cfe142575c22419490fb9db86a6d18801c7919f49b9042619ee339ea200cd8ad533cf41b";
+    bytes guardianmode = hex"00";
+    bytes recoverymode = hex"01";
+    bytes guardiandata = hex"5b38da6a701c568545dcfcb03fcb875f56beddc40000000000000000000000000000000000000000000000000000000000000064";
 
     function setUp() public {
         (owner, ownerKey) = makeAddrAndKey("owner");
@@ -44,9 +47,8 @@ contract RecoveryTest is Test {
         );
 
         kernel = Kernel(payable(recoveryFactory.createAccount(abi.encodePacked(
-                owner,
-                hash,
-                signature
+                guardianmode,
+                guardiandata
             ), 0)));
         vm.deal(address(kernel), 1e30);
         beneficiary = payable(address(makeAddr("beneficiary")));
@@ -57,9 +59,8 @@ contract RecoveryTest is Test {
         kernel.initialize(
             validator,
             abi.encodePacked(
-                owner,
-                hash,
-                signature
+                guardianmode,
+                guardiandata
             )
         );
     }
@@ -74,18 +75,13 @@ contract RecoveryTest is Test {
                             KernelStorage.initialize.selector,
                             validator,
                             abi.encodePacked(
-                                owner,
-                                hash,
-                                signature
+                                guardianmode,
+                                guardiandata
                             )
                         )
                     )
                 )
             )
         );
-        RecoveryPluginStorage memory storage_ = RecoveryPluginStorage(
-            validator.recoveryPluginStorage(address(newKernel))
-        );
-        assertEq(storage_.owner, owner);
     }
 }

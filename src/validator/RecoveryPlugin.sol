@@ -38,10 +38,21 @@ contract RecoveryPlugin is IKernelValidator {
     }
 
     function enable(bytes calldata _data) external override {
-        address newOwner = address(bytes20(_data[0:20]));
-        bytes32 hash = bytes32(_data[20:52]);
-        bytes[] memory signatures = divideBytes(bytes(_data[52:]));
-        initRecovery(newOwner, hash, signatures);
+        //0x00 - to add guardians
+        //0x01 - to change owner
+        bytes memory mode = bytes(_data[0:1]);
+        if (keccak256(mode) == keccak256(hex"00")) {
+            bytes calldata guardiandata = bytes(_data[1:]);
+            addGuardian(guardiandata, 100, 1 days);
+        } else if (keccak256(mode) == keccak256(hex"01")) {
+            bytes calldata recoverydata = bytes(_data[1:]);
+            address newOwner = address(bytes20(recoverydata[0:20]));
+            bytes32 hash = bytes32(recoverydata[20:52]);
+            bytes[] memory signatures = divideBytes(bytes(recoverydata[52:]));
+            initRecovery(newOwner, hash, signatures);
+        } else {
+            revert("Invalid mode");
+        }
     }
 
     function divideBytes(
@@ -73,28 +84,23 @@ contract RecoveryPlugin is IKernelValidator {
     }
 
     function addGuardian(
-        Guardian[] memory _guardians,
+        bytes calldata _guardiandata,
         uint256 _thresholdWeight,
         uint256 delay
     ) public {
-        for (uint256 i = 0; i < _guardians.length; i++) {
-            if (_guardians[i].weight <= 0) {
-                revert();
-            }
-            if (_guardians[i].guardian == address(0)) {
-                revert();
-            }
-            if (_guardians[i].guardian == msg.sender) {
-                revert();
-            }
-            if (_guardians[i].approved) {
-                revert();
-            }
-            guardians[msg.sender].push(_guardians[i]);
+        require(_guardiandata.length % 52 == 0, "RecoveryPlugin: invalid data length");
+        uint256 chunks = _guardiandata.length / 52;
+        for(uint256 i = 0; i < chunks; i++) {
+            address guardian = address(bytes20(_guardiandata[i * 52: (i + 1) * 52]));
+            require(guardian != address(0), "RecoveryPlugin: guardian is zero address");
+            require(guardian != msg.sender, "RecoveryPlugin: guardian is self");
+            uint256 weight = (uint256(uint160(bytes20(_guardiandata[(i + 1) * 52 - 20: (i + 1) * 52]))));
+            require(weight > 0, "RecoveryPlugin: weight is zero");
+            guardians[msg.sender].push(Guardian(guardian, weight, false));
         }
         thresholdWeight[msg.sender] = _thresholdWeight;
         recoveryDelay[msg.sender] = block.timestamp + delay;
-        emit GuardianAdded(msg.sender, _guardians, _thresholdWeight);
+        emit GuardianAdded(msg.sender, guardians[msg.sender], _thresholdWeight);
     }
 
     function verifyGuardians(
