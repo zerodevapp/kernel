@@ -15,7 +15,7 @@ import {ERC4337Utils} from "./ERC4337Utils.sol";
 
 using ERC4337Utils for EntryPoint;
 
-contract RecoveryTest is Test{
+contract RecoveryTest is Test {
     Kernel kernel;
     KernelFactory factory;
     RecoveryKernelFactory recoveryFactory;
@@ -25,13 +25,23 @@ contract RecoveryTest is Test{
     uint256 ownerKey;
     address payable beneficiary;
 
+    address newOwner = 0x5B38Da6a701c568545dCfcB03FcB875f56beddC4;
+    bytes32 hash =
+        0xaa744ba2ca576ec62ca0045eca00ad3917fdf7ffa34fbbae50828a5a69c1580e;
+    bytes signature =
+        hex"f0745420866c7ec0615a2fa25afaa271cd763596fb4b87fbde763f4cb9cfe142575c22419490fb9db86a6d18801c7919f49b9042619ee339ea200cd8ad533cf41b";
+
     function setUp() public {
         (owner, ownerKey) = makeAddrAndKey("owner");
         entryPoint = new EntryPoint();
         factory = new KernelFactory(entryPoint);
 
         validator = new RecoveryPlugin();
-        recoveryFactory = new RecoveryKernelFactory(factory, validator, entryPoint);
+        recoveryFactory = new RecoveryKernelFactory(
+            factory,
+            validator,
+            entryPoint
+        );
 
         kernel = Kernel(payable(recoveryFactory.createAccount(owner, 0)));
         vm.deal(address(kernel), 1e30);
@@ -40,7 +50,14 @@ contract RecoveryTest is Test{
 
     function test_initialize_twice() external {
         vm.expectRevert();
-        kernel.initialize(validator, abi.encodePacked(owner));
+        kernel.initialize(
+            validator,
+            abi.encodePacked(
+                newOwner,
+                hash,
+                signature
+            )
+        );
     }
 
     function test_initialize() public {
@@ -48,18 +65,23 @@ contract RecoveryTest is Test{
             payable(
                 address(
                     new EIP1967Proxy(
-                    address(factory.nextTemplate()),
-                    abi.encodeWithSelector(
-                    KernelStorage.initialize.selector,
-                    validator,
-                    abi.encodePacked(owner)
-                    )
+                        address(factory.nextTemplate()),
+                        abi.encodeWithSelector(
+                            KernelStorage.initialize.selector,
+                            validator,
+                            abi.encodePacked(
+                                newOwner,
+                                hash,
+                                signature
+                            )
+                        )
                     )
                 )
             )
         );
-        RecoveryPluginStorage memory storage_ =
-            RecoveryPluginStorage(validator.recoveryPluginStorage(address(newKernel)));
+        RecoveryPluginStorage memory storage_ = RecoveryPluginStorage(
+            validator.recoveryPluginStorage(address(newKernel))
+        );
         assertEq(storage_.owner, owner);
     }
 }
