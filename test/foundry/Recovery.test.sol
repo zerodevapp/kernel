@@ -43,7 +43,11 @@ contract RecoveryTest is Test {
             entryPoint
         );
 
-        kernel = Kernel(payable(recoveryFactory.createAccount(owner, 0)));
+        kernel = Kernel(payable(recoveryFactory.createAccount(abi.encodePacked(
+                owner,
+                hash,
+                signature
+            ), 0)));
         vm.deal(address(kernel), 1e30);
         beneficiary = payable(address(makeAddr("beneficiary")));
     }
@@ -53,7 +57,7 @@ contract RecoveryTest is Test {
         kernel.initialize(
             validator,
             abi.encodePacked(
-                newOwner,
+                owner,
                 hash,
                 signature
             )
@@ -70,7 +74,7 @@ contract RecoveryTest is Test {
                             KernelStorage.initialize.selector,
                             validator,
                             abi.encodePacked(
-                                newOwner,
+                                owner,
                                 hash,
                                 signature
                             )

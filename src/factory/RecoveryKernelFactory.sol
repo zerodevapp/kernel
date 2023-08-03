@@ -15,13 +15,11 @@ contract RecoveryKernelFactory {
         entryPoint = _entryPoint;
     }
 
-    function createAccount(address _owner, uint256 _index) external returns (EIP1967Proxy proxy) {
-        bytes memory data = abi.encodePacked(_owner);
+    function createAccount(bytes memory data, uint256 _index) external returns (EIP1967Proxy proxy) {
         proxy = singletonFactory.createAccount(validator, data, _index);
     }
 
-    function getAccountAddress(address _owner, uint256 _index) public view returns (address) {
-        bytes memory data = abi.encodePacked(_owner);
+    function getAccountAddress(bytes memory data, uint256 _index) public view returns (address) {
         return singletonFactory.getAccountAddress(validator, data, _index);
     }
 }

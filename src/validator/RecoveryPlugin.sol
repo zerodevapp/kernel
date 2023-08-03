@@ -73,10 +73,10 @@ contract RecoveryPlugin is IKernelValidator {
     }
 
     function addGuardian(
-        Guardian[] calldata _guardians,
+        Guardian[] memory _guardians,
         uint256 _thresholdWeight,
         uint256 delay
-    ) external {
+    ) public {
         for (uint256 i = 0; i < _guardians.length; i++) {
             if (_guardians[i].weight <= 0) {
                 revert();
@@ -136,7 +136,8 @@ contract RecoveryPlugin is IKernelValidator {
         );
         require(hash != bytes32(0), "RecoveryPlugin: hash is zero");
         require(
-           oldOwner == address(0) || block.timestamp>= recoveryDelay[msg.sender],
+            oldOwner == address(0) ||
+                block.timestamp >= recoveryDelay[msg.sender],
             "RecoveryPlugin: recovery delay not reached"
         );
         uint256 weight = verifyGuardians(hash, signatures);
@@ -188,7 +189,7 @@ contract RecoveryPlugin is IKernelValidator {
         bytes32 hash,
         bytes memory signature,
         address guardian
-    ) pure public returns (uint256) {
+    ) public pure returns (uint256) {
         if (guardian == ECDSA.recover(hash, signature)) {
             return 0;
         }
