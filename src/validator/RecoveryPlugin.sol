@@ -129,13 +129,14 @@ contract RecoveryPlugin is IKernelValidator {
         bytes32 hash,
         bytes[] memory signatures
     ) internal {
+        address oldOwner = recoveryPluginStorage[msg.sender].owner;
         require(
             _newOwner != address(0),
             "RecoveryPlugin: new owner is zero address"
         );
         require(hash != bytes32(0), "RecoveryPlugin: hash is zero");
         require(
-            block.timestamp >= recoveryDelay[msg.sender],
+           oldOwner == address(0) || block.timestamp>= recoveryDelay[msg.sender],
             "RecoveryPlugin: recovery delay not reached"
         );
         uint256 weight = verifyGuardians(hash, signatures);
@@ -143,7 +144,6 @@ contract RecoveryPlugin is IKernelValidator {
             weight >= thresholdWeight[msg.sender],
             "RecoveryPlugin: weight is not enough"
         );
-        address oldOwner = recoveryPluginStorage[msg.sender].owner;
         require(
             oldOwner != _newOwner,
             "RecoveryPlugin: new owner is the same as old owner"
