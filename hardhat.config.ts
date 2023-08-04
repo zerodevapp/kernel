@@ -4,6 +4,7 @@ import "@nomicfoundation/hardhat-foundry";
 import "@nomiclabs/hardhat-ethers";
 import "hardhat-deploy";
 import '@typechain/hardhat'
+import "@nomicfoundation/hardhat-verify";
 dotenv.config()
 
 
@@ -73,6 +74,11 @@ const config: HardhatUserConfig = {
       url: `https://icy-long-mountain.base-goerli.quiknode.pro/5b80d93e97cc9412a63c10a30841869abbef9596`,
       accounts: getAccounts(),
     },
+  },
+  etherscan: {
+    apiKey: {
+      mainnet : 'RX4BIWW9C4X3R96X341741D9APZR1DRA2P'
+    }
   }
 };
 
