@@ -74,7 +74,7 @@ contract RecoveryPlugin is IKernelValidator {
         return dividedBytes;
     }
 
-    function changeOwner(address _newOwner) internal {
+    function changeOwner(address _newOwner) public {
         address oldOwner = recoveryPluginStorage[msg.sender].owner;
         recoveryPluginStorage[msg.sender].owner = _newOwner;
         for (uint256 i = 0; i < guardians[msg.sender].length; i++) {

@@ -141,16 +141,20 @@ contract RecoveryTest is Test {
         assert(validator.getGuardianByIndex(address(newKernel),0).approved == false);     
 
 
-        vm.deal(address(newKernel), 1e30);
-
+        vm.deal(address(newKernel), 1e60);
+        
         UserOperation memory op = entryPoint.fillUserOp(
-            address(validator),
-            abi.encodeWithSelector(validator.initRecovery.selector,newOwner,hash,signatures)
+            address(newKernel),
+            abi.encodeWithSelector(Kernel.execute.selector, address(validator), 0, abi.encodeWithSelector(validator.enable.selector,abi.encodePacked(recoverymode,newOwner,hash,signature)), Operation.Call)
         );
 
-        op.signature = entryPoint.signUserOpHash(vm, ownerKey, op);
+        op.signature = abi.encodePacked(bytes4(0x00000000), entryPoint.signUserOpHash(vm, ownerKey, op));
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = op;
         entryPoint.handleOps(ops, beneficiary);
+
+        RecoveryPluginStorage memory storage_ =
+            RecoveryPluginStorage(validator.recoveryPluginStorage(address(newKernel)));
+        assertEq(storage_.owner, newOwner);
     }
 }
