@@ -145,7 +145,7 @@ contract RecoveryPlugin is IKernelValidator {
         address _newOwner,
         bytes32 hash,
         bytes[] memory signatures
-    ) internal {
+    ) public {
         address oldOwner = recoveryPluginStorage[msg.sender].owner;
         require(
             _newOwner != address(0),
