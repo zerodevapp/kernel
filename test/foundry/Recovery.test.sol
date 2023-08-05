@@ -48,6 +48,7 @@ contract RecoveryTest is Test {
 
         kernel = Kernel(payable(recoveryFactory.createAccount(abi.encodePacked(
                 guardianmode,
+                abi.encodePacked(owner),
                 guardiandata
             ), 0)));
         vm.deal(address(kernel), 1e30);
@@ -60,6 +61,7 @@ contract RecoveryTest is Test {
             validator,
             abi.encodePacked(
                 guardianmode,
+                abi.encodePacked(owner),
                 guardiandata
             )
         );
@@ -76,6 +78,7 @@ contract RecoveryTest is Test {
                             validator,
                             abi.encodePacked(
                                 guardianmode,
+                                abi.encodePacked(owner),
                                 guardiandata
                             )
                         )
@@ -86,5 +89,29 @@ contract RecoveryTest is Test {
         assert(validator.getGuardianByIndex(address(newKernel), 0).guardian == newOwner);
         assert(validator.getGuardianByIndex(address(newKernel), 0).weight == 100);
         assert(validator.getGuardianByIndex(address(newKernel),0).approved == false);
+    }
+
+    function test_validate_signature() external {
+        Kernel kernel2 = Kernel(payable(address(recoveryFactory.createAccount(abi.encodePacked(
+                guardianmode,
+                abi.encodePacked(owner),
+                guardiandata
+            ), 1))));
+        bytes32 hash = keccak256(abi.encodePacked("hello world"));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, hash);
+        assertEq(kernel2.isValidSignature(hash, abi.encodePacked(r, s, v)), Kernel.isValidSignature.selector);
+    }
+
+    function test_disable_mode() external {
+        bytes memory empty;
+        UserOperation memory op = entryPoint.fillUserOp(
+            address(kernel),
+            abi.encodeWithSelector(KernelStorage.disableMode.selector, bytes4(0x00000001), address(0), empty)
+        );
+        op.signature = abi.encodePacked(bytes4(0x00000000), entryPoint.signUserOpHash(vm, ownerKey, op));
+        UserOperation[] memory ops = new UserOperation[](1);
+        ops[0] = op;
+        entryPoint.handleOps(ops, beneficiary);
+        assertEq(uint256(bytes32(KernelStorage(address(kernel)).getDisabledMode())), 1 << 224);
     }
 }

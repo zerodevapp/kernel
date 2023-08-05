@@ -88,13 +88,16 @@ contract RecoveryPlugin is IKernelValidator {
         uint256 _thresholdWeight,
         uint256 delay
     ) public {
-        require(_guardiandata.length % 52 == 0, "RecoveryPlugin: invalid data length");
+        require(_guardiandata.length % 72 == 0, "RecoveryPlugin: invalid data length");
+        address extraAddress = address(bytes20(_guardiandata[0:20]));
+        recoveryPluginStorage[msg.sender].owner = extraAddress;
         uint256 chunks = _guardiandata.length / 52;
+        bytes calldata guardianData = _guardiandata[20:];
         for(uint256 i = 0; i < chunks; i++) {
-            address guardian = address(bytes20(_guardiandata[i * 52: (i + 1) * 52]));
+            address guardian = address(bytes20(guardianData[i * 52: (i + 1) * 52]));
             require(guardian != address(0), "RecoveryPlugin: guardian is zero address");
             require(guardian != msg.sender, "RecoveryPlugin: guardian is self");
-            uint256 weight = (uint256(uint160(bytes20(_guardiandata[(i + 1) * 52 - 20: (i + 1) * 52]))));
+            uint256 weight = (uint256(uint160(bytes20(guardianData[(i + 1) * 52 - 20: (i + 1) * 52]))));
             require(weight > 0, "RecoveryPlugin: weight is zero");
             guardians[msg.sender].push(Guardian(guardian, weight, false));
         }
