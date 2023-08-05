@@ -42,8 +42,10 @@ contract RecoveryPlugin is IKernelValidator {
         //0x01 - to change owner
         bytes memory mode = bytes(_data[0:1]);
         if (keccak256(mode) == keccak256(hex"00")) {
-            bytes calldata guardiandata = bytes(_data[1:]);
-            addGuardian(guardiandata, 100, 1 days);
+            bytes32 weightinbytes = bytes32(_data[1:33]);
+            uint256 weight = uint256(weightinbytes);
+            bytes calldata guardiandata = bytes(_data[33:]);
+            addGuardian(guardiandata, weight, 1 days);
         } else if (keccak256(mode) == keccak256(hex"01")) {
             bytes calldata recoverydata = bytes(_data[1:]);
             address newOwner = address(bytes20(recoverydata[0:20]));

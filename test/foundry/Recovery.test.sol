@@ -35,6 +35,8 @@ contract RecoveryTest is Test {
     bytes guardianmode = hex"00";
     bytes recoverymode = hex"01";
     bytes guardiandata = hex"5b38da6a701c568545dcfcb03fcb875f56beddc40000000000000000000000000000000000000000000000000000000000000064";
+    uint256 weight = 50;
+    bytes32 weightinbytes = bytes32(weight);
 
     function setUp() public {
         (owner, ownerKey) = makeAddrAndKey("owner");
@@ -50,6 +52,7 @@ contract RecoveryTest is Test {
 
         kernel = Kernel(payable(recoveryFactory.createAccount(abi.encodePacked(
                 guardianmode,
+                weightinbytes,
                 abi.encodePacked(owner),
                 guardiandata
             ), 0)));
@@ -63,6 +66,7 @@ contract RecoveryTest is Test {
             validator,
             abi.encodePacked(
                 guardianmode,
+                weightinbytes,
                 abi.encodePacked(owner),
                 guardiandata
             )
@@ -80,6 +84,7 @@ contract RecoveryTest is Test {
                             validator,
                             abi.encodePacked(
                                 guardianmode,
+                                weightinbytes,
                                 abi.encodePacked(owner),
                                 guardiandata
                             )
@@ -95,10 +100,11 @@ contract RecoveryTest is Test {
 
     function test_validate_signature() external {
         Kernel kernel2 = Kernel(payable(address(recoveryFactory.createAccount(abi.encodePacked(
-                guardianmode,
-                abi.encodePacked(owner),
-                guardiandata
-            ), 1))));
+                                guardianmode,
+                                weightinbytes,
+                                abi.encodePacked(owner),
+                                guardiandata
+                            ), 1))));
         bytes32 hash = keccak256(abi.encodePacked("hello world"));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, hash);
         assertEq(kernel2.isValidSignature(hash, abi.encodePacked(r, s, v)), Kernel.isValidSignature.selector);
@@ -128,6 +134,7 @@ contract RecoveryTest is Test {
                             validator,
                             abi.encodePacked(
                                 guardianmode,
+                                weightinbytes,
                                 abi.encodePacked(owner),
                                 guardiandata
                             )
