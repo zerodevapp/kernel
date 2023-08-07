@@ -97,10 +97,10 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         returns (uint256 validationData)
     {
         bytes calldata userOpSignature;
-        uint256 userOpOffset;
+        uint256 userOpEndOffset;
         assembly {
-            userOpOffset := calldataload(0x04)
-            userOpSignature.offset := add(add(calldataload(add(userOpOffset, 0x144)), userOpOffset), 0x24)
+            userOpEndOffset := add(calldataload(0x04), 0x24)
+            userOpSignature.offset := add(calldataload(add(userOpEndOffset, 0x120)), userOpEndOffset)
             userOpSignature.length := calldataload(sub(userOpSignature.offset, 0x20))
         }
 
@@ -128,7 +128,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         } else if (mode == 0x00000001) {
             bytes calldata userOpCallData;
             assembly {
-                userOpCallData.offset := add(add(calldataload(add(userOpOffset, 0x64)), userOpOffset), 0x24)
+                userOpCallData.offset := add(calldataload(add(userOpEndOffset, 0x40)), userOpEndOffset)
                 userOpCallData.length := calldataload(sub(userOpCallData.offset, 0x20))
             }
             ExecutionDetail storage detail = getKernelStorage().execution[bytes4(userOpCallData[0:4])];
@@ -143,9 +143,8 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         } else if (mode == 0x00000002) {
             bytes calldata userOpCallData;
             assembly {
-                userOpCallData.offset := add(calldataload(add(userOpOffset, 0x64)), userOpOffset)
-                userOpCallData.length := calldataload(add(userOpCallData.offset, 0x04))
-                userOpCallData.offset := add(userOpCallData.offset, 0x24)
+                userOpCallData.offset := add(calldataload(add(userOpEndOffset, 0x40)), userOpEndOffset)
+                userOpCallData.length := calldataload(sub(userOpCallData.offset, 0x20))
             }
             // use given validator
             // userOpSignature[4:10] = validAfter,

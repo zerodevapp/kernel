@@ -9,7 +9,7 @@ Running 8 tests for test/foundry/Kernel.t.sol:KernelTest
 [32m[PASS][0m test_set_execution() (gas: 411435)
 [32m[PASS][0m test_validate_signature() (gas: 163680)
 [32m[PASS][0m test_validate_userOp() (gas: 1711548)
-Test result: [32mok[0m. 8 passed; 0 failed; 0 skipped; finished in 2.92ms
+Test result: [32mok[0m. 8 passed; 0 failed; 0 skipped; finished in 2.80ms
 | src/Kernel.sol:Kernel contract |                 |       |        |       |         |
 |--------------------------------|-----------------|-------|--------|-------|---------|
 | Deployment Cost                | Deployment Size |       |        |       |         |
