@@ -152,7 +152,8 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
             // userOpSignature[16:36] = validator address,
             validator = IKernelValidator(address(bytes20(userOpSignature[16:36])));
             bytes calldata enableData;
-            (validationData, enableData, userOpSignature) = _approveValidator(bytes4(userOpCallData[0:4]), userOpSignature);
+            (validationData, enableData, userOpSignature) =
+                _approveValidator(bytes4(userOpCallData[0:4]), userOpSignature);
             validator.enable(enableData);
         } else {
             return SIG_VALIDATION_FAILED;

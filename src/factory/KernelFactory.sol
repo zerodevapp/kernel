@@ -40,9 +40,9 @@ contract KernelFactory is AdminLessERC1967Factory, Ownable {
         return predictDeterministicAddress(salt);
     }
 
-    // stake functions    
+    // stake functions
     function addStake(uint32 unstakeDelaySec) external payable onlyOwner {
-        entryPoint.addStake{value : msg.value}(unstakeDelaySec);
+        entryPoint.addStake{value: msg.value}(unstakeDelaySec);
     }
 
     function unlockStake() external onlyOwner {
