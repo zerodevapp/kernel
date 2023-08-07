@@ -49,7 +49,7 @@ contract AdminLessERC1967Factory {
     /// @dev Deploys a proxy for `implementation`,
     /// and returns its address.
     /// The value passed into this function will be forwarded to the proxy.
-    function deploy(address implementation) public payable returns (address proxy) {
+    function deploy(address implementation) internal returns (address proxy) {
         proxy = deployAndCall(implementation, _emptyData());
     }
 
@@ -58,8 +58,7 @@ contract AdminLessERC1967Factory {
     /// The value passed into this function will be forwarded to the proxy.
     /// Then, calls the proxy with abi encoded `data`.
     function deployAndCall(address implementation, bytes calldata data)
-        public
-        payable
+        internal
         returns (address proxy)
     {
         proxy = _deploy(implementation, bytes32(0), false, data);
@@ -69,8 +68,7 @@ contract AdminLessERC1967Factory {
     /// and returns its deterministic address.
     /// The value passed into this function will be forwarded to the proxy.
     function deployDeterministic(address implementation, bytes32 salt)
-        public
-        payable
+        internal
         returns (address proxy)
     {
         proxy = deployDeterministicAndCall(implementation, salt, _emptyData());
@@ -84,7 +82,7 @@ contract AdminLessERC1967Factory {
         address implementation,
         bytes32 salt,
         bytes calldata data
-    ) public payable returns (address proxy) {
+    ) internal returns (address proxy) {
         /// @solidity memory-safe-assembly
         assembly {
             // If the salt does not start with the zero address or the caller.

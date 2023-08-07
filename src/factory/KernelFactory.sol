@@ -27,7 +27,7 @@ contract KernelFactory is AdminLessERC1967Factory, Ownable{
     {
         require(isAllowedImplementation[_implementation], "KernelFactory: implementation not allowed");
         bytes32 salt = bytes32(uint256(keccak256(abi.encodePacked(_data, _index))) & type(uint96).max);
-        proxy = this.deployDeterministicAndCall(_implementation, salt, _data);
+        proxy = deployDeterministicAndCall(_implementation, salt, _data);
     }
 
     function getAccountAddress(bytes calldata _data, uint256 _index)
