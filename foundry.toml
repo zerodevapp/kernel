@@ -7,7 +7,7 @@ solc_version = '0.8.19'
 bytecode_hash = "none"
 cbor_metadata = false
 optimize = true
-via-ir = true
+via-ir = false
 runs = 1000000
 
 gas_reports=["Kernel","KernelLiteECDSA","KernelFactory"]
