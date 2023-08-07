@@ -60,13 +60,7 @@ contract KernelStorage {
 
     // Function to initialize the wallet kernel
     function initialize(IKernelValidator _defaultValidator, bytes calldata _data) external payable {
-        WalletKernelStorage storage ws = getKernelStorage();
-        if (address(ws.defaultValidator) != address(0)) {
-            revert AlreadyInitialized();
-        }
-        ws.defaultValidator = _defaultValidator;
-        emit DefaultValidatorChanged(address(0), address(_defaultValidator));
-        _defaultValidator.enable(_data);
+        _setInitialData(_defaultValidator, _data);
     }
 
     // Function to get the wallet kernel storage
@@ -160,5 +154,17 @@ contract KernelStorage {
     function disableMode(bytes4 _disableFlag) external payable onlyFromEntryPointOrSelf {
         getKernelStorage().disabledMode = _disableFlag;
         getKernelStorage().lastDisabledTime = uint48(block.timestamp);
+    }
+
+    function _setInitialData(IKernelValidator _defaultValidator, bytes calldata _data) internal virtual {
+        address validator;
+        assembly {
+            validator := shr(80, sload(KERNEL_STORAGE_SLOT_1))
+        }
+        if (address(validator) != address(0)) {
+            revert AlreadyInitialized();
+        }
+        getKernelStorage().defaultValidator = _defaultValidator;
+        _defaultValidator.enable(_data);
     }
 }

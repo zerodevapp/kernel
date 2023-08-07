@@ -1,0 +1,40 @@
+No files changed, compilation skipped
+
+Running 8 tests for test/foundry/KernelLite.t.sol:KernelTest
+[32m[PASS][0m test_disable_mode() (gas: 171425)
+[32m[PASS][0m test_external_call_default() (gas: 22953)
+[32m[PASS][0m test_external_call_execution() (gas: 439687)
+[32m[PASS][0m test_initialize_twice() (gas: 20968)
+[32m[PASS][0m test_set_default_validator() (gas: 369789)
+[32m[PASS][0m test_set_execution() (gas: 400852)
+[32m[PASS][0m test_validate_signature() (gas: 139666)
+[32m[PASS][0m test_validate_userOp() (gas: 1733019)
+Test result: [32mok[0m. 8 passed; 0 failed; 0 skipped; finished in 2.73ms
+| src/factory/KernelFactory.sol:KernelFactory contract |                 |        |        |        |         |
+|------------------------------------------------------|-----------------|--------|--------|--------|---------|
+| Deployment Cost                                      | Deployment Size |        |        |        |         |
+| 594023                                               | 3050            |        |        |        |         |
+| Function Name                                        | min             | avg    | median | max    | # calls |
+| createAccount                                        | 106913          | 107413 | 106913 | 111413 | 9       |
+| deployDeterministicAndCall                           | 105350          | 105627 | 105350 | 107850 | 9       |
+| setImplementation                                    | 22862           | 22862  | 22862  | 22862  | 8       |
+
+
+| src/lite/KernelLiteECDSA.sol:KernelLiteECDSA contract |                 |       |        |       |         |
+|-------------------------------------------------------|-----------------|-------|--------|-------|---------|
+| Deployment Cost                                       | Deployment Size |       |        |       |         |
+| 1598398                                               | 8392            |       |        |       |         |
+| Function Name                                         | min             | avg   | median | max   | # calls |
+| disableMode                                           | 22865           | 22865 | 22865  | 22865 | 1       |
+| getDefaultValidator                                   | 341             | 341   | 341    | 341   | 1       |
+| getDisabledMode                                       | 577             | 577   | 577    | 577   | 1       |
+| getExecution                                          | 1249            | 1249  | 1249   | 1249  | 2       |
+| initialize                                            | 3117            | 21073 | 23069  | 23069 | 10      |
+| isValidSignature                                      | 8587            | 8587  | 8587   | 8587  | 1       |
+| setDefaultValidator                                   | 26774           | 26774 | 26774  | 26774 | 1       |
+| setExecution                                          | 49853           | 49853 | 49853  | 49853 | 2       |
+| validateUserOp                                        | 36049           | 36049 | 36049  | 36049 | 4       |
+
+
+
+Ran 1 test suites: 8 tests passed, 0 failed, 0 skipped (8 total tests)

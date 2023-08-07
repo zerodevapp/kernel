@@ -6,36 +6,36 @@ import "./AdminLessERC1967Factory.sol";
 import "openzeppelin-contracts/contracts/utils/Create2.sol";
 import "src/Kernel.sol";
 import "src/validator/ECDSAValidator.sol";
+import "solady/auth/Ownable.sol";
 
-contract KernelFactory {
-    AdminLessERC1967Factory public immutable erc1967factory;
-    Kernel public immutable kernelTemplate;
-    IEntryPoint public immutable entryPoint;
+contract KernelFactory is AdminLessERC1967Factory, Ownable{
 
-    event AccountCreated(address indexed account, address indexed validator, bytes data, uint256 index);
+    mapping(address => bool) public isAllowedImplementation;
 
-    constructor(AdminLessERC1967Factory _erc1967factory, IEntryPoint _entryPoint) {
-        erc1967factory = _erc1967factory;
-        entryPoint = _entryPoint;
-        kernelTemplate = new Kernel(_entryPoint);
+    constructor(address _owner) {
+        _initializeOwner(_owner);
     }
 
-    function createAccount(IKernelValidator _validator, bytes calldata _data, uint256 _index)
+    function setImplementation(address _implementation, bool _allow) external onlyOwner {
+        isAllowedImplementation[_implementation] = _allow;
+    }
+
+    function createAccount(address _implementation, bytes calldata _data, uint256 _index)
         external
         payable
         returns (address proxy)
     {
-        bytes memory initData = abi.encodeWithSelector(KernelStorage.initialize.selector, _validator, _data);
-        bytes32 salt = bytes32(uint256(keccak256(abi.encodePacked(_validator, _data, _index))) & type(uint96).max);
-        proxy = erc1967factory.deployDeterministicAndCall(address(kernelTemplate), salt, initData);
+        require(isAllowedImplementation[_implementation], "KernelFactory: implementation not allowed");
+        bytes32 salt = bytes32(uint256(keccak256(abi.encodePacked(_data, _index))) & type(uint96).max);
+        proxy = this.deployDeterministicAndCall(_implementation, salt, _data);
     }
 
-    function getAccountAddress(IKernelValidator _validator, bytes calldata _data, uint256 _index)
+    function getAccountAddress(bytes calldata _data, uint256 _index)
         public
         view
         returns (address)
     {
-        bytes32 salt = bytes32(uint256(keccak256(abi.encodePacked(_validator, _data, _index))) & type(uint96).max);
-        return erc1967factory.predictDeterministicAddress(salt);
+        bytes32 salt = bytes32(uint256(keccak256(abi.encodePacked(_data, _index))) & type(uint96).max);
+        return predictDeterministicAddress(salt);
     }
 }

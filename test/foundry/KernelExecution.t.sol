@@ -5,7 +5,6 @@ import "src/factory/AdminLessERC1967Factory.sol";
 import "src/Kernel.sol";
 import "src/validator/ECDSAValidator.sol";
 import "src/factory/KernelFactory.sol";
-import "src/factory/ECDSAKernelFactory.sol";
 // test artifacts
 import "src/test/TestValidator.sol";
 import "src/test/TestExecutor.sol";
@@ -21,25 +20,28 @@ using ERC4337Utils for EntryPoint;
 
 contract KernelExecutionTest is Test {
     Kernel kernel;
-    AdminLessERC1967Factory erc1967factory;
+    Kernel kernelImpl;
     KernelFactory factory;
-    ECDSAKernelFactory ecdsaFactory;
     EntryPoint entryPoint;
     ECDSAValidator validator;
     address owner;
     uint256 ownerKey;
     address payable beneficiary;
+    address factoryOwner;
 
     function setUp() public {
         (owner, ownerKey) = makeAddrAndKey("owner");
+        (factoryOwner, ) = makeAddrAndKey("factoryOwner");
         entryPoint = new EntryPoint();
-        erc1967factory = new AdminLessERC1967Factory();
-        factory = new KernelFactory(erc1967factory, entryPoint);
+        kernelImpl = new Kernel(entryPoint);
+        factory = new KernelFactory(factoryOwner);
+        vm.startPrank(factoryOwner);
+        factory.setImplementation(address(kernelImpl), true);
+        vm.stopPrank();
 
         validator = new ECDSAValidator();
-        ecdsaFactory = new ECDSAKernelFactory(factory, validator);
 
-        kernel = Kernel(payable(address(ecdsaFactory.createAccount(owner, 0))));
+        kernel = Kernel(payable(address(factory.createAccount(address(kernelImpl), abi.encodeWithSelector(KernelStorage.initialize.selector, validator, abi.encodePacked(owner)), 0))));
         vm.deal(address(kernel), 1e30);
         beneficiary = payable(address(makeAddr("beneficiary")));
     }
