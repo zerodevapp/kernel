@@ -7,8 +7,8 @@ import "src/interfaces/IValidator.sol";
 
 // Defining a struct for execution details
 struct ExecutionDetail {
-    uint48 validUntil; // Until what time is this execution valid
-    uint48 validAfter; // After what time is this execution valid
+    uint48 validAfter; // Until what time is this execution valid
+    uint48 validUntil; // After what time is this execution valid
     address executor; // Who is the executor of this execution
     IKernelValidator validator; // The validator for this execution
 }
@@ -95,9 +95,9 @@ contract KernelStorage {
     }
 
     function getDisabledMode() public view returns (bytes4 disabled) {
-       assembly {
-          disabled := shl(224, sload(KERNEL_STORAGE_SLOT_1))
-       }
+        assembly {
+            disabled := shl(224, sload(KERNEL_STORAGE_SLOT_1))
+        }
     }
 
     function getLastDisabledTime() public view returns (uint48) {

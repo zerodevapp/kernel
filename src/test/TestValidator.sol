@@ -18,7 +18,12 @@ contract TestValidator is IKernelValidator {
         return 0;
     }
 
-    function validateUserOp(UserOperation calldata, bytes32 userOpHash, uint256) external payable override returns (uint256) {
+    function validateUserOp(UserOperation calldata, bytes32 userOpHash, uint256)
+        external
+        payable
+        override
+        returns (uint256)
+    {
         emit TestValidateUserOp(userOpHash);
         return 0;
     }

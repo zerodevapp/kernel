@@ -9,7 +9,8 @@ interface IKernelValidator {
     function disable(bytes calldata _data) external payable;
 
     function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256 missingFunds)
-        external payable
+        external
+        payable
         returns (uint256);
 
     function validateSignature(bytes32 hash, bytes calldata signature) external view returns (uint256);

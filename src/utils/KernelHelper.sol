@@ -8,23 +8,19 @@ function _intersectValidationData(uint256 a, uint256 b) pure returns (uint256 va
         // xor(a,b) == shows only matching bits
         // and(xor(a,b), 0x000000000000000000000000ffffffffffffffffffffffffffffffffffffffff) == filters out the validAfter and validUntil bits
         // if the result is not zero, then aggregator part is not matching
-        switch iszero(and(xor(a,b), 0x000000000000000000000000ffffffffffffffffffffffffffffffffffffffff))
+        switch iszero(and(xor(a, b), 0x000000000000000000000000ffffffffffffffffffffffffffffffffffffffff))
         case 1 {
             // validAfter
-            let a_vd :=         and(0xffffffffffff000000000000ffffffffffffffffffffffffffffffffffffffff, a)
-            let b_vd :=         and(0xffffffffffff000000000000ffffffffffffffffffffffffffffffffffffffff, b)
+            let a_vd := and(0xffffffffffff000000000000ffffffffffffffffffffffffffffffffffffffff, a)
+            let b_vd := and(0xffffffffffff000000000000ffffffffffffffffffffffffffffffffffffffff, b)
             validationData := xor(a_vd, mul(xor(a_vd, b_vd), gt(b_vd, a_vd)))
             // validUntil
-            a_vd     :=         and(0x000000000000ffffffffffff0000000000000000000000000000000000000000, a)
-            b_vd     :=         and(0x000000000000ffffffffffff0000000000000000000000000000000000000000, b)
+            a_vd := and(0x000000000000ffffffffffff0000000000000000000000000000000000000000, a)
+            b_vd := and(0x000000000000ffffffffffff0000000000000000000000000000000000000000, b)
             let until := xor(a_vd, mul(xor(a_vd, b_vd), lt(b_vd, a_vd)))
-            if iszero(until) {
-                until :=            0x000000000000ffffffffffff0000000000000000000000000000000000000000
-            }
+            if iszero(until) { until := 0x000000000000ffffffffffff0000000000000000000000000000000000000000 }
             validationData := or(validationData, until)
         }
-        default {
-            validationData := SIG_VALIDATION_FAILED
-        }
+        default { validationData := SIG_VALIDATION_FAILED }
     }
 }
