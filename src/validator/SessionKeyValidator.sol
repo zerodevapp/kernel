@@ -69,16 +69,22 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
             // sessionKey allowed to execute any tx
             return _packValidationData(false, session.validUntil, session.validAfter);
         }
-        if(session.paymaster == address(1)) {
+        if (session.paymaster == address(1)) {
             require(userOp.paymasterAndData.length != 0, "SessionKeyValidator: paymaster not set");
         } else if (session.paymaster != address(0)) {
-            require(address(bytes20(userOp.paymasterAndData[0:20])) == session.paymaster, "SessionKeyValidator: paymaster mismatch");
+            require(
+                address(bytes20(userOp.paymasterAndData[0:20])) == session.paymaster,
+                "SessionKeyValidator: paymaster mismatch"
+            );
         }
 
         (Permission memory permission, bytes32[] memory merkleProof) =
             abi.decode(userOp.signature[85:], (Permission, bytes32[]));
         require(address(bytes20(userOp.callData[16:36])) == permission.target, "SessionKeyValidator: target mismatch");
-        require(uint256(bytes32(userOp.callData[36:68])) <= permission.valueLimit, "SessionKeyValidator: value limit exceeded");
+        require(
+            uint256(bytes32(userOp.callData[36:68])) <= permission.valueLimit,
+            "SessionKeyValidator: value limit exceeded"
+        );
         uint256 dataOffset = uint256(bytes32(userOp.callData[68:100])) + 4; // adding 4 for msg.sig
         uint256 dataLength = uint256(bytes32(userOp.callData[dataOffset:dataOffset + 32]));
         bytes calldata data = userOp.callData[dataOffset + 32:dataOffset + 32 + dataLength];
@@ -100,7 +106,8 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
                 require(param != rule.param, "SessionKeyValidator: param mismatch");
             }
         }
-        bool result = MerkleProofLib.verify(merkleProof, session.merkleRoot, keccak256(abi.encode(permission))) && (sessionKey == ECDSA.recover(ECDSA.toEthSignedMessageHash(userOpHash), signature));
+        bool result = MerkleProofLib.verify(merkleProof, session.merkleRoot, keccak256(abi.encode(permission)))
+            && (sessionKey == ECDSA.recover(ECDSA.toEthSignedMessageHash(userOpHash), signature));
         return _packValidationData(!result, session.validUntil, session.validAfter);
     }
 

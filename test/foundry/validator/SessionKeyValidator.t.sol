@@ -23,9 +23,10 @@ contract SessionKeyValidatorTest is KernelTestBase {
     TestERC20 testToken;
     address sessionKey;
     uint256 sessionKeyPriv;
+
     function setUp() public {
         (owner, ownerKey) = makeAddrAndKey("owner");
-        (factoryOwner, ) = makeAddrAndKey("factoryOwner");
+        (factoryOwner,) = makeAddrAndKey("factoryOwner");
         (sessionKey, sessionKeyPriv) = makeAddrAndKey("sessionKey");
         entryPoint = new EntryPoint();
         kernelImpl = new Kernel(entryPoint);
@@ -36,7 +37,17 @@ contract SessionKeyValidatorTest is KernelTestBase {
 
         validator = new ECDSAValidator();
 
-        kernel = Kernel(payable(address(factory.createAccount(address(kernelImpl), abi.encodeWithSelector(KernelStorage.initialize.selector, validator, abi.encodePacked(owner)), 0))));
+        kernel = Kernel(
+            payable(
+                address(
+                    factory.createAccount(
+                        address(kernelImpl),
+                        abi.encodeWithSelector(KernelStorage.initialize.selector, validator, abi.encodePacked(owner)),
+                        0
+                    )
+                )
+            )
+        );
         vm.deal(address(kernel), 1e30);
         beneficiary = payable(address(makeAddr("beneficiary")));
         testToken = new TestERC20();
@@ -46,8 +57,16 @@ contract SessionKeyValidatorTest is KernelTestBase {
     function test_mode_2_no_paymaster() external {
         testToken.mint(address(kernel), 100e18);
         TestERC20 testToken2 = new TestERC20();
-        UserOperation memory op =
-            entryPoint.fillUserOp(address(kernel), abi.encodeWithSelector(Kernel.execute.selector, address(testToken), 0, abi.encodeWithSelector(ERC20.transfer.selector, beneficiary, 100), Operation.Call));
+        UserOperation memory op = entryPoint.fillUserOp(
+            address(kernel),
+            abi.encodeWithSelector(
+                Kernel.execute.selector,
+                address(testToken),
+                0,
+                abi.encodeWithSelector(ERC20.transfer.selector, beneficiary, 100),
+                Operation.Call
+            )
+        );
 
         ExecuteSessionKeyValidator.ParamRule[] memory rules = new ExecuteSessionKeyValidator.ParamRule[](1);
         rules[0] = ExecuteSessionKeyValidator.ParamRule({
@@ -56,22 +75,28 @@ contract SessionKeyValidatorTest is KernelTestBase {
             param: bytes32(uint256(1e18))
         });
 
-
         bytes32[] memory data = new bytes32[](2);
-        data[0] = keccak256(abi.encode(ExecuteSessionKeyValidator.Permission({
-            valueLimit : 0,
-            target: address(testToken),
-            sig: ERC20.transfer.selector,
-            rules: rules
-        })));
+        data[0] = keccak256(
+            abi.encode(
+                ExecuteSessionKeyValidator.Permission({
+                    valueLimit: 0,
+                    target: address(testToken),
+                    sig: ERC20.transfer.selector,
+                    rules: rules
+                })
+            )
+        );
 
-        data[1] = keccak256(abi.encode(ExecuteSessionKeyValidator.Permission({
-            valueLimit : 0,
-            target: address(testToken2),
-            sig: ERC20.transfer.selector,
-            rules: rules
-        })));
-
+        data[1] = keccak256(
+            abi.encode(
+                ExecuteSessionKeyValidator.Permission({
+                    valueLimit: 0,
+                    target: address(testToken2),
+                    sig: ERC20.transfer.selector,
+                    rules: rules
+                })
+            )
+        );
 
         bytes32 merkleRoot = _getRoot(data);
         bytes memory enableData = abi.encodePacked(sessionKey, merkleRoot, uint48(0), uint48(0), address(0));
@@ -100,7 +125,7 @@ contract SessionKeyValidatorTest is KernelTestBase {
                 entryPoint.signUserOpHash(vm, sessionKeyPriv, op),
                 abi.encode(
                     ExecuteSessionKeyValidator.Permission({
-                        valueLimit : 0,
+                        valueLimit: 0,
                         target: address(testToken),
                         sig: ERC20.transfer.selector,
                         rules: rules
@@ -116,79 +141,76 @@ contract SessionKeyValidatorTest is KernelTestBase {
         entryPoint.handleOps(ops, beneficiary);
     }
 }
-    // Following code is adapted from https://github.com/dmfxyz/murky/blob/main/src/common/MurkyBase.sol.
+// Following code is adapted from https://github.com/dmfxyz/murky/blob/main/src/common/MurkyBase.sol.
 
-    function _getRoot(bytes32[] memory data) pure returns (bytes32) {
-        require(data.length > 1);
-        while (data.length > 1) {
-            data = _hashLevel(data);
-        }
-        return data[0];
+function _getRoot(bytes32[] memory data) pure returns (bytes32) {
+    require(data.length > 1);
+    while (data.length > 1) {
+        data = _hashLevel(data);
     }
+    return data[0];
+}
 
-    function _getProof(bytes32[] memory data, uint256 nodeIndex)
-        pure
-        returns (bytes32[] memory)
-    {
-        require(data.length > 1);
+function _getProof(bytes32[] memory data, uint256 nodeIndex) pure returns (bytes32[] memory) {
+    require(data.length > 1);
 
-        bytes32[] memory result = new bytes32[](64);
-        uint256 pos;
+    bytes32[] memory result = new bytes32[](64);
+    uint256 pos;
 
-        while (data.length > 1) {
-            unchecked {
-                if (nodeIndex & 0x1 == 1) {
-                    result[pos] = data[nodeIndex - 1];
-                } else if (nodeIndex + 1 == data.length) {
-                    result[pos] = bytes32(0);
-                } else {
-                    result[pos] = data[nodeIndex + 1];
-                }
-                ++pos;
-                nodeIndex /= 2;
-            }
-            data = _hashLevel(data);
-        }
-        // Resize the length of the array to fit.
-        /// @solidity memory-safe-assembly
-        assembly {
-            mstore(result, pos)
-        }
-
-        return result;
-    }
-
-    function _hashLevel(bytes32[] memory data) pure returns (bytes32[] memory) {
-        bytes32[] memory result;
+    while (data.length > 1) {
         unchecked {
-            uint256 length = data.length;
-            if (length & 0x1 == 1) {
-                result = new bytes32[](length / 2 + 1);
-                result[result.length - 1] = _hashPair(data[length - 1], bytes32(0));
+            if (nodeIndex & 0x1 == 1) {
+                result[pos] = data[nodeIndex - 1];
+            } else if (nodeIndex + 1 == data.length) {
+                result[pos] = bytes32(0);
             } else {
-                result = new bytes32[](length / 2);
+                result[pos] = data[nodeIndex + 1];
             }
-            uint256 pos = 0;
-            for (uint256 i = 0; i < length - 1; i += 2) {
-                result[pos] = _hashPair(data[i], data[i + 1]);
-                ++pos;
-            }
+            ++pos;
+            nodeIndex /= 2;
         }
-        return result;
+        data = _hashLevel(data);
+    }
+    // Resize the length of the array to fit.
+    /// @solidity memory-safe-assembly
+    assembly {
+        mstore(result, pos)
     }
 
-    function _hashPair(bytes32 left, bytes32 right) pure returns (bytes32 result) {
-        /// @solidity memory-safe-assembly
-        assembly {
-            switch lt(left, right)
-            case 0 {
-                mstore(0x0, right)
-                mstore(0x20, left)
-            }
-            default {
-                mstore(0x0, left)
-                mstore(0x20, right)
-            }
-            result := keccak256(0x0, 0x40)
+    return result;
+}
+
+function _hashLevel(bytes32[] memory data) pure returns (bytes32[] memory) {
+    bytes32[] memory result;
+    unchecked {
+        uint256 length = data.length;
+        if (length & 0x1 == 1) {
+            result = new bytes32[](length / 2 + 1);
+            result[result.length - 1] = _hashPair(data[length - 1], bytes32(0));
+        } else {
+            result = new bytes32[](length / 2);
+        }
+        uint256 pos = 0;
+        for (uint256 i = 0; i < length - 1; i += 2) {
+            result[pos] = _hashPair(data[i], data[i + 1]);
+            ++pos;
         }
     }
+    return result;
+}
+
+function _hashPair(bytes32 left, bytes32 right) pure returns (bytes32 result) {
+    /// @solidity memory-safe-assembly
+    assembly {
+        switch lt(left, right)
+        case 0 {
+            mstore(0x0, right)
+            mstore(0x20, left)
+        }
+        default {
+            mstore(0x0, left)
+            mstore(0x20, right)
+        }
+        result := keccak256(0x0, 0x40)
+    }
+}
