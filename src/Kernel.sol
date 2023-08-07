@@ -126,7 +126,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
                 }
             }
             op.signature = userOp.signature[4:];
-            validationData = (uint256(detail.validAfter) << 160) | (uint256(detail.validUntil) << 208);
+            validationData = (uint256(detail.validAfter) << 208) | (uint256(detail.validUntil) << 160);
         } else if (mode == 0x00000002) {
             bytes4 sig = bytes4(userOp.callData[0:4]);
             // use given validator
@@ -190,7 +190,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
                 validationSig.length := sub(signature.length, cursor)
             }
             getKernelStorage().execution[sig] = ExecutionDetail({
-                validAfter: uint48(bytes6(signature[4:6])),
+                validAfter: uint48(bytes6(signature[4:10])),
                 validUntil: uint48(bytes6(signature[10:16])),
                 executor: address(bytes20(signature[36:56])),
                 validator: IKernelValidator(address(bytes20(signature[16:36])))
