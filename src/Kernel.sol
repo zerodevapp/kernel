@@ -114,7 +114,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
             assembly {
                 validator := shr(80, storage_slot_1)
             }
-        } else if(mode & (storage_slot_1 << 224) != 0x00000000) {
+        } else if (mode & (storage_slot_1 << 224) != 0x00000000) {
             revert DisabledMode();
         } else if (mode == 0x00000001) {
             bytes4 sig = bytes4(userOp.callData[0:4]);
@@ -126,12 +126,12 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
                 }
             }
             op.signature = userOp.signature[4:];
-            validationData = (uint256(detail.validAfter) << 160) | (uint256(detail.validUntil) << 208);
+            validationData = (uint256(detail.validAfter) << 208) | (uint256(detail.validUntil) << 160);
         } else if (mode == 0x00000002) {
             bytes4 sig = bytes4(userOp.callData[0:4]);
             // use given validator
-            // userOp.signature[4:10] = validUntil,
-            // userOp.signature[10:16] = validAfter,
+            // userOp.signature[4:10] = validAfter,
+            // userOp.signature[10:16] = validUntil,
             // userOp.signature[16:36] = validator address,
             validator = IKernelValidator(address(bytes20(userOp.signature[16:36])));
             bytes calldata enableData;
@@ -159,7 +159,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     {
         unchecked {
             uint256 cursor = 88;
-            uint256 length  = uint256(bytes32(signature[56:88])); // this is enableDataLength
+            uint256 length = uint256(bytes32(signature[56:88])); // this is enableDataLength
             assembly {
                 enableData.offset := add(signature.offset, cursor)
                 enableData.length := length
@@ -181,9 +181,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
                 )
             );
             validationData = _intersectValidationData(
-                getKernelStorage().defaultValidator.validateSignature(
-                    enableDigest, signature[cursor:cursor+length]
-                ),
+                getKernelStorage().defaultValidator.validateSignature(enableDigest, signature[cursor:cursor + length]),
                 uint256(bytes32(signature[4:36])) & 0xffffffffffffffffffffffff0000000000000000000000000000000000000000
             );
             assembly {
@@ -192,9 +190,9 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
                 validationSig.length := sub(signature.length, cursor)
             }
             getKernelStorage().execution[sig] = ExecutionDetail({
+                validAfter: uint48(bytes6(signature[4:10])),
+                validUntil: uint48(bytes6(signature[10:16])),
                 executor: address(bytes20(signature[36:56])),
-                validUntil: uint48(bytes6(signature[4:10])),
-                validAfter: uint48(bytes6(signature[10:16])),
                 validator: IKernelValidator(address(bytes20(signature[16:36])))
             });
         }

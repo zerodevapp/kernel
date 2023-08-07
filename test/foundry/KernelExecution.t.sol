@@ -31,7 +31,7 @@ contract KernelExecutionTest is Test {
 
     function setUp() public {
         (owner, ownerKey) = makeAddrAndKey("owner");
-        (factoryOwner, ) = makeAddrAndKey("factoryOwner");
+        (factoryOwner,) = makeAddrAndKey("factoryOwner");
         entryPoint = new EntryPoint();
         kernelImpl = new Kernel(entryPoint);
         factory = new KernelFactory(factoryOwner);
@@ -41,7 +41,17 @@ contract KernelExecutionTest is Test {
 
         validator = new ECDSAValidator();
 
-        kernel = Kernel(payable(address(factory.createAccount(address(kernelImpl), abi.encodeWithSelector(KernelStorage.initialize.selector, validator, abi.encodePacked(owner)), 0))));
+        kernel = Kernel(
+            payable(
+                address(
+                    factory.createAccount(
+                        address(kernelImpl),
+                        abi.encodeWithSelector(KernelStorage.initialize.selector, validator, abi.encodePacked(owner)),
+                        0
+                    )
+                )
+            )
+        );
         vm.deal(address(kernel), 1e30);
         beneficiary = payable(address(makeAddr("beneficiary")));
     }
@@ -237,8 +247,8 @@ contract KernelExecutionTest is Test {
 // computes the hash of a permit
 function getStructHash(
     bytes4 sig,
-    uint48 validUntil,
     uint48 validAfter,
+    uint48 validUntil,
     address validator,
     address executor,
     bytes memory enableData
@@ -247,7 +257,7 @@ function getStructHash(
         abi.encode(
             keccak256("ValidatorApproved(bytes4 sig,uint256 validatorData,address executor,bytes enableData)"),
             bytes4(sig),
-            uint256(uint256(uint160(validator)) | (uint256(validAfter) << 160) | (uint256(validUntil) << (48 + 160))),
+            uint256(uint256(uint160(validator)) | (uint256(validAfter) << 208) | (uint256(validUntil) << 160)),
             executor,
             keccak256(enableData)
         )
@@ -268,7 +278,7 @@ function getTypedDataHash(
         abi.encodePacked(
             "\x19\x01",
             _buildDomainSeparator("Kernel", "0.2.1", sender),
-            getStructHash(sig, validUntil, validAfter, validator, executor, enableData)
+            getStructHash(sig, validAfter, validUntil, validator, executor, enableData)
         )
     );
 }

@@ -28,7 +28,7 @@ contract AdminLessERC1967Factory {
 
     /// @dev A proxy has been deployed.
     event Deployed(address indexed proxy, address indexed implementation);
-    
+
     /// @dev `keccak256(bytes("Deployed(address,address)"))`.
     uint256 internal constant _DEPLOYED_EVENT_SIGNATURE =
         0x09e48df7857bd0c1e0d31bb8a85d42cf1874817895f171c917f6ee2cea73ec20;
@@ -39,8 +39,7 @@ contract AdminLessERC1967Factory {
 
     /// @dev The ERC-1967 storage slot for the implementation in the proxy.
     /// `uint256(keccak256("eip1967.proxy.implementation")) - 1`.
-    uint256 internal constant _IMPLEMENTATION_SLOT =
-        0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+    uint256 internal constant _IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                      DEPLOY FUNCTIONS                      */
@@ -57,20 +56,14 @@ contract AdminLessERC1967Factory {
     /// and returns its address.
     /// The value passed into this function will be forwarded to the proxy.
     /// Then, calls the proxy with abi encoded `data`.
-    function deployAndCall(address implementation, bytes calldata data)
-        internal
-        returns (address proxy)
-    {
+    function deployAndCall(address implementation, bytes calldata data) internal returns (address proxy) {
         proxy = _deploy(implementation, bytes32(0), false, data);
     }
 
     /// @dev Deploys a proxy for `implementation`, with `salt`,
     /// and returns its deterministic address.
     /// The value passed into this function will be forwarded to the proxy.
-    function deployDeterministic(address implementation, bytes32 salt)
-        internal
-        returns (address proxy)
-    {
+    function deployDeterministic(address implementation, bytes32 salt) internal returns (address proxy) {
         proxy = deployDeterministicAndCall(implementation, salt, _emptyData());
     }
 
@@ -78,11 +71,10 @@ contract AdminLessERC1967Factory {
     /// and returns its deterministic address.
     /// The value passed into this function will be forwarded to the proxy.
     /// Then, calls the proxy with abi encoded `data`.
-    function deployDeterministicAndCall(
-        address implementation,
-        bytes32 salt,
-        bytes calldata data
-    ) internal returns (address proxy) {
+    function deployDeterministicAndCall(address implementation, bytes32 salt, bytes calldata data)
+        internal
+        returns (address proxy)
+    {
         /// @solidity memory-safe-assembly
         assembly {
             // If the salt does not start with the zero address or the caller.
@@ -95,12 +87,10 @@ contract AdminLessERC1967Factory {
     }
 
     /// @dev Deploys the proxy, with optionality to deploy deterministically with a `salt`.
-    function _deploy(
-        address implementation,
-        bytes32 salt,
-        bool useSalt,
-        bytes calldata data
-    ) internal returns (address proxy) {
+    function _deploy(address implementation, bytes32 salt, bool useSalt, bytes calldata data)
+        internal
+        returns (address proxy)
+    {
         bytes memory m = _initCode();
         /// @solidity memory-safe-assembly
         assembly {

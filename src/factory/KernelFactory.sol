@@ -8,8 +8,7 @@ import "src/Kernel.sol";
 import "src/validator/ECDSAValidator.sol";
 import "solady/auth/Ownable.sol";
 
-contract KernelFactory is AdminLessERC1967Factory, Ownable{
-
+contract KernelFactory is AdminLessERC1967Factory, Ownable {
     mapping(address => bool) public isAllowedImplementation;
 
     constructor(address _owner) {
@@ -30,11 +29,7 @@ contract KernelFactory is AdminLessERC1967Factory, Ownable{
         proxy = deployDeterministicAndCall(_implementation, salt, _data);
     }
 
-    function getAccountAddress(bytes calldata _data, uint256 _index)
-        public
-        view
-        returns (address)
-    {
+    function getAccountAddress(bytes calldata _data, uint256 _index) public view returns (address) {
         bytes32 salt = bytes32(uint256(keccak256(abi.encodePacked(_data, _index))) & type(uint96).max);
         return predictDeterministicAddress(salt);
     }

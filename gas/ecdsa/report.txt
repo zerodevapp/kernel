@@ -3,17 +3,17 @@ No files changed, compilation skipped
 Running 8 tests for test/foundry/Kernel.t.sol:KernelTest
 [32m[PASS][0m test_disable_mode() (gas: 162901)
 [32m[PASS][0m test_external_call_default() (gas: 28867)
-[32m[PASS][0m test_external_call_execution() (gas: 453376)
+[32m[PASS][0m test_external_call_execution() (gas: 453373)
 [32m[PASS][0m test_initialize_twice() (gas: 20885)
 [32m[PASS][0m test_set_default_validator() (gas: 361374)
-[32m[PASS][0m test_set_execution() (gas: 411711)
+[32m[PASS][0m test_set_execution() (gas: 411708)
 [32m[PASS][0m test_validate_signature() (gas: 163680)
-[32m[PASS][0m test_validate_userOp() (gas: 1729466)
-Test result: [32mok[0m. 8 passed; 0 failed; 0 skipped; finished in 2.82ms
+[32m[PASS][0m test_validate_userOp() (gas: 1727059)
+Test result: [32mok[0m. 8 passed; 0 failed; 0 skipped; finished in 2.90ms
 | src/Kernel.sol:Kernel contract |                 |       |        |       |         |
 |--------------------------------|-----------------|-------|--------|-------|---------|
 | Deployment Cost                | Deployment Size |       |        |       |         |
-| 1586591                        | 8333            |       |        |       |         |
+| 1584184                        | 8321            |       |        |       |         |
 | Function Name                  | min             | avg   | median | max   | # calls |
 | disableMode                    | 3765            | 3765  | 3765   | 3765  | 1       |
 | getDefaultValidator            | 341             | 341   | 341    | 341   | 1       |
@@ -22,7 +22,7 @@ Test result: [32mok[0m. 8 passed; 0 failed; 0 skipped; finished in 2.82ms
 | initialize                     | 3046            | 43982 | 48253  | 50753 | 10      |
 | isValidSignature               | 6047            | 6047  | 6047   | 6047  | 1       |
 | setDefaultValidator            | 7870            | 7870  | 7870   | 7870  | 1       |
-| setExecution                   | 49877           | 49877 | 49877  | 49877 | 2       |
+| setExecution                   | 49874           | 49874 | 49874  | 49874 | 2       |
 | validateUserOp                 | 46040           | 46234 | 46256  | 46386 | 4       |
 
 

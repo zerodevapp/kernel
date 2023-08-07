@@ -28,7 +28,7 @@ contract KernelTest is Test {
 
     function setUp() public {
         (owner, ownerKey) = makeAddrAndKey("owner");
-        (factoryOwner, ) = makeAddrAndKey("factoryOwner");
+        (factoryOwner,) = makeAddrAndKey("factoryOwner");
         entryPoint = new EntryPoint();
         kernelImpl = new Kernel(entryPoint);
         factory = new KernelFactory(factoryOwner);
@@ -38,7 +38,17 @@ contract KernelTest is Test {
 
         validator = new ECDSAValidator();
 
-        kernel = Kernel(payable(address(factory.createAccount(address(kernelImpl), abi.encodeWithSelector(KernelStorage.initialize.selector, validator, abi.encodePacked(owner)), 0))));
+        kernel = Kernel(
+            payable(
+                address(
+                    factory.createAccount(
+                        address(kernelImpl),
+                        abi.encodeWithSelector(KernelStorage.initialize.selector, validator, abi.encodePacked(owner)),
+                        0
+                    )
+                )
+            )
+        );
         vm.deal(address(kernel), 1e30);
         beneficiary = payable(address(makeAddr("beneficiary")));
     }
@@ -55,7 +65,17 @@ contract KernelTest is Test {
     }
 
     function test_validate_signature() external {
-        Kernel kernel2 = Kernel(payable(address(factory.createAccount(address(kernelImpl), abi.encodeWithSelector(KernelStorage.initialize.selector, validator, abi.encodePacked(owner)), 1))));
+        Kernel kernel2 = Kernel(
+            payable(
+                address(
+                    factory.createAccount(
+                        address(kernelImpl),
+                        abi.encodeWithSelector(KernelStorage.initialize.selector, validator, abi.encodePacked(owner)),
+                        1
+                    )
+                )
+            )
+        );
         bytes32 hash = keccak256(abi.encodePacked("hello world"));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, hash);
         assertEq(kernel2.isValidSignature(hash, abi.encodePacked(r, s, v)), Kernel.isValidSignature.selector);
@@ -66,8 +86,7 @@ contract KernelTest is Test {
         kernel2.sudoInitialize(validator, abi.encodePacked(owner));
 
         UserOperation memory op = entryPoint.fillUserOp(
-            address(kernel),
-            abi.encodeWithSelector(Kernel.execute.selector, address(0), 0, bytes(""))
+            address(kernel), abi.encodeWithSelector(Kernel.execute.selector, address(0), 0, bytes(""))
         );
         op.signature = abi.encodePacked(bytes4(0x00000000), entryPoint.signUserOpHash(vm, ownerKey, op));
         bytes32 hash = entryPoint.getUserOpHash(op);
