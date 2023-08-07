@@ -1,19 +1,19 @@
 No files changed, compilation skipped
 
 Running 8 tests for test/foundry/Kernel.t.sol:KernelTest
-[32m[PASS][0m test_disable_mode() (gas: 162901)
+[32m[PASS][0m test_disable_mode() (gas: 162628)
 [32m[PASS][0m test_external_call_default() (gas: 28867)
-[32m[PASS][0m test_external_call_execution() (gas: 453373)
+[32m[PASS][0m test_external_call_execution() (gas: 453100)
 [32m[PASS][0m test_initialize_twice() (gas: 20885)
-[32m[PASS][0m test_set_default_validator() (gas: 361374)
-[32m[PASS][0m test_set_execution() (gas: 411708)
+[32m[PASS][0m test_set_default_validator() (gas: 361101)
+[32m[PASS][0m test_set_execution() (gas: 411435)
 [32m[PASS][0m test_validate_signature() (gas: 163680)
-[32m[PASS][0m test_validate_userOp() (gas: 1727059)
-Test result: [32mok[0m. 8 passed; 0 failed; 0 skipped; finished in 2.90ms
+[32m[PASS][0m test_validate_userOp() (gas: 1711548)
+Test result: [32mok[0m. 8 passed; 0 failed; 0 skipped; finished in 2.92ms
 | src/Kernel.sol:Kernel contract |                 |       |        |       |         |
 |--------------------------------|-----------------|-------|--------|-------|---------|
 | Deployment Cost                | Deployment Size |       |        |       |         |
-| 1584184                        | 8321            |       |        |       |         |
+| 1568970                        | 8245            |       |        |       |         |
 | Function Name                  | min             | avg   | median | max   | # calls |
 | disableMode                    | 3765            | 3765  | 3765   | 3765  | 1       |
 | getDefaultValidator            | 341             | 341   | 341    | 341   | 1       |
@@ -23,7 +23,7 @@ Test result: [32mok[0m. 8 passed; 0 failed; 0 skipped; finished in 2.90ms
 | isValidSignature               | 6047            | 6047  | 6047   | 6047  | 1       |
 | setDefaultValidator            | 7870            | 7870  | 7870   | 7870  | 1       |
 | setExecution                   | 49874           | 49874 | 49874  | 49874 | 2       |
-| validateUserOp                 | 46040           | 46234 | 46256  | 46386 | 4       |
+| validateUserOp                 | 45767           | 45961 | 45983  | 46113 | 4       |
 
 
 | src/factory/KernelFactory.sol:KernelFactory contract |                 |        |        |        |         |
