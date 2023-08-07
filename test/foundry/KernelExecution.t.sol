@@ -34,7 +34,7 @@ contract KernelExecutionTest is Test {
         (factoryOwner,) = makeAddrAndKey("factoryOwner");
         entryPoint = new EntryPoint();
         kernelImpl = new Kernel(entryPoint);
-        factory = new KernelFactory(factoryOwner);
+        factory = new KernelFactory(factoryOwner, entryPoint);
         vm.startPrank(factoryOwner);
         factory.setImplementation(address(kernelImpl), true);
         vm.stopPrank();

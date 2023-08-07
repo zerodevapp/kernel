@@ -9,14 +9,20 @@ import "src/validator/ECDSAValidator.sol";
 import "solady/auth/Ownable.sol";
 
 contract KernelFactory is AdminLessERC1967Factory, Ownable {
+    IEntryPoint public entryPoint;
     mapping(address => bool) public isAllowedImplementation;
 
-    constructor(address _owner) {
+    constructor(address _owner, IEntryPoint _entryPoint) {
         _initializeOwner(_owner);
+        entryPoint = _entryPoint;
     }
 
     function setImplementation(address _implementation, bool _allow) external onlyOwner {
         isAllowedImplementation[_implementation] = _allow;
+    }
+
+    function setEntryPoint(IEntryPoint _entryPoint) external onlyOwner {
+        entryPoint = _entryPoint;
     }
 
     function createAccount(address _implementation, bytes calldata _data, uint256 _index)
@@ -32,5 +38,18 @@ contract KernelFactory is AdminLessERC1967Factory, Ownable {
     function getAccountAddress(bytes calldata _data, uint256 _index) public view returns (address) {
         bytes32 salt = bytes32(uint256(keccak256(abi.encodePacked(_data, _index))) & type(uint96).max);
         return predictDeterministicAddress(salt);
+    }
+
+    // stake functions    
+    function addStake(uint32 unstakeDelaySec) external payable onlyOwner {
+        entryPoint.addStake{value : msg.value}(unstakeDelaySec);
+    }
+
+    function unlockStake() external onlyOwner {
+        entryPoint.unlockStake();
+    }
+
+    function withdrawStake(address payable withdrawAddress) external onlyOwner {
+        entryPoint.withdrawStake(withdrawAddress);
     }
 }
