@@ -1,15 +1,15 @@
 No files changed, compilation skipped
 
 Running 8 tests for test/foundry/Kernel.t.sol:KernelTest
-[32m[PASS][0m test_disable_mode() (gas: 162638)
-[32m[PASS][0m test_external_call_default() (gas: 28922)
-[32m[PASS][0m test_external_call_execution() (gas: 453206)
-[32m[PASS][0m test_initialize_twice() (gas: 20940)
-[32m[PASS][0m test_set_default_validator() (gas: 361012)
-[32m[PASS][0m test_set_execution() (gas: 411412)
-[32m[PASS][0m test_validate_signature() (gas: 163756)
-[32m[PASS][0m test_validate_userOp() (gas: 1704327)
-Test result: [32mok[0m. 8 passed; 0 failed; 0 skipped; finished in 2.87ms
+[32m[PASS][0m test_disable_mode() (gas: 162572)
+[32m[PASS][0m test_external_call_default() (gas: 28889)
+[32m[PASS][0m test_external_call_execution() (gas: 453074)
+[32m[PASS][0m test_initialize_twice() (gas: 20907)
+[32m[PASS][0m test_set_default_validator() (gas: 361045)
+[32m[PASS][0m test_set_execution() (gas: 411379)
+[32m[PASS][0m test_validate_signature() (gas: 163724)
+[32m[PASS][0m test_validate_userOp() (gas: 1704261)
+Test result: [32mok[0m. 8 passed; 0 failed; 0 skipped; finished in 2.89ms
 | src/Kernel.sol:Kernel contract |                 |       |        |       |         |
 |--------------------------------|-----------------|-------|--------|-------|---------|
 | Deployment Cost                | Deployment Size |       |        |       |         |

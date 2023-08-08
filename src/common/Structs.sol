@@ -22,7 +22,7 @@ struct WalletKernelStorage {
 
 // Param Rule for session key
 struct ParamRule {
-    uint8 index;
+    uint256 offset;
     ParamCondition condition;
     bytes32 param;
 }

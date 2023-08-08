@@ -16,14 +16,13 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
         uint48 validAfter = uint48(bytes6(_data[52:58]));
         uint48 validUntil = uint48(bytes6(_data[58:64]));
         address paymaster = address(bytes20(_data[64:84]));
-
         sessionData[sessionKey][msg.sender] = SessionData(merkleRoot, validAfter, validUntil, paymaster, true);
     }
 
     function disable(bytes calldata _data) external payable {
         address sessionKey = address(bytes20(_data[0:20]));
         address kernel = msg.sender;
-        delete sessionData[sessionKey][kernel];
+        sessionData[sessionKey][kernel].enabled = false;
     }
 
     function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256)
@@ -51,13 +50,13 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
 
         (Permission memory permission, bytes32[] memory merkleProof) =
             abi.decode(userOp.signature[85:], (Permission, bytes32[]));
-        require(address(bytes20(userOp.callData[16:36])) == permission.target, "SessionKeyValidator: target mismatch");
+        require(permission.target == address(0) || address(bytes20(userOp.callData[16:36])) == permission.target, "SessionKeyValidator: target mismatch");
         require(
             uint256(bytes32(userOp.callData[36:68])) <= permission.valueLimit,
             "SessionKeyValidator: value limit exceeded"
         );
         require(
-            Operation(uint8(userOp.callData[68])) == permission.operation,
+            Operation(uint8(uint256(bytes32(userOp.callData[100:132])))) == permission.operation,
             "SessionKeyValidator: operation mismatch"
         );
         uint256 dataOffset = uint256(bytes32(userOp.callData[68:100])) + 4; // adding 4 for msg.sig
@@ -66,7 +65,7 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
         require(bytes4(data[0:4]) == permission.sig, "SessionKeyValidator: sig mismatch");
         for (uint256 i = 0; i < permission.rules.length; i++) {
             ParamRule memory rule = permission.rules[i];
-            bytes32 param = bytes32(data[4 + rule.index * 32:4 + rule.index * 32 + 32]);
+            bytes32 param = bytes32(data[4 + rule.offset:4 + rule.offset + 32]);
             if (rule.condition == ParamCondition.EQUAL) {
                 require(param == rule.param, "SessionKeyValidator: param mismatch");
             } else if (rule.condition == ParamCondition.GREATER_THAN) {
