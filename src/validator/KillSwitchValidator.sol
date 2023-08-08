@@ -46,7 +46,7 @@ contract KillSwitchValidator is IKernelValidator {
         override
         returns (uint256)
     {
-        KillSwitchValidatorStorage storage validatorStorage = killSwitchValidatorStorage[_userOp.sender];
+        KillSwitchValidatorStorage storage validatorStorage = killSwitchValidatorStorage[msg.sender]; // should use msg.sender to prevent others from changing storage
         uint48 pausedUntil = validatorStorage.pausedUntil;
         uint256 validationResult = 0;
         if (address(validatorStorage.validator) != address(0)) {
