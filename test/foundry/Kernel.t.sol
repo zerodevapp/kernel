@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+import {EntryPoint} from "account-abstraction/core/EntryPoint.sol";
 import "src/factory/AdminLessERC1967Factory.sol";
 import "src/factory/KernelFactory.sol";
 import "src/Kernel.sol";

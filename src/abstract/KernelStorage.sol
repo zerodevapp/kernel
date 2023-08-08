@@ -4,34 +4,14 @@ pragma solidity ^0.8.0;
 // Importing necessary interfaces
 import "account-abstraction/interfaces/IEntryPoint.sol";
 import "src/interfaces/IValidator.sol";
-
-// Defining a struct for execution details
-struct ExecutionDetail {
-    uint48 validAfter; // Until what time is this execution valid
-    uint48 validUntil; // After what time is this execution valid
-    address executor; // Who is the executor of this execution
-    IKernelValidator validator; // The validator for this execution
-}
-
-// Defining a struct for wallet kernel storage
-struct WalletKernelStorage {
-    bytes32 __deprecated; // A deprecated field
-    bytes4 disabledMode; // Mode which is currently disabled
-    uint48 lastDisabledTime; // Last time when a mode was disabled
-    IKernelValidator defaultValidator; // Default validator for the wallet
-    mapping(bytes4 => ExecutionDetail) execution; // Mapping of function selectors to execution details
-}
+import "src/common/Constants.sol";
+import "src/common/Structs.sol";
 
 /// @title Kernel Storage Contract
 /// @author taek<leekt216@gmail.com>
 /// @notice This contract serves as the storage module for the Kernel contract.
 /// @dev This contract should only be used by the main Kernel contract.
 contract KernelStorage {
-    bytes32 internal constant KERNEL_STORAGE_SLOT = 0x439ffe7df606b78489639bc0b827913bd09e1246fa6802968a5b3694c53e0dd8;
-    bytes32 internal constant KERNEL_STORAGE_SLOT_1 = 0x439ffe7df606b78489639bc0b827913bd09e1246fa6802968a5b3694c53e0dd9;
-    bytes32 internal constant IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
-    uint256 internal constant SIG_VALIDATION_FAILED = 1; // Signature validation failed error code
-
     IEntryPoint public immutable entryPoint; // The entry point of the contract
 
     // Event declarations

@@ -6,27 +6,20 @@ import "solady/utils/EIP712.sol";
 import "solady/utils/ECDSA.sol";
 import "account-abstraction/core/Helpers.sol";
 import "account-abstraction/interfaces/IEntryPoint.sol";
-import {EntryPoint} from "account-abstraction/core/EntryPoint.sol";
 import "./abstract/Compatibility.sol";
 import "./abstract/KernelStorage.sol";
 import "./utils/KernelHelper.sol";
 
-import "forge-std/console.sol";
-
-enum Operation {
-    Call,
-    DelegateCall
-}
-
-bytes32 constant VALIDATOR_APPROVED_STRUCT_HASH = 0x3ce406685c1b3551d706d85a68afdaa49ac4e07b451ad9b8ff8b58c3ee964176;
+import "src/common/Constants.sol";
+import "src/common/Enum.sol";
 
 /// @title Kernel
 /// @author taek<leekt216@gmail.com>
 /// @notice wallet kernel for extensible wallet functionality
 contract Kernel is EIP712, Compatibility, KernelStorage {
-    string public constant name = "Kernel";
+    string public constant name = KERNEL_NAME;
 
-    string public constant version = "0.2.1";
+    string public constant version = KERNEL_VERSION;
 
     error NotEntryPoint();
     error DisabledMode();
@@ -35,7 +28,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     constructor(IEntryPoint _entryPoint) KernelStorage(_entryPoint) {}
 
     function _domainNameAndVersion() internal pure override returns (string memory, string memory) {
-        return (name, version);
+        return (KERNEL_NAME, KERNEL_VERSION);
     }
 
     /// @notice Accepts incoming Ether transactions and calls from the EntryPoint contract
@@ -96,19 +89,16 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         payable
         returns (uint256 validationData)
     {
+        if (msg.sender != address(entryPoint)) {
+            revert NotEntryPoint();
+        }
         bytes calldata userOpSignature;
         uint256 userOpEndOffset;
+        bytes32 storage_slot_1;
         assembly {
             userOpEndOffset := add(calldataload(0x04), 0x24)
             userOpSignature.offset := add(calldataload(add(userOpEndOffset, 0x120)), userOpEndOffset)
             userOpSignature.length := calldataload(sub(userOpSignature.offset, 0x20))
-        }
-
-        if (msg.sender != address(entryPoint)) {
-            revert NotEntryPoint();
-        }
-        bytes32 storage_slot_1;
-        assembly {
             storage_slot_1 := sload(KERNEL_STORAGE_SLOT_1)
         }
         // mode based signature
@@ -150,11 +140,8 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
             // userOpSignature[4:10] = validAfter,
             // userOpSignature[10:16] = validUntil,
             // userOpSignature[16:36] = validator address,
-            validator = IKernelValidator(address(bytes20(userOpSignature[16:36])));
-            bytes calldata enableData;
-            (validationData, enableData, userOpSignature) =
+            (validator, validationData, userOpSignature) =
                 _approveValidator(bytes4(userOpCallData[0:4]), userOpSignature);
-            validator.enable(enableData);
         } else {
             return SIG_VALIDATION_FAILED;
         }
@@ -172,11 +159,13 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
 
     function _approveValidator(bytes4 sig, bytes calldata signature)
         internal
-        returns (uint256 validationData, bytes calldata enableData, bytes calldata validationSig)
+        returns (IKernelValidator validator, uint256 validationData, bytes calldata validationSig)
     {
         unchecked {
+            validator = IKernelValidator(address(bytes20(signature[16:36])));
             uint256 cursor = 88;
             uint256 length = uint256(bytes32(signature[56:88])); // this is enableDataLength
+            bytes calldata enableData;
             assembly {
                 enableData.offset := add(signature.offset, cursor)
                 enableData.length := length
@@ -212,6 +201,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
                 executor: address(bytes20(signature[36:56])),
                 validator: IKernelValidator(address(bytes20(signature[16:36])))
             });
+            validator.enable(enableData);
         }
     }
 

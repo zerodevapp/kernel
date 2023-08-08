@@ -4,39 +4,10 @@ import "solady/utils/ECDSA.sol";
 import "src/interfaces/IValidator.sol";
 import "account-abstraction/core/Helpers.sol";
 import "solady/utils/MerkleProofLib.sol";
+import "src/common/Enum.sol";
+import "src/common/Structs.sol";
 
 contract ExecuteSessionKeyValidator is IKernelValidator {
-    enum ParamCondition {
-        EQUAL,
-        GREATER_THAN,
-        LESS_THAN,
-        GREATER_THAN_OR_EQUAL,
-        LESS_THAN_OR_EQUAL,
-        NOT_EQUAL
-    }
-
-    struct ParamRule {
-        uint8 index;
-        ParamCondition condition;
-        bytes32 param;
-    }
-
-    struct Permission {
-        uint256 valueLimit;
-        address target;
-        bytes4 sig;
-        ParamRule[] rules;
-    }
-
-    // TODO : gas spending limit
-    struct SessionData {
-        bytes32 merkleRoot;
-        uint48 validAfter;
-        uint48 validUntil;
-        address paymaster;
-        bool enabled;
-    }
-
     mapping(address sessionKey => mapping(address kernel => SessionData)) public sessionData;
 
     function enable(bytes calldata _data) external payable {
@@ -55,14 +26,14 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
         delete sessionData[sessionKey][kernel];
     }
 
-    function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256 missingFunds)
+    function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256)
         external
         payable
         returns (uint256)
     {
         // userOp.signature = signer + signature + permission + merkleProof
         address sessionKey = address(bytes20(userOp.signature[0:20]));
-        bytes calldata signature = userOp.signature[20:85]; // this may be problematic with stackup
+        bytes calldata signature = userOp.signature[20:85];
         SessionData storage session = sessionData[sessionKey][msg.sender];
         require(session.enabled, "SessionKeyValidator: session key not enabled");
         if (session.merkleRoot == bytes32(0)) {
@@ -84,6 +55,10 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
         require(
             uint256(bytes32(userOp.callData[36:68])) <= permission.valueLimit,
             "SessionKeyValidator: value limit exceeded"
+        );
+        require(
+            Operation(uint8(userOp.callData[68])) == permission.operation,
+            "SessionKeyValidator: operation mismatch"
         );
         uint256 dataOffset = uint256(bytes32(userOp.callData[68:100])) + 4; // adding 4 for msg.sig
         uint256 dataLength = uint256(bytes32(userOp.callData[dataOffset:dataOffset + 32]));
@@ -111,11 +86,11 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
         return _packValidationData(!result, session.validUntil, session.validAfter);
     }
 
-    function validCaller(address caller, bytes calldata _data) external view returns (bool) {
+    function validCaller(address, bytes calldata) external pure returns (bool) {
         revert("SessionKeyValidator: not implemented");
     }
 
-    function validateSignature(bytes32 hash, bytes calldata _data) external view returns (uint256) {
+    function validateSignature(bytes32, bytes calldata) external pure returns (uint256) {
         revert("SessionKeyValidator: not implemented");
     }
 }

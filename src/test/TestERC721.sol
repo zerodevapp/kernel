@@ -14,7 +14,7 @@ contract TestERC721 is ERC721 {
         return "TEST";
     }
 
-    function tokenURI(uint256 _id) public pure override returns (string memory) {
+    function tokenURI(uint256) public pure override returns (string memory) {
         return "";
     }
 

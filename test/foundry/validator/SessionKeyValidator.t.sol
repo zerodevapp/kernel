@@ -30,7 +30,7 @@ contract SessionKeyValidatorTest is KernelTestBase {
         (sessionKey, sessionKeyPriv) = makeAddrAndKey("sessionKey");
         entryPoint = new EntryPoint();
         kernelImpl = new Kernel(entryPoint);
-        factory = new KernelFactory(factoryOwner);
+        factory = new KernelFactory(factoryOwner, entryPoint);
         vm.startPrank(factoryOwner);
         factory.setImplementation(address(kernelImpl), true);
         vm.stopPrank();
@@ -53,7 +53,7 @@ contract SessionKeyValidatorTest is KernelTestBase {
         testToken = new TestERC20();
         sessionKeyValidator = new ExecuteSessionKeyValidator();
     }
-
+    
     function test_mode_2_no_paymaster() external {
         testToken.mint(address(kernel), 100e18);
         TestERC20 testToken2 = new TestERC20();
@@ -68,20 +68,21 @@ contract SessionKeyValidatorTest is KernelTestBase {
             )
         );
 
-        ExecuteSessionKeyValidator.ParamRule[] memory rules = new ExecuteSessionKeyValidator.ParamRule[](1);
-        rules[0] = ExecuteSessionKeyValidator.ParamRule({
+        ParamRule[] memory rules = new ParamRule[](1);
+        rules[0] = ParamRule({
             index: 1,
-            condition: ExecuteSessionKeyValidator.ParamCondition.LESS_THAN_OR_EQUAL,
+            condition: ParamCondition.LESS_THAN_OR_EQUAL,
             param: bytes32(uint256(1e18))
         });
 
         bytes32[] memory data = new bytes32[](2);
         data[0] = keccak256(
             abi.encode(
-                ExecuteSessionKeyValidator.Permission({
+                Permission({
                     valueLimit: 0,
                     target: address(testToken),
                     sig: ERC20.transfer.selector,
+                    operation: Operation.Call,
                     rules: rules
                 })
             )
@@ -89,10 +90,11 @@ contract SessionKeyValidatorTest is KernelTestBase {
 
         data[1] = keccak256(
             abi.encode(
-                ExecuteSessionKeyValidator.Permission({
+                Permission({
                     valueLimit: 0,
                     target: address(testToken2),
                     sig: ERC20.transfer.selector,
+                    operation: Operation.Call,
                     rules: rules
                 })
             )
@@ -124,10 +126,11 @@ contract SessionKeyValidatorTest is KernelTestBase {
                 sessionKey,
                 entryPoint.signUserOpHash(vm, sessionKeyPriv, op),
                 abi.encode(
-                    ExecuteSessionKeyValidator.Permission({
+                    Permission({
                         valueLimit: 0,
                         target: address(testToken),
                         sig: ERC20.transfer.selector,
+                        operation: Operation.Call,
                         rules: rules
                     }),
                     _getProof(data, 0)
@@ -138,6 +141,97 @@ contract SessionKeyValidatorTest is KernelTestBase {
         ops[0] = op;
         logGas(op);
 
+        entryPoint.handleOps(ops, beneficiary);
+    }
+
+    function test_mode_2_no_paymaster_wrong_param() external {
+        testToken.mint(address(kernel), 100e18);
+        TestERC20 testToken2 = new TestERC20();
+        UserOperation memory op = entryPoint.fillUserOp(
+            address(kernel),
+            abi.encodeWithSelector(
+                Kernel.execute.selector,
+                address(testToken),
+                0,
+                abi.encodeWithSelector(ERC20.transfer.selector, beneficiary, 100),
+                Operation.Call
+            )
+        );
+
+        ParamRule[] memory rules = new ParamRule[](1);
+        rules[0] = ParamRule({
+            index: 1,
+            condition: ParamCondition.LESS_THAN_OR_EQUAL,
+            param: bytes32(uint256(1e18))
+        });
+
+        bytes32[] memory data = new bytes32[](2);
+        data[0] = keccak256(
+            abi.encode(
+                Permission({
+                    valueLimit: 0,
+                    target: address(testToken),
+                    sig: ERC20.transfer.selector,
+                    operation: Operation.Call,
+                    rules: rules
+                })
+            )
+        );
+
+        data[1] = keccak256(
+            abi.encode(
+                Permission({
+                    valueLimit: 0,
+                    target: address(testToken2),
+                    sig: ERC20.transfer.selector,
+                    operation: Operation.Call,
+                    rules: rules
+                })
+            )
+        );
+
+        bytes32 merkleRoot = _getRoot(data);
+        bytes memory enableData = abi.encodePacked(sessionKey, merkleRoot, uint48(0), uint48(0), address(0));
+        bytes32 digest = getTypedDataHash(
+            address(kernel), Kernel.execute.selector, 0, 0, address(sessionKeyValidator), address(0), enableData
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
+
+        op.signature = abi.encodePacked(
+            bytes4(0x00000002),
+            uint48(0),
+            uint48(0),
+            address(sessionKeyValidator),
+            address(0),
+            uint256(enableData.length),
+            enableData,
+            uint256(65),
+            r,
+            s,
+            v
+        );
+        op.signature = bytes.concat(
+            op.signature,
+            abi.encodePacked(
+                sessionKey,
+                entryPoint.signUserOpHash(vm, sessionKeyPriv, op),
+                abi.encode(
+                    Permission({
+                        valueLimit: 0,
+                        target: address(testToken),
+                        sig: ERC20.transfer.selector,
+                        operation: Operation.DelegateCall,
+                        rules: rules
+                    }),
+                    _getProof(data, 0)
+                )
+            )
+        );
+        UserOperation[] memory ops = new UserOperation[](1);
+        ops[0] = op;
+        logGas(op);
+
+        vm.expectRevert(); 
         entryPoint.handleOps(ops, beneficiary);
     }
 }

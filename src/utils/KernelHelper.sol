@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-uint256 constant SIG_VALIDATION_FAILED = 1;
+import {SIG_VALIDATION_FAILED} from "src/common/Constants.sol";
 
 function _intersectValidationData(uint256 a, uint256 b) pure returns (uint256 validationData) {
     assembly {

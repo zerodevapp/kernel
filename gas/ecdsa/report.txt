@@ -1,19 +1,19 @@
 No files changed, compilation skipped
 
 Running 8 tests for test/foundry/Kernel.t.sol:KernelTest
-[32m[PASS][0m test_disable_mode() (gas: 162625)
-[32m[PASS][0m test_external_call_default() (gas: 28867)
-[32m[PASS][0m test_external_call_execution() (gas: 453097)
-[32m[PASS][0m test_initialize_twice() (gas: 20885)
-[32m[PASS][0m test_set_default_validator() (gas: 361098)
-[32m[PASS][0m test_set_execution() (gas: 411432)
-[32m[PASS][0m test_validate_signature() (gas: 163702)
-[32m[PASS][0m test_validate_userOp() (gas: 1711945)
+[32m[PASS][0m test_disable_mode() (gas: 162638)
+[32m[PASS][0m test_external_call_default() (gas: 28922)
+[32m[PASS][0m test_external_call_execution() (gas: 453206)
+[32m[PASS][0m test_initialize_twice() (gas: 20940)
+[32m[PASS][0m test_set_default_validator() (gas: 361012)
+[32m[PASS][0m test_set_execution() (gas: 411412)
+[32m[PASS][0m test_validate_signature() (gas: 163756)
+[32m[PASS][0m test_validate_userOp() (gas: 1704327)
 Test result: [32mok[0m. 8 passed; 0 failed; 0 skipped; finished in 2.87ms
 | src/Kernel.sol:Kernel contract |                 |       |        |       |         |
 |--------------------------------|-----------------|-------|--------|-------|---------|
 | Deployment Cost                | Deployment Size |       |        |       |         |
-| 1569370                        | 8247            |       |        |       |         |
+| 1561763                        | 8209            |       |        |       |         |
 | Function Name                  | min             | avg   | median | max   | # calls |
 | disableMode                    | 3765            | 3765  | 3765   | 3765  | 1       |
 | getDefaultValidator            | 341             | 341   | 341    | 341   | 1       |
@@ -23,7 +23,7 @@ Test result: [32mok[0m. 8 passed; 0 failed; 0 skipped; finished in 2.87ms
 | isValidSignature               | 6047            | 6047  | 6047   | 6047  | 1       |
 | setDefaultValidator            | 7870            | 7870  | 7870   | 7870  | 1       |
 | setExecution                   | 49874           | 49874 | 49874  | 49874 | 2       |
-| validateUserOp                 | 45764           | 45958 | 45980  | 46110 | 4       |
+| validateUserOp                 | 45773           | 45967 | 45989  | 46119 | 4       |
 
 
 | src/factory/KernelFactory.sol:KernelFactory contract |                 |        |        |        |         |
