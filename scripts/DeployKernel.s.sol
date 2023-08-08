@@ -27,6 +27,10 @@ contract DeployKernel is Script {
             factory = KernelFactory(EXPECTED_KERNEL_FACTORY_ADDRESS);
             console.log("KernelFactory address: %s", address(factory));
         }
+        if(factory.isAllowedImplementation(address(EXPECTED_KERNEL_ADDRESS)) == false) {
+            console.log("Registering kernel implementation");
+            factory.setImplementation(address(EXPECTED_KERNEL_ADDRESS), true);
+        }
         IEntryPoint entryPoint = IEntryPoint(ENTRYPOINT_0_6);
         IStakeManager.DepositInfo memory info = entryPoint.getDepositInfo(address(factory));
         if(info.stake == 0) {
