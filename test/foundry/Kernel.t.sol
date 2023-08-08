@@ -11,21 +11,11 @@ import "src/test/TestERC721.sol";
 import "src/test/TestKernel.sol";
 // test utils
 import "forge-std/Test.sol";
-import {ERC4337Utils} from "./ERC4337Utils.sol";
+import {ERC4337Utils, KernelTestBase} from "./utils/ERC4337Utils.sol";
 
 using ERC4337Utils for EntryPoint;
 
-contract KernelTest is Test {
-    Kernel kernel;
-    Kernel kernelImpl;
-    KernelFactory factory;
-    EntryPoint entryPoint;
-    ECDSAValidator validator;
-    address owner;
-    uint256 ownerKey;
-    address payable beneficiary;
-    address factoryOwner;
-
+contract KernelTest is KernelTestBase {
     function setUp() public {
         (owner, ownerKey) = makeAddrAndKey("owner");
         (factoryOwner,) = makeAddrAndKey("factoryOwner");
