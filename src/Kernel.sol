@@ -11,6 +11,8 @@ import "./abstract/Compatibility.sol";
 import "./abstract/KernelStorage.sol";
 import "./utils/KernelHelper.sol";
 
+import "forge-std/console.sol";
+
 enum Operation {
     Call,
     DelegateCall
@@ -89,11 +91,19 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     /// @param userOpHash The hash of the user operation
     /// @param missingAccountFunds The funds needed to be reimbursed
     /// @return validationData The data used for validation
-    function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256 missingAccountFunds)
+    function validateUserOp(UserOperation memory userOp, bytes32 userOpHash, uint256 missingAccountFunds)
         external
         payable
         returns (uint256 validationData)
     {
+        bytes calldata userOpSignature;
+        uint256 userOpEndOffset;
+        assembly {
+            userOpEndOffset := add(calldataload(0x04), 0x24)
+            userOpSignature.offset := add(calldataload(add(userOpEndOffset, 0x120)), userOpEndOffset)
+            userOpSignature.length := calldataload(sub(userOpSignature.offset, 0x20))
+        }
+
         if (msg.sender != address(entryPoint)) {
             revert NotEntryPoint();
         }
@@ -102,43 +112,49 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
             storage_slot_1 := sload(KERNEL_STORAGE_SLOT_1)
         }
         // mode based signature
-        bytes4 mode = bytes4(userOp.signature[0:4]); // mode == 00..00 use validators
+        bytes4 mode = bytes4(userOpSignature[0:4]); // mode == 00..00 use validators
         // mode == 0x00000000 use sudo validator
         // mode == 0x00000001 use given validator
         // mode == 0x00000002 enable validator
-        UserOperation memory op = userOp;
         IKernelValidator validator;
         if (mode == 0x00000000) {
             // sudo mode (use default validator)
-            op.signature = userOp.signature[4:];
+            userOpSignature = userOpSignature[4:];
             assembly {
                 validator := shr(80, storage_slot_1)
             }
         } else if (mode & (storage_slot_1 << 224) != 0x00000000) {
             revert DisabledMode();
         } else if (mode == 0x00000001) {
-            bytes4 sig = bytes4(userOp.callData[0:4]);
-            ExecutionDetail storage detail = getKernelStorage().execution[sig];
+            bytes calldata userOpCallData;
+            assembly {
+                userOpCallData.offset := add(calldataload(add(userOpEndOffset, 0x40)), userOpEndOffset)
+                userOpCallData.length := calldataload(sub(userOpCallData.offset, 0x20))
+            }
+            ExecutionDetail storage detail = getKernelStorage().execution[bytes4(userOpCallData[0:4])];
             validator = detail.validator;
             if (address(validator) == address(0)) {
                 assembly {
                     validator := shr(80, storage_slot_1)
                 }
             }
-            op.signature = userOp.signature[4:];
+            userOpSignature = userOpSignature[4:];
             validationData = (uint256(detail.validAfter) << 208) | (uint256(detail.validUntil) << 160);
         } else if (mode == 0x00000002) {
-            bytes4 sig = bytes4(userOp.callData[0:4]);
+            bytes calldata userOpCallData;
+            assembly {
+                userOpCallData.offset := add(calldataload(add(userOpEndOffset, 0x40)), userOpEndOffset)
+                userOpCallData.length := calldataload(sub(userOpCallData.offset, 0x20))
+            }
             // use given validator
-            // userOp.signature[4:10] = validAfter,
-            // userOp.signature[10:16] = validUntil,
-            // userOp.signature[16:36] = validator address,
-            validator = IKernelValidator(address(bytes20(userOp.signature[16:36])));
+            // userOpSignature[4:10] = validAfter,
+            // userOpSignature[10:16] = validUntil,
+            // userOpSignature[16:36] = validator address,
+            validator = IKernelValidator(address(bytes20(userOpSignature[16:36])));
             bytes calldata enableData;
-            bytes calldata remainSig;
-            (validationData, enableData, remainSig) = _approveValidator(sig, userOp.signature);
+            (validationData, enableData, userOpSignature) =
+                _approveValidator(bytes4(userOpCallData[0:4]), userOpSignature);
             validator.enable(enableData);
-            op.signature = remainSig;
         } else {
             return SIG_VALIDATION_FAILED;
         }
@@ -148,8 +164,9 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
             }
             //ignore failure (its EntryPoint's job to verify, not account.)
         }
+        userOp.signature = userOpSignature;
         validationData =
-            _intersectValidationData(validationData, validator.validateUserOp(op, userOpHash, missingAccountFunds));
+            _intersectValidationData(validationData, validator.validateUserOp(userOp, userOpHash, missingAccountFunds));
         return validationData;
     }
 
