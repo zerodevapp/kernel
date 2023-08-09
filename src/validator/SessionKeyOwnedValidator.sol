@@ -2,10 +2,11 @@
 
 pragma solidity ^0.8.0;
 
-import "./IValidator.sol";
-import "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
-import "src/utils/KernelHelper.sol";
+import "solady/utils/ECDSA.sol";
+import "solady/utils/EIP712.sol";
 import "account-abstraction/core/Helpers.sol";
+import "src/utils/KernelHelper.sol";
+import "src/interfaces/IValidator.sol";
 
 struct SessionKeyStorage {
     uint48 validUntil;
@@ -17,12 +18,12 @@ contract SessionKeyOwnedValidator is IKernelValidator {
 
     mapping(address sessionKey => mapping(address kernel => SessionKeyStorage)) public sessionKeyStorage;
 
-    function disable(bytes calldata _data) external override {
+    function disable(bytes calldata _data) external payable override {
         address sessionKey = address(bytes20(_data[0:20]));
         delete sessionKeyStorage[sessionKey][msg.sender];
     }
 
-    function enable(bytes calldata _data) external override {
+    function enable(bytes calldata _data) external payable override {
         address sessionKey = address(bytes20(_data[0:20]));
         uint48 validUntil = uint48(bytes6(_data[20:26]));
         uint48 validAfter = uint48(bytes6(_data[26:32]));
@@ -32,7 +33,7 @@ contract SessionKeyOwnedValidator is IKernelValidator {
 
     function validateUserOp(UserOperation calldata _userOp, bytes32 _userOpHash, uint256)
         external
-        view
+        payable
         override
         returns (uint256 validationData)
     {
@@ -40,10 +41,11 @@ contract SessionKeyOwnedValidator is IKernelValidator {
         address recovered = ECDSA.recover(hash, _userOp.signature);
 
         SessionKeyStorage storage sessionKey = sessionKeyStorage[recovered][msg.sender];
-        if (sessionKey.validUntil == 0 ) { // we do not allow validUntil == 0 here
+        if (sessionKey.validUntil == 0) {
+            // we do not allow validUntil == 0 here
             return SIG_VALIDATION_FAILED;
         }
-        return _packValidationData(false, sessionKey.validUntil, sessionKey.validAfter);
+        validationData = _packValidationData(false, sessionKey.validUntil, sessionKey.validAfter);
     }
 
     function validateSignature(bytes32 hash, bytes calldata signature) public view override returns (uint256) {
@@ -51,9 +53,21 @@ contract SessionKeyOwnedValidator is IKernelValidator {
         address recovered = ECDSA.recover(ethhash, signature);
 
         SessionKeyStorage storage sessionKey = sessionKeyStorage[recovered][msg.sender];
-        if (sessionKey.validUntil == 0 ) { // we do not allow validUntil == 0 here
+        if (sessionKey.validUntil == 0) {
+            // we do not allow validUntil == 0 here
             return SIG_VALIDATION_FAILED;
         }
         return _packValidationData(false, sessionKey.validUntil, sessionKey.validAfter);
+    }
+
+    function validCaller(address _caller, bytes calldata) external view override returns (bool) {
+        SessionKeyStorage storage sessionKey = sessionKeyStorage[_caller][msg.sender];
+        if (block.timestamp <= sessionKey.validAfter) {
+            return false;
+        }
+        if (block.timestamp > sessionKey.validUntil) {
+            return false;
+        }
+        return true;
     }
 }

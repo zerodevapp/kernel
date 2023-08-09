@@ -3,32 +3,15 @@ pragma solidity ^0.8.0;
 
 // Importing necessary interfaces
 import "account-abstraction/interfaces/IEntryPoint.sol";
-import "src/validator/IValidator.sol";
-
-// Defining a struct for execution details
-struct ExecutionDetail {
-    uint48 validUntil; // Until what time is this execution valid
-    uint48 validAfter; // After what time is this execution valid
-    address executor; // Who is the executor of this execution
-    IKernelValidator validator; // The validator for this execution
-}
-
-// Defining a struct for wallet kernel storage
-struct WalletKernelStorage {
-    bytes32 __deprecated; // A deprecated field
-    bytes4 disabledMode; // Mode which is currently disabled
-    uint48 lastDisabledTime; // Last time when a mode was disabled
-    IKernelValidator defaultValidator; // Default validator for the wallet
-    mapping(bytes4 => ExecutionDetail) execution; // Mapping of function selectors to execution details
-}
+import "src/interfaces/IValidator.sol";
+import "src/common/Constants.sol";
+import "src/common/Structs.sol";
 
 /// @title Kernel Storage Contract
 /// @author taek<leekt216@gmail.com>
 /// @notice This contract serves as the storage module for the Kernel contract.
 /// @dev This contract should only be used by the main Kernel contract.
 contract KernelStorage {
-    uint256 internal constant SIG_VALIDATION_FAILED = 1; // Signature validation failed error code
-
     IEntryPoint public immutable entryPoint; // The entry point of the contract
 
     // Event declarations
@@ -36,12 +19,15 @@ contract KernelStorage {
     event DefaultValidatorChanged(address indexed oldValidator, address indexed newValidator);
     event ExecutionChanged(bytes4 indexed selector, address indexed executor, address indexed validator);
 
+    // Error declarations
+    error NotAuthorizedCaller();
+    error AlreadyInitialized();
+
     // Modifier to check if the function is called by the entry point, the contract itself or the owner
-    modifier onlyFromEntryPointOrOwnerOrSelf() {
-        require(
-            msg.sender == address(entryPoint) || msg.sender == address(this),
-            "account: not from entrypoint or owner or self"
-        );
+    modifier onlyFromEntryPointOrSelf() {
+        if (msg.sender != address(entryPoint) && msg.sender != address(this)) {
+            revert NotAuthorizedCaller();
+        }
         _;
     }
 
@@ -53,27 +39,21 @@ contract KernelStorage {
     }
 
     // Function to initialize the wallet kernel
-    function initialize(IKernelValidator _defaultValidator, bytes calldata _data) external {
-        WalletKernelStorage storage ws = getKernelStorage();
-        require(address(ws.defaultValidator) == address(0), "account: already initialized");
-        ws.defaultValidator = _defaultValidator;
-        emit DefaultValidatorChanged(address(0), address(_defaultValidator));
-        _defaultValidator.enable(_data);
+    function initialize(IKernelValidator _defaultValidator, bytes calldata _data) external payable {
+        _setInitialData(_defaultValidator, _data);
     }
 
     // Function to get the wallet kernel storage
     function getKernelStorage() internal pure returns (WalletKernelStorage storage ws) {
-        bytes32 storagePosition = bytes32(uint256(keccak256("zerodev.kernel")) - 1);
         assembly {
-            ws.slot := storagePosition
+            ws.slot := KERNEL_STORAGE_SLOT
         }
     }
 
     // Function to upgrade the contract to a new implementation
-    function upgradeTo(address _newImplementation) external onlyFromEntryPointOrOwnerOrSelf {
-        bytes32 slot = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+    function upgradeTo(address _newImplementation) external payable onlyFromEntryPointOrSelf {
         assembly {
-            sstore(slot, _newImplementation)
+            sstore(IMPLEMENTATION_SLOT, _newImplementation)
         }
         emit Upgraded(_newImplementation);
     }
@@ -88,12 +68,16 @@ contract KernelStorage {
     }
 
     // query storage
-    function getDefaultValidator() public view returns (IKernelValidator) {
-        return getKernelStorage().defaultValidator;
+    function getDefaultValidator() public view returns (IKernelValidator validator) {
+        assembly {
+            validator := shr(80, sload(KERNEL_STORAGE_SLOT_1))
+        }
     }
 
-    function getDisabledMode() public view returns (bytes4) {
-        return getKernelStorage().disabledMode;
+    function getDisabledMode() public view returns (bytes4 disabled) {
+        assembly {
+            disabled := shl(224, sload(KERNEL_STORAGE_SLOT_1))
+        }
     }
 
     function getLastDisabledTime() public view returns (uint48) {
@@ -122,7 +106,7 @@ contract KernelStorage {
         uint48 _validUntil,
         uint48 _validAfter,
         bytes calldata _enableData
-    ) external onlyFromEntryPointOrOwnerOrSelf {
+    ) external payable onlyFromEntryPointOrSelf {
         getKernelStorage().execution[_selector] = ExecutionDetail({
             executor: _executor,
             validator: _validator,
@@ -135,7 +119,8 @@ contract KernelStorage {
 
     function setDefaultValidator(IKernelValidator _defaultValidator, bytes calldata _data)
         external
-        onlyFromEntryPointOrOwnerOrSelf
+        payable
+        onlyFromEntryPointOrSelf
     {
         IKernelValidator oldValidator = getKernelStorage().defaultValidator;
         getKernelStorage().defaultValidator = _defaultValidator;
@@ -146,8 +131,20 @@ contract KernelStorage {
     /// @notice Updates the disabled mode
     /// @dev This function can be used to update the disabled mode
     /// @param _disableFlag The new disabled mode
-    function disableMode(bytes4 _disableFlag) external onlyFromEntryPointOrOwnerOrSelf {
+    function disableMode(bytes4 _disableFlag) external payable onlyFromEntryPointOrSelf {
         getKernelStorage().disabledMode = _disableFlag;
         getKernelStorage().lastDisabledTime = uint48(block.timestamp);
+    }
+
+    function _setInitialData(IKernelValidator _defaultValidator, bytes calldata _data) internal virtual {
+        address validator;
+        assembly {
+            validator := shr(80, sload(KERNEL_STORAGE_SLOT_1))
+        }
+        if (address(validator) != address(0)) {
+            revert AlreadyInitialized();
+        }
+        getKernelStorage().defaultValidator = _defaultValidator;
+        _defaultValidator.enable(_data);
     }
 }

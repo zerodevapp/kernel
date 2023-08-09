@@ -2,33 +2,43 @@
 pragma solidity ^0.8.0;
 
 // Importing external libraries and contracts
-import "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
+import "solady/utils/EIP712.sol";
+import "solady/utils/ECDSA.sol";
 import "account-abstraction/core/Helpers.sol";
-import "account-abstraction/interfaces/IAccount.sol";
 import "account-abstraction/interfaces/IEntryPoint.sol";
-import {EntryPoint} from "account-abstraction/core/EntryPoint.sol";
-import "./utils/Exec.sol";
 import "./abstract/Compatibility.sol";
 import "./abstract/KernelStorage.sol";
 import "./utils/KernelHelper.sol";
 
+import "src/common/Constants.sol";
+import "src/common/Enum.sol";
+
 /// @title Kernel
 /// @author taek<leekt216@gmail.com>
-/// @notice wallet kernel for minimal wallet functionality
-contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
-    string public constant name = "Kernel";
+/// @notice wallet kernel for extensible wallet functionality
+contract Kernel is EIP712, Compatibility, KernelStorage {
+    string public constant name = KERNEL_NAME;
 
-    string public constant version = "0.0.2";
+    string public constant version = KERNEL_VERSION;
+
+    error NotEntryPoint();
+    error DisabledMode();
 
     /// @dev Sets up the EIP712 and KernelStorage with the provided entry point
-    constructor(IEntryPoint _entryPoint) EIP712(name, version) KernelStorage(_entryPoint) {}
+    constructor(IEntryPoint _entryPoint) KernelStorage(_entryPoint) {}
+
+    function _domainNameAndVersion() internal pure override returns (string memory, string memory) {
+        return (KERNEL_NAME, KERNEL_VERSION);
+    }
 
     /// @notice Accepts incoming Ether transactions and calls from the EntryPoint contract
     /// @dev This function will delegate any call to the appropriate executor based on the function signature.
     fallback() external payable {
-        require(msg.sender == address(entryPoint), "account: not from entrypoint");
         bytes4 sig = msg.sig;
         address executor = getKernelStorage().execution[sig].executor;
+        if (msg.sender != address(entryPoint) && !_checkCaller()) {
+            revert NotAuthorizedCaller();
+        }
         assembly {
             calldatacopy(0, 0, calldatasize())
             let result := delegatecall(gas(), executor, 0, calldatasize(), 0, 0)
@@ -45,18 +55,25 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
     /// @param value The amount of Ether to send
     /// @param data The call data to be sent
     /// @param operation The type of operation (call or delegatecall)
-    function execute(address to, uint256 value, bytes calldata data, Operation operation) external {
-        require(msg.sender == address(entryPoint), "account: not from entrypoint");
-        bool success;
-        bytes memory ret;
-        if (operation == Operation.DelegateCall) {
-            (success, ret) = Exec.delegateCall(to, data);
-        } else {
-            (success, ret) = Exec.call(to, value, data);
+    function execute(address to, uint256 value, bytes memory data, Operation operation) external payable {
+        if (msg.sender != address(entryPoint) && !_checkCaller()) {
+            revert NotAuthorizedCaller();
         }
-        if (!success) {
+        if (operation == Operation.DelegateCall) {
             assembly {
-                revert(add(ret, 32), mload(ret))
+                let success := delegatecall(gas(), to, add(data, 0x20), mload(data), 0, 0)
+                returndatacopy(0, 0, returndatasize())
+                switch success
+                case 0 { revert(0, returndatasize()) }
+                default { return(0, returndatasize()) }
+            }
+        } else {
+            assembly {
+                let success := call(gas(), to, value, add(data, 0x20), mload(data), 0, 0)
+                returndatacopy(0, 0, returndatasize())
+                switch success
+                case 0 { revert(0, returndatasize()) }
+                default { return(0, returndatasize()) }
             }
         }
     }
@@ -67,89 +84,125 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
     /// @param userOpHash The hash of the user operation
     /// @param missingAccountFunds The funds needed to be reimbursed
     /// @return validationData The data used for validation
-    function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256 missingAccountFunds)
+    function validateUserOp(UserOperation memory userOp, bytes32 userOpHash, uint256 missingAccountFunds)
         external
+        payable
         returns (uint256 validationData)
     {
-        require(msg.sender == address(entryPoint), "account: not from entryPoint");
+        if (msg.sender != address(entryPoint)) {
+            revert NotEntryPoint();
+        }
+        bytes calldata userOpSignature;
+        uint256 userOpEndOffset;
+        bytes32 storage_slot_1;
+        assembly {
+            userOpEndOffset := add(calldataload(0x04), 0x24)
+            userOpSignature.offset := add(calldataload(add(userOpEndOffset, 0x120)), userOpEndOffset)
+            userOpSignature.length := calldataload(sub(userOpSignature.offset, 0x20))
+            storage_slot_1 := sload(KERNEL_STORAGE_SLOT_1)
+        }
         // mode based signature
-        bytes4 mode = bytes4(userOp.signature[0:4]); // mode == 00..00 use validators
-        require(mode & getKernelStorage().disabledMode == 0x00000000, "kernel: mode disabled");
+        bytes4 mode = bytes4(userOpSignature[0:4]); // mode == 00..00 use validators
         // mode == 0x00000000 use sudo validator
         // mode == 0x00000001 use given validator
         // mode == 0x00000002 enable validator
-        UserOperation memory op = userOp;
         IKernelValidator validator;
-        bytes4 sig = bytes4(userOp.callData[0:4]);
         if (mode == 0x00000000) {
             // sudo mode (use default validator)
-            op = userOp;
-            op.signature = userOp.signature[4:];
-            validator = getKernelStorage().defaultValidator;
+            userOpSignature = userOpSignature[4:];
+            assembly {
+                validator := shr(80, storage_slot_1)
+            }
+        } else if (mode & (storage_slot_1 << 224) != 0x00000000) {
+            revert DisabledMode();
         } else if (mode == 0x00000001) {
-            ExecutionDetail storage detail = getKernelStorage().execution[sig];
+            bytes calldata userOpCallData;
+            assembly {
+                userOpCallData.offset := add(calldataload(add(userOpEndOffset, 0x40)), userOpEndOffset)
+                userOpCallData.length := calldataload(sub(userOpCallData.offset, 0x20))
+            }
+            ExecutionDetail storage detail = getKernelStorage().execution[bytes4(userOpCallData[0:4])];
             validator = detail.validator;
             if (address(validator) == address(0)) {
-                validator = getKernelStorage().defaultValidator;
+                assembly {
+                    validator := shr(80, storage_slot_1)
+                }
             }
-            op.signature = userOp.signature[4:];
-            validationData = (uint256(detail.validAfter) << 160) | (uint256(detail.validUntil) << (48 + 160));
+            userOpSignature = userOpSignature[4:];
+            validationData = (uint256(detail.validAfter) << 208) | (uint256(detail.validUntil) << 160);
         } else if (mode == 0x00000002) {
+            bytes calldata userOpCallData;
+            assembly {
+                userOpCallData.offset := add(calldataload(add(userOpEndOffset, 0x40)), userOpEndOffset)
+                userOpCallData.length := calldataload(sub(userOpCallData.offset, 0x20))
+            }
             // use given validator
-            // userOp.signature[4:10] = validUntil,
-            // userOp.signature[10:16] = validAfter,
-            // userOp.signature[16:36] = validator address,
-            validator = IKernelValidator(address(bytes20(userOp.signature[16:36])));
-            bytes calldata enableData;
-            bytes calldata remainSig;
-            (validationData, enableData, remainSig) = _approveValidator(sig, userOp.signature);
-            validator.enable(enableData);
-            op.signature = remainSig;
+            // userOpSignature[4:10] = validAfter,
+            // userOpSignature[10:16] = validUntil,
+            // userOpSignature[16:36] = validator address,
+            (validator, validationData, userOpSignature) =
+                _approveValidator(bytes4(userOpCallData[0:4]), userOpSignature);
         } else {
             return SIG_VALIDATION_FAILED;
         }
-        if (missingAccountFunds > 0) {
-            // we are going to assume signature is valid at this point
-            (bool success,) = msg.sender.call{value: missingAccountFunds}("");
-            (success);
+        if (missingAccountFunds != 0) {
+            assembly {
+                pop(call(gas(), caller(), missingAccountFunds, 0, 0, 0, 0))
+            }
+            //ignore failure (its EntryPoint's job to verify, not account.)
         }
+        userOp.signature = userOpSignature;
         validationData =
-            _intersectValidationData(validationData, validator.validateUserOp(op, userOpHash, missingAccountFunds));
+            _intersectValidationData(validationData, validator.validateUserOp(userOp, userOpHash, missingAccountFunds));
         return validationData;
     }
 
     function _approveValidator(bytes4 sig, bytes calldata signature)
         internal
-        returns (uint256 validationData, bytes calldata enableData, bytes calldata validationSig)
+        returns (IKernelValidator validator, uint256 validationData, bytes calldata validationSig)
     {
-        uint256 enableDataLength = uint256(bytes32(signature[56:88]));
-        enableData = signature[88:88 + enableDataLength];
-        uint256 enableSignatureLength = uint256(bytes32(signature[88 + enableDataLength:120 + enableDataLength]));
-        bytes32 enableDigest = _hashTypedDataV4(
-            keccak256(
-                abi.encode(
-                    keccak256("ValidatorApproved(bytes4 sig,uint256 validatorData,address executor,bytes enableData)"),
-                    bytes4(sig),
-                    uint256(bytes32(signature[4:36])),
-                    address(bytes20(signature[36:56])),
-                    keccak256(enableData)
+        unchecked {
+            validator = IKernelValidator(address(bytes20(signature[16:36])));
+            uint256 cursor = 88;
+            uint256 length = uint256(bytes32(signature[56:88])); // this is enableDataLength
+            bytes calldata enableData;
+            assembly {
+                enableData.offset := add(signature.offset, cursor)
+                enableData.length := length
+                cursor := add(cursor, length) // 88 + enableDataLength
+            }
+            length = uint256(bytes32(signature[cursor:cursor + 32])); // this is enableSigLength
+            assembly {
+                cursor := add(cursor, 32)
+            }
+            bytes32 enableDigest = _hashTypedData(
+                keccak256(
+                    abi.encode(
+                        VALIDATOR_APPROVED_STRUCT_HASH,
+                        bytes4(sig),
+                        uint256(bytes32(signature[4:36])),
+                        address(bytes20(signature[36:56])),
+                        keccak256(enableData)
+                    )
                 )
-            )
-        );
-        validationData = _intersectValidationData(
-            getKernelStorage().defaultValidator.validateSignature(
-                enableDigest, signature[120 + enableDataLength:120 + enableDataLength + enableSignatureLength]
-            ),
-            uint256(bytes32(signature[4:36])) & (uint256(type(uint96).max) << 160)
-        );
-        validationSig = signature[120 + enableDataLength + enableSignatureLength:];
-        getKernelStorage().execution[sig] = ExecutionDetail({
-            executor: address(bytes20(signature[36:56])),
-            validator: IKernelValidator(address(bytes20(signature[16:36]))),
-            validUntil: uint48(bytes6(signature[4:10])),
-            validAfter: uint48(bytes6(signature[10:16]))
-        });
-        return (validationData, signature[88:88 + enableDataLength], validationSig);
+            );
+            validationData = _intersectValidationData(
+                getKernelStorage().defaultValidator.validateSignature(enableDigest, signature[cursor:cursor + length]),
+                uint256(bytes32(signature[4:36])) & 0xffffffffffffffffffffffff0000000000000000000000000000000000000000
+            );
+            assembly {
+                cursor := add(cursor, length)
+                validationSig.offset := add(signature.offset, cursor)
+                validationSig.length := sub(signature.length, cursor)
+            }
+            getKernelStorage().execution[sig] = ExecutionDetail({
+                validAfter: uint48(bytes6(signature[4:10])),
+                validUntil: uint48(bytes6(signature[10:16])),
+                executor: address(bytes20(signature[36:56])),
+                validator: IKernelValidator(address(bytes20(signature[16:36])))
+            });
+            validator.enable(enableData);
+        }
     }
 
     /// @notice Checks if a signature is valid
@@ -171,5 +224,21 @@ contract Kernel is IAccount, EIP712, Compatibility, KernelStorage {
         }
 
         return 0x1626ba7e;
+    }
+
+    function _checkCaller() internal view returns (bool) {
+        if (getKernelStorage().defaultValidator.validCaller(msg.sender, msg.data)) {
+            return true;
+        }
+        bytes4 sig = msg.sig;
+        ExecutionDetail storage detail = getKernelStorage().execution[sig];
+        if (
+            address(detail.validator) == address(0) || (detail.validUntil != 0 && detail.validUntil < block.timestamp)
+                || detail.validAfter > block.timestamp
+        ) {
+            return false;
+        } else {
+            return detail.validator.validCaller(msg.sender, msg.data);
+        }
     }
 }

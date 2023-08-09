@@ -1,68 +1,55 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+import "./AdminLessERC1967Factory.sol";
+
 import "openzeppelin-contracts/contracts/utils/Create2.sol";
-import "./EIP1967Proxy.sol";
 import "src/Kernel.sol";
 import "src/validator/ECDSAValidator.sol";
+import "solady/auth/Ownable.sol";
 
-import "./TempKernel.sol";
+contract KernelFactory is AdminLessERC1967Factory, Ownable {
+    IEntryPoint public entryPoint;
+    mapping(address => bool) public isAllowedImplementation;
 
-contract KernelFactory {
-    TempKernel public immutable kernelTemplate;
-    Kernel public immutable nextTemplate;
-    IEntryPoint public immutable entryPoint;
-
-    event AccountCreated(address indexed account, address indexed validator, bytes data, uint256 index);
-
-    constructor(IEntryPoint _entryPoint) {
-        kernelTemplate = new TempKernel(_entryPoint);
-        nextTemplate = new Kernel(_entryPoint);
+    constructor(address _owner, IEntryPoint _entryPoint) {
+        _initializeOwner(_owner);
         entryPoint = _entryPoint;
     }
 
-    function createAccount(IKernelValidator _validator, bytes calldata _data, uint256 _index)
-        external
-        returns (EIP1967Proxy proxy)
-    {
-        bytes32 salt = keccak256(abi.encodePacked(_validator, _data, _index));
-        address addr = Create2.computeAddress(
-            salt,
-            keccak256(
-                abi.encodePacked(
-                    type(EIP1967Proxy).creationCode,
-                    abi.encode(
-                        address(kernelTemplate),
-                        abi.encodeCall(TempKernel.initialize, (_validator, address(nextTemplate), _data))
-                    )
-                )
-            )
-        );
-        if (addr.code.length > 0) {
-            return EIP1967Proxy(payable(addr));
-        }
-        proxy =
-        new EIP1967Proxy{salt: salt}(address(kernelTemplate), abi.encodeCall(TempKernel.initialize, (_validator, address(nextTemplate), _data)));
-        emit AccountCreated(address(proxy), address(_validator), _data, _index);
+    function setImplementation(address _implementation, bool _allow) external onlyOwner {
+        isAllowedImplementation[_implementation] = _allow;
     }
 
-    function getAccountAddress(IKernelValidator _validator, bytes calldata _data, uint256 _index)
-        public
-        view
-        returns (address)
+    function setEntryPoint(IEntryPoint _entryPoint) external onlyOwner {
+        entryPoint = _entryPoint;
+    }
+
+    function createAccount(address _implementation, bytes calldata _data, uint256 _index)
+        external
+        payable
+        returns (address proxy)
     {
-        bytes32 salt = keccak256(abi.encodePacked(_validator, _data, _index));
-        return Create2.computeAddress(
-            salt,
-            keccak256(
-                abi.encodePacked(
-                    type(EIP1967Proxy).creationCode,
-                    abi.encode(
-                        address(kernelTemplate),
-                        abi.encodeCall(TempKernel.initialize, (_validator, address(nextTemplate), _data))
-                    )
-                )
-            )
-        );
+        require(isAllowedImplementation[_implementation], "KernelFactory: implementation not allowed");
+        bytes32 salt = bytes32(uint256(keccak256(abi.encodePacked(_data, _index))) & type(uint96).max);
+        proxy = deployDeterministicAndCall(_implementation, salt, _data);
+    }
+
+    function getAccountAddress(bytes calldata _data, uint256 _index) public view returns (address) {
+        bytes32 salt = bytes32(uint256(keccak256(abi.encodePacked(_data, _index))) & type(uint96).max);
+        return predictDeterministicAddress(salt);
+    }
+
+    // stake functions
+    function addStake(uint32 unstakeDelaySec) external payable onlyOwner {
+        entryPoint.addStake{value: msg.value}(unstakeDelaySec);
+    }
+
+    function unlockStake() external onlyOwner {
+        entryPoint.unlockStake();
+    }
+
+    function withdrawStake(address payable withdrawAddress) external onlyOwner {
+        entryPoint.withdrawStake(withdrawAddress);
     }
 }

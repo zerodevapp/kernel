@@ -13,7 +13,9 @@ contract TokenActions {
         IERC721(_token).transferFrom(address(this), _to, _id);
     }
 
-    function transferERC1155Action(address _token, uint256 _id, address _to, uint256 amount, bytes calldata data) external {
+    function transferERC1155Action(address _token, uint256 _id, address _to, uint256 amount, bytes calldata data)
+        external
+    {
         IERC1155(_token).safeTransferFrom(address(this), _to, _id, amount, data);
     }
 }
