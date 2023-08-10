@@ -2,14 +2,14 @@
 pragma solidity ^0.8.18;
 
 import "./KernelFactory.sol";
-import "src/validator/RecoveryPlugin.sol";
+import "src/validator/SocialRecoveryValidator.sol";
 
 contract RecoveryKernelFactory {
     KernelFactory public immutable singletonFactory;
-    RecoveryPlugin public immutable validator;
+    SocialRecoveryValidator public immutable validator;
     IEntryPoint public immutable entryPoint;
 
-    constructor(KernelFactory _singletonFactory, RecoveryPlugin _validator, IEntryPoint _entryPoint) {
+    constructor(KernelFactory _singletonFactory, SocialRecoveryValidator _validator, IEntryPoint _entryPoint) {
         singletonFactory = _singletonFactory;
         validator = _validator;
         entryPoint = _entryPoint;

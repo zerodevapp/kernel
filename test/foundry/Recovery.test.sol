@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import "src/factory/KernelFactory.sol";
 import "src/factory/RecoveryKernelFactory.sol";
 import "src/Kernel.sol";
-import "src/validator/RecoveryPlugin.sol";
+import "src/validator/SocialRecoveryValidator.sol";
 import "src/factory/EIP1967Proxy.sol";
 // test artifacts
 import "src/test/TestValidator.sol";
@@ -20,7 +20,7 @@ contract RecoveryTest is Test {
     KernelFactory factory;
     RecoveryKernelFactory recoveryFactory;
     EntryPoint entryPoint;
-    RecoveryPlugin validator;
+    SocialRecoveryValidator validator;
     address owner;
     uint256 ownerKey;
     address payable beneficiary;
@@ -43,7 +43,7 @@ contract RecoveryTest is Test {
         entryPoint = new EntryPoint();
         factory = new KernelFactory(entryPoint);
 
-        validator = new RecoveryPlugin();
+        validator = new SocialRecoveryValidator();
         recoveryFactory = new RecoveryKernelFactory(
             factory,
             validator,

@@ -16,7 +16,7 @@ struct Guardian {
     bool approved;
 }
 
-contract RecoveryPlugin is IKernelValidator {
+contract SocialRecoveryValidator is IKernelValidator {
     event OwnerChanged(
         address indexed kernel,
         address indexed oldOwner,
@@ -40,13 +40,13 @@ contract RecoveryPlugin is IKernelValidator {
     function enable(bytes calldata _data) external override {
         //0x00 - to add guardians
         //0x01 - to change owner
-        bytes memory mode = bytes(_data[0:1]);
-        if (keccak256(mode) == keccak256(hex"00")) {
+        bytes1 mode = bytes1(_data);
+        if (mode == hex"00") {
             bytes32 weightinbytes = bytes32(_data[1:33]);
             uint256 weight = uint256(weightinbytes);
             bytes calldata guardiandata = bytes(_data[33:]);
-            addGuardian(guardiandata, weight, 1 days);
-        } else if (keccak256(mode) == keccak256(hex"01")) {
+            addGuardian(guardiandata, weight, 0 days);
+        } else if (mode == hex"01") {
             bytes calldata recoverydata = bytes(_data[1:]);
             address newOwner = address(bytes20(recoverydata[0:20]));
             bytes32 hash = bytes32(recoverydata[20:52]);
@@ -58,7 +58,7 @@ contract RecoveryPlugin is IKernelValidator {
     }
 
     function divideBytes(
-        bytes memory data
+        bytes calldata data
     ) public pure returns (bytes[] memory) {
         require(data.length % 65 == 0, "Data length must be a multiple of 65");
 
