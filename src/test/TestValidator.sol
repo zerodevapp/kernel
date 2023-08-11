@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "src/interfaces/IValidator.sol";
+import "src/common/Types.sol";
 
 contract TestValidator is IKernelValidator {
     event TestValidateUserOp(bytes32 indexed opHash);
@@ -14,18 +15,18 @@ contract TestValidator is IKernelValidator {
         caller[_kernel] = _caller;
     }
 
-    function validateSignature(bytes32, bytes calldata) external pure override returns (uint256) {
-        return 0;
+    function validateSignature(bytes32, bytes calldata) external pure override returns (ValidationData) {
+        return ValidationData.wrap(0);
     }
 
     function validateUserOp(UserOperation calldata, bytes32 userOpHash, uint256)
         external
         payable
         override
-        returns (uint256)
+        returns (ValidationData)
     {
         emit TestValidateUserOp(userOpHash);
-        return 0;
+        return ValidationData.wrap(0);
     }
 
     function enable(bytes calldata data) external payable override {

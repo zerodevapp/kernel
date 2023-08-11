@@ -2,11 +2,12 @@ pragma solidity ^0.8.0;
 
 import "src/interfaces/IValidator.sol";
 import "src/common/Enum.sol";
+import "src/common/Types.sol";
 
 // Defining a struct for execution details
 struct ExecutionDetail {
-    uint48 validAfter; // Until what time is this execution valid
-    uint48 validUntil; // After what time is this execution valid
+    ValidAfter validAfter; // Until what time is this execution valid
+    ValidUntil validUntil; // After what time is this execution valid
     address executor; // Who is the executor of this execution
     IKernelValidator validator; // The validator for this execution
 }
@@ -37,8 +38,8 @@ struct Permission {
 
 struct SessionData {
     bytes32 merkleRoot;
-    uint48 validAfter;
-    uint48 validUntil;
+    ValidAfter validAfter;
+    ValidUntil validUntil;
     address paymaster; // address(0) means accept userOp without paymaster, address(1) means reject userOp with paymaster, other address means accept userOp with paymaster with the address
     bool enabled;
 }

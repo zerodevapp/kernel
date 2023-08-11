@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "account-abstraction/core/EntryPoint.sol";
+import {EntryPoint, UserOperation} from "account-abstraction/core/EntryPoint.sol";
 import "forge-std/Test.sol";
 import "solady/utils/ECDSA.sol";
 import "src/Kernel.sol";

@@ -4,7 +4,6 @@ pragma solidity ^0.8.0;
 // Importing external libraries and contracts
 import "solady/utils/EIP712.sol";
 import "solady/utils/ECDSA.sol";
-import "account-abstraction/core/Helpers.sol";
 import "account-abstraction/interfaces/IEntryPoint.sol";
 import "./abstract/Compatibility.sol";
 import "./abstract/KernelStorage.sol";
@@ -16,6 +15,7 @@ import "src/common/Enum.sol";
 /// @title Kernel
 /// @author taek<leekt216@gmail.com>
 /// @notice wallet kernel for extensible wallet functionality
+
 contract Kernel is EIP712, Compatibility, KernelStorage {
     string public constant name = KERNEL_NAME;
 
@@ -59,9 +59,9 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         if (msg.sender != address(entryPoint) && !_checkCaller()) {
             revert NotAuthorizedCaller();
         }
-        if (operation == Operation.DelegateCall) {
+        if (operation == Operation.Call) {
             assembly {
-                let success := delegatecall(gas(), to, add(data, 0x20), mload(data), 0, 0)
+                let success := call(gas(), to, value, add(data, 0x20), mload(data), 0, 0)
                 returndatacopy(0, 0, returndatasize())
                 switch success
                 case 0 { revert(0, returndatasize()) }
@@ -69,7 +69,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
             }
         } else {
             assembly {
-                let success := call(gas(), to, value, add(data, 0x20), mload(data), 0, 0)
+                let success := delegatecall(gas(), to, add(data, 0x20), mload(data), 0, 0)
                 returndatacopy(0, 0, returndatasize())
                 switch success
                 case 0 { revert(0, returndatasize()) }
@@ -87,7 +87,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     function validateUserOp(UserOperation memory userOp, bytes32 userOpHash, uint256 missingAccountFunds)
         external
         payable
-        returns (uint256 validationData)
+        returns (ValidationData validationData)
     {
         if (msg.sender != address(entryPoint)) {
             revert NotEntryPoint();
@@ -129,7 +129,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
                 }
             }
             userOpSignature = userOpSignature[4:];
-            validationData = (uint256(detail.validAfter) << 208) | (uint256(detail.validUntil) << 160);
+            validationData = packValidationData(detail.validAfter, detail.validUntil);
         } else if (mode == 0x00000002) {
             bytes calldata userOpCallData;
             assembly {
@@ -159,7 +159,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
 
     function _approveValidator(bytes4 sig, bytes calldata signature)
         internal
-        returns (IKernelValidator validator, uint256 validationData, bytes calldata validationSig)
+        returns (IKernelValidator validator, ValidationData validationData, bytes calldata validationSig)
     {
         unchecked {
             validator = IKernelValidator(address(bytes20(signature[16:36])));
@@ -188,7 +188,10 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
             );
             validationData = _intersectValidationData(
                 getKernelStorage().defaultValidator.validateSignature(enableDigest, signature[cursor:cursor + length]),
-                uint256(bytes32(signature[4:36])) & 0xffffffffffffffffffffffff0000000000000000000000000000000000000000
+                ValidationData.wrap(
+                    uint256(bytes32(signature[4:36]))
+                        & 0xffffffffffffffffffffffff0000000000000000000000000000000000000000
+                )
             );
             assembly {
                 cursor := add(cursor, length)
@@ -196,8 +199,8 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
                 validationSig.length := sub(signature.length, cursor)
             }
             getKernelStorage().execution[sig] = ExecutionDetail({
-                validAfter: uint48(bytes6(signature[4:10])),
-                validUntil: uint48(bytes6(signature[10:16])),
+                validAfter: ValidAfter.wrap(uint48(bytes6(signature[4:10]))),
+                validUntil: ValidUntil.wrap(uint48(bytes6(signature[10:16]))),
                 executor: address(bytes20(signature[36:56])),
                 validator: IKernelValidator(address(bytes20(signature[16:36])))
             });
@@ -211,15 +214,15 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     /// @param signature The signature to be validated
     /// @return The magic value 0x1626ba7e if the signature is valid, otherwise returns 0xffffffff.
     function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4) {
-        uint256 validationData = getKernelStorage().defaultValidator.validateSignature(hash, signature);
-        ValidationData memory data = _parseValidationData(validationData);
-        if (data.validAfter > block.timestamp) {
+        ValidationData validationData = getKernelStorage().defaultValidator.validateSignature(hash, signature);
+        (ValidAfter validAfter, ValidUntil validUntil, address result) = parseValidationData(validationData);
+        if (ValidAfter.unwrap(validAfter) > block.timestamp) {
             return 0xffffffff;
         }
-        if (data.validUntil < block.timestamp) {
+        if (ValidUntil.unwrap(validUntil) < block.timestamp) {
             return 0xffffffff;
         }
-        if (data.aggregator != address(0)) {
+        if (result != address(0)) {
             return 0xffffffff;
         }
 
@@ -233,8 +236,9 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         bytes4 sig = msg.sig;
         ExecutionDetail storage detail = getKernelStorage().execution[sig];
         if (
-            address(detail.validator) == address(0) || (detail.validUntil != 0 && detail.validUntil < block.timestamp)
-                || detail.validAfter > block.timestamp
+            address(detail.validator) == address(0)
+                || (ValidUntil.unwrap(detail.validUntil) != 0 && ValidUntil.unwrap(detail.validUntil) < block.timestamp)
+                || ValidAfter.unwrap(detail.validAfter) > block.timestamp
         ) {
             return false;
         } else {

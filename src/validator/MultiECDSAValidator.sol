@@ -6,6 +6,7 @@ import "solady/utils/ECDSA.sol";
 import "src/utils/KernelHelper.sol";
 import "src/interfaces/IAddressBook.sol";
 import "src/interfaces/IValidator.sol";
+import "src/common/Types.sol";
 
 contract MultiECDSAValidator is IKernelValidator {
     event OwnerAdded(address indexed kernel, address indexed owner);
@@ -34,11 +35,11 @@ contract MultiECDSAValidator is IKernelValidator {
         external
         payable
         override
-        returns (uint256 validationData)
+        returns (ValidationData validationData)
     {
         address signer = ECDSA.recover(_userOpHash, _userOp.signature);
         if (isOwner[signer][msg.sender]) {
-            return 0;
+            return ValidationData.wrap(0);
         }
 
         bytes32 hash = ECDSA.toEthSignedMessageHash(_userOpHash);
@@ -46,20 +47,20 @@ contract MultiECDSAValidator is IKernelValidator {
         if (!isOwner[signer][msg.sender]) {
             return SIG_VALIDATION_FAILED;
         }
-        return 0;
+        return ValidationData.wrap(0);
     }
 
-    function validateSignature(bytes32 hash, bytes calldata signature) public view override returns (uint256) {
+    function validateSignature(bytes32 hash, bytes calldata signature) public view override returns (ValidationData) {
         address signer = ECDSA.recover(hash, signature);
         if (isOwner[signer][msg.sender]) {
-            return 0;
+            return ValidationData.wrap(0);
         }
         bytes32 ethHash = ECDSA.toEthSignedMessageHash(hash);
         signer = ECDSA.recover(ethHash, signature);
         if (!isOwner[signer][msg.sender]) {
             return SIG_VALIDATION_FAILED;
         }
-        return 0;
+        return ValidationData.wrap(0);
     }
 
     function validCaller(address _caller, bytes calldata) external view override returns (bool) {

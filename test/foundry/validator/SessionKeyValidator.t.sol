@@ -53,7 +53,7 @@ contract SessionKeyValidatorTest is KernelTestBase {
         testToken = new TestERC20();
         sessionKeyValidator = new ExecuteSessionKeyValidator();
     }
-    
+
     function test_mode_2_no_paymaster() external {
         testToken.mint(address(kernel), 100e18);
         TestERC20 testToken2 = new TestERC20();
@@ -69,11 +69,7 @@ contract SessionKeyValidatorTest is KernelTestBase {
         );
 
         ParamRule[] memory rules = new ParamRule[](1);
-        rules[0] = ParamRule({
-            offset: 32,
-            condition: ParamCondition.LESS_THAN_OR_EQUAL,
-            param: bytes32(uint256(1e18))
-        });
+        rules[0] = ParamRule({offset: 32, condition: ParamCondition.LESS_THAN_OR_EQUAL, param: bytes32(uint256(1e18))});
 
         bytes32[] memory data = new bytes32[](2);
         data[0] = keccak256(
@@ -159,11 +155,7 @@ contract SessionKeyValidatorTest is KernelTestBase {
         );
 
         ParamRule[] memory rules = new ParamRule[](1);
-        rules[0] = ParamRule({
-            offset: 32,
-            condition: ParamCondition.LESS_THAN_OR_EQUAL,
-            param: bytes32(uint256(1e18))
-        });
+        rules[0] = ParamRule({offset: 32, condition: ParamCondition.LESS_THAN_OR_EQUAL, param: bytes32(uint256(1e18))});
 
         bytes32[] memory data = new bytes32[](2);
         data[0] = keccak256(
@@ -249,11 +241,7 @@ contract SessionKeyValidatorTest is KernelTestBase {
         );
 
         ParamRule[] memory rules = new ParamRule[](1);
-        rules[0] = ParamRule({
-            offset: 32,
-            condition: ParamCondition.LESS_THAN_OR_EQUAL,
-            param: bytes32(uint256(1e18))
-        });
+        rules[0] = ParamRule({offset: 32, condition: ParamCondition.LESS_THAN_OR_EQUAL, param: bytes32(uint256(1e18))});
 
         bytes32[] memory data = new bytes32[](2);
         data[0] = keccak256(
@@ -321,7 +309,7 @@ contract SessionKeyValidatorTest is KernelTestBase {
         ops[0] = op;
         logGas(op);
 
-        vm.expectRevert(); 
+        vm.expectRevert();
         entryPoint.handleOps(ops, beneficiary);
     }
 }

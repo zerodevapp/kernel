@@ -1,11 +1,11 @@
 pragma solidity ^0.8.0;
 
 // constants for kernel metadata
-string constant KERNEL_NAME="Kernel";
-string constant KERNEL_VERSION="0.2.1";
+string constant KERNEL_NAME = "Kernel";
+string constant KERNEL_VERSION = "0.2.1";
 
 // ERC4337 constants
-uint256 constant SIG_VALIDATION_FAILED = 1;
+uint256 constant SIG_VALIDATION_FAILED_UINT = 1;
 
 // STRUCT_HASH
 bytes32 constant VALIDATOR_APPROVED_STRUCT_HASH = 0x3ce406685c1b3551d706d85a68afdaa49ac4e07b451ad9b8ff8b58c3ee964176;

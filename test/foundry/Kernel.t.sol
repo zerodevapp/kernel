@@ -136,8 +136,8 @@ contract KernelTest is KernelTestBase {
         ExecutionDetail memory execution = KernelStorage(address(kernel)).getExecution(bytes4(0xdeadbeef));
         assertEq(execution.executor, address(0xdead));
         assertEq(address(execution.validator), address(newValidator));
-        assertEq(uint256(execution.validUntil), uint256(0));
-        assertEq(uint256(execution.validAfter), uint256(0));
+        assertEq(uint256(ValidUntil.unwrap(execution.validUntil)), uint256(0));
+        assertEq(uint256(ValidAfter.unwrap(execution.validAfter)), uint256(0));
     }
 
     function test_external_call_execution() external {
@@ -162,8 +162,8 @@ contract KernelTest is KernelTestBase {
         ExecutionDetail memory execution = KernelStorage(address(kernel)).getExecution(bytes4(0xdeadbeef));
         assertEq(execution.executor, address(0xdead));
         assertEq(address(execution.validator), address(newValidator));
-        assertEq(uint256(execution.validUntil), uint256(0));
-        assertEq(uint256(execution.validAfter), uint256(0));
+        assertEq(uint256(ValidUntil.unwrap(execution.validUntil)), uint256(0));
+        assertEq(uint256(ValidAfter.unwrap(execution.validAfter)), uint256(0));
 
         address randomAddr = makeAddr("random");
         newValidator.sudoSetCaller(address(kernel), randomAddr);
