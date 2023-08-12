@@ -90,7 +90,6 @@ contract SocialRecoveryValidator is IKernelValidator {
         uint256 _thresholdWeight,
         uint256 delay
     ) public {
-        require(_guardiandata.length % 72 == 0, "RecoveryPlugin: invalid data length");
         address extraAddress = address(bytes20(_guardiandata[0:20]));
         recoveryPluginStorage[msg.sender].owner = extraAddress;
         uint256 chunks = _guardiandata.length / 52;
