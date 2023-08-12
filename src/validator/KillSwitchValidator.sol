@@ -27,11 +27,16 @@ contract KillSwitchValidator is IKernelValidator {
         delete killSwitchValidatorStorage[msg.sender];
     }
 
-    function validateSignature(bytes32 hash, bytes calldata signature) external view override returns (ValidationData) {
+    function validateSignature(bytes32 hash, bytes calldata signature)
+        external
+        view
+        override
+        returns (ValidationData)
+    {
         KillSwitchValidatorStorage storage validatorStorage = killSwitchValidatorStorage[msg.sender];
         ValidationData res = validatorStorage.validator.validateSignature(hash, signature);
         ValidAfter pausedUntil = validatorStorage.pausedUntil;
-        (, , address result) = parseValidationData(res);
+        (,, address result) = parseValidationData(res);
         if (result != address(1)) {
             // if signature verification has not been failed, return with the result
             ValidationData delayedData = packValidationData(pausedUntil, ValidUntil.wrap(0));
@@ -56,7 +61,7 @@ contract KillSwitchValidator is IKernelValidator {
             } catch {
                 validationData = SIG_VALIDATION_FAILED;
             }
-            (, , address result) = parseValidationData(validationData);
+            (,, address result) = parseValidationData(validationData);
             if (result != address(1)) {
                 // if signature verification has not been failed, return with the result
                 ValidationData delayedData = packValidationData(pausedUntil, ValidUntil.wrap(0));

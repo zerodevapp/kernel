@@ -13,11 +13,40 @@ abstract contract KernelTestBase is Test {
     Kernel kernelImpl;
     KernelFactory factory;
     EntryPoint entryPoint;
-    ECDSAValidator validator;
+    IKernelValidator defaultValidator;
     address owner;
     uint256 ownerKey;
     address payable beneficiary;
     address factoryOwner;
+
+    function _initialize() internal {
+        (owner, ownerKey) = makeAddrAndKey("owner");
+        (factoryOwner,) = makeAddrAndKey("factoryOwner");
+        beneficiary = payable(address(makeAddr("beneficiary")));
+        entryPoint = new EntryPoint();
+        kernelImpl = new Kernel(entryPoint);
+        factory = new KernelFactory(factoryOwner, entryPoint);
+        vm.startPrank(factoryOwner);
+        factory.setImplementation(address(kernelImpl), true);
+        vm.stopPrank();
+    }
+
+    function _setAddress() internal {
+        kernel = Kernel(
+            payable(
+                address(
+                    factory.createAccount(
+                        address(kernelImpl),
+                        abi.encodeWithSelector(
+                            KernelStorage.initialize.selector, defaultValidator, abi.encodePacked(owner)
+                        ),
+                        0
+                    )
+                )
+            )
+        );
+        vm.deal(address(kernel), 1e30);
+    }
 
     function logGas(UserOperation memory op) internal returns (uint256 used) {
         try this.consoleGasUsage(op) {
