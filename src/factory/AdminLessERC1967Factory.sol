@@ -92,6 +92,10 @@ contract AdminLessERC1967Factory {
         returns (address proxy)
     {
         bytes memory m = _initCode();
+        proxy = predictDeterministicAddress(salt);
+        if(proxy.code.length > 0) {
+            return proxy;
+        }
         /// @solidity memory-safe-assembly
         assembly {
             // Create the proxy.
