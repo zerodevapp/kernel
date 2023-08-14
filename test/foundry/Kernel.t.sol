@@ -18,35 +18,25 @@ using ERC4337Utils for EntryPoint;
 
 contract KernelTest is KernelTestBase {
     function setUp() public {
-        (owner, ownerKey) = makeAddrAndKey("owner");
-        (factoryOwner,) = makeAddrAndKey("factoryOwner");
-        entryPoint = new EntryPoint();
-        kernelImpl = new Kernel(entryPoint);
-        factory = new KernelFactory(factoryOwner, entryPoint);
-        vm.startPrank(factoryOwner);
-        factory.setImplementation(address(kernelImpl), true);
-        vm.stopPrank();
+        _initialize();
+        defaultValidator = new ECDSAValidator();
+        _setAddress();
+    }
 
-        validator = new ECDSAValidator();
-
-        kernel = Kernel(
-            payable(
-                address(
-                    factory.createAccount(
-                        address(kernelImpl),
-                        abi.encodeWithSelector(KernelStorage.initialize.selector, validator, abi.encodePacked(owner)),
-                        0
-                    )
-                )
-            )
+    function test_should_return_address_if_deployed() external {
+        address proxy = factory.createAccount(
+            address(kernelImpl),
+            abi.encodeWithSelector(
+                KernelStorage.initialize.selector, defaultValidator, abi.encodePacked(owner)
+            ),
+            0
         );
-        vm.deal(address(kernel), 1e30);
-        beneficiary = payable(address(makeAddr("beneficiary")));
+        assertEq(proxy, address(kernel));
     }
 
     function test_initialize_twice() external {
         vm.expectRevert();
-        kernel.initialize(validator, abi.encodePacked(owner));
+        kernel.initialize(defaultValidator, abi.encodePacked(owner));
     }
 
     function test_external_call_default() external {
@@ -61,7 +51,9 @@ contract KernelTest is KernelTestBase {
                 address(
                     factory.createAccount(
                         address(kernelImpl),
-                        abi.encodeWithSelector(KernelStorage.initialize.selector, validator, abi.encodePacked(owner)),
+                        abi.encodeWithSelector(
+                            KernelStorage.initialize.selector, defaultValidator, abi.encodePacked(owner)
+                        ),
                         1
                     )
                 )
@@ -74,7 +66,7 @@ contract KernelTest is KernelTestBase {
 
     function test_validate_userOp() external {
         TestKernel kernel2 = new TestKernel(entryPoint);
-        kernel2.sudoInitialize(validator, abi.encodePacked(owner));
+        kernel2.sudoInitialize(defaultValidator, abi.encodePacked(owner));
 
         UserOperation memory op = entryPoint.fillUserOp(
             address(kernel), abi.encodeWithSelector(Kernel.execute.selector, address(0), 0, bytes(""))
@@ -136,8 +128,8 @@ contract KernelTest is KernelTestBase {
         ExecutionDetail memory execution = KernelStorage(address(kernel)).getExecution(bytes4(0xdeadbeef));
         assertEq(execution.executor, address(0xdead));
         assertEq(address(execution.validator), address(newValidator));
-        assertEq(uint256(execution.validUntil), uint256(0));
-        assertEq(uint256(execution.validAfter), uint256(0));
+        assertEq(uint256(ValidUntil.unwrap(execution.validUntil)), uint256(0));
+        assertEq(uint256(ValidAfter.unwrap(execution.validAfter)), uint256(0));
     }
 
     function test_external_call_execution() external {
@@ -162,8 +154,8 @@ contract KernelTest is KernelTestBase {
         ExecutionDetail memory execution = KernelStorage(address(kernel)).getExecution(bytes4(0xdeadbeef));
         assertEq(execution.executor, address(0xdead));
         assertEq(address(execution.validator), address(newValidator));
-        assertEq(uint256(execution.validUntil), uint256(0));
-        assertEq(uint256(execution.validAfter), uint256(0));
+        assertEq(uint256(ValidUntil.unwrap(execution.validUntil)), uint256(0));
+        assertEq(uint256(ValidAfter.unwrap(execution.validAfter)), uint256(0));
 
         address randomAddr = makeAddr("random");
         newValidator.sudoSetCaller(address(kernel), randomAddr);

@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {SIG_VALIDATION_FAILED} from "src/common/Constants.sol";
+import {SIG_VALIDATION_FAILED_UINT} from "src/common/Constants.sol";
+import {ValidationData} from "src/common/Types.sol";
 
-function _intersectValidationData(uint256 a, uint256 b) pure returns (uint256 validationData) {
+function _intersectValidationData(ValidationData a, ValidationData b) pure returns (ValidationData validationData) {
     assembly {
         // xor(a,b) == shows only matching bits
         // and(xor(a,b), 0x000000000000000000000000ffffffffffffffffffffffffffffffffffffffff) == filters out the validAfter and validUntil bits
@@ -21,6 +22,6 @@ function _intersectValidationData(uint256 a, uint256 b) pure returns (uint256 va
             if iszero(until) { until := 0x000000000000ffffffffffff0000000000000000000000000000000000000000 }
             validationData := or(validationData, until)
         }
-        default { validationData := SIG_VALIDATION_FAILED }
+        default { validationData := SIG_VALIDATION_FAILED_UINT }
     }
 }

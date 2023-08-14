@@ -4,15 +4,15 @@ pragma solidity ^0.8.0;
 
 import "solady/utils/ECDSA.sol";
 import "src/utils/KernelHelper.sol";
-import "account-abstraction/core/Helpers.sol";
 import "src/Kernel.sol";
 import {WalletKernelStorage, ExecutionDetail} from "src/abstract/KernelStorage.sol";
 import "src/interfaces/IValidator.sol";
+import "src/common/Types.sol";
 
 struct KillSwitchValidatorStorage {
     address guardian;
     IKernelValidator validator;
-    uint48 pausedUntil;
+    ValidAfter pausedUntil;
     bytes4 disableMode;
 }
 
@@ -27,15 +27,20 @@ contract KillSwitchValidator is IKernelValidator {
         delete killSwitchValidatorStorage[msg.sender];
     }
 
-    function validateSignature(bytes32 hash, bytes calldata signature) external view override returns (uint256) {
+    function validateSignature(bytes32 hash, bytes calldata signature)
+        external
+        view
+        override
+        returns (ValidationData)
+    {
         KillSwitchValidatorStorage storage validatorStorage = killSwitchValidatorStorage[msg.sender];
-        uint256 res = validatorStorage.validator.validateSignature(hash, signature);
-        uint48 pausedUntil = validatorStorage.pausedUntil;
-        ValidationData memory validationData = _parseValidationData(res);
-        if (validationData.aggregator != address(1)) {
+        ValidationData res = validatorStorage.validator.validateSignature(hash, signature);
+        ValidAfter pausedUntil = validatorStorage.pausedUntil;
+        (,, address result) = parseValidationData(res);
+        if (result != address(1)) {
             // if signature verification has not been failed, return with the result
-            uint256 delayedData = _packValidationData(false, 0, pausedUntil);
-            return _packValidationData(_intersectTimeRange(res, delayedData));
+            ValidationData delayedData = packValidationData(pausedUntil, ValidUntil.wrap(0));
+            return _intersectValidationData(res, delayedData);
         }
         return SIG_VALIDATION_FAILED;
     }
@@ -44,28 +49,28 @@ contract KillSwitchValidator is IKernelValidator {
         external
         payable
         override
-        returns (uint256)
+        returns (ValidationData)
     {
         KillSwitchValidatorStorage storage validatorStorage = killSwitchValidatorStorage[msg.sender]; // should use msg.sender to prevent others from changing storage
-        uint48 pausedUntil = validatorStorage.pausedUntil;
-        uint256 validationResult = 0;
+        ValidAfter pausedUntil = validatorStorage.pausedUntil;
+        ValidationData validationData;
         if (address(validatorStorage.validator) != address(0)) {
             // check for validator at first
-            try validatorStorage.validator.validateUserOp(_userOp, _userOpHash, pausedUntil) returns (uint256 res) {
-                validationResult = res;
+            try validatorStorage.validator.validateUserOp(_userOp, _userOpHash, 0) returns (ValidationData res) {
+                validationData = res;
             } catch {
-                validationResult = SIG_VALIDATION_FAILED;
+                validationData = SIG_VALIDATION_FAILED;
             }
-            ValidationData memory validationData = _parseValidationData(validationResult);
-            if (validationData.aggregator != address(1)) {
+            (,, address result) = parseValidationData(validationData);
+            if (result != address(1)) {
                 // if signature verification has not been failed, return with the result
-                uint256 delayedData = _packValidationData(false, 0, pausedUntil);
-                return _packValidationData(_intersectTimeRange(validationResult, delayedData));
+                ValidationData delayedData = packValidationData(pausedUntil, ValidUntil.wrap(0));
+                return _intersectValidationData(validationData, delayedData);
             }
         }
         if (_userOp.signature.length == 71) {
             // save data to this storage
-            validatorStorage.pausedUntil = uint48(bytes6(_userOp.signature[0:6]));
+            validatorStorage.pausedUntil = ValidAfter.wrap(uint48(bytes6(_userOp.signature[0:6])));
             validatorStorage.validator = KernelStorage(msg.sender).getDefaultValidator();
             validatorStorage.disableMode = KernelStorage(msg.sender).getDisabledMode();
             bytes32 hash = ECDSA.toEthSignedMessageHash(keccak256(bytes.concat(_userOp.signature[0:6], _userOpHash)));
@@ -73,7 +78,7 @@ contract KillSwitchValidator is IKernelValidator {
             if (validatorStorage.guardian != recovered) {
                 return SIG_VALIDATION_FAILED;
             }
-            return _packValidationData(false, 0, pausedUntil);
+            return packValidationData(pausedUntil, ValidUntil.wrap(0));
         } else {
             return SIG_VALIDATION_FAILED;
         }

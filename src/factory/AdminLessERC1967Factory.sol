@@ -98,12 +98,20 @@ contract AdminLessERC1967Factory {
             switch useSalt
             case 0 { proxy := create(0, add(m, 0x13), 0x89) }
             default { proxy := create2(0, add(m, 0x13), 0x89, salt) }
-            // Revert if the creation fails.
-            if iszero(proxy) {
-                mstore(0x00, _DEPLOYMENT_FAILED_ERROR_SELECTOR)
-                revert(0x1c, 0x04)
-            }
+        }
 
+        if (proxy == address(0)) {
+            proxy = predictDeterministicAddress(salt);
+            assembly {
+                if iszero(extcodesize(proxy)) {
+                    // Revert if the creation fails.
+                    mstore(0x00, _DEPLOYMENT_FAILED_ERROR_SELECTOR)
+                    revert(0x1c, 0x04)
+                }
+            }
+            return proxy;
+        }
+        assembly {
             // Set up the calldata to set the implementation of the proxy.
             mstore(m, implementation)
             mstore(add(m, 0x20), _IMPLEMENTATION_SLOT)

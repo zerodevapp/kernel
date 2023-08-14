@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "account-abstraction/interfaces/UserOperation.sol";
+import {UserOperation} from "account-abstraction/interfaces/UserOperation.sol";
+import "src/common/Types.sol";
 
 interface IKernelValidator {
     function enable(bytes calldata _data) external payable;
@@ -11,9 +12,9 @@ interface IKernelValidator {
     function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256 missingFunds)
         external
         payable
-        returns (uint256);
+        returns (ValidationData);
 
-    function validateSignature(bytes32 hash, bytes calldata signature) external view returns (uint256);
+    function validateSignature(bytes32 hash, bytes calldata signature) external view returns (ValidationData);
 
     function validCaller(address caller, bytes calldata data) external view returns (bool);
 }

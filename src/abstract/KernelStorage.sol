@@ -110,8 +110,8 @@ contract KernelStorage {
         getKernelStorage().execution[_selector] = ExecutionDetail({
             executor: _executor,
             validator: _validator,
-            validUntil: _validUntil,
-            validAfter: _validAfter
+            validUntil: ValidUntil.wrap(_validUntil),
+            validAfter: ValidAfter.wrap(_validAfter)
         });
         _validator.enable(_enableData);
         emit ExecutionChanged(_selector, _executor, address(_validator));

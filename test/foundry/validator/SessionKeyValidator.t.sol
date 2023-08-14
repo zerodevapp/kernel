@@ -25,35 +25,14 @@ contract SessionKeyValidatorTest is KernelTestBase {
     uint256 sessionKeyPriv;
 
     function setUp() public {
-        (owner, ownerKey) = makeAddrAndKey("owner");
-        (factoryOwner,) = makeAddrAndKey("factoryOwner");
+        _initialize();
+        defaultValidator = new ECDSAValidator();
+        _setAddress();
         (sessionKey, sessionKeyPriv) = makeAddrAndKey("sessionKey");
-        entryPoint = new EntryPoint();
-        kernelImpl = new Kernel(entryPoint);
-        factory = new KernelFactory(factoryOwner, entryPoint);
-        vm.startPrank(factoryOwner);
-        factory.setImplementation(address(kernelImpl), true);
-        vm.stopPrank();
-
-        validator = new ECDSAValidator();
-
-        kernel = Kernel(
-            payable(
-                address(
-                    factory.createAccount(
-                        address(kernelImpl),
-                        abi.encodeWithSelector(KernelStorage.initialize.selector, validator, abi.encodePacked(owner)),
-                        0
-                    )
-                )
-            )
-        );
-        vm.deal(address(kernel), 1e30);
-        beneficiary = payable(address(makeAddr("beneficiary")));
         testToken = new TestERC20();
         sessionKeyValidator = new ExecuteSessionKeyValidator();
     }
-    
+
     function test_mode_2_no_paymaster() external {
         testToken.mint(address(kernel), 100e18);
         TestERC20 testToken2 = new TestERC20();
@@ -69,11 +48,7 @@ contract SessionKeyValidatorTest is KernelTestBase {
         );
 
         ParamRule[] memory rules = new ParamRule[](1);
-        rules[0] = ParamRule({
-            offset: 32,
-            condition: ParamCondition.LESS_THAN_OR_EQUAL,
-            param: bytes32(uint256(1e18))
-        });
+        rules[0] = ParamRule({offset: 32, condition: ParamCondition.LESS_THAN_OR_EQUAL, param: bytes32(uint256(1e18))});
 
         bytes32[] memory data = new bytes32[](2);
         data[0] = keccak256(
@@ -159,11 +134,7 @@ contract SessionKeyValidatorTest is KernelTestBase {
         );
 
         ParamRule[] memory rules = new ParamRule[](1);
-        rules[0] = ParamRule({
-            offset: 32,
-            condition: ParamCondition.LESS_THAN_OR_EQUAL,
-            param: bytes32(uint256(1e18))
-        });
+        rules[0] = ParamRule({offset: 32, condition: ParamCondition.LESS_THAN_OR_EQUAL, param: bytes32(uint256(1e18))});
 
         bytes32[] memory data = new bytes32[](2);
         data[0] = keccak256(
@@ -249,11 +220,7 @@ contract SessionKeyValidatorTest is KernelTestBase {
         );
 
         ParamRule[] memory rules = new ParamRule[](1);
-        rules[0] = ParamRule({
-            offset: 32,
-            condition: ParamCondition.LESS_THAN_OR_EQUAL,
-            param: bytes32(uint256(1e18))
-        });
+        rules[0] = ParamRule({offset: 32, condition: ParamCondition.LESS_THAN_OR_EQUAL, param: bytes32(uint256(1e18))});
 
         bytes32[] memory data = new bytes32[](2);
         data[0] = keccak256(
@@ -321,7 +288,7 @@ contract SessionKeyValidatorTest is KernelTestBase {
         ops[0] = op;
         logGas(op);
 
-        vm.expectRevert(); 
+        vm.expectRevert();
         entryPoint.handleOps(ops, beneficiary);
     }
 }

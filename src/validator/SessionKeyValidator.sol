@@ -2,10 +2,11 @@ pragma solidity ^0.8.0;
 
 import "solady/utils/ECDSA.sol";
 import "src/interfaces/IValidator.sol";
-import "account-abstraction/core/Helpers.sol";
 import "solady/utils/MerkleProofLib.sol";
+import "src/common/Constants.sol";
 import "src/common/Enum.sol";
 import "src/common/Structs.sol";
+import "src/common/Types.sol";
 
 contract ExecuteSessionKeyValidator is IKernelValidator {
     mapping(address sessionKey => mapping(address kernel => SessionData)) public sessionData;
@@ -13,8 +14,8 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
     function enable(bytes calldata _data) external payable {
         address sessionKey = address(bytes20(_data[0:20]));
         bytes32 merkleRoot = bytes32(_data[20:52]);
-        uint48 validAfter = uint48(bytes6(_data[52:58]));
-        uint48 validUntil = uint48(bytes6(_data[58:64]));
+        ValidAfter validAfter = ValidAfter.wrap(uint48(bytes6(_data[52:58])));
+        ValidUntil validUntil = ValidUntil.wrap(uint48(bytes6(_data[58:64])));
         address paymaster = address(bytes20(_data[64:84]));
         sessionData[sessionKey][msg.sender] = SessionData(merkleRoot, validAfter, validUntil, paymaster, true);
     }
@@ -28,7 +29,7 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
     function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256)
         external
         payable
-        returns (uint256)
+        returns (ValidationData)
     {
         // userOp.signature = signer + signature + permission + merkleProof
         address sessionKey = address(bytes20(userOp.signature[0:20]));
@@ -37,7 +38,7 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
         require(session.enabled, "SessionKeyValidator: session key not enabled");
         if (session.merkleRoot == bytes32(0)) {
             // sessionKey allowed to execute any tx
-            return _packValidationData(false, session.validUntil, session.validAfter);
+            return packValidationData(session.validAfter, session.validUntil);
         }
         if (session.paymaster == address(1)) {
             require(userOp.paymasterAndData.length != 0, "SessionKeyValidator: paymaster not set");
@@ -50,7 +51,10 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
 
         (Permission memory permission, bytes32[] memory merkleProof) =
             abi.decode(userOp.signature[85:], (Permission, bytes32[]));
-        require(permission.target == address(0) || address(bytes20(userOp.callData[16:36])) == permission.target, "SessionKeyValidator: target mismatch");
+        require(
+            permission.target == address(0) || address(bytes20(userOp.callData[16:36])) == permission.target,
+            "SessionKeyValidator: target mismatch"
+        );
         require(
             uint256(bytes32(userOp.callData[36:68])) <= permission.valueLimit,
             "SessionKeyValidator: value limit exceeded"
@@ -82,14 +86,17 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
         }
         bool result = MerkleProofLib.verify(merkleProof, session.merkleRoot, keccak256(abi.encode(permission)))
             && (sessionKey == ECDSA.recover(ECDSA.toEthSignedMessageHash(userOpHash), signature));
-        return _packValidationData(!result, session.validUntil, session.validAfter);
+        if (!result) {
+            return SIG_VALIDATION_FAILED;
+        }
+        return packValidationData(session.validAfter, session.validUntil);
     }
 
     function validCaller(address, bytes calldata) external pure returns (bool) {
         revert("SessionKeyValidator: not implemented");
     }
 
-    function validateSignature(bytes32, bytes calldata) external pure returns (uint256) {
+    function validateSignature(bytes32, bytes calldata) external pure returns (ValidationData) {
         revert("SessionKeyValidator: not implemented");
     }
 }
