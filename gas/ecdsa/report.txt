@@ -1,16 +1,16 @@
 No files changed, compilation skipped
 
 Running 9 tests for test/foundry/Kernel.t.sol:KernelTest
-[32m[PASS][0m test_deploy_twice() (gas: 8937393460516739196)
-[32m[PASS][0m test_disable_mode() (gas: 162660)
-[32m[PASS][0m test_external_call_default() (gas: 28944)
-[32m[PASS][0m test_external_call_execution() (gas: 453333)
-[32m[PASS][0m test_initialize_twice() (gas: 20962)
-[32m[PASS][0m test_set_default_validator() (gas: 361100)
-[32m[PASS][0m test_set_execution() (gas: 411425)
-[32m[PASS][0m test_validate_signature() (gas: 163683)
-[32m[PASS][0m test_validate_userOp() (gas: 1687914)
-Test result: [32mok[0m. 9 passed; 0 failed; 0 skipped; finished in 2.68ms
+[32m[PASS][0m test_disable_mode() (gas: 162594)
+[32m[PASS][0m test_external_call_default() (gas: 28911)
+[32m[PASS][0m test_external_call_execution() (gas: 453201)
+[32m[PASS][0m test_initialize_twice() (gas: 20929)
+[32m[PASS][0m test_set_default_validator() (gas: 361067)
+[32m[PASS][0m test_set_execution() (gas: 411392)
+[32m[PASS][0m test_shoul_return_address_if_deployed() (gas: 8937393460516732963)
+[32m[PASS][0m test_validate_signature() (gas: 163650)
+[32m[PASS][0m test_validate_userOp() (gas: 1687848)
+Test result: [32mok[0m. 9 passed; 0 failed; 0 skipped; finished in 2.60ms
 | src/Kernel.sol:Kernel contract |                 |       |        |       |         |
 |--------------------------------|-----------------|-------|--------|-------|---------|
 | Deployment Cost                | Deployment Size |       |        |       |         |
@@ -32,7 +32,7 @@ Test result: [32mok[0m. 9 passed; 0 failed; 0 skipped; finished in 2.68ms
 | Deployment Cost                                      | Deployment Size |                    |        |                     |         |
 | 599207                                               | 3033            |                    |        |                     |         |
 | Function Name                                        | min             | avg                | median | max                 | # calls |
-| createAccount                                        | 131176          | 812490314592548784 | 131176 | 8937393460516717866 | 11      |
+| createAccount                                        | 131176          | 812490314592548788 | 131176 | 8937393460516717918 | 11      |
 | setImplementation                                    | 22852           | 22852              | 22852  | 22852               | 9       |
 
 

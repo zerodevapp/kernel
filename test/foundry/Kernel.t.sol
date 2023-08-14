@@ -23,10 +23,15 @@ contract KernelTest is KernelTestBase {
         _setAddress();
     }
 
-    function test_deploy_twice() external {
-        uint256 gas = gasleft();
-        _setAddress();
-        console.log("gas", gas - gasleft());
+    function test_should_return_address_if_deployed() external {
+        address proxy = factory.createAccount(
+            address(kernelImpl),
+            abi.encodeWithSelector(
+                KernelStorage.initialize.selector, defaultValidator, abi.encodePacked(owner)
+            ),
+            0
+        );
+        assertEq(proxy, address(kernel));
     }
 
     function test_initialize_twice() external {
