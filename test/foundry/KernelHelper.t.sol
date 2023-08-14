@@ -28,12 +28,4 @@ contract KernelHelperTest is Test {
         );
         assertEq(ValidationData.unwrap(c), ValidationData.unwrap(expected));
     }
-
-    //    function testIntersectDiff(address a, address b) public {
-    //        vm.assume(a != b);
-    //        uint256 a_packed = _packValidationData(ValidationData({aggregator: a, validAfter: 0, validUntil: 0}));
-    //        uint256 b_packed = _packValidationData(ValidationData({aggregator: b, validAfter: 0, validUntil: 0}));
-    //        uint256 c = _intersectValidationData(a_packed, b_packed);
-    //        assertEq(c, 1);
-    //    }
 }
