@@ -24,7 +24,9 @@ contract KernelTest is KernelTestBase {
     }
 
     function test_deploy_twice() external {
+        uint256 gas = gasleft();
         _setAddress();
+        console.log("gas", gas - gasleft());
     }
 
     function test_initialize_twice() external {
