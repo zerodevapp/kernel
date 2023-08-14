@@ -23,6 +23,10 @@ contract KernelTest is KernelTestBase {
         _setAddress();
     }
 
+    function test_deploy_twice() external {
+        _setAddress();
+    }
+
     function test_initialize_twice() external {
         vm.expectRevert();
         kernel.initialize(defaultValidator, abi.encodePacked(owner));
