@@ -33,8 +33,7 @@ contract DeployKernel is Script {
         IEntryPoint entryPoint = IEntryPoint(ENTRYPOINT_0_6);
         IStakeManager.DepositInfo memory info = entryPoint.getDepositInfo(address(factory));
         if(info.stake == 0) {
-            console.log("Staking 1 wei to factory");
-            factory.addStake{value:1}(1);
+            console.log("Need to stake to factory");
         }
         vm.stopBroadcast();
     }
