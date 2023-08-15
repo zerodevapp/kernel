@@ -27,7 +27,7 @@ abstract contract KernelTestBase is Test {
         kernelImpl = new Kernel(entryPoint);
         factory = new KernelFactory(factoryOwner);
         vm.startPrank(factoryOwner);
-        factory.setImplementation(address(kernelImpl));
+        factory.deployImplementation(keccak256("v2.1"), address(kernelImpl).code);
         vm.stopPrank();
     }
 
@@ -36,7 +36,7 @@ abstract contract KernelTestBase is Test {
             payable(
                 address(
                     factory.createAccount(
-                        address(kernelImpl),
+                        keccak256("v2.1"),
                         abi.encodeWithSelector(
                             KernelStorage.initialize.selector, defaultValidator, abi.encodePacked(owner)
                         ),
