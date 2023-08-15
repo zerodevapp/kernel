@@ -7,22 +7,21 @@ import "openzeppelin-contracts/contracts/utils/Create2.sol";
 import "src/Kernel.sol";
 import "src/validator/ECDSAValidator.sol";
 import "solady/auth/Ownable.sol";
+import "src/utils/Create2Flag.sol";
 
 contract KernelFactory is AdminLessERC1967Factory, Ownable {
-    IEntryPoint public entryPoint;
-    mapping(address => bool) public isAllowedImplementation;
+    error InvalidImplementation();
 
-    constructor(address _owner, IEntryPoint _entryPoint) {
+    constructor(address _owner) {
         _initializeOwner(_owner);
-        entryPoint = _entryPoint;
     }
 
-    function setImplementation(address _implementation, bool _allow) external onlyOwner {
-        isAllowedImplementation[_implementation] = _allow;
+    function setImplementation(address _implementation) external onlyOwner {
+        Create2Flag.on(bytes32(bytes20(_implementation)));
     }
 
-    function setEntryPoint(IEntryPoint _entryPoint) external onlyOwner {
-        entryPoint = _entryPoint;
+    function isAllowedImplementation(address _implementation) external view returns (bool) {
+        return !Create2Flag.isOff(bytes32(bytes20(_implementation)));
     }
 
     function createAccount(address _implementation, bytes calldata _data, uint256 _index)
@@ -30,7 +29,9 @@ contract KernelFactory is AdminLessERC1967Factory, Ownable {
         payable
         returns (address proxy)
     {
-        require(isAllowedImplementation[_implementation], "KernelFactory: implementation not allowed");
+        if (Create2Flag.isOff(bytes32(bytes20(_implementation)))) {
+            revert InvalidImplementation();
+        }
         bytes32 salt = bytes32(uint256(keccak256(abi.encodePacked(_data, _index))) & type(uint96).max);
         proxy = deployDeterministicAndCall(_implementation, salt, _data);
     }
@@ -38,18 +39,5 @@ contract KernelFactory is AdminLessERC1967Factory, Ownable {
     function getAccountAddress(bytes calldata _data, uint256 _index) public view returns (address) {
         bytes32 salt = bytes32(uint256(keccak256(abi.encodePacked(_data, _index))) & type(uint96).max);
         return predictDeterministicAddress(salt);
-    }
-
-    // stake functions
-    function addStake(uint32 unstakeDelaySec) external payable onlyOwner {
-        entryPoint.addStake{value: msg.value}(unstakeDelaySec);
-    }
-
-    function unlockStake() external onlyOwner {
-        entryPoint.unlockStake();
-    }
-
-    function withdrawStake(address payable withdrawAddress) external onlyOwner {
-        entryPoint.withdrawStake(withdrawAddress);
     }
 }

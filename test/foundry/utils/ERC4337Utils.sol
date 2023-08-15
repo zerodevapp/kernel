@@ -25,9 +25,9 @@ abstract contract KernelTestBase is Test {
         beneficiary = payable(address(makeAddr("beneficiary")));
         entryPoint = new EntryPoint();
         kernelImpl = new Kernel(entryPoint);
-        factory = new KernelFactory(factoryOwner, entryPoint);
+        factory = new KernelFactory(factoryOwner);
         vm.startPrank(factoryOwner);
-        factory.setImplementation(address(kernelImpl), true);
+        factory.setImplementation(address(kernelImpl));
         vm.stopPrank();
     }
 

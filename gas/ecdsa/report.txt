@@ -7,8 +7,8 @@ Running 9 tests for test/foundry/Kernel.t.sol:KernelTest
 [32m[PASS][0m test_initialize_twice() (gas: 20906)
 [32m[PASS][0m test_set_default_validator() (gas: 361039)
 [32m[PASS][0m test_set_execution() (gas: 411364)
-[32m[PASS][0m test_should_return_address_if_deployed() (gas: 24772)
-[32m[PASS][0m test_validate_signature() (gas: 166294)
+[32m[PASS][0m test_should_return_address_if_deployed() (gas: 25807)
+[32m[PASS][0m test_validate_signature() (gas: 167309)
 [32m[PASS][0m test_validate_userOp() (gas: 1687821)
 Test result: [32mok[0m. 9 passed; 0 failed; 0 skipped; finished in 2.61ms
 | src/Kernel.sol:Kernel contract |                 |       |        |       |         |
@@ -30,10 +30,10 @@ Test result: [32mok[0m. 9 passed; 0 failed; 0 skipped; finished in 2.61ms
 | src/factory/KernelFactory.sol:KernelFactory contract |                 |        |        |        |         |
 |------------------------------------------------------|-----------------|--------|--------|--------|---------|
 | Deployment Cost                                      | Deployment Size |        |        |        |         |
-| 577582                                               | 2925            |        |        |        |         |
+| 614420                                               | 3109            |        |        |        |         |
 | Function Name                                        | min             | avg    | median | max    | # calls |
-| createAccount                                        | 5962            | 122858 | 133848 | 140848 | 11      |
-| setImplementation                                    | 22862           | 22862  | 22862  | 22862  | 9       |
+| createAccount                                        | 6997            | 123466 | 134363 | 141863 | 11      |
+| setImplementation                                    | 34001           | 34001  | 34001  | 34001  | 9       |
 
 
 
