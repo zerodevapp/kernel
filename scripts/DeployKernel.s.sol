@@ -10,12 +10,12 @@ contract DeployKernel is Script {
     address constant ENTRYPOINT_0_6 = 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789;
     //  Kernel address: 0xf048AD83CB2dfd6037A43902a2A5Be04e53cd2Eb
     // KernelFactory address: 0xA3A415a987b1Ae1afe28Ab77F9e9CB1D1DBb4D69
-    address constant EXPECTED_KERNEL_ADDRESS = 0xf048AD83CB2dfd6037A43902a2A5Be04e53cd2Eb;
-    address constant EXPECTED_KERNEL_FACTORY_ADDRESS = 0xA3A415a987b1Ae1afe28Ab77F9e9CB1D1DBb4D69;
+    address payable constant EXPECTED_KERNEL_ADDRESS = payable(0xf048AD83CB2dfd6037A43902a2A5Be04e53cd2Eb);
+    address payable constant EXPECTED_KERNEL_FACTORY_ADDRESS = payable(0x5de4839a76cf55d0c90e2061ef4386d962E15ae3);
     function run() public {
         uint256 key = vm.envUint("DEPLOYER_PRIVATE_KEY");
         vm.startBroadcast(key);
-        Kernel kernel
+        Kernel kernel;
         if(EXPECTED_KERNEL_ADDRESS.code.length == 0 ){
             kernel = new Kernel{salt:0}(IEntryPoint(ENTRYPOINT_0_6));
             console.log("Kernel address: %s", address(kernel));

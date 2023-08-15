@@ -64,10 +64,7 @@ contract AdminLessERC1967Factory {
     }
 
     /// @dev Deploys the proxy, with optionality to deploy deterministically with a `salt`.
-    function _deploy(address implementation, bytes32 salt, bytes calldata data)
-        internal
-        returns (address proxy)
-    {
+    function _deploy(address implementation, bytes32 salt, bytes calldata data) internal returns (address proxy) {
         bytes memory m = _initCode();
         /// @solidity memory-safe-assembly
         assembly {
@@ -80,7 +77,7 @@ contract AdminLessERC1967Factory {
             proxy := keccak256(0x00, 0x55)
             // Restore the part of the free memory pointer that has been overwritten.
             mstore(0x35, 0)
-            if iszero(extcodesize(proxy)){
+            if iszero(extcodesize(proxy)) {
                 proxy := create2(0, add(m, 0x13), 0x89, salt)
                 if iszero(proxy) {
                     // Revert if the creation fails.
