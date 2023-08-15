@@ -7,14 +7,14 @@ Running 9 tests for test/foundry/Kernel.t.sol:KernelTest
 [32m[PASS][0m test_initialize_twice() (gas: 20906)
 [32m[PASS][0m test_set_default_validator() (gas: 361039)
 [32m[PASS][0m test_set_execution() (gas: 411364)
-[32m[PASS][0m test_should_return_address_if_deployed() (gas: 23753)
-[32m[PASS][0m test_validate_signature() (gas: 162768)
+[32m[PASS][0m test_should_return_address_if_deployed() (gas: 23560)
+[32m[PASS][0m test_validate_signature() (gas: 162575)
 [32m[PASS][0m test_validate_userOp() (gas: 1687821)
-Test result: [32mok[0m. 9 passed; 0 failed; 0 skipped; finished in 3.02ms
+Test result: [32mok[0m. 9 passed; 0 failed; 0 skipped; finished in 3.08ms
 | src/Kernel.sol:Kernel contract |                 |       |        |       |         |
 |--------------------------------|-----------------|-------|--------|-------|---------|
 | Deployment Cost                | Deployment Size |       |        |       |         |
-| 1612074                        | 332             |       |        |       |         |
+| 1612129                        | 332             |       |        |       |         |
 | Function Name                  | min             | avg   | median | max   | # calls |
 | disableMode                    | 3765            | 3765  | 3765   | 3765  | 1       |
 | getDefaultValidator            | 341             | 341   | 341    | 341   | 1       |
@@ -30,11 +30,11 @@ Test result: [32mok[0m. 9 passed; 0 failed; 0 skipped; finished in 3.02ms
 | src/factory/KernelFactory.sol:KernelFactory contract |                 |         |         |         |         |
 |------------------------------------------------------|-----------------|---------|---------|---------|---------|
 | Deployment Cost                                      | Deployment Size |         |         |         |         |
-| 685919                                               | 3509            |         |         |         |         |
+| 850488                                               | 4727            |         |         |         |         |
 | Function Name                                        | min             | avg     | median  | max     | # calls |
-| createAccount                                        | 7049            | 123305  | 134431  | 139431  | 11      |
-| deployByteCode                                       | 69048           | 69048   | 69048   | 69048   | 9       |
-| deployImplementation                                 | 6948674         | 6948674 | 6948674 | 6948674 | 9       |
+| createAccount                                        | 6856            | 123112  | 134238  | 139238  | 11      |
+| deployByteCode                                       | 69103           | 69103   | 69103   | 69103   | 9       |
+| deployImplementation                                 | 5593354         | 5593354 | 5593354 | 5593354 | 9       |
 
 
 
