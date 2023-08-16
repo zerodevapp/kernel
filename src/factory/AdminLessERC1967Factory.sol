@@ -44,29 +44,6 @@ contract AdminLessERC1967Factory {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                      DEPLOY FUNCTIONS                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
-    /// @dev Deploys a proxy for `implementation`,
-    /// and returns its address.
-    /// The value passed into this function will be forwarded to the proxy.
-    function deploy(address implementation) internal returns (address proxy) {
-        proxy = deployAndCall(implementation, _emptyData());
-    }
-
-    /// @dev Deploys a proxy for `implementation`,
-    /// and returns its address.
-    /// The value passed into this function will be forwarded to the proxy.
-    /// Then, calls the proxy with abi encoded `data`.
-    function deployAndCall(address implementation, bytes calldata data) internal returns (address proxy) {
-        proxy = _deploy(implementation, bytes32(0), false, data);
-    }
-
-    /// @dev Deploys a proxy for `implementation`, with `salt`,
-    /// and returns its deterministic address.
-    /// The value passed into this function will be forwarded to the proxy.
-    function deployDeterministic(address implementation, bytes32 salt) internal returns (address proxy) {
-        proxy = deployDeterministicAndCall(implementation, salt, _emptyData());
-    }
-
     /// @dev Deploys a proxy for `implementation`, with `salt`,
     /// and returns its deterministic address.
     /// The value passed into this function will be forwarded to the proxy.
@@ -83,53 +60,49 @@ contract AdminLessERC1967Factory {
                 revert(0x1c, 0x04)
             }
         }
-        proxy = _deploy(implementation, salt, true, data);
+        proxy = _deploy(implementation, salt, data);
     }
 
     /// @dev Deploys the proxy, with optionality to deploy deterministically with a `salt`.
-    function _deploy(address implementation, bytes32 salt, bool useSalt, bytes calldata data)
-        internal
-        returns (address proxy)
-    {
+    function _deploy(address implementation, bytes32 salt, bytes calldata data) internal returns (address proxy) {
         bytes memory m = _initCode();
         /// @solidity memory-safe-assembly
         assembly {
-            // Create the proxy.
-            switch useSalt
-            case 0 { proxy := create(0, add(m, 0x13), 0x89) }
-            default { proxy := create2(0, add(m, 0x13), 0x89, salt) }
-        }
-
-        if (proxy == address(0)) {
-            proxy = predictDeterministicAddress(salt);
-            assembly {
-                if iszero(extcodesize(proxy)) {
+            let hash := keccak256(add(m, 0x13), 0x89)
+            // Compute and store the bytecode hash.
+            mstore8(0x00, 0xff) // Write the prefix.
+            mstore(0x35, hash)
+            mstore(0x01, shl(96, address()))
+            mstore(0x15, salt)
+            proxy := keccak256(0x00, 0x55)
+            // Restore the part of the free memory pointer that has been overwritten.
+            mstore(0x35, 0)
+            if iszero(extcodesize(proxy)) {
+                proxy := create2(0, add(m, 0x13), 0x89, salt)
+                if iszero(proxy) {
                     // Revert if the creation fails.
                     mstore(0x00, _DEPLOYMENT_FAILED_ERROR_SELECTOR)
                     revert(0x1c, 0x04)
                 }
-            }
-            return proxy;
-        }
-        assembly {
-            // Set up the calldata to set the implementation of the proxy.
-            mstore(m, implementation)
-            mstore(add(m, 0x20), _IMPLEMENTATION_SLOT)
-            calldatacopy(add(m, 0x40), data.offset, data.length)
-            // Try setting the implementation on the proxy and revert upon failure.
-            if iszero(call(gas(), proxy, callvalue(), m, add(0x40, data.length), 0x00, 0x00)) {
-                // Revert with the `DeploymentFailed` selector if there is no error returndata.
-                if iszero(returndatasize()) {
-                    mstore(0x00, _DEPLOYMENT_FAILED_ERROR_SELECTOR)
-                    revert(0x1c, 0x04)
+                // Set up the calldata to set the implementation of the proxy.
+                mstore(m, implementation)
+                mstore(add(m, 0x20), _IMPLEMENTATION_SLOT)
+                calldatacopy(add(m, 0x40), data.offset, data.length)
+                // Try setting the implementation on the proxy and revert upon failure.
+                if iszero(call(gas(), proxy, callvalue(), m, add(0x40, data.length), 0x00, 0x00)) {
+                    // Revert with the `DeploymentFailed` selector if there is no error returndata.
+                    if iszero(returndatasize()) {
+                        mstore(0x00, _DEPLOYMENT_FAILED_ERROR_SELECTOR)
+                        revert(0x1c, 0x04)
+                    }
+                    // Otherwise, bubble up the returned error.
+                    returndatacopy(0x00, 0x00, returndatasize())
+                    revert(0x00, returndatasize())
                 }
-                // Otherwise, bubble up the returned error.
-                returndatacopy(0x00, 0x00, returndatasize())
-                revert(0x00, returndatasize())
-            }
 
-            // Emit the {Deployed} event.
-            log3(0, 0, _DEPLOYED_EVENT_SIGNATURE, proxy, implementation)
+                // Emit the {Deployed} event.
+                log3(0, 0, _DEPLOYED_EVENT_SIGNATURE, proxy, implementation)
+            }
         }
     }
 

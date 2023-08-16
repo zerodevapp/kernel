@@ -24,11 +24,10 @@ contract KernelTest is KernelTestBase {
     }
 
     function test_should_return_address_if_deployed() external {
+        console.log("Kernel", address(kernel));
         address proxy = factory.createAccount(
             address(kernelImpl),
-            abi.encodeWithSelector(
-                KernelStorage.initialize.selector, defaultValidator, abi.encodePacked(owner)
-            ),
+            abi.encodeWithSelector(KernelStorage.initialize.selector, defaultValidator, abi.encodePacked(owner)),
             0
         );
         assertEq(proxy, address(kernel));
