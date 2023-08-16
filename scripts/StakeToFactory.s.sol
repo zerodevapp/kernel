@@ -15,10 +15,9 @@ contract StakeToFactory is Script {
         KernelFactory factory = KernelFactory(EXPECTED_KERNEL_FACTORY_ADDRESS);
         IEntryPoint entryPoint = IEntryPoint(ENTRYPOINT_0_6);
         IStakeManager.DepositInfo memory info = entryPoint.getDepositInfo(address(factory));
-        if(info.stake < 10e18) {
-            factory.addStake{value: 10e18}(86400);
+        if(info.stake < 1e16) {
+            factory.addStake{value: 1e16}(86400);
         }
         vm.stopBroadcast();
     }
 }
-
