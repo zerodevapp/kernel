@@ -53,15 +53,14 @@ contract SocialRecoveryValidator is IKernelValidator {
             bytes32 hash = bytes32(recoverydata[20:52]);
             bytes[] memory signatures = divideBytes(bytes(recoverydata[52:]));
             initRecovery(newOwner, hash, signatures);
-        } else if (mode == hex"02"){
+        } else if (mode == hex"02") {
             bytes calldata recoverydata = bytes(_data[1:]);
             address kernelAddress = address(bytes20(recoverydata[0:20]));
             address newOwner = address(bytes20(recoverydata[20:40]));
             bytes32 hash = bytes32(recoverydata[40:72]);
             bytes[] memory signatures = divideBytes(bytes(recoverydata[72:]));
-            initRecoveryByGuardian(kernelAddress,newOwner, hash, signatures);
-        }
-        else {
+            initRecoveryByGuardian(kernelAddress, newOwner, hash, signatures);
+        } else {
             revert("Invalid mode");
         }
     }
@@ -94,7 +93,10 @@ contract SocialRecoveryValidator is IKernelValidator {
         emit OwnerChanged(msg.sender, oldOwner, _newOwner);
     }
 
-    function changeOwnerByGuardian(address kernelAddress, address _newOwner) public {
+    function changeOwnerByGuardian(
+        address kernelAddress,
+        address _newOwner
+    ) public {
         address oldOwner = recoveryPluginStorage[kernelAddress].owner;
         recoveryPluginStorage[kernelAddress].owner = _newOwner;
         for (uint256 i = 0; i < guardians[kernelAddress].length; i++) {
@@ -129,7 +131,7 @@ contract SocialRecoveryValidator is IKernelValidator {
                 )
             );
             require(weight > 0, "RecoveryPlugin: weight is zero");
-            isGuardian[msg.sender][guardian]=true;
+            isGuardian[msg.sender][guardian] = true;
             guardians[msg.sender].push(Guardian(guardian, weight, false));
         }
         thresholdWeight[msg.sender] = _thresholdWeight;
@@ -197,7 +199,7 @@ contract SocialRecoveryValidator is IKernelValidator {
             oldOwner != _newOwner,
             "RecoveryPlugin: new owner is the same as old owner"
         );
-        changeOwnerByGuardian(kernelAddress,_newOwner);
+        changeOwnerByGuardian(kernelAddress, _newOwner);
     }
 
     function initRecovery(
@@ -242,7 +244,7 @@ contract SocialRecoveryValidator is IKernelValidator {
         bytes32 _userOpHash,
         uint256
     ) external view override returns (uint256 validationData) {
-        if (_userOp.callData.length > 232) {
+        if (_userOp.callData.length >= 232) {
             bytes1 mode = _slice(_userOp.callData, 232);
             if (mode == bytes1(0x01) || mode == bytes1(0x00)) {
                 address owner = recoveryPluginStorage[_userOp.sender].owner;
@@ -255,15 +257,28 @@ contract SocialRecoveryValidator is IKernelValidator {
                 if (owner != recovered) {
                     return SIG_VALIDATION_FAILED;
                 }
-            } else if(mode == bytes1(0x02)) {
-                address kernelAddress = address(bytes20(_userOp.callData[233:253]));
-                require(isGuardian[kernelAddress][_userOp.sender],"Recovery Plugin: Not a guardian");
+            } else if (mode == bytes1(0x02)) {
+                address kernelAddress = address(
+                    bytes20(_userOp.callData[233:253])
+                );
+                require(
+                    isGuardian[kernelAddress][_userOp.sender],
+                    "Recovery Plugin: Not a guardian"
+                );
                 return 0;
             }
-        }
-        else if(_userOp.callData.length < 232) {
-            return 0;
-        }else{
+        } else if (_userOp.callData.length < 232) {
+            address owner = recoveryPluginStorage[_userOp.sender].owner;
+            if (owner == ECDSA.recover(_userOpHash, _userOp.signature)) {
+                return 0;
+            }
+
+            bytes32 hash = ECDSA.toEthSignedMessageHash(_userOpHash);
+            address recovered = ECDSA.recover(hash, _userOp.signature);
+            if (owner != recovered) {
+                return SIG_VALIDATION_FAILED;
+            }
+        } else {
             return SIG_VALIDATION_FAILED;
         }
     }
