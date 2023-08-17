@@ -23,6 +23,8 @@ contract RecoveryTest is Test {
     SocialRecoveryValidator validator;
     address owner;
     uint256 ownerKey;
+    address owner2 = 0x5B38Da6a701c568545dCfcB03FcB875f56beddC4;
+    uint256 ownerKey2 = 0x503f38a9c967ed597e47fe25643985f032b072db8075426a92110f82df48dfcb;
     address payable beneficiary;
 
     address newOwner = 0x5B38Da6a701c568545dCfcB03FcB875f56beddC4;
@@ -34,7 +36,10 @@ contract RecoveryTest is Test {
     bytes[] signatures = [signature];
     bytes guardianmode = hex"00";
     bytes recoverymode = hex"01";
+    bytes recoveryByGuardianMode = hex"02";
     bytes guardiandata = hex"5b38da6a701c568545dcfcb03fcb875f56beddc40000000000000000000000000000000000000000000000000000000000000064";
+    bytes guardiandata2 = hex"a0Cb889707d426A7A386870A03bc70d1b069759800000000000000000000000000000000000000000000000000000000000000645b38da6a701c568545dcfcb03fcb875f56beddc40000000000000000000000000000000000000000000000000000000000000064";
+
     uint256 weight = 50;
     bytes32 weightinbytes = bytes32(weight);
 
@@ -60,7 +65,7 @@ contract RecoveryTest is Test {
         beneficiary = payable(address(makeAddr("beneficiary")));
     }
 
-    function test_initialize_twice() external {
+    function test_initialize_twice() public {
         vm.expectRevert();
         kernel.initialize(
             validator,
@@ -98,7 +103,7 @@ contract RecoveryTest is Test {
         assert(validator.getGuardianByIndex(address(newKernel),0).approved == false);
     }
 
-    function test_validate_signature() external {
+    function test_validate_signature() public {
         Kernel kernel2 = Kernel(payable(address(recoveryFactory.createAccount(abi.encodePacked(
                                 guardianmode,
                                 weightinbytes,
@@ -110,7 +115,7 @@ contract RecoveryTest is Test {
         assertEq(kernel2.isValidSignature(hash, abi.encodePacked(r, s, v)), Kernel.isValidSignature.selector);
     }
 
-    function test_disable_mode() external {
+    function test_disable_mode() public {
         bytes memory empty;
         UserOperation memory op = entryPoint.fillUserOp(
             address(kernel),
@@ -143,13 +148,14 @@ contract RecoveryTest is Test {
                 )
             )
         );
+        
         assert(validator.getGuardianByIndex(address(newKernel), 0).guardian == newOwner);
         assert(validator.getGuardianByIndex(address(newKernel), 0).weight == 100);
         assert(validator.getGuardianByIndex(address(newKernel),0).approved == false);     
 
 
         vm.deal(address(newKernel), 1e60);
-        
+        console.log(ownerKey2);
         UserOperation memory op = entryPoint.fillUserOp(
             address(newKernel),
             abi.encodeWithSelector(Kernel.execute.selector, address(validator), 0, abi.encodeWithSelector(validator.enable.selector,abi.encodePacked(recoverymode,newOwner,hash,signature)), Operation.Call)
@@ -163,5 +169,73 @@ contract RecoveryTest is Test {
         RecoveryPluginStorage memory storage_ =
             RecoveryPluginStorage(validator.recoveryPluginStorage(address(newKernel)));
         assertEq(storage_.owner, newOwner);
+    }
+    function test_recovery_by_guardian() public {
+
+        Kernel newKernel = Kernel(
+            payable(
+                address(
+                    new EIP1967Proxy(
+                        address(factory.nextTemplate()),
+                        abi.encodeWithSelector(
+                            KernelStorage.initialize.selector,
+                            validator,
+                            abi.encodePacked(
+                                guardianmode,
+                                weightinbytes,
+                                abi.encodePacked(owner),
+                                guardiandata2
+                            )
+                        )
+                    )
+                )
+            )
+        );
+
+
+        Kernel newKernel2 = Kernel(
+            payable(
+                address(
+                    new EIP1967Proxy(
+                        address(factory.nextTemplate()),
+                        abi.encodeWithSelector(
+                            KernelStorage.initialize.selector,
+                            validator,
+                            abi.encodePacked(
+                                guardianmode,
+                                weightinbytes,
+                                abi.encodePacked(owner),
+                                guardiandata
+                            )
+                        )
+                    )
+                )
+            )
+        );
+
+        console.log(address(newKernel));
+        console.log(address(newKernel2));
+
+        vm.deal(address(newKernel), 1e60);
+        vm.deal(address(newKernel2), 1e60);
+                
+        assert(validator.getGuardianByIndex(address(newKernel), 0).guardian == address(newKernel2));
+
+        UserOperation memory op = entryPoint.fillUserOp(
+            address(newKernel2),
+            abi.encodeWithSelector(Kernel.execute.selector, address(validator), 0, abi.encodeWithSelector(validator.enable.selector,abi.encodePacked(recoveryByGuardianMode,address(newKernel),newOwner,hash,signature)), Operation.Call)
+        );
+
+        op.signature = abi.encodePacked(bytes4(0x00000000), entryPoint.signUserOpHash(vm, ownerKey, op));
+        UserOperation[] memory ops = new UserOperation[](1);
+        ops[0] = op;
+        entryPoint.handleOps(ops, beneficiary);
+
+        RecoveryPluginStorage memory storage_1 =
+            RecoveryPluginStorage(validator.recoveryPluginStorage(address(newKernel)));
+        RecoveryPluginStorage memory storage_2 =
+            RecoveryPluginStorage(validator.recoveryPluginStorage(address(newKernel2)));
+
+        assertEq(storage_1.owner,newOwner);
     }
 }
