@@ -14,6 +14,7 @@ contract DeploySessionKey is Script {
         bool success;
         (success, returnData) = DETERMINISTIC_CREATE2_FACTORY.call(CODE);
         require(success, "Failed to deploy");
+        require(address(uint160(bytes20(returnData))) == 0xA08c304A85b8C73c5847b08DBcfD3bF7E6CC607A);
         vm.stopBroadcast();
         console.log("deployed at : ", address (uint160 (bytes20 (returnData) )) );
     }
