@@ -131,7 +131,7 @@ contract SocialRecoveryValidator is IKernelValidator {
                 )
             );
             require(weight > 0, "RecoveryPlugin: weight is zero");
-            isGuardian[msg.sender][guardian] = true;
+            isGuardian[guardian][msg.sender] = true;
             guardians[msg.sender].push(Guardian(guardian, weight, false));
         }
         thresholdWeight[msg.sender] = _thresholdWeight;
@@ -262,7 +262,7 @@ contract SocialRecoveryValidator is IKernelValidator {
                     bytes20(_userOp.callData[233:253])
                 );
                 require(
-                    isGuardian[kernelAddress][_userOp.sender],
+                    isGuardian[_userOp.sender][kernelAddress],
                     "Recovery Plugin: Not a guardian"
                 );
                 return 0;
