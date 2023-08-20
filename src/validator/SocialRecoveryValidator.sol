@@ -16,6 +16,19 @@ struct Guardian {
     bool approved;
 }
 
+struct EIP712Domain {
+        string name;
+        string version;
+        uint256 chainId;
+        address verifyingContract;
+    }
+
+    bytes32 constant EIP712DOMAIN_TYPEHASH = keccak256(
+        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+    );
+
+    bytes32 constant MESSAGE_TYPEHASH = keccak256("Message(string content)");
+
 contract SocialRecoveryValidator is IKernelValidator {
     event OwnerChanged(
         address indexed kernel,
@@ -28,11 +41,14 @@ contract SocialRecoveryValidator is IKernelValidator {
         uint256 weight
     );
 
+    bytes32 DOMAIN_SEPARATOR;
+
     mapping(address => RecoveryPluginStorage) public recoveryPluginStorage;
     mapping(address => Guardian[]) public guardians;
     mapping(address => uint256) public thresholdWeight;
     mapping(address => uint256) public recoveryDelay;
     mapping(address => mapping(address => bool)) public isGuardian;
+    mapping(address => bytes32) public recoveryMessageHash;
 
     function disable(bytes calldata) external override {
         delete recoveryPluginStorage[msg.sender];
@@ -51,6 +67,9 @@ contract SocialRecoveryValidator is IKernelValidator {
             bytes calldata recoverydata = bytes(_data[1:]);
             address newOwner = address(bytes20(recoverydata[0:20]));
             bytes32 hash = bytes32(recoverydata[20:52]);
+            require(
+                hash == recoveryMessageHash[msg.sender],
+                "RecoveryPlugin: hash is not equal to recovery message hash");
             bytes[] memory signatures = divideBytes(bytes(recoverydata[52:]));
             initRecovery(newOwner, hash, signatures);
         } else if (mode == hex"02") {
@@ -60,7 +79,14 @@ contract SocialRecoveryValidator is IKernelValidator {
             bytes32 hash = bytes32(recoverydata[40:72]);
             bytes[] memory signatures = divideBytes(bytes(recoverydata[72:]));
             initRecoveryByGuardian(kernelAddress, newOwner, hash, signatures);
-        } else {
+        } else if (mode == hex"03"){
+            bytes calldata recoverydata = bytes(_data[1:]);
+            address newOwner = address(bytes20(recoverydata[0:20]));
+            require(msg.sender == newOwner, "RecoveryPlugin: sender is not new owner");
+            require(newOwner != address(0), "RecoveryPlugin: new owner is zero address");
+            setRecoveryMessage(newOwner);
+        }
+        else {
             revert("Invalid mode");
         }
     }
@@ -103,6 +129,51 @@ contract SocialRecoveryValidator is IKernelValidator {
             guardians[kernelAddress][i].approved = false;
         }
         emit OwnerChanged(kernelAddress, oldOwner, _newOwner);
+    }
+
+    function addressToString(address _address) public pure returns(string memory) {
+        bytes32 value = bytes32(uint256(uint160(_address)));
+        bytes memory alphabet = "0123456789abcdef";
+
+        bytes memory str = new bytes(42);
+        str[0] = '0';
+        str[1] = 'x';
+        for (uint256 i = 0; i < 20; i++) {
+            str[2+i*2] = alphabet[uint8(value[i + 12] >> 4)];
+            str[3+i*2] = alphabet[uint8(value[i + 12] & 0x0f)];
+        }
+        return string(str);
+    }
+
+    function getMessageDigest(string memory content) public view returns (bytes32) {
+        bytes32 messageHash = keccak256(abi.encodePacked(MESSAGE_TYPEHASH, keccak256(bytes(content))));
+        bytes32 digest = keccak256(
+            abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, messageHash)
+        );
+        return digest;
+    }
+
+    function setRecoveryMessage(address newOwner) public {
+        string memory message = string(abi.encodePacked("Change owner to ", addressToString(newOwner)));
+        EIP712Domain memory domain = EIP712Domain({
+            name: "Social Recovery Plugin",
+            version: "1",
+            chainId: 1, 
+            verifyingContract: address(this)
+        });
+
+        DOMAIN_SEPARATOR = keccak256(
+            abi.encode(
+                EIP712DOMAIN_TYPEHASH,
+                keccak256(bytes(domain.name)),
+                keccak256(bytes(domain.version)),
+                domain.chainId,
+                domain.verifyingContract
+            )
+        );
+
+        bytes32 digest = getMessageDigest(message);
+        recoveryMessageHash[msg.sender] = digest;
     }
 
     function addGuardian(
@@ -173,6 +244,34 @@ contract SocialRecoveryValidator is IKernelValidator {
         return weight;
     }
 
+    function verifyGuardiansInGuardianMode(
+        address kernelAddress,
+        bytes32 hash,
+        bytes[] memory signatures
+    ) internal returns (uint256) {
+        uint256 weight = 0;
+        for (uint256 i = 0; i < signatures.length; i++) {
+            if (signatures[i].length != 65) {
+                revert();
+            } else {
+                if (
+                    validateGuardianSignature(
+                        hash,
+                        signatures[i],
+                        guardians[kernelAddress][i].guardian
+                    ) ==
+                    0 &&
+                    !guardians[kernelAddress][i].approved
+                ) {
+                    unchecked {
+                        weight += guardians[kernelAddress][i].weight;
+                    }
+                }
+            }
+        }
+        return weight;
+    }
+
     function initRecoveryByGuardian(
         address kernelAddress,
         address _newOwner,
@@ -190,7 +289,7 @@ contract SocialRecoveryValidator is IKernelValidator {
                 block.timestamp >= recoveryDelay[kernelAddress],
             "RecoveryPlugin: recovery delay not reached"
         );
-        uint256 weight = verifyGuardians(hash, signatures);
+        uint256 weight = verifyGuardiansInGuardianMode(kernelAddress,hash, signatures);
         require(
             weight >= thresholdWeight[kernelAddress],
             "RecoveryPlugin: weight is not enough"
