@@ -77,6 +77,9 @@ contract SocialRecoveryValidator is IKernelValidator {
             address kernelAddress = address(bytes20(recoverydata[0:20]));
             address newOwner = address(bytes20(recoverydata[20:40]));
             bytes32 hash = bytes32(recoverydata[40:72]);
+            require(
+                hash == recoveryMessageHash[kernelAddress],
+                "RecoveryPlugin: hash is not equal to recovery message hash");
             bytes[] memory signatures = divideBytes(bytes(recoverydata[72:]));
             initRecoveryByGuardian(kernelAddress, newOwner, hash, signatures);
         } else if (mode == hex"03"){
