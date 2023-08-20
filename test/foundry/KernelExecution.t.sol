@@ -11,20 +11,15 @@ import "src/test/TestExecutor.sol";
 import "src/test/TestERC721.sol";
 // test utils
 import "forge-std/Test.sol";
-import "./utils/ERC4337Utils.sol";
+import "./KernelECDSA.t.sol";
 // test actions/validators
 import "src/validator/ERC165SessionKeyValidator.sol";
 import "src/executor/TokenActions.sol";
+import "./utils/ERC4337Utils.sol";
 
 using ERC4337Utils for EntryPoint;
 
-contract KernelExecutionTest is KernelTestBase {
-    function setUp() public {
-        _initialize();
-        defaultValidator = new ECDSAValidator();
-        _setAddress();
-    }
-
+contract KernelExecutionTest is KernelECDSATest {
     function test_revert_when_mode_disabled() external {
         vm.warp(1000);
         bytes memory empty;
@@ -32,7 +27,7 @@ contract KernelExecutionTest is KernelTestBase {
             address(kernel),
             abi.encodeWithSelector(KernelStorage.disableMode.selector, bytes4(0x00000001), address(0), empty)
         );
-        op.signature = abi.encodePacked(bytes4(0x00000000), entryPoint.signUserOpHash(vm, ownerKey, op));
+        op.signature = signUserOp(op);
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = op;
         entryPoint.handleOps(ops, beneficiary);
@@ -53,7 +48,7 @@ contract KernelExecutionTest is KernelTestBase {
     function test_sudo() external {
         UserOperation memory op =
             entryPoint.fillUserOp(address(kernel), abi.encodeWithSelector(TestExecutor.doNothing.selector));
-        op.signature = abi.encodePacked(bytes4(0x00000000), entryPoint.signUserOpHash(vm, ownerKey, op));
+        op.signature = signUserOp(op);
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = op;
         logGas(op);
@@ -69,7 +64,7 @@ contract KernelExecutionTest is KernelTestBase {
         bytes32 digest = getTypedDataHash(
             address(kernel), TestExecutor.doNothing.selector, 0, 0, address(testValidator), address(testExecutor), ""
         );
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
+        bytes memory sig = signHash(digest);
 
         op.signature = abi.encodePacked(
             bytes4(0x00000002),
@@ -79,9 +74,7 @@ contract KernelExecutionTest is KernelTestBase {
             address(testExecutor),
             uint256(0),
             uint256(65),
-            r,
-            s,
-            v
+            sig
         );
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = op;
@@ -101,7 +94,7 @@ contract KernelExecutionTest is KernelTestBase {
         bytes32 digest = getTypedDataHash(
             address(kernel), TestExecutor.doNothing.selector, 0, 0, address(testValidator), address(testExecutor), ""
         );
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
+        bytes memory sig = signHash(digest);
 
         op.signature = abi.encodePacked(
             bytes4(0x00000002),
@@ -111,9 +104,7 @@ contract KernelExecutionTest is KernelTestBase {
             address(testExecutor),
             uint256(0),
             uint256(65),
-            r,
-            s,
-            v
+            sig
         );
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = op;
@@ -159,7 +150,7 @@ contract KernelExecutionTest is KernelTestBase {
                 address(action),
                 enableData
             );
-            (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
+            bytes memory sig = signHash(digest);
 
             op.signature = abi.encodePacked(
                 bytes4(0x00000002),
@@ -170,9 +161,7 @@ contract KernelExecutionTest is KernelTestBase {
                 uint256(enableData.length),
                 enableData,
                 uint256(65),
-                r,
-                s,
-                v
+                sig
             );
         }
 
