@@ -1,80 +1,69 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {EntryPoint} from "account-abstraction/core/EntryPoint.sol";
-import "src/factory/AdminLessERC1967Factory.sol";
-import "src/factory/KernelFactory.sol";
-import "src/Kernel.sol";
-import "src/validator/ECDSAValidator.sol";
-// test artifacts
-import "src/test/TestValidator.sol";
-import "src/test/TestERC721.sol";
-import "src/test/TestKernel.sol";
-// test utils
-import "forge-std/Test.sol";
-import {ERC4337Utils, KernelTestBase} from "./utils/ERC4337Utils.sol";
+import {EntryPoint, UserOperation} from "account-abstraction/core/EntryPoint.sol";
+import {Kernel} from "src/Kernel.sol";
+import {KernelStorage} from "src/abstract/KernelStorage.sol";
+import {KernelFactory} from "src/factory/KernelFactory.sol";
+import {IKernelValidator} from "src/interfaces/IValidator.sol";
+
+import {ExecutionDetail} from "src/common/Structs.sol";
+import {ValidUntil, ValidAfter} from "src/common/Types.sol";
+
+import {ERC4337Utils, getStructHash, _buildDomainSeparator} from "test/foundry/utils/ERC4337Utils.sol";
+import {Test} from "forge-std/Test.sol";
+import {console} from "forge-std/Console.sol";
+import {TestValidator} from "src/test/TestValidator.sol";
 
 using ERC4337Utils for EntryPoint;
 
-contract KernelTest is KernelTestBase {
-    function setUp() public {
-        _initialize();
-        defaultValidator = new ECDSAValidator();
-        _setAddress();
-    }
+abstract contract KernelTestBase is Test {
+    Kernel kernel;
+    Kernel kernelImpl;
+    KernelFactory factory;
+    EntryPoint entryPoint;
+    IKernelValidator defaultValidator;
+    address owner;
+    uint256 ownerKey;
+    address payable beneficiary;
+    address factoryOwner;
 
-    function test_should_return_address_if_deployed() external {
-        console.log("Kernel", address(kernel));
-        address proxy = factory.createAccount(
-            address(kernelImpl),
-            abi.encodeWithSelector(KernelStorage.initialize.selector, defaultValidator, abi.encodePacked(owner)),
-            0
-        );
-        assertEq(proxy, address(kernel));
+    function _initialize() internal {
+        (owner, ownerKey) = makeAddrAndKey("owner");
+        (factoryOwner,) = makeAddrAndKey("factoryOwner");
+        beneficiary = payable(address(makeAddr("beneficiary")));
+        entryPoint = new EntryPoint();
+        kernelImpl = new Kernel(entryPoint);
+        factory = new KernelFactory(factoryOwner, entryPoint);
+        vm.startPrank(factoryOwner);
+        factory.setImplementation(address(kernelImpl), true);
+        vm.stopPrank();
     }
-
-    function test_initialize_twice() external {
-        vm.expectRevert();
-        kernel.initialize(defaultValidator, abi.encodePacked(owner));
-    }
-
+    
     function test_external_call_default() external {
         vm.startPrank(owner);
         (bool success,) = address(kernel).call(abi.encodePacked("Hello world"));
         assertEq(success, true);
     }
 
-    function test_validate_signature() external {
-        Kernel kernel2 = Kernel(
-            payable(
-                address(
-                    factory.createAccount(
-                        address(kernelImpl),
-                        abi.encodeWithSelector(
-                            KernelStorage.initialize.selector, defaultValidator, abi.encodePacked(owner)
-                        ),
-                        1
-                    )
-                )
-            )
+    function test_initialize_twice() external {
+        (bool success, ) = address(kernel).call(getInitializeData());
+        assertEq(success, false);
+    }
+    
+    function test_should_return_address_if_deployed() external {
+        address proxy = factory.createAccount(
+            address(kernelImpl),
+            getInitializeData(),
+            0
         );
-        bytes32 hash = keccak256(abi.encodePacked("hello world"));
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, hash);
-        assertEq(kernel2.isValidSignature(hash, abi.encodePacked(r, s, v)), Kernel.isValidSignature.selector);
+        assertEq(proxy, address(kernel));
     }
 
-    function test_validate_userOp() external {
-        TestKernel kernel2 = new TestKernel(entryPoint);
-        kernel2.sudoInitialize(defaultValidator, abi.encodePacked(owner));
-
-        UserOperation memory op = entryPoint.fillUserOp(
-            address(kernel), abi.encodeWithSelector(Kernel.execute.selector, address(0), 0, bytes(""))
-        );
-        op.signature = abi.encodePacked(bytes4(0x00000000), entryPoint.signUserOpHash(vm, ownerKey, op));
-        bytes32 hash = entryPoint.getUserOpHash(op);
-        vm.startPrank(address(entryPoint));
-        kernel2.validateUserOp(op, hash, 0);
-        vm.stopPrank();
+    function test_validate_signature() external {
+        bytes32 hash = keccak256(abi.encodePacked("hello world"));
+        bytes memory sig = signHash(hash);
+        assertEq(kernel.isValidSignature(hash, sig), Kernel.isValidSignature.selector);
     }
 
     function test_set_default_validator() external {
@@ -84,7 +73,7 @@ contract KernelTest is KernelTestBase {
             address(kernel),
             abi.encodeWithSelector(KernelStorage.setDefaultValidator.selector, address(newValidator), empty)
         );
-        op.signature = abi.encodePacked(bytes4(0x00000000), entryPoint.signUserOpHash(vm, ownerKey, op));
+        op.signature = signUserOp(op);
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = op;
         entryPoint.handleOps(ops, beneficiary);
@@ -98,7 +87,7 @@ contract KernelTest is KernelTestBase {
             address(kernel),
             abi.encodeWithSelector(KernelStorage.disableMode.selector, bytes4(0x00000001), address(0), empty)
         );
-        op.signature = abi.encodePacked(bytes4(0x00000000), entryPoint.signUserOpHash(vm, ownerKey, op));
+        op.signature = signUserOp(op);
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = op;
         entryPoint.handleOps(ops, beneficiary);
@@ -106,7 +95,6 @@ contract KernelTest is KernelTestBase {
     }
 
     function test_set_execution() external {
-        console.log("owner", owner);
         TestValidator newValidator = new TestValidator();
         UserOperation memory op = entryPoint.fillUserOp(
             address(kernel),
@@ -120,7 +108,7 @@ contract KernelTest is KernelTestBase {
                 bytes("")
             )
         );
-        op.signature = abi.encodePacked(bytes4(0x00000000), entryPoint.signUserOpHash(vm, ownerKey, op));
+        op.signature = signUserOp(op);
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = op;
         entryPoint.handleOps(ops, beneficiary);
@@ -132,7 +120,6 @@ contract KernelTest is KernelTestBase {
     }
 
     function test_external_call_execution() external {
-        console.log("owner", owner);
         TestValidator newValidator = new TestValidator();
         UserOperation memory op = entryPoint.fillUserOp(
             address(kernel),
@@ -146,7 +133,7 @@ contract KernelTest is KernelTestBase {
                 bytes("")
             )
         );
-        op.signature = abi.encodePacked(bytes4(0x00000000), entryPoint.signUserOpHash(vm, ownerKey, op));
+        op.signature = signUserOp(op);
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = op;
         entryPoint.handleOps(ops, beneficiary);
@@ -168,5 +155,62 @@ contract KernelTest is KernelTestBase {
         (bool success2,) = address(kernel).call(abi.encodePacked(bytes4(0xdeadbeef)));
         assertEq(success2, false);
         vm.stopPrank();
+    }
+
+    function getInitializeData() internal virtual view returns(bytes memory);
+
+    function signUserOp(UserOperation memory op) internal virtual view returns(bytes memory);
+
+    function signHash(bytes32 hash) internal virtual view returns(bytes memory);
+
+    function _setAddress() internal {
+        kernel = Kernel(
+            payable(
+                address(
+                    factory.createAccount(
+                        address(kernelImpl),
+                        getInitializeData(),
+                        0
+                    )
+                )
+            )
+        );
+        vm.deal(address(kernel), 1e30);
+    }
+
+    function logGas(UserOperation memory op) internal returns (uint256 used) {
+        try this.consoleGasUsage(op) {
+            revert("should revert");
+        } catch Error(string memory reason) {
+            used = abi.decode(bytes(reason), (uint256));
+            console.log("validation gas usage :", used);
+        }
+    }
+
+    function consoleGasUsage(UserOperation memory op) external {
+        uint256 gas = gasleft();
+        vm.startPrank(address(entryPoint));
+        kernel.validateUserOp(op, entryPoint.getUserOpHash(op), 0);
+        vm.stopPrank();
+        revert(string(abi.encodePacked(gas - gasleft())));
+    }
+
+    // computes the hash of the fully encoded EIP-712 message for the domain, which can be used to recover the signer
+    function getTypedDataHash(
+        address sender,
+        bytes4 sig,
+        uint48 validUntil,
+        uint48 validAfter,
+        address validator,
+        address executor,
+        bytes memory enableData
+    ) public view returns (bytes32) {
+        return keccak256(
+            abi.encodePacked(
+                "\x19\x01",
+                _buildDomainSeparator("Kernel", "0.2.1", sender),
+                getStructHash(sig, validUntil, validAfter, validator, executor, enableData)
+        )
+        );
     }
 }

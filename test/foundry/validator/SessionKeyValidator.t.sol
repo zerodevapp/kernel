@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "src/factory/AdminLessERC1967Factory.sol";
 import "src/Kernel.sol";
 import "src/validator/ECDSAValidator.sol";
 import "src/factory/KernelFactory.sol";
@@ -16,9 +15,11 @@ import "test/foundry/utils/ERC4337Utils.sol";
 // test actions/validators
 import "src/validator/SessionKeyValidator.sol";
 
+import {KernelTestBase} from "test/foundry/KernelTestBase.sol";
+
 using ERC4337Utils for EntryPoint;
 
-contract SessionKeyValidatorTest is KernelTestBase {
+abstract contract SessionKeyValidatorTest is KernelTestBase {
     ExecuteSessionKeyValidator sessionKeyValidator;
     TestERC20 testToken;
     address sessionKey;
