@@ -31,17 +31,19 @@ contract RecoveryTest is Test {
     bytes32 hash =
         0xaa744ba2ca576ec62ca0045eca00ad3917fdf7ffa34fbbae50828a5a69c1580e;
     bytes signature =
-        hex"f0745420866c7ec0615a2fa25afaa271cd763596fb4b87fbde763f4cb9cfe142575c22419490fb9db86a6d18801c7919f49b9042619ee339ea200cd8ad533cf41b";
+        hex"edc77081733f99261f615f8de9f0a2474ad84fa54bc3e7925bc5a990efb4dbfd71df500dfd41f8da35cbd2179e55b1e31c998bc4371836e3f3aac6a390ab9f9e1b";
 
     bytes[] signatures = [signature];
     bytes guardianmode = hex"00";
     bytes recoverymode = hex"01";
     bytes recoveryByGuardianMode = hex"02";
+    bytes setNewOwnerAddressMode = hex"03";
     bytes guardiandata = hex"5b38da6a701c568545dcfcb03fcb875f56beddc40000000000000000000000000000000000000000000000000000000000000064";
     bytes guardiandata2 = hex"a0Cb889707d426A7A386870A03bc70d1b069759800000000000000000000000000000000000000000000000000000000000000645b38da6a701c568545dcfcb03fcb875f56beddc40000000000000000000000000000000000000000000000000000000000000064";
 
     uint256 weight = 50;
     bytes32 weightinbytes = bytes32(weight);
+    uint256 weight2 = 10;
 
     function setUp() public {
         (owner, ownerKey) = makeAddrAndKey("owner");
@@ -153,18 +155,32 @@ contract RecoveryTest is Test {
         assert(validator.getGuardianByIndex(address(newKernel), 0).weight == 100);
         assert(validator.getGuardianByIndex(address(newKernel),0).approved == false);     
 
-
         vm.deal(address(newKernel), 1e60);
-        console.log(ownerKey2);
+
         UserOperation memory op = entryPoint.fillUserOp(
             address(newKernel),
-            abi.encodeWithSelector(Kernel.execute.selector, address(validator), 0, abi.encodeWithSelector(validator.enable.selector,abi.encodePacked(recoverymode,newOwner,hash,signature)), Operation.Call)
+            abi.encodeWithSelector(Kernel.execute.selector, address(validator), 0, abi.encodeWithSelector(validator.enable.selector,abi.encodePacked(setNewOwnerAddressMode,newOwner)), Operation.Call)
         );
 
         op.signature = abi.encodePacked(bytes4(0x00000000), entryPoint.signUserOpHash(vm, ownerKey, op));
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = op;
         entryPoint.handleOps(ops, beneficiary);
+
+        assert(validator.newOwnerAddress(address(newKernel)) == newOwner);
+
+        console.log(address(validator));
+        validator.recoveryMessage(address(newKernel));
+
+        UserOperation memory op1 = entryPoint.fillUserOp(
+            address(newKernel),
+            abi.encodeWithSelector(Kernel.execute.selector, address(validator), 0, abi.encodeWithSelector(validator.enable.selector,abi.encodePacked(recoverymode,signature)), Operation.Call)
+        );
+
+        op1.signature = abi.encodePacked(bytes4(0x00000000), entryPoint.signUserOpHash(vm, ownerKey, op1));
+        UserOperation[] memory ops1 = new UserOperation[](1);
+        ops1[0] = op1;
+        entryPoint.handleOps(ops1, beneficiary);
 
         RecoveryPluginStorage memory storage_ =
             RecoveryPluginStorage(validator.recoveryPluginStorage(address(newKernel)));
@@ -182,7 +198,7 @@ contract RecoveryTest is Test {
                             validator,
                             abi.encodePacked(
                                 guardianmode,
-                                weightinbytes,
+                                bytes32(weight2),
                                 abi.encodePacked(owner),
                                 guardiandata2
                             )
@@ -222,14 +238,24 @@ contract RecoveryTest is Test {
         assert(validator.getGuardianByIndex(address(newKernel), 0).guardian == address(newKernel2));
 
         UserOperation memory op = entryPoint.fillUserOp(
-            address(newKernel2),
-            abi.encodeWithSelector(Kernel.execute.selector, address(validator), 0, abi.encodeWithSelector(validator.enable.selector,abi.encodePacked(recoveryByGuardianMode,address(newKernel),newOwner,hash,signature)), Operation.Call)
+            address(newKernel),
+            abi.encodeWithSelector(Kernel.execute.selector, address(validator), 0, abi.encodeWithSelector(validator.enable.selector,abi.encodePacked(setNewOwnerAddressMode,newOwner)), Operation.Call)
         );
 
         op.signature = abi.encodePacked(bytes4(0x00000000), entryPoint.signUserOpHash(vm, ownerKey, op));
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = op;
         entryPoint.handleOps(ops, beneficiary);
+
+        UserOperation memory op1 = entryPoint.fillUserOp(
+            address(newKernel2),
+            abi.encodeWithSelector(Kernel.execute.selector, address(validator), 0, abi.encodeWithSelector(validator.enable.selector,abi.encodePacked(recoveryByGuardianMode,address(newKernel),signature,signature)), Operation.Call)
+        );
+
+        op1.signature = abi.encodePacked(bytes4(0x00000000), entryPoint.signUserOpHash(vm, ownerKey, op1));
+        UserOperation[] memory ops1 = new UserOperation[](1);
+        ops1[0] = op1;
+        entryPoint.handleOps(ops1, beneficiary);
 
         RecoveryPluginStorage memory storage_1 =
             RecoveryPluginStorage(validator.recoveryPluginStorage(address(newKernel)));

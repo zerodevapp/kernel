@@ -41,12 +41,20 @@ contract SocialRecoveryValidator is IKernelValidator {
         uint256 weight
     );
 
+    event newOwnerAddressSet(
+        address indexed kernel,
+        address indexed newOwner,
+        bytes32 hash
+    );
+
     mapping(address => RecoveryPluginStorage) public recoveryPluginStorage;
     mapping(address => Guardian[]) public guardians;
     mapping(address => uint256) public thresholdWeight;
     mapping(address => uint256) public recoveryDelay;
     mapping(address => mapping(address => bool)) public isGuardian;
     mapping(address => bytes32) public recoveryMessageHash;
+    mapping(address => address) public newOwnerAddress;
+    mapping(address => string) public recoveryMessage;
 
     function disable(bytes calldata) external override {
         delete recoveryPluginStorage[msg.sender];
@@ -63,28 +71,22 @@ contract SocialRecoveryValidator is IKernelValidator {
             addGuardian(guardiandata, weight, 0 days);
         } else if (mode == hex"01") {
             bytes calldata recoverydata = bytes(_data[1:]);
-            address newOwner = address(bytes20(recoverydata[0:20]));
-            bytes32 hash = bytes32(recoverydata[20:52]);
-            require(
-                hash == recoveryMessageHash[msg.sender],
-                "RecoveryPlugin: hash is not equal to recovery message hash");
-            bytes[] memory signatures = divideBytes(bytes(recoverydata[52:]));
-            initRecovery(newOwner, hash, signatures);
+            address newOwner = newOwnerAddress[msg.sender];
+            bytes[] memory signatures = divideBytes(bytes(recoverydata[0:]));
+            initRecovery(newOwner, signatures);
         } else if (mode == hex"02") {
             bytes calldata recoverydata = bytes(_data[1:]);
             address kernelAddress = address(bytes20(recoverydata[0:20]));
-            address newOwner = address(bytes20(recoverydata[20:40]));
-            bytes32 hash = bytes32(recoverydata[40:72]);
-            require(
-                hash == recoveryMessageHash[kernelAddress],
-                "RecoveryPlugin: hash is not equal to recovery message hash");
-            bytes[] memory signatures = divideBytes(bytes(recoverydata[72:]));
+            address newOwner = newOwnerAddress[kernelAddress];
+            bytes32 hash = recoveryMessageHash[kernelAddress];
+            bytes[] memory signatures = divideBytes(bytes(recoverydata[20:]));
             initRecoveryByGuardian(kernelAddress, newOwner, hash, signatures);
         } else if (mode == hex"03"){
             bytes calldata recoverydata = bytes(_data[1:]);
             address newOwner = address(bytes20(recoverydata[0:20]));
-            require(msg.sender == newOwner, "RecoveryPlugin: sender is not new owner");
+            require(msg.sender != newOwner, "RecoveryPlugin: sender is not new owner");
             require(newOwner != address(0), "RecoveryPlugin: new owner is zero address");
+            newOwnerAddress[msg.sender] = newOwner;
             setRecoveryMessage(newOwner);
         }
         else {
@@ -146,7 +148,7 @@ contract SocialRecoveryValidator is IKernelValidator {
         return string(str);
     }
 
-    function getMessageDigest(bytes32 DOMAIN_SEPARATOR ,string memory content) public view returns (bytes32) {
+    function getMessageDigest(bytes32 DOMAIN_SEPARATOR ,string memory content) public pure returns (bytes32) {
         bytes32 messageHash = keccak256(abi.encodePacked(MESSAGE_TYPEHASH, keccak256(bytes(content))));
         bytes32 digest = keccak256(
             abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, messageHash)
@@ -156,6 +158,7 @@ contract SocialRecoveryValidator is IKernelValidator {
 
     function setRecoveryMessage(address newOwner) public {
         string memory message = string(abi.encodePacked("Change owner to ", addressToString(newOwner)));
+        recoveryMessage[msg.sender] = message;
         EIP712Domain memory domain = EIP712Domain({
             name: "Social Recovery Plugin",
             version: "1",
@@ -175,6 +178,7 @@ contract SocialRecoveryValidator is IKernelValidator {
 
         bytes32 digest = getMessageDigest(DOMAIN_SEPARATOR,message);
         recoveryMessageHash[msg.sender] = digest;
+        emit newOwnerAddressSet(msg.sender, newOwner, digest);
     }
 
     function addGuardian(
@@ -219,9 +223,9 @@ contract SocialRecoveryValidator is IKernelValidator {
     }
 
     function verifyGuardians(
-        bytes32 hash,
         bytes[] memory signatures
     ) internal returns (uint256) {
+        bytes32 hash = recoveryMessageHash[msg.sender];
         uint256 weight = 0;
         for (uint256 i = 0; i < signatures.length; i++) {
             if (signatures[i].length != 65) {
@@ -247,13 +251,13 @@ contract SocialRecoveryValidator is IKernelValidator {
 
     function verifyGuardiansInGuardianMode(
         address kernelAddress,
-        bytes32 hash,
         bytes[] memory signatures
     ) internal returns (uint256) {
         uint256 weight = 0;
+        bytes32 hash = recoveryMessageHash[kernelAddress];
         for (uint256 i = 0; i < signatures.length; i++) {
             if (signatures[i].length != 65) {
-                revert();
+                revert("Wrong signature length");
             } else {
                 if (
                     validateGuardianSignature(
@@ -290,7 +294,7 @@ contract SocialRecoveryValidator is IKernelValidator {
                 block.timestamp >= recoveryDelay[kernelAddress],
             "RecoveryPlugin: recovery delay not reached"
         );
-        uint256 weight = verifyGuardiansInGuardianMode(kernelAddress,hash, signatures);
+        uint256 weight = verifyGuardiansInGuardianMode(kernelAddress,signatures);
         require(
             weight >= thresholdWeight[kernelAddress],
             "RecoveryPlugin: weight is not enough"
@@ -304,10 +308,10 @@ contract SocialRecoveryValidator is IKernelValidator {
 
     function initRecovery(
         address _newOwner,
-        bytes32 hash,
         bytes[] memory signatures
     ) public {
         address oldOwner = recoveryPluginStorage[msg.sender].owner;
+        bytes32 hash = recoveryMessageHash[msg.sender];
         require(
             _newOwner != address(0),
             "RecoveryPlugin: new owner is zero address"
@@ -318,7 +322,7 @@ contract SocialRecoveryValidator is IKernelValidator {
                 block.timestamp >= recoveryDelay[msg.sender],
             "RecoveryPlugin: recovery delay not reached"
         );
-        uint256 weight = verifyGuardians(hash, signatures);
+        uint256 weight = verifyGuardians(signatures);
         require(
             weight >= thresholdWeight[msg.sender],
             "RecoveryPlugin: weight is not enough"
