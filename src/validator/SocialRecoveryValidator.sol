@@ -41,8 +41,6 @@ contract SocialRecoveryValidator is IKernelValidator {
         uint256 weight
     );
 
-    bytes32 DOMAIN_SEPARATOR;
-
     mapping(address => RecoveryPluginStorage) public recoveryPluginStorage;
     mapping(address => Guardian[]) public guardians;
     mapping(address => uint256) public thresholdWeight;
@@ -148,7 +146,7 @@ contract SocialRecoveryValidator is IKernelValidator {
         return string(str);
     }
 
-    function getMessageDigest(string memory content) public view returns (bytes32) {
+    function getMessageDigest(bytes32 DOMAIN_SEPARATOR ,string memory content) public view returns (bytes32) {
         bytes32 messageHash = keccak256(abi.encodePacked(MESSAGE_TYPEHASH, keccak256(bytes(content))));
         bytes32 digest = keccak256(
             abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, messageHash)
@@ -165,7 +163,7 @@ contract SocialRecoveryValidator is IKernelValidator {
             verifyingContract: address(this)
         });
 
-        DOMAIN_SEPARATOR = keccak256(
+        bytes32 DOMAIN_SEPARATOR = keccak256(
             abi.encode(
                 EIP712DOMAIN_TYPEHASH,
                 keccak256(bytes(domain.name)),
@@ -175,7 +173,7 @@ contract SocialRecoveryValidator is IKernelValidator {
             )
         );
 
-        bytes32 digest = getMessageDigest(message);
+        bytes32 digest = getMessageDigest(DOMAIN_SEPARATOR,message);
         recoveryMessageHash[msg.sender] = digest;
     }
 
