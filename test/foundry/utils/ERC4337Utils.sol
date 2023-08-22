@@ -21,7 +21,7 @@ abstract contract KernelTestBase is Test {
 
     function _initialize() internal {
         (owner, ownerKey) = makeAddrAndKey("owner");
-        (factoryOwner,) = makeAddrAndKey("factoryOwner");
+        (factoryOwner, ) = makeAddrAndKey("factoryOwner");
         beneficiary = payable(address(makeAddr("beneficiary")));
         entryPoint = new EntryPoint();
         kernelImpl = new Kernel(entryPoint);
@@ -38,7 +38,9 @@ abstract contract KernelTestBase is Test {
                     factory.createAccount(
                         address(kernelImpl),
                         abi.encodeWithSelector(
-                            KernelStorage.initialize.selector, defaultValidator, abi.encodePacked(owner)
+                            KernelStorage.initialize.selector,
+                            defaultValidator,
+                            abi.encodePacked(owner)
                         ),
                         0
                     )
@@ -67,11 +69,11 @@ abstract contract KernelTestBase is Test {
 }
 
 library ERC4337Utils {
-    function fillUserOp(EntryPoint _entryPoint, address _sender, bytes memory _data)
-        internal
-        view
-        returns (UserOperation memory op)
-    {
+    function fillUserOp(
+        EntryPoint _entryPoint,
+        address _sender,
+        bytes memory _data
+    ) internal view returns (UserOperation memory op) {
         op.sender = _sender;
         op.nonce = _entryPoint.getNonce(_sender, 0);
         op.callData = _data;
@@ -82,13 +84,17 @@ library ERC4337Utils {
         op.maxPriorityFeePerGas = 1;
     }
 
-    function signUserOpHash(EntryPoint _entryPoint, Vm _vm, uint256 _key, UserOperation memory _op)
-        internal
-        view
-        returns (bytes memory signature)
-    {
+    function signUserOpHash(
+        EntryPoint _entryPoint,
+        Vm _vm,
+        uint256 _key,
+        UserOperation memory _op
+    ) internal view returns (bytes memory signature) {
         bytes32 hash = _entryPoint.getUserOpHash(_op);
-        (uint8 v, bytes32 r, bytes32 s) = _vm.sign(_key, ECDSA.toEthSignedMessageHash(hash));
+        (uint8 v, bytes32 r, bytes32 s) = _vm.sign(
+            _key,
+            ECDSA.toEthSignedMessageHash(hash)
+        );
         signature = abi.encodePacked(r, s, v);
     }
 }
@@ -102,15 +108,22 @@ function getStructHash(
     address executor,
     bytes memory enableData
 ) pure returns (bytes32) {
-    return keccak256(
-        abi.encode(
-            keccak256("ValidatorApproved(bytes4 sig,uint256 validatorData,address executor,bytes enableData)"),
-            bytes4(sig),
-            uint256(uint256(uint160(validator)) | (uint256(validAfter) << 160) | (uint256(validUntil) << (48 + 160))),
-            executor,
-            keccak256(enableData)
-        )
-    );
+    return
+        keccak256(
+            abi.encode(
+                keccak256(
+                    "ValidatorApproved(bytes4 sig,uint256 validatorData,address executor,bytes enableData)"
+                ),
+                bytes4(sig),
+                uint256(
+                    uint256(uint160(validator)) |
+                        (uint256(validAfter) << 160) |
+                        (uint256(validUntil) << (48 + 160))
+                ),
+                executor,
+                keccak256(enableData)
+            )
+        );
 }
 
 // computes the hash of the fully encoded EIP-712 message for the domain, which can be used to recover the signer
@@ -123,22 +136,42 @@ function getTypedDataHash(
     address executor,
     bytes memory enableData
 ) view returns (bytes32) {
-    return keccak256(
-        abi.encodePacked(
-            "\x19\x01",
-            _buildDomainSeparator("Kernel", "0.2.1", sender),
-            getStructHash(sig, validUntil, validAfter, validator, executor, enableData)
-        )
-    );
+    return
+        keccak256(
+            abi.encodePacked(
+                "\x19\x01",
+                _buildDomainSeparator("Kernel", "0.2.1", sender),
+                getStructHash(
+                    sig,
+                    validUntil,
+                    validAfter,
+                    validator,
+                    executor,
+                    enableData
+                )
+            )
+        );
 }
 
-function _buildDomainSeparator(string memory name, string memory version, address verifyingContract)
-    view
-    returns (bytes32)
-{
+function _buildDomainSeparator(
+    string memory name,
+    string memory version,
+    address verifyingContract
+) view returns (bytes32) {
     bytes32 hashedName = keccak256(bytes(name));
     bytes32 hashedVersion = keccak256(bytes(version));
-    bytes32 typeHash = keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+    bytes32 typeHash = keccak256(
+        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+    );
 
-    return keccak256(abi.encode(typeHash, hashedName, hashedVersion, block.chainid, address(verifyingContract)));
+    return
+        keccak256(
+            abi.encode(
+                typeHash,
+                hashedName,
+                hashedVersion,
+                block.chainid,
+                address(verifyingContract)
+            )
+        );
 }
