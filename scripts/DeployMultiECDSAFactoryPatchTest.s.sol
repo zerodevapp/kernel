@@ -6,7 +6,7 @@ import "src/Kernel.sol";
 import "forge-std/Script.sol";
 import "forge-std/console.sol";
 
-contract DeployMultiECDSAFactoryPatchProd is Script {
+contract DeployMultiECDSAFactoryPatchTest is Script {
     function run(bytes32 salt) public {
         uint256 key = vm.envUint("DEPLOYER_PRIVATE_KEY");
         vm.startBroadcast(key);
@@ -43,15 +43,11 @@ contract DeployMultiECDSAFactoryPatchProd is Script {
         );
 
         address[] memory owners = new address[](1);
-        owners[0] = address(0xdD664b8A02d3B13C0bdfB1878CbE66aA53B2de06);
+        owners[0] = address(0xaD6442a1b5A9D5a25eDE2f8dC3A99C7038b95CD5);
 
         multiECDSAFactoryPatch.setOwners(owners);
 
         multiECDSAFactoryPatch.addStake{value: 1}(1);
-
-        multiECDSAFactoryPatch.transferOwnership(
-            0x74427681c620DE258Aa53a382d6a4C865738A06C
-        );
 
         vm.stopBroadcast();
     }
