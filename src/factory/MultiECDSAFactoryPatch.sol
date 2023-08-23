@@ -8,15 +8,17 @@ import "src/validator/MultiECDSAValidatorNew.sol";
 
 contract MultiECDSAFactoryPatch is KernelFactory, IAddressBook {
     address[] owners;
-    MultiECDSAValidatorNew public multiECDSAValidatorNew;
     Kernel public kernel;
+    MultiECDSAValidatorNew public multiECDSAValidatorNew;
 
     constructor(
         address _owner,
-        IEntryPoint _entryPoint
+        IEntryPoint _entryPoint,
+        Kernel _kernel,
+        MultiECDSAValidatorNew _multiECDSAValidatorNew
     ) KernelFactory(_owner, _entryPoint) {
-        multiECDSAValidatorNew = new MultiECDSAValidatorNew();
-        kernel = new Kernel(_entryPoint);
+        kernel = _kernel;
+        multiECDSAValidatorNew = _multiECDSAValidatorNew;
     }
 
     function getOwners() external view override returns (address[] memory) {
