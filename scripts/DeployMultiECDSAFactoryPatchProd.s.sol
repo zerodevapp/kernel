@@ -29,7 +29,7 @@ contract DeployMultiECDSAFactoryPatchProd is Script {
             }(
                 0xf0d5D3FcBFc0009121A630EC8AB67e012117f40c,
                 IEntryPoint(0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789),
-                kernelImplementation,
+                address(kernelImplementation),
                 multiECDSAValidatorNew
             );
         console.log(

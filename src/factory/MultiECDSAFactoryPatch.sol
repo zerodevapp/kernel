@@ -8,13 +8,14 @@ import "src/validator/MultiECDSAValidatorNew.sol";
 
 contract MultiECDSAFactoryPatch is KernelFactory, IAddressBook {
     address[] owners;
-    Kernel public kernel;
-    MultiECDSAValidatorNew public multiECDSAValidatorNew;
+
+    address public kernel;
+    MultiECDSAValidatorNew public immutable multiECDSAValidatorNew;
 
     constructor(
         address _owner,
         IEntryPoint _entryPoint,
-        Kernel _kernel,
+        address _kernel,
         MultiECDSAValidatorNew _multiECDSAValidatorNew
     ) KernelFactory(_owner, _entryPoint) {
         kernel = _kernel;
@@ -29,6 +30,10 @@ contract MultiECDSAFactoryPatch is KernelFactory, IAddressBook {
         owners = _owners;
     }
 
+    function setKernel(address _kernel) external onlyOwner {
+        kernel = _kernel;
+    }
+
     function createAccount(
         uint256 _index
     ) external payable returns (address proxy) {
@@ -37,7 +42,7 @@ contract MultiECDSAFactoryPatch is KernelFactory, IAddressBook {
             multiECDSAValidatorNew,
             abi.encodePacked(address(this))
         );
-        proxy = this.createAccount(address(kernel), data, _index);
+        proxy = this.createAccount(kernel, data, _index);
     }
 
     function getAccountAddress(uint256 _index) public view returns (address) {

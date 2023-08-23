@@ -23,12 +23,12 @@ contract KernelMultiOwnedPatchTest is KernelTestBase {
     uint256 secondOwnerKey;
     MultiECDSAFactoryPatch newFactory;
     MultiECDSAValidatorNew multiECDSAValidatorNew;
-    Kernel kernelImplementation;
+    address kernelImplementation;
 
     function setUp() public {
         _initialize();
 
-        kernelImplementation = new Kernel(entryPoint);
+        kernelImplementation = address(new Kernel(entryPoint));
         multiECDSAValidatorNew = new MultiECDSAValidatorNew();
         newFactory = new MultiECDSAFactoryPatch(
             factoryOwner,
@@ -39,7 +39,7 @@ contract KernelMultiOwnedPatchTest is KernelTestBase {
 
         vm.deal(address(factoryOwner), 1e30);
         vm.startPrank(factoryOwner);
-        newFactory.setImplementation(address(kernelImplementation), true);
+        newFactory.setImplementation(kernelImplementation, true);
 
         (secondOwner, secondOwnerKey) = makeAddrAndKey("secondOwner");
         address[] memory owners = new address[](2);
