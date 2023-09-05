@@ -5,9 +5,15 @@ import {UserOperation} from "account-abstraction/interfaces/UserOperation.sol";
 import {ECDSA} from "solady/utils/ECDSA.sol";
 
 struct WeightedECDSAValidatorStorage {
-    uint64 totalWeight;
-    uint64 threshold;
+    uint24 totalWeight;
+    uint24 threshold;
     uint48 delay;
+    address firstGuardian;
+}
+
+struct GuardianStorage {
+    uint24 weight;
+    address nextGuardian;
 }
 
 enum ProposalStatus {
@@ -19,53 +25,74 @@ enum ProposalStatus {
 struct ProposalStorage {
     ProposalStatus status;
     ValidAfter validAfter;
-    uint64 weightApproved;
+    uint24 weightApproved;
+}
+
+enum VoteStatus {
+    NA,
+    Approved
+}
+
+struct VoteStorage {
+    VoteStatus status;
 }
 
 contract WeightedECDSAValidator {
     mapping(address kernel => WeightedECDSAValidatorStorage) public weightedStorage;
-    mapping(address guardian => mapping(address kernel => uint64)) public weights;
+    mapping(address guardian => mapping(address kernel => GuardianStorage)) public guardian;
     mapping(bytes32 userOpHash => mapping(address kernel => ProposalStorage)) public proposalStatus;
+    mapping(bytes32 userOpHash => mapping(address guardian => mapping(address kernel => VoteStorage))) public voteStatus;
 
     function enable(bytes calldata _data) external {
-        (address[] memory _guardians, uint64[] memory _weights, uint256 _threshold, uint256 _delay) =
-            abi.decode(_data, (address[], uint64[], uint256, uint256));
+        (address[] memory _guardians, uint24[] memory _weights, uint24 _threshold, uint48 _delay) =
+            abi.decode(_data, (address[], uint24[], uint24, uint48));
         require(_guardians.length == _weights.length, "Length mismatch");
-        uint256 totalWeight = 0;
-        for (uint256 i = 0; i < _guardians.length; i++) {
-            require(_weights[i] != 0, "Weight must be positive");
-            require(weights[_guardians[i]][msg.sender] == 0, "Guardian already enabled");
-            totalWeight += _weights[i];
-            weights[_guardians[i]][msg.sender] = _weights[i];
+        require(weightedStorage[msg.sender].totalWeight == 0, "Already enabled");
+        weightedStorage[msg.sender].firstGuardian = msg.sender;
+        for(uint256 i = 0; i < _guardians.length; i++) {
+            require(_guardians[i] != address(0), "Guardian cannot be 0");
+            require(_weights[i] != 0, "Weight cannot be 0");
+            require(guardian[_guardians[i]][msg.sender].weight == 0, "Guardian already enabled");
+            guardian[_guardians[i]][msg.sender] = GuardianStorage({
+                weight: _weights[i],
+                nextGuardian: weightedStorage[msg.sender].firstGuardian
+            });
+            weightedStorage[msg.sender].firstGuardian = _guardians[i];
+            weightedStorage[msg.sender].totalWeight += _weights[i];
         }
-        weightedStorage[msg.sender] = WeightedECDSAValidatorStorage({
-            totalWeight: uint64(totalWeight),
-            threshold: uint64(_threshold),
-            delay: uint48(_delay)
-        });
+        weightedStorage[msg.sender].delay = _delay;
+        weightedStorage[msg.sender].threshold = _threshold;
     }
 
     function approve(bytes32 _userOpHash, address _kernel) external {
-        require(weights[msg.sender][_kernel] != 0, "Guardian not enabled");
+        require(guardian[msg.sender][_kernel].weight != 0, "Guardian not enabled");
         ProposalStorage storage proposal = proposalStatus[_userOpHash][_kernel];
         require(proposal.status == ProposalStatus.Ongoing, "Proposal not ongoing");
-        proposal.weightApproved += weights[msg.sender][_kernel];
+        VoteStorage storage vote = voteStatus[_userOpHash][msg.sender][_kernel];
+        require(vote.status == VoteStatus.NA, "Already voted");
+        vote.status = VoteStatus.Approved;
+        proposal.weightApproved += guardian[msg.sender][_kernel].weight;
         if (proposal.weightApproved >= weightedStorage[_kernel].threshold) {
             proposal.status = ProposalStatus.Approved;
             proposal.validAfter = ValidAfter.wrap(uint48(block.timestamp + weightedStorage[_kernel].delay));
         }
     }
 
-    function approveWithSig(bytes32 _userOpHash, address _kernel, bytes calldata sig) external {
-        address guardian = ECDSA.recover(_userOpHash, sig);
-        require(weights[guardian][_kernel] != 0, "Guardian not enabled");
+    function approveWithSig(bytes32 _userOpHash, address _kernel, bytes calldata sigs) external {
+        uint256 sigCount = sigs.length / 65;
         ProposalStorage storage proposal = proposalStatus[_userOpHash][_kernel];
         require(proposal.status == ProposalStatus.Ongoing, "Proposal not ongoing");
-        proposal.weightApproved += weights[guardian][_kernel];
+        for (uint256 i = 0; i < sigCount; i++) {
+            address signer = ECDSA.recover(_userOpHash, sigs[i * 65:(i + 1) * 65]);
+            VoteStorage storage vote = voteStatus[_userOpHash][signer][_kernel];
+            require(vote.status == VoteStatus.NA, "Already voted");
+            vote.status = VoteStatus.Approved;
+            proposal.weightApproved += guardian[signer][_kernel].weight;
+        }
         if (proposal.weightApproved >= weightedStorage[_kernel].threshold) {
             proposal.status = ProposalStatus.Approved;
             proposal.validAfter = ValidAfter.wrap(uint48(block.timestamp + weightedStorage[_kernel].delay));
-        }
+        } 
     }
 
     function veto(bytes32 _userOpHash) external {
@@ -92,11 +119,15 @@ contract WeightedECDSAValidator {
             bytes calldata sig = userOp.signature;
             // parse sig with 65 bytes
             uint256 sigCount = sig.length / 65;
+            uint256 totalWeight = proposal.weightApproved;
             for (uint256 i = 0; i < sigCount; i++) {
-                address guardian = ECDSA.recover(userOpHash, sig[i * 65:(i + 1) * 65]);
-                proposal.weightApproved += weights[guardian][msg.sender];
+                address signer = ECDSA.recover(userOpHash, sig[i * 65:(i + 1) * 65]);
+                VoteStorage storage vote = voteStatus[userOpHash][signer][msg.sender];
+                require(vote.status == VoteStatus.NA, "Already voted");
+                vote.status = VoteStatus.Approved;
+                totalWeight += guardian[signer][msg.sender].weight;
             }
-            if (proposal.weightApproved >= strg.threshold) {
+            if (totalWeight >= strg.threshold) {
                 proposal.status = ProposalStatus.Approved;
                 return packValidationData(ValidAfter.wrap(0), ValidUntil.wrap(0));
             } else {
