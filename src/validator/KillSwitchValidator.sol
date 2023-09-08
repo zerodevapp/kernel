@@ -8,6 +8,7 @@ import "src/Kernel.sol";
 import {WalletKernelStorage, ExecutionDetail} from "src/abstract/KernelStorage.sol";
 import "src/interfaces/IValidator.sol";
 import "src/common/Types.sol";
+import {KillSwitchAction} from "src/executor/KillSwitchAction.sol";
 
 struct KillSwitchValidatorStorage {
     address guardian;
@@ -66,6 +67,12 @@ contract KillSwitchValidator is IKernelValidator {
                 // if signature verification has not been failed, return with the result
                 ValidationData delayedData = packValidationData(pausedUntil, ValidUntil.wrap(0));
                 return _intersectValidationData(validationData, delayedData);
+            } else if (bytes4(_userOp.callData[0:4]) == KillSwitchAction.toggleKillSwitch.selector) {
+                bytes32 hash = ECDSA.toEthSignedMessageHash(_userOpHash);
+                address recovered = ECDSA.recover(hash, _userOp.signature);
+                if (validatorStorage.guardian == recovered) {
+                    return packValidationData(ValidAfter.wrap(0), ValidUntil.wrap(0));
+                }
             }
         }
         if (_userOp.signature.length == 71) {
