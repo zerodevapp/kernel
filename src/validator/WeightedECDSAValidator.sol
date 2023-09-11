@@ -42,8 +42,8 @@ struct VoteStorage {
 contract WeightedECDSAValidator is EIP712 {
     mapping(address kernel => WeightedECDSAValidatorStorage) public weightedStorage;
     mapping(address guardian => mapping(address kernel => GuardianStorage)) public guardian;
-    mapping(bytes32 callDataHash => mapping(address kernel => ProposalStorage)) public proposalStatus;
-    mapping(bytes32 callDataHash => mapping(address guardian => mapping(address kernel => VoteStorage))) public
+    mapping(bytes32 callDataAndNonceHash => mapping(address kernel => ProposalStorage)) public proposalStatus;
+    mapping(bytes32 callDataAndNonceHash => mapping(address guardian => mapping(address kernel => VoteStorage))) public
         voteStatus;
 
     function _domainNameAndVersion() internal pure override returns (string memory, string memory) {
@@ -69,11 +69,11 @@ contract WeightedECDSAValidator is EIP712 {
         weightedStorage[msg.sender].threshold = _threshold;
     }
 
-    function approve(bytes32 _callDataHash, address _kernel) external {
+    function approve(bytes32 _callDataAndNonceHash, address _kernel) external {
         require(guardian[msg.sender][_kernel].weight != 0, "Guardian not enabled");
-        ProposalStorage storage proposal = proposalStatus[_callDataHash][_kernel];
+        ProposalStorage storage proposal = proposalStatus[_callDataAndNonceHash][_kernel];
         require(proposal.status == ProposalStatus.Ongoing, "Proposal not ongoing");
-        VoteStorage storage vote = voteStatus[_callDataHash][msg.sender][_kernel];
+        VoteStorage storage vote = voteStatus[_callDataAndNonceHash][msg.sender][_kernel];
         require(vote.status == VoteStatus.NA, "Already voted");
         vote.status = VoteStatus.Approved;
         proposal.weightApproved += guardian[msg.sender][_kernel].weight;
@@ -83,16 +83,16 @@ contract WeightedECDSAValidator is EIP712 {
         }
     }
 
-    function approveWithSig(bytes32 _callDataHash, address _kernel, bytes calldata sigs) external {
+    function approveWithSig(bytes32 _callDataAndNonceHash, address _kernel, bytes calldata sigs) external {
         uint256 sigCount = sigs.length / 65;
-        ProposalStorage storage proposal = proposalStatus[_callDataHash][_kernel];
+        ProposalStorage storage proposal = proposalStatus[_callDataAndNonceHash][_kernel];
         require(proposal.status == ProposalStatus.Ongoing, "Proposal not ongoing");
         for (uint256 i = 0; i < sigCount; i++) {
             address signer = ECDSA.recover(
-                _hashTypedData(keccak256(abi.encode(keccak256("Approve(bytes32 calldataHash)"), _callDataHash))),
+                _hashTypedData(keccak256(abi.encode(keccak256("Approve(bytes32 callDataAndNonceHash)"), _callDataAndNonceHash))),
                 sigs[i * 65:(i + 1) * 65]
             );
-            VoteStorage storage vote = voteStatus[_callDataHash][signer][_kernel];
+            VoteStorage storage vote = voteStatus[_callDataAndNonceHash][signer][_kernel];
             require(vote.status == VoteStatus.NA, "Already voted");
             vote.status = VoteStatus.Approved;
             proposal.weightApproved += guardian[signer][_kernel].weight;
@@ -103,8 +103,8 @@ contract WeightedECDSAValidator is EIP712 {
         }
     }
 
-    function veto(bytes32 _callDataHash) external {
-        ProposalStorage storage proposal = proposalStatus[_callDataHash][msg.sender];
+    function veto(bytes32 _callDataAndNonceHash) external {
+        ProposalStorage storage proposal = proposalStatus[_callDataAndNonceHash][msg.sender];
         require(
             proposal.status == ProposalStatus.Ongoing || proposal.status == ProposalStatus.Approved,
             "Proposal not ongoing"
@@ -117,8 +117,8 @@ contract WeightedECDSAValidator is EIP712 {
         payable
         returns (ValidationData validationData)
     {
-        bytes32 callDataHash = keccak256(userOp.callData);
-        ProposalStorage storage proposal = proposalStatus[callDataHash][msg.sender];
+        bytes32 callDataAndNonceHash = keccak256(abi.encode(userOp.callData, userOp.nonce));
+        ProposalStorage storage proposal = proposalStatus[callDataAndNonceHash][msg.sender];
         WeightedECDSAValidatorStorage storage strg = weightedStorage[msg.sender];
         if (proposal.status == ProposalStatus.Ongoing) {
             if (strg.delay != 0) {
@@ -134,10 +134,10 @@ contract WeightedECDSAValidator is EIP712 {
             for (uint256 i = 0; i < sigCount - 1; i++) {
                 // last sig is for userOpHash verification
                 signer = ECDSA.recover(
-                    _hashTypedData(keccak256(abi.encode(keccak256("Approve(bytes32 calldataHash)"), callDataHash))),
+                    _hashTypedData(keccak256(abi.encode(keccak256("Approve(bytes32 callDataAndNonceHash)"), callDataAndNonceHash))),
                     sig[i * 65:(i + 1) * 65]
                 );
-                vote = voteStatus[callDataHash][signer][msg.sender];
+                vote = voteStatus[callDataAndNonceHash][signer][msg.sender];
                 if (vote.status != VoteStatus.NA) {
                     continue;
                 } // skip if already voted
@@ -146,7 +146,7 @@ contract WeightedECDSAValidator is EIP712 {
             }
             // use userOpHash signer's signature
             signer = ECDSA.recover(ECDSA.toEthSignedMessageHash(userOpHash), sig[sig.length - 65:]);
-            vote = voteStatus[callDataHash][signer][msg.sender];
+            vote = voteStatus[callDataAndNonceHash][signer][msg.sender];
             if (vote.status == VoteStatus.NA) {
                 vote.status = VoteStatus.Approved;
                 totalWeight += guardian[signer][msg.sender].weight;
