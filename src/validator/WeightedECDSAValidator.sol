@@ -128,7 +128,6 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
     function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256 missingFunds)
         external
         payable
-        override
         returns (ValidationData validationData)
     {
         bytes32 callDataAndNonceHash = keccak256(abi.encode(userOp.callData, userOp.nonce));
@@ -145,12 +144,10 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
             uint256 totalWeight = proposal.weightApproved;
             address signer;
             VoteStorage storage vote;
-            for (uint256 i = 0; i < sigCount - 1; i++) {
+            for (uint256 i = 0; i < sigCount; i++) {
                 // last sig is for userOpHash verification
                 signer = ECDSA.recover(
-                    _hashTypedData(
-                        keccak256(abi.encode(keccak256("Approve(bytes32 callDataAndNonceHash)"), callDataAndNonceHash))
-                    ),
+                    _hashTypedData(keccak256(abi.encode(keccak256("Approve(bytes32 callDataAndNonceHash)"), callDataAndNonceHash))),
                     sig[i * 65:(i + 1) * 65]
                 );
                 vote = voteStatus[callDataAndNonceHash][signer][msg.sender];
@@ -160,23 +157,7 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
                 vote.status = VoteStatus.Approved;
                 totalWeight += guardian[signer][msg.sender].weight;
             }
-            // NOTE: if userOp.paymasterAndData.length == 0, userOp.signature is used for userOpHash verification
-            // since userOp can be constructed to drain wallet, we need to verify userOpHash or paymaster should pay
-            // BUT if paymaster has some kind of approval to drain wallet's asset(eg. ERC20 allowance), it is at risk.
-            if (userOp.paymasterAndData.length == 0) {
-                // use userOpHash signer's signature
-                signer = ECDSA.recover(ECDSA.toEthSignedMessageHash(userOpHash), sig[sig.length - 65:]);
-                vote = voteStatus[callDataAndNonceHash][signer][msg.sender];
-                if (vote.status == VoteStatus.NA) {
-                    vote.status = VoteStatus.Approved;
-                    totalWeight += guardian[signer][msg.sender].weight;
-                }
-                if (guardian[signer][msg.sender].weight == 0) {
-                    return SIG_VALIDATION_FAILED;
-                }
-            }
             if (totalWeight >= strg.threshold) {
-                proposal.status = ProposalStatus.Approved;
                 validationData = packValidationData(ValidAfter.wrap(0), ValidUntil.wrap(0));
                 proposal.status = ProposalStatus.Executed;
             } else {
@@ -184,10 +165,7 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
             }
         } else if (proposal.status == ProposalStatus.Approved) {
             validationData = packValidationData(proposal.validAfter, ValidUntil.wrap(0));
-            address userOpSigner = ECDSA.recover(ECDSA.toEthSignedMessageHash(userOpHash), userOp.signature);
-            if (guardian[userOpSigner][msg.sender].weight == 0) {
-                return SIG_VALIDATION_FAILED;
-            }
+            proposal.status = ProposalStatus.Executed;
         } else {
             return SIG_VALIDATION_FAILED;
         }
