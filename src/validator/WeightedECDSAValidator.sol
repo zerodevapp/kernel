@@ -4,6 +4,7 @@ import "src/common/Types.sol";
 import {UserOperation} from "account-abstraction/interfaces/UserOperation.sol";
 import {ECDSA} from "solady/utils/ECDSA.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
+import {IKernelValidator} from "src/interfaces/IValidator.sol";
 
 struct WeightedECDSAValidatorStorage {
     uint24 totalWeight;
@@ -39,7 +40,7 @@ struct VoteStorage {
     VoteStatus status;
 }
 
-contract WeightedECDSAValidator is EIP712 {
+contract WeightedECDSAValidator is EIP712, IKernelValidator {
     mapping(address kernel => WeightedECDSAValidatorStorage) public weightedStorage;
     mapping(address guardian => mapping(address kernel => GuardianStorage)) public guardian;
     mapping(bytes32 callDataAndNonceHash => mapping(address kernel => ProposalStorage)) public proposalStatus;
@@ -50,7 +51,7 @@ contract WeightedECDSAValidator is EIP712 {
         return ("WeightedECDSAValidator", "1");
     }
 
-    function enable(bytes calldata _data) external {
+    function enable(bytes calldata _data) external payable override {
         (address[] memory _guardians, uint24[] memory _weights, uint24 _threshold, uint48 _delay) =
             abi.decode(_data, (address[], uint24[], uint24, uint48));
         require(_guardians.length == _weights.length, "Length mismatch");
@@ -67,6 +68,16 @@ contract WeightedECDSAValidator is EIP712 {
         }
         weightedStorage[msg.sender].delay = _delay;
         weightedStorage[msg.sender].threshold = _threshold;
+    }
+
+    function disable(bytes calldata) external payable override {
+        require(weightedStorage[msg.sender].totalWeight != 0, "Not enabled");
+        address currentGuardian = weightedStorage[msg.sender].firstGuardian;
+        while (currentGuardian != msg.sender) {
+            delete guardian[currentGuardian][msg.sender];
+            currentGuardian = guardian[currentGuardian][msg.sender].nextGuardian;
+        }
+        delete weightedStorage[msg.sender];
     }
 
     function approve(bytes32 _callDataAndNonceHash, address _kernel) external {
@@ -89,7 +100,9 @@ contract WeightedECDSAValidator is EIP712 {
         require(proposal.status == ProposalStatus.Ongoing, "Proposal not ongoing");
         for (uint256 i = 0; i < sigCount; i++) {
             address signer = ECDSA.recover(
-                _hashTypedData(keccak256(abi.encode(keccak256("Approve(bytes32 callDataAndNonceHash)"), _callDataAndNonceHash))),
+                _hashTypedData(
+                    keccak256(abi.encode(keccak256("Approve(bytes32 callDataAndNonceHash)"), _callDataAndNonceHash))
+                ),
                 sigs[i * 65:(i + 1) * 65]
             );
             VoteStorage storage vote = voteStatus[_callDataAndNonceHash][signer][_kernel];
@@ -115,6 +128,7 @@ contract WeightedECDSAValidator is EIP712 {
     function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256 missingFunds)
         external
         payable
+        override
         returns (ValidationData validationData)
     {
         bytes32 callDataAndNonceHash = keccak256(abi.encode(userOp.callData, userOp.nonce));
@@ -134,7 +148,9 @@ contract WeightedECDSAValidator is EIP712 {
             for (uint256 i = 0; i < sigCount - 1; i++) {
                 // last sig is for userOpHash verification
                 signer = ECDSA.recover(
-                    _hashTypedData(keccak256(abi.encode(keccak256("Approve(bytes32 callDataAndNonceHash)"), callDataAndNonceHash))),
+                    _hashTypedData(
+                        keccak256(abi.encode(keccak256("Approve(bytes32 callDataAndNonceHash)"), callDataAndNonceHash))
+                    ),
                     sig[i * 65:(i + 1) * 65]
                 );
                 vote = voteStatus[callDataAndNonceHash][signer][msg.sender];
@@ -144,12 +160,20 @@ contract WeightedECDSAValidator is EIP712 {
                 vote.status = VoteStatus.Approved;
                 totalWeight += guardian[signer][msg.sender].weight;
             }
-            // use userOpHash signer's signature
-            signer = ECDSA.recover(ECDSA.toEthSignedMessageHash(userOpHash), sig[sig.length - 65:]);
-            vote = voteStatus[callDataAndNonceHash][signer][msg.sender];
-            if (vote.status == VoteStatus.NA) {
-                vote.status = VoteStatus.Approved;
-                totalWeight += guardian[signer][msg.sender].weight;
+            // NOTE: if userOp.paymasterAndData.length == 0, userOp.signature is used for userOpHash verification
+            // since userOp can be constructed to drain wallet, we need to verify userOpHash or paymaster should pay
+            // BUT if paymaster has some kind of approval to drain wallet's asset(eg. ERC20 allowance), it is at risk.
+            if (userOp.paymasterAndData.length == 0) {
+                // use userOpHash signer's signature
+                signer = ECDSA.recover(ECDSA.toEthSignedMessageHash(userOpHash), sig[sig.length - 65:]);
+                vote = voteStatus[callDataAndNonceHash][signer][msg.sender];
+                if (vote.status == VoteStatus.NA) {
+                    vote.status = VoteStatus.Approved;
+                    totalWeight += guardian[signer][msg.sender].weight;
+                }
+                if (guardian[signer][msg.sender].weight == 0) {
+                    return SIG_VALIDATION_FAILED;
+                }
             }
             if (totalWeight >= strg.threshold) {
                 proposal.status = ProposalStatus.Approved;
@@ -167,5 +191,13 @@ contract WeightedECDSAValidator is EIP712 {
         } else {
             return SIG_VALIDATION_FAILED;
         }
+    }
+
+    function validCaller(address, bytes calldata) external view override returns (bool) {
+        return false;
+    }
+
+    function validateSignature(bytes32 hash, bytes calldata signature) external view returns (ValidationData) {
+        return SIG_VALIDATION_FAILED;
     }
 }
