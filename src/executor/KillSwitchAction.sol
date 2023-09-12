@@ -32,6 +32,7 @@ contract KillSwitchAction {
             // this means it is activated
             ws.defaultValidator = prevValidator;
             getKernelStorage().disabledMode = prevDisableMode;
+            killSwitchValidator.disable(bytes(""));
         }
     }
 }
