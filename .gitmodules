@@ -13,3 +13,6 @@
 [submodule "lib/solady"]
 	path = lib/solady
 	url = https://github.com/vectorized/solady
+[submodule "lib/aa-benchmark"]
+	path = lib/aa-benchmark
+	url = https://github.com/zerodevapp/aa-benchmark
