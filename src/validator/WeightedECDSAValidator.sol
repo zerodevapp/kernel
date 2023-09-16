@@ -74,8 +74,9 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
         require(weightedStorage[msg.sender].totalWeight != 0, "Not enabled");
         address currentGuardian = weightedStorage[msg.sender].firstGuardian;
         while (currentGuardian != msg.sender) {
+            address nextGuardian = guardian[currentGuardian][msg.sender].nextGuardian;
             delete guardian[currentGuardian][msg.sender];
-            currentGuardian = guardian[currentGuardian][msg.sender].nextGuardian;
+            currentGuardian = nextGuardian;
         }
         delete weightedStorage[msg.sender];
     }
