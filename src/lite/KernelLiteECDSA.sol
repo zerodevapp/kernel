@@ -10,6 +10,7 @@ contract KernelLiteECDSA is KernelLite {
     bytes32 constant private KERNEL_LITE_ECDSA_STORAGE_SLOT = 0xdea7fea882fba743201b2aeb1babf326b8944488db560784858525d123ee7e97; // keccak256(abi.encodePacked("zerodev.kernel.lite.ecdsa")) - 1
 
     constructor(IEntryPoint _entryPoint) KernelLite(_entryPoint) {
+        getKernelLiteECDSAStorage().owner = address(1); // set owner to non-zero address to prevent initialization
     }
 
     function getKernelLiteECDSAStorage() internal pure returns (KernelLiteECDSAStorage storage s) {
