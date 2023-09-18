@@ -55,27 +55,17 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     /// @param to The address of the target contract
     /// @param value The amount of Ether to send
     /// @param data The call data to be sent
-    /// @param operation The type of operation (call or delegatecall)
-    function execute(address to, uint256 value, bytes memory data, Operation operation) external payable {
+    /// operation deprecated operation type, usere executeBatch for batch operation
+    function execute(address to, uint256 value, bytes memory data, Operation) external payable {
         if (msg.sender != address(entryPoint) && !_checkCaller()) {
             revert NotAuthorizedCaller();
         }
-        if (operation == Operation.Call) {
-            assembly {
-                let success := call(gas(), to, value, add(data, 0x20), mload(data), 0, 0)
-                returndatacopy(0, 0, returndatasize())
-                switch success
-                case 0 { revert(0, returndatasize()) }
-                default { return(0, returndatasize()) }
-            }
-        } else {
-            assembly {
-                let success := delegatecall(gas(), to, add(data, 0x20), mload(data), 0, 0)
-                returndatacopy(0, 0, returndatasize())
-                switch success
-                case 0 { revert(0, returndatasize()) }
-                default { return(0, returndatasize()) }
-            }
+        assembly {
+            let success := call(gas(), to, value, add(data, 0x20), mload(data), 0, 0)
+            returndatacopy(0, 0, returndatasize())
+            switch success
+            case 0 { revert(0, returndatasize()) }
+            default { return(0, returndatasize()) }
         }
     }
 
