@@ -11,6 +11,7 @@ import "./utils/KernelHelper.sol";
 
 import "src/common/Constants.sol";
 import "src/common/Enum.sol";
+import "src/common/Structs.sol";
 
 /// @title KernelLite
 /// @author taek<leekt216@gmail.com>
@@ -73,6 +74,26 @@ abstract contract KernelLite is EIP712, Compatibility, KernelStorage {
                 switch success
                 case 0 { revert(0, returndatasize()) }
                 default { return(0, returndatasize()) }
+            }
+        }
+    }
+
+    function executeBatch(Call[] memory calls) external payable {
+        if (msg.sender != address(entryPoint) && !_checkCaller()) {
+            revert NotAuthorizedCaller();
+        }
+        uint256 len = calls.length;
+        for(uint256 i = 0; i<len;) {
+            Call memory call = calls[i];
+            address to = call.to;
+            uint256 value = call.value;
+            bytes memory data = call.data;
+            assembly {
+                let success := call(gas(), to, value, add(data, 0x20), mload(data), 0, 0)
+                returndatacopy(0, 0, returndatasize())
+                switch success
+                case 0 { revert(0, returndatasize()) }
+                default { i := add(i, 1) }
             }
         }
     }
