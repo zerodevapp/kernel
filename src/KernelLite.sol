@@ -266,6 +266,15 @@ abstract contract KernelLite is EIP712, Compatibility, KernelStorage {
         }
     }
 
+    function setDefaultValidator(IKernelValidator _defaultValidator, bytes calldata _data)
+        external
+        payable
+        override
+        onlyFromEntryPointOrSelf
+    {
+        revert ("not implemented");
+    }
+
     function _validateUserOp(UserOperation calldata _op, bytes32 _opHash, uint256 _missingFunds) internal virtual returns(ValidationData);
 
     function _validateSignature(bytes32 _hash, bytes calldata _signature) internal view virtual returns(ValidationData);
