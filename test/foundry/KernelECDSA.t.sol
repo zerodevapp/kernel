@@ -12,7 +12,7 @@ import {KernelTestBase} from "./KernelTestBase.sol";
 
 using ERC4337Utils for EntryPoint;
 contract KernelECDSATest is KernelTestBase {
-    function setUp() public {
+    function setUp() public virtual {
         _initialize();
         defaultValidator = new ECDSAValidator();
         _setAddress();

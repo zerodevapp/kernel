@@ -9,19 +9,19 @@ import "src/executor/KillSwitchAction.sol";
 // test utils
 import "forge-std/Test.sol";
 import "test/foundry/utils/ERC4337Utils.sol";
+import {KernelTestBase} from "test/foundry/KernelTestBase.sol";
+import {KernelECDSATest} from "test/foundry/KernelECDSA.t.sol";
 
 using ERC4337Utils for EntryPoint;
 
-contract KillSwitchValidatorTest is KernelTestBase {
+contract KillSwitchValidatorTest is KernelECDSATest {
     KillSwitchValidator killSwitch;
     KillSwitchAction action;
     address guardian;
     uint256 guardianKey;
 
-    function setUp() public {
-        _initialize();
-        defaultValidator = new ECDSAValidator();
-        _setAddress();
+    function setUp() public override {
+        super.setUp();
         (guardian, guardianKey) = makeAddrAndKey("guardian");
         killSwitch = new KillSwitchValidator();
         action = new KillSwitchAction(killSwitch);

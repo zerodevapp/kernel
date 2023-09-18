@@ -15,20 +15,18 @@ import "test/foundry/utils/ERC4337Utils.sol";
 // test actions/validators
 import "src/validator/SessionKeyValidator.sol";
 
-import {KernelTestBase} from "test/foundry/KernelTestBase.sol";
+import {KernelECDSATest} from "test/foundry/KernelECDSA.t.sol";
 
 using ERC4337Utils for EntryPoint;
 
-abstract contract SessionKeyValidatorTest is KernelTestBase {
+contract SessionKeyValidatorTest is KernelECDSATest {
     ExecuteSessionKeyValidator sessionKeyValidator;
     TestERC20 testToken;
     address sessionKey;
     uint256 sessionKeyPriv;
 
-    function setUp() public {
-        _initialize();
-        defaultValidator = new ECDSAValidator();
-        _setAddress();
+    function setUp() public override {
+        super.setUp();
         (sessionKey, sessionKeyPriv) = makeAddrAndKey("sessionKey");
         testToken = new TestERC20();
         sessionKeyValidator = new ExecuteSessionKeyValidator();
