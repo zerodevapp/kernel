@@ -120,6 +120,7 @@ contract KernelStorage {
     function setDefaultValidator(IKernelValidator _defaultValidator, bytes calldata _data)
         external
         payable
+        virtual
         onlyFromEntryPointOrSelf
     {
         IKernelValidator oldValidator = getKernelStorage().defaultValidator;
