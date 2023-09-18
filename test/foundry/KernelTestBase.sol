@@ -208,7 +208,7 @@ abstract contract KernelTestBase is Test {
         return keccak256(
             abi.encodePacked(
                 "\x19\x01",
-                _buildDomainSeparator("Kernel", "0.2.1", sender),
+                _buildDomainSeparator("Kernel", "0.2.2", sender),
                 getStructHash(sig, validUntil, validAfter, validator, executor, enableData)
         )
         );
