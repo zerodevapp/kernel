@@ -12,6 +12,12 @@ struct ExecutionDetail {
     IKernelValidator validator; // The validator for this execution
 }
 
+struct Call {
+    address to;
+    uint256 value;
+    bytes data;
+}
+
 // Defining a struct for wallet kernel storage
 struct WalletKernelStorage {
     bytes32 __deprecated; // A deprecated field

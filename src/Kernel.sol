@@ -11,6 +11,7 @@ import "./utils/KernelHelper.sol";
 
 import "./common/Constants.sol";
 import "./common/Enum.sol";
+import "./common/Structs.sol";
 
 /// @title Kernel
 /// @author taek<leekt216@gmail.com>
@@ -78,6 +79,26 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         }
     }
 
+    function executeBatch(Call[] memory calls) external payable {
+        if (msg.sender != address(entryPoint) && !_checkCaller()) {
+            revert NotAuthorizedCaller();
+        }
+        uint256 len = calls.length;
+        for(uint256 i = 0; i<len;) {
+            Call memory call = calls[i];
+            address to = call.to;
+            uint256 value = call.value;
+            bytes memory data = call.data;
+            assembly {
+                let success := call(gas(), to, value, add(data, 0x20), mload(data), 0, 0)
+                returndatacopy(0, 0, returndatasize())
+                switch success
+                case 0 { revert(0, returndatasize()) }
+                default { i := add(i, 1) }
+            }
+        }
+    }
+
     /// @notice Validates a user operation based on its mode
     /// @dev This function will validate user operation and be called by EntryPoint
     /// @param userOp The user operation to be validated
@@ -123,8 +144,8 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
             }
             ExecutionDetail storage detail = getKernelStorage().execution[bytes4(userOpCallData[0:4])];
             validator = detail.validator;
-            if (address(validator) == address(0)) {
-                assembly {
+            assembly {
+                if iszero(validator) {
                     validator := shr(80, storage_slot_1)
                 }
             }
@@ -145,12 +166,12 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         } else {
             return SIG_VALIDATION_FAILED;
         }
-        if (missingAccountFunds != 0) {
-            assembly {
+        assembly {
+            if iszero(iszero(missingAccountFunds)) {
                 pop(call(gas(), caller(), missingAccountFunds, callvalue(), callvalue(), callvalue(), callvalue()))
             }
-            //ignore failure (its EntryPoint's job to verify, not account.)
         }
+        //ignore failure (its EntryPoint's job to verify, not account.)
         userOp.signature = userOpSignature;
         validationData =
             _intersectValidationData(validationData, validator.validateUserOp(userOp, userOpHash, missingAccountFunds));
