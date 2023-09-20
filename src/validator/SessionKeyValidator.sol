@@ -1,12 +1,12 @@
 pragma solidity ^0.8.0;
 
 import "solady/utils/ECDSA.sol";
-import "src/interfaces/IValidator.sol";
+import "../interfaces/IValidator.sol";
 import "solady/utils/MerkleProofLib.sol";
-import "src/common/Constants.sol";
-import "src/common/Enum.sol";
-import "src/common/Structs.sol";
-import "src/common/Types.sol";
+import "../common/Constants.sol";
+import "../common/Enum.sol";
+import "../common/Structs.sol";
+import "../common/Types.sol";
 
 contract ExecuteSessionKeyValidator is IKernelValidator {
     mapping(address sessionKey => mapping(address kernel => SessionData)) public sessionData;

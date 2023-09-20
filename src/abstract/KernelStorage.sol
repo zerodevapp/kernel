@@ -3,9 +3,9 @@ pragma solidity ^0.8.0;
 
 // Importing necessary interfaces
 import "account-abstraction/interfaces/IEntryPoint.sol";
-import "src/interfaces/IValidator.sol";
-import "src/common/Constants.sol";
-import "src/common/Structs.sol";
+import "../interfaces/IValidator.sol";
+import "../common/Constants.sol";
+import "../common/Structs.sol";
 
 /// @title Kernel Storage Contract
 /// @author taek<leekt216@gmail.com>

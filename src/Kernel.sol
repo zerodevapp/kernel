@@ -9,8 +9,8 @@ import "./abstract/Compatibility.sol";
 import "./abstract/KernelStorage.sol";
 import "./utils/KernelHelper.sol";
 
-import "src/common/Constants.sol";
-import "src/common/Enum.sol";
+import "./common/Constants.sol";
+import "./common/Enum.sol";
 
 /// @title Kernel
 /// @author taek<leekt216@gmail.com>

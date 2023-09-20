@@ -3,9 +3,9 @@ pragma solidity ^0.8.0;
 
 import "openzeppelin-contracts/contracts/utils/introspection/IERC165.sol";
 import "solady/utils/ECDSA.sol";
-import "src/utils/KernelHelper.sol";
-import "src/interfaces/IValidator.sol";
-import "src/common/Types.sol";
+import "../utils/KernelHelper.sol";
+import "../interfaces/IValidator.sol";
+import "../common/Types.sol";
 
 // idea, we can make this merkle root
 struct ERC165SessionKeyStorage {

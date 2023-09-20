@@ -4,8 +4,8 @@ pragma solidity ^0.8.0;
 import "./AdminLessERC1967Factory.sol";
 
 import "openzeppelin-contracts/contracts/utils/Create2.sol";
-import "src/Kernel.sol";
-import "src/validator/ECDSAValidator.sol";
+import "../Kernel.sol";
+import "../validator/ECDSAValidator.sol";
 import "solady/auth/Ownable.sol";
 
 contract KernelFactory is AdminLessERC1967Factory, Ownable {

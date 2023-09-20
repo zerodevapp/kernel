@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import {UserOperation} from "account-abstraction/interfaces/UserOperation.sol";
-import "src/common/Types.sol";
+import "../common/Types.sol";
 
 interface IKernelValidator {
     function enable(bytes calldata _data) external payable;

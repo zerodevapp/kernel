@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {SIG_VALIDATION_FAILED_UINT} from "src/common/Constants.sol";
-import {ValidationData} from "src/common/Types.sol";
+import {SIG_VALIDATION_FAILED_UINT} from "../common/Constants.sol";
+import {ValidationData} from "../common/Types.sol";
 
 function _intersectValidationData(ValidationData a, ValidationData b) pure returns (ValidationData validationData) {
     assembly {

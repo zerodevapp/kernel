@@ -4,9 +4,9 @@ pragma solidity ^0.8.0;
 
 import "solady/utils/ECDSA.sol";
 import "solady/utils/EIP712.sol";
-import "src/utils/KernelHelper.sol";
-import "src/interfaces/IValidator.sol";
-import "src/common/Types.sol";
+import "../utils/KernelHelper.sol";
+import "../interfaces/IValidator.sol";
+import "../common/Types.sol";
 
 struct SessionKeyStorage {
     ValidUntil validUntil;
