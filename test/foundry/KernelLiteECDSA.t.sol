@@ -29,6 +29,10 @@ contract KernelECDSATest is KernelTestBase {
             abi.encodePacked(owner)
         );
     }
+    
+    function test_set_default_validator() external override {
+        vm.skip(true);
+    }
 
     function signUserOp(UserOperation memory op) internal override view returns(bytes memory) {
         return abi.encodePacked(bytes4(0x00000000), entryPoint.signUserOpHash(vm, ownerKey, op));

@@ -34,12 +34,19 @@ struct ParamRule {
     bytes32 param;
 }
 
+struct ExecutionRule {
+    ValidAfter validAfter; // 48 bits
+    uint48 interval; // 48 bits 
+    uint48 runs; // 48
+}
+
 struct Permission {
+    uint32 index;
     address target;
-    uint256 valueLimit;
     bytes4 sig;
+    uint256 valueLimit;
     ParamRule[] rules;
-    Operation operation;
+    ExecutionRule executionRule;
 }
 
 struct SessionData {
