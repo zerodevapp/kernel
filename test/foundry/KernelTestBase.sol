@@ -66,7 +66,7 @@ abstract contract KernelTestBase is Test {
         assertEq(kernel.isValidSignature(hash, sig), Kernel.isValidSignature.selector);
     }
 
-    function test_set_default_validator() external {
+    function test_set_default_validator() external virtual {
         TestValidator newValidator = new TestValidator();
         bytes memory empty;
         UserOperation memory op = entryPoint.fillUserOp(
