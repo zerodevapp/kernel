@@ -1,9 +1,19 @@
 # Kernel
 
-Kernel is a minimal smart contract account designed to be extended.
+Kernel is a smart contract account that is:
 
-- [Docs](https://docs.zerodev.app/extend-wallets/overview)
-- [Code](https://github.com/zerodevapp/kernel)
+- Compatible with [ERC-4337](https://eips.ethereum.org/EIPS/eip-4337).
+- Modular (supports [plugins](./src/validator)).
+- [Highly gas-efficient](https://github.com/zerodevapp/aa-benchmark).
+
+Kernel is also a winner of [the inaugural Ethereum AA grant](https://erc4337.mirror.xyz/hRn_41cef8oKn44ZncN9pXvY3VID6LZOtpLlktXYtmA).  At the time of writing, [Kernel powers over 60% of all AA wallets](https://twitter.com/SixdegreeLab/status/1705585256638849325?s=20).
+
+Kernel can be used as a standalone smart contract account, but most people use it through [ZeroDev](https://docs.zerodev.app/).
+
+## Resources
+
+- [Developing plugins](https://docs.zerodev.app/extend-wallets/overview)
+- [Read the source code](https://github.com/zerodevapp/kernel)
 
 ## Build
 
@@ -14,3 +24,7 @@ forge install
 forge build
 forge test
 ```
+
+## License
+
+MIT
