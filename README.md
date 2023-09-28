@@ -28,3 +28,37 @@ forge test
 ## License
 
 MIT
+
+## Addresses
+
+<details>
+<summary>v2.2</summary>
+
+| Name                 | Address                                    |
+| -------------------- | ------------------------------------------ |
+| Kernel               | 0xfBf45e38D8D741F542740CDddE6D2dDe1ca3602f |
+| SessionKey Validator | 0x563492B19d6180AeFFB1296019EDb33907d61872 |
+</details>
+
+<details>
+<summary>v2.1</summary>
+
+| Name                 | Address                                    |
+| -------------------- | ------------------------------------------ |
+| Kernel               | 0xf048AD83CB2dfd6037A43902a2A5Be04e53cd2Eb |
+| KernelFactory        | 0x5de4839a76cf55d0c90e2061ef4386d962E15ae3 |
+| ECDSA Validator      | 0xd9AB5096a832b9ce79914329DAEE236f8Eea0390 |
+| SessionKey Validator | 0x1C1D5b70aD6e0c04366aab100261A6Bcc251EA3f |
+</details>
+
+<details>
+<summary>v2.0</summary>
+
+| Name            | Address                                    |
+| --------------- | ------------------------------------------ |
+| Kernel          | 0xeB8206E02f6AB1884cfEa58CC7BabdA7d55aC957 |
+| TempKernel      | 0x727A10897e70cd3Ab1a6e43d59A12ab0895A4995 |
+| KernelFactory   | 0x12358cA00141D09cB90253F05a1DD16bE93A8EE6 |
+| ECDSA Validator | 0x180D6465F921C7E0DEA0040107D342c87455fFF5 |
+| ECDSA Factory   | 0xAf299A1f51560F51A1F3ADC0a5991Ac74b61b0BE |
+</details>

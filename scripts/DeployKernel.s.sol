@@ -13,12 +13,12 @@ contract DeployKernel is Script {
         uint256 key = vm.envUint("DEPLOYER_PRIVATE_KEY");
         vm.startBroadcast(key);
         Kernel kernel;
-        if(EXPECTED_KERNEL_ADDRESS.code.length == 0 ){
+//        if(EXPECTED_KERNEL_ADDRESS.code.length == 0 ){
             kernel = new Kernel{salt:0}(IEntryPoint(ENTRYPOINT_0_6));
             console.log("Kernel address: %s", address(kernel));
-        } else {
-            kernel = Kernel(EXPECTED_KERNEL_ADDRESS);
-        }
+//        } else {
+//            kernel = Kernel(EXPECTED_KERNEL_ADDRESS);
+//        }
         KernelFactory factory;
         if(EXPECTED_KERNEL_FACTORY_ADDRESS.code.length == 0){
             factory = new KernelFactory{salt:0}(DEPLOYER, IEntryPoint(ENTRYPOINT_0_6));
