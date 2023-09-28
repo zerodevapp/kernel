@@ -9,6 +9,8 @@ import "../common/Structs.sol";
 import "../common/Types.sol";
 import {Kernel} from "../Kernel.sol";
 
+import "forge-std/console.sol";
+
 contract ExecuteSessionKeyValidator is IKernelValidator {
     mapping(address sessionKey => mapping(address kernel => SessionData)) public sessionData;
     mapping(address sessionKey => mapping(uint32 index => mapping(address kernel => ValidAfter))) public executionValidAfter;
@@ -97,32 +99,42 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
             Call[] calldata calls;
             bytes calldata callData = userOp.callData;
             assembly {
-                calls.offset := add(callData.offset, 4)
-                calls.length := sub(callData.length, 4)
+                calls.offset := add(add(callData.offset,4), calldataload(add(callData.offset,4)))
+                calls.length := calldataload(calls.offset)
             }
-            require(calls.length == permissions.length, "SessionKeyValidator: invalid permissions");
-            require(calls.length == index.length, "SessionKeyValidator: invalid permissions");
+            require(calls.length == permissions.length, "call length != permissions length");
+            require(calls.length == index.length, "call length != index length");
             uint256 maxIndex;
-            for(uint256 i = 0; i < index.length; i++) {
-                if (index[i] > maxIndex) {
-                    maxIndex = index[i];
+            for(uint256 j = 0; j < index.length; j++) {
+                if (index[j] > maxIndex) {
+                    maxIndex = index[j];
                 }
             }
             bytes32[] memory leaves = new bytes32[](maxIndex + 1);
             ValidAfter maxValidAfter = session.validAfter;
             for (uint256 i = 0; i < calls.length; i++) {
-                Call calldata call = calls[i];
+                //Call calldata callInfo;
+                uint256 callInfoOffset;
+                address to;
+                uint256 value;
+                bytes calldata data;
+                assembly("memory-safe") {
+                    callInfoOffset := add(add(calls.offset,0x20), calldataload(add(add(calls.offset, 0x20), mul(i, 0x20))))
+                    to := calldataload(callInfoOffset)
+                    value := calldataload(add(callInfoOffset, 0x20))
+                    data.offset := add(add(callInfoOffset,0x20), calldataload(add(callInfoOffset, 0x40)))
+                    data.length := calldataload(sub(data.offset, 0x20))
+                }
                 Permission memory permission = permissions[i];
                 require(
-                    permission.target == address(0) || call.to == permission.target,
+                    permission.target == address(0) || to == permission.target,
                     "SessionKeyValidator: target mismatch"
                 );
                 require(
-                    uint256(bytes32(call.value)) <= permission.valueLimit,
+                    uint256(bytes32(value)) <= permission.valueLimit,
                     "SessionKeyValidator: value limit exceeded"
                 );
-                bytes calldata data = call.data;
-                require(verifyPermision(data, permission), "SessionKeyValidator: permission verification failed");
+                require(verifyPermission(data, permission), "SessionKeyValidator: permission verification failed");
                 leaves[index[i]] = keccak256(abi.encode(permission));
                 if(permission.executionRule.interval != 0) {
                     ValidAfter validAfter = executionValidAfter[sessionKey][permission.index][msg.sender];
@@ -152,7 +164,7 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
         }
     }
 
-    function verifyPermision(bytes calldata data, Permission memory permission) internal pure returns (bool) {
+    function verifyPermission(bytes calldata data, Permission memory permission) internal view returns (bool) {
         if (bytes4(data[0:4]) != permission.sig) return false;
         for (uint256 i = 0; i < permission.rules.length; i++) {
             ParamRule memory rule = permission.rules[i];
@@ -168,8 +180,6 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
             } else if (rule.condition == ParamCondition.LESS_THAN_OR_EQUAL && param > rule.param) {
                 return false;
             } else if (rule.condition == ParamCondition.NOT_EQUAL && param == rule.param) {
-                return false;
-            } else {
                 return false;
             }
         }
