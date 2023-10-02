@@ -5,7 +5,7 @@ import "src/validator/ECDSAValidator.sol";
 import "forge-std/Script.sol";
 import "forge-std/console.sol";
 contract DeployKernel is Script {
-    address constant DEPLOYER = 0x9775137314fE595c943712B0b336327dfa80aE8A;
+    address constant DEPLOYER = 0x9fD431b7703f94289Ba02034631dcC302717805B;
     address constant ENTRYPOINT_0_6 = 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789;
     address constant EXPECTED_VALIDATOR_ADDRESS = 0xd9AB5096a832b9ce79914329DAEE236f8Eea0390;
     function run() public {
