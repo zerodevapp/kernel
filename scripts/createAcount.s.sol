@@ -17,7 +17,7 @@ contract CreateAccount is Script {
             abi.encodeWithSelector(KernelStorage.initialize.selector, defaultValidator, abi.encodePacked(0x9fD431b7703f94289Ba02034631dcC302717805B)),
             0
         );
-        console.log("smart account created at: %s", proxy);
+        console.log("smart account created at: %s", accountProxy);
         vm.stopBroadcast();
     }
 }
