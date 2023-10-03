@@ -3,10 +3,10 @@
 pragma solidity ^0.8.0;
 
 import "solady/utils/ECDSA.sol";
-import "src/utils/KernelHelper.sol";
-import "src/interfaces/IAddressBook.sol";
-import "src/interfaces/IValidator.sol";
-import "src/common/Types.sol";
+import "../utils/KernelHelper.sol";
+import "../interfaces/IAddressBook.sol";
+import "../interfaces/IValidator.sol";
+import "../common/Types.sol";
 
 contract MultiECDSAValidator is IKernelValidator {
     event OwnerAdded(address indexed kernel, address indexed owner);

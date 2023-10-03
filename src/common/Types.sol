@@ -1,6 +1,6 @@
 pragma solidity ^0.8.9;
 
-import "src/common/Constants.sol";
+import "./Constants.sol";
 
 type ValidAfter is uint48;
 
