@@ -42,6 +42,9 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
         require(session.enabled, "SessionKeyValidator: session key not enabled");
         if (session.merkleRoot == bytes32(0)) {
             // sessionKey allowed to execute any tx
+            if(sessionKey != ECDSA.recover(ECDSA.toEthSignedMessageHash(userOpHash), signature)) {
+                return SIG_VALIDATION_FAILED;
+            }
             return packValidationData(session.validAfter, session.validUntil);
         }
         if (session.paymaster == address(1)) {
