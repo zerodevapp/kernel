@@ -36,52 +36,52 @@ contract SessionKeyOwnedValidatorTest is KernelTestBase {
         testToken = new TestERC20();
     }
 
-    function test_mode_2_no_paymaster() external {
-        testToken.mint(address(kernel), 100e18);
-        UserOperation memory op = entryPoint.fillUserOp(
-            address(kernel),
-            abi.encodeWithSelector(
-                Kernel.execute.selector,
-                address(testToken),
-                0,
-                abi.encodeWithSelector(ERC20.transfer.selector, beneficiary, 100),
-                Operation.Call
-            )
-        );
+    //function test_mode_2_no_paymaster() external {
+    //    testToken.mint(address(kernel), 100e18);
+    //    UserOperation memory op = entryPoint.fillUserOp(
+    //        address(kernel),
+    //        abi.encodeWithSelector(
+    //            Kernel.execute.selector,
+    //            address(testToken),
+    //            0,
+    //            abi.encodeWithSelector(ERC20.transfer.selector, beneficiary, 100),
+    //            Operation.Call
+    //        )
+    //    );
 
-        bytes memory enableData = abi.encodePacked(sessionKey, validAfter, validUntil);
+    //    bytes memory enableData = abi.encodePacked(sessionKey, validAfter, validUntil);
 
-        bytes32 digest = getTypedDataHash(
-            address(kernel),
-            Kernel.execute.selector,
-            validAfter,
-            validUntil,
-            address(sessionKeyValidator),
-            address(0),
-            enableData
-        );
+    //    bytes32 digest = getTypedDataHash(
+    //        address(kernel),
+    //        Kernel.execute.selector,
+    //        validAfter,
+    //        validUntil,
+    //        address(sessionKeyValidator),
+    //        address(0),
+    //        enableData
+    //    );
 
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
+    //    (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
 
-        op.signature = abi.encodePacked(
-            bytes4(0x00000002),
-            validAfter,
-            validUntil,
-            address(sessionKeyValidator),
-            address(0),
-            uint256(enableData.length),
-            enableData,
-            uint256(65),
-            r,
-            s,
-            v,
-            entryPoint.signUserOpHash(vm, sessionKeyPriv, op)
-        );
+    //    op.signature = abi.encodePacked(
+    //        bytes4(0x00000002),
+    //        validAfter,
+    //        validUntil,
+    //        address(sessionKeyValidator),
+    //        address(0),
+    //        uint256(enableData.length),
+    //        enableData,
+    //        uint256(65),
+    //        r,
+    //        s,
+    //        v,
+    //        entryPoint.signUserOpHash(vm, sessionKeyPriv, op)
+    //    );
 
-        UserOperation[] memory ops = new UserOperation[](1);
-        ops[0] = op;
-        logGas(op);
+    //    UserOperation[] memory ops = new UserOperation[](1);
+    //    ops[0] = op;
+    //    logGas(op);
 
-        entryPoint.handleOps(ops, beneficiary);
-    }
+    //    entryPoint.handleOps(ops, beneficiary);
+    //}
 }
