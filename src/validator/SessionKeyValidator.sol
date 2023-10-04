@@ -76,9 +76,6 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
             signature.offset := signatureOffset
             signature.length := 0x41
         }
-        console.log("Verify userOpHash");
-        console.log("- signature ");
-        console.logBytes(signature);
         if(_sessionKey != ECDSA.recover(ECDSA.toEthSignedMessageHash(userOpHash), signature)) {
             return SIG_VALIDATION_FAILED;
         }
@@ -95,48 +92,10 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
 
     // to parse single execute permission
     function _getPermission(bytes calldata _sig) internal view returns(Permission calldata permission, bytes32[] calldata merkleProof) {
-/*
-0x
-0000000000000000000000000000000000000000000000000000000000000040 0x00
-00000000000000000000000000000000000000000000000000000000000001c0 0x20
-0000000000000000000000000000000000000000000000000000000000000000 0x40 // permission Offset
-000000000000000000000000c7183455a4c133ae270771860664b6b7ec320bb1 0x60
-a9059cbb00000000000000000000000000000000000000000000000000000000 0x80
-0000000000000000000000000000000000000000000000000000000000000000 0xa0
-0000000000000000000000000000000000000000000000000000000000000100 0xc0
-0000000000000000000000000000000000000000000000000000000000000000 0xe0
-0000000000000000000000000000000000000000000000000000000000000000 0x100
-0000000000000000000000000000000000000000000000000000000000000000 0x120
-0000000000000000000000000000000000000000000000000000000000000001 0x140
-0000000000000000000000000000000000000000000000000000000000000020 0x160
-0000000000000000000000000000000000000000000000000000000000000004 0x180
-0000000000000000000000000000000000000000000000000de0b6b3a7640000 0x1a0
-0000000000000000000000000000000000000000000000000000000000000001
-f39437e548eb9ca852b9fac9fc2eaccbb521e775553f81056cf35d6f21fe8bd2
-*/
-        console.log("GET PERMISSION");
-        console.logBytes(_sig);
-        uint256 permissionOffset;
-        uint256 merkleProofOffset;
-        uint256 merkleProofLength;
         assembly {
             permission := add(_sig.offset, calldataload(_sig.offset))
-            permissionOffset := permission
             merkleProof.length := calldataload(add(_sig.offset, calldataload(add(_sig.offset, 0x20))))
             merkleProof.offset := add(add(_sig.offset,0x20), calldataload(add(_sig.offset, 0x20)))
-            merkleProofOffset := merkleProof.offset
-            merkleProofLength := merkleProof.length
-        }
-        console.log("permissionOffset");
-        console.logUint(permissionOffset);
-        console.log("merkleProofOffset");
-        console.logUint(merkleProofOffset);
-        console.log("merkleProofLength");
-        console.logUint(merkleProofLength);
-
-        console.log("merkleProof");
-        for(uint256 i = 0; i < merkleProofLength; i++) {
-            console.logBytes32(merkleProof[i]);
         }
     }
 
@@ -160,9 +119,6 @@ f39437e548eb9ca852b9fac9fc2eaccbb521e775553f81056cf35d6f21fe8bd2
         bytes calldata callData = userOp.callData;
         if(bytes4(callData[0:4]) == Kernel.execute.selector) {
             (Permission calldata permission, bytes32[] calldata merkleProof) = _getPermission(userOp.signature[85:]);
-            console.log("permission");
-            console.log("target %s", permission.target);
-            console.log("valueLimit %s", permission.valueLimit);
             require(
                 permission.target == address(0) || address(bytes20(userOp.callData[16:36])) == permission.target,
                 "SessionKeyValidator: target mismatch"
@@ -173,29 +129,17 @@ f39437e548eb9ca852b9fac9fc2eaccbb521e775553f81056cf35d6f21fe8bd2
             );
             bytes calldata data;
             assembly {
-                let dataOffset := add(callData.offset, calldataload(add(add(callData.offset,4), 64)))
+                let dataOffset := add(add(callData.offset, 0x04), calldataload(add(callData.offset, 0x44)))
                 let length := calldataload(dataOffset)
                 data.offset := add(dataOffset, 32)
+                data.length := length
             }
-            //ValidAfter maxValidAfter = session.validAfter;
-            //if(permission.executionRule.interval != 0) {
-            //    ValidAfter validAfter = executionValidAfter[sessionKey][permission.index][msg.sender];
-            //    if(ValidAfter.unwrap(validAfter) == 0) {
-            //        validAfter = ValidAfter.wrap(
-            //            ValidAfter.unwrap(permission.executionRule.validAfter) + permission.executionRule.interval
-            //        );
-            //    } else {
-            //        validAfter = ValidAfter.wrap(
-            //            uint48(ValidAfter.unwrap(validAfter)) + permission.executionRule.interval
-            //        );
-            //    }
-            //    executionValidAfter[sessionKey][permission.index][msg.sender] = validAfter;
-            //    if(ValidAfter.unwrap(validAfter) > ValidAfter.unwrap(maxValidAfter)) {
-            //        maxValidAfter = validAfter;
-            //    }
-            //}
+            require(verifyPermission(data, permission), "SessionKeyValidator: permission verification failed");
+            ValidAfter validAfter = _updateValidAfter(permission, sessionKey);
+            if (ValidAfter.unwrap(validAfter) < ValidAfter.unwrap(session.validAfter)) {
+                validAfter = session.validAfter;
+            }
             if(!MerkleProofLib.verify(merkleProof, session.merkleRoot, keccak256(abi.encode(permission)))){
-                console.log("VERIFY FAILED");
                 return SIG_VALIDATION_FAILED;
             }
             return _verifyUserOpHash(sessionKey, session);
@@ -203,7 +147,7 @@ f39437e548eb9ca852b9fac9fc2eaccbb521e775553f81056cf35d6f21fe8bd2
             Permission[] calldata permissions = _getPermissions(userOp.signature[85:]);
             (, bytes32[] memory merkleProof, bool[] memory flags, uint256[] memory index) =
                 abi.decode(userOp.signature[85:], (Permission[], bytes32[], bool[], uint256[]));
-            bytes32[] memory leaves = _verifyParams(callData, permissions, index);
+            bytes32[] memory leaves = _verifyParams(sessionKey, callData, permissions, index);
             if (!MerkleProofLib.verifyMultiProof(merkleProof, session.merkleRoot, leaves, flags)) {
                 return SIG_VALIDATION_FAILED;
             }
@@ -213,7 +157,22 @@ f39437e548eb9ca852b9fac9fc2eaccbb521e775553f81056cf35d6f21fe8bd2
         }
     }
 
-    function _verifyParams(bytes calldata callData, Permission[] calldata _permissions, uint256[] memory index) internal view returns(bytes32[] memory leaves) {
+    function _updateValidAfter(Permission calldata permission, address sessionKey) internal returns(ValidAfter) {
+        if(permission.executionRule.interval == 0) {
+            // no need to update validAfter
+            return ValidAfter.wrap(0);
+        }
+        uint48 validAfter = ValidAfter.unwrap(executionValidAfter[sessionKey][permission.index][msg.sender]);
+        if(validAfter == 0) {
+            validAfter = ValidAfter.unwrap(permission.executionRule.validAfter);
+        }
+        executionValidAfter[sessionKey][permission.index][msg.sender] = ValidAfter.wrap(
+            validAfter + permission.executionRule.interval
+        );
+        return ValidAfter.wrap(validAfter);
+    }
+
+    function _verifyParams(address sessionKey, bytes calldata callData, Permission[] calldata _permissions, uint256[] memory index) internal returns(bytes32[] memory leaves) {
         Call[] calldata calls;
         assembly {
             calls.offset := add(add(callData.offset,0x24), calldataload(add(callData.offset,4)))
@@ -221,15 +180,10 @@ f39437e548eb9ca852b9fac9fc2eaccbb521e775553f81056cf35d6f21fe8bd2
         }
         //require(calls.length == permissions.length, "call length != permissions length"); ignore this since we don't care if calls.length < permissions.length
         //require(calls.length == index.length, "call length != index length");
-        uint256 maxIndex;
-        for(uint256 j = 0; j < index.length; j++) {
-            if (index[j] > maxIndex) {
-                maxIndex = index[j];
-            }
-        }
-        leaves = new bytes32[](maxIndex + 1);
-        ValidAfter maxValidAfter = ValidAfter.wrap(0);
-        for (uint256 i = 0; i < calls.length; i++) {
+        uint256 i = 0;
+        leaves = _generateLeaves(index);
+        ValidAfter maxValidAfter = sessionData[sessionKey][msg.sender].validAfter; 
+        for (i = 0; i < calls.length; i++) {
             Call calldata call = calls[i];
             Permission calldata permission = _permissions[i];
             require(
@@ -241,8 +195,23 @@ f39437e548eb9ca852b9fac9fc2eaccbb521e775553f81056cf35d6f21fe8bd2
                 "SessionKeyValidator: value limit exceeded"
             );
             require(verifyPermission(call.data, permission), "SessionKeyValidator: permission verification failed");
+            ValidAfter validAfter = _updateValidAfter(permission, sessionKey);
+            if (ValidAfter.unwrap(validAfter) > ValidAfter.unwrap(maxValidAfter)) {
+                maxValidAfter = validAfter;
+            }
             leaves[index[i]] = keccak256(abi.encode(permission));
         }
+    }
+
+    function _generateLeaves(uint256[] memory _indexes) internal pure returns(bytes32[] memory leaves) {
+        uint256 maxIndex;
+        uint256 i = 0;
+        for(i = 0; i < _indexes.length; i++) {
+            if (_indexes[i] > maxIndex) {
+                maxIndex = _indexes[i];
+            }
+        }
+        leaves = new bytes32[](maxIndex + 1);
     }
 
 
