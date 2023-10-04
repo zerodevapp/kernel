@@ -95,10 +95,48 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
 
     // to parse single execute permission
     function _getPermission(bytes calldata _sig) internal view returns(Permission calldata permission, bytes32[] calldata merkleProof) {
+/*
+0x
+0000000000000000000000000000000000000000000000000000000000000040 0x00
+00000000000000000000000000000000000000000000000000000000000001c0 0x20
+0000000000000000000000000000000000000000000000000000000000000000 0x40 // permission Offset
+000000000000000000000000c7183455a4c133ae270771860664b6b7ec320bb1 0x60
+a9059cbb00000000000000000000000000000000000000000000000000000000 0x80
+0000000000000000000000000000000000000000000000000000000000000000 0xa0
+0000000000000000000000000000000000000000000000000000000000000100 0xc0
+0000000000000000000000000000000000000000000000000000000000000000 0xe0
+0000000000000000000000000000000000000000000000000000000000000000 0x100
+0000000000000000000000000000000000000000000000000000000000000000 0x120
+0000000000000000000000000000000000000000000000000000000000000001 0x140
+0000000000000000000000000000000000000000000000000000000000000020 0x160
+0000000000000000000000000000000000000000000000000000000000000004 0x180
+0000000000000000000000000000000000000000000000000de0b6b3a7640000 0x1a0
+0000000000000000000000000000000000000000000000000000000000000001
+f39437e548eb9ca852b9fac9fc2eaccbb521e775553f81056cf35d6f21fe8bd2
+*/
+        console.log("GET PERMISSION");
+        console.logBytes(_sig);
+        uint256 permissionOffset;
+        uint256 merkleProofOffset;
+        uint256 merkleProofLength;
         assembly {
             permission := add(_sig.offset, calldataload(_sig.offset))
-            merkleProof.offset := add(_sig.offset, calldataload(add(_sig.offset, 32)))
-            merkleProof.length := calldataload(merkleProof.offset)
+            permissionOffset := permission
+            merkleProof.length := calldataload(add(_sig.offset, calldataload(add(_sig.offset, 0x20))))
+            merkleProof.offset := add(add(_sig.offset,0x20), calldataload(add(_sig.offset, 0x20)))
+            merkleProofOffset := merkleProof.offset
+            merkleProofLength := merkleProof.length
+        }
+        console.log("permissionOffset");
+        console.logUint(permissionOffset);
+        console.log("merkleProofOffset");
+        console.logUint(merkleProofOffset);
+        console.log("merkleProofLength");
+        console.logUint(merkleProofLength);
+
+        console.log("merkleProof");
+        for(uint256 i = 0; i < merkleProofLength; i++) {
+            console.logBytes32(merkleProof[i]);
         }
     }
 
@@ -157,6 +195,7 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
             //    }
             //}
             if(!MerkleProofLib.verify(merkleProof, session.merkleRoot, keccak256(abi.encode(permission)))){
+                console.log("VERIFY FAILED");
                 return SIG_VALIDATION_FAILED;
             }
             return _verifyUserOpHash(sessionKey, session);
@@ -193,10 +232,6 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
         for (uint256 i = 0; i < calls.length; i++) {
             Call calldata call = calls[i];
             Permission calldata permission = _permissions[i];
-            console.log("permission");
-            console.log("target %s", permission.target);
-            console.log("valueLimit %s", permission.valueLimit);
-            console.log("call target %s", call.to);
             require(
                 permission.target == address(0) || call.to == permission.target,
                 "SessionKeyValidator: target mismatch"
