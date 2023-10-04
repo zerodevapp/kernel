@@ -9,9 +9,9 @@ import "./abstract/Compatibility.sol";
 import "./abstract/KernelStorage.sol";
 import "./utils/KernelHelper.sol";
 
-import "src/common/Constants.sol";
-import "src/common/Enum.sol";
-import "src/common/Structs.sol";
+import "./common/Constants.sol";
+import "./common/Enum.sol";
+import "./common/Structs.sol";
 
 /// @title KernelLite
 /// @author taek<leekt216@gmail.com>

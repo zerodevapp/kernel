@@ -1,6 +1,6 @@
 pragma solidity ^0.8.0;
 
-import "src/KernelLite.sol";
+import "../KernelLite.sol";
 
 struct KernelLiteECDSAStorage {
     address owner;

@@ -3,11 +3,11 @@ src = 'src'
 out = 'out'
 libs = ['lib']
 remappings = ['account-abstraction/=lib/account-abstraction/contracts/']
-solc_version = '0.8.19'
+solc_version = '0.8.21'
 bytecode_hash = "none"
 cbor_metadata = false
 optimize = true
-via-ir = true
+via-ir = false
 runs = 1000000
 
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config

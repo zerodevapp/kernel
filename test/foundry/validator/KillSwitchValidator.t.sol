@@ -8,9 +8,9 @@ import "src/validator/KillSwitchValidator.sol";
 import "src/executor/KillSwitchAction.sol";
 // test utils
 import "forge-std/Test.sol";
-import "test/foundry/utils/ERC4337Utils.sol";
-import {KernelTestBase} from "test/foundry/KernelTestBase.sol";
-import {KernelECDSATest} from "test/foundry/KernelECDSA.t.sol";
+import "../utils/ERC4337Utils.sol";
+import {KernelTestBase} from "../KernelTestBase.sol";
+import {KernelECDSATest} from "../KernelECDSA.t.sol";
 
 using ERC4337Utils for EntryPoint;
 
