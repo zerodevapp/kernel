@@ -19,8 +19,6 @@ contract KernelECDSATest is KernelTestBase {
         _setAddress();
     }
 
-    function test() public {}
-
     function getInitializeData() internal view override returns (bytes memory) {
         return abi.encodeWithSelector(KernelStorage.initialize.selector, defaultValidator, abi.encodePacked(owner));
     }
@@ -32,5 +30,16 @@ contract KernelECDSATest is KernelTestBase {
     function signHash(bytes32 hash) internal view override returns (bytes memory) {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, ECDSA.toEthSignedMessageHash(hash));
         return abi.encodePacked(r, s, v);
+    }
+
+    function test_externalCall_success() external {
+        vm.prank(owner);
+        kernel.execute(owner, 0, "", Operation.Call);
+    }
+
+    function test_externalCall_fail() external {
+        vm.prank(address(uint160(owner) -1));
+        vm.expectRevert();
+        kernel.execute(owner, 0, "", Operation.Call);
     }
 }

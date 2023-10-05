@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 import {EntryPoint, UserOperation} from "account-abstraction/core/EntryPoint.sol";
 import {Kernel} from "src/Kernel.sol";
+import {Compatibility} from "src/abstract/Compatibility.sol";
 import {KernelStorage} from "src/abstract/KernelStorage.sol";
 import {KernelFactory} from "src/factory/KernelFactory.sol";
 import {IKernelValidator} from "src/interfaces/IValidator.sol";
@@ -14,10 +15,15 @@ import {ERC4337Utils} from "test/foundry/utils/ERC4337Utils.sol";
 import {Test} from "forge-std/Test.sol";
 import {console} from "forge-std/Console.sol";
 import {TestValidator} from "./mock/TestValidator.sol";
+import {TestERC721} from "./mock/TestERC721.sol";
+import {TestERC1155} from "./mock/TestERC1155.sol";
 
 using ERC4337Utils for EntryPoint;
 
 abstract contract KernelTestBase is Test {
+    // to support 0.8.19
+    // also, weird error came up when i did Compatibility.Received
+    event Received(address sender, uint256 amount);
     Kernel kernel;
     Kernel kernelImpl;
     KernelFactory factory;
@@ -60,6 +66,34 @@ abstract contract KernelTestBase is Test {
         bytes32 hash = keccak256(abi.encodePacked("hello world"));
         bytes memory sig = signHash(hash);
         assertEq(kernel.isValidSignature(hash, sig), Kernel.isValidSignature.selector);
+    }
+
+    function test_should_emit_event_on_receive() external {
+        vm.expectEmit(address(kernel));
+        emit Received(address(this), 1000);
+        (bool success, ) = address(kernel).call{value: 1000}("");
+        assertEq(success, true);
+    }
+
+    function test_should_receive_erc721() external {
+        TestERC721 token = new TestERC721();
+        token.safeMint(address(kernel), 1);
+    }
+
+    function test_should_receive_erc1155() external {
+        TestERC1155 token = new TestERC1155();
+        token.mint(address(kernel), 1, 1000, "");
+    }
+
+    function test_should_receive_erc1155_batch() external {
+        TestERC1155 token = new TestERC1155();
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 1;
+        ids[1] = 2;
+        uint256[] memory amounts = new uint256[](2);
+        amounts[0] = 1000;
+        amounts[1] = 1000;
+        token.batchMint(address(kernel), ids, amounts, "");
     }
 
     function test_set_default_validator() external virtual {
