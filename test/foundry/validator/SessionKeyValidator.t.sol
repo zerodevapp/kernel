@@ -48,18 +48,14 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         );
 
         ParamRule[] memory rules = new ParamRule[](1);
-        ExecutionRule memory execRule = ExecutionRule({
-            validAfter: ValidAfter.wrap(0),
-            interval: 0,
-            runs: 0
-        });
+        ExecutionRule memory execRule = ExecutionRule({validAfter: ValidAfter.wrap(0), interval: 0, runs: 0});
         rules[0] = ParamRule({offset: 32, condition: ParamCondition.LESS_THAN_OR_EQUAL, param: bytes32(uint256(1e18))});
 
         bytes32[] memory data = new bytes32[](2);
         data[0] = keccak256(
             abi.encode(
                 Permission({
-                    index : 0,
+                    index: 0,
                     valueLimit: 0,
                     target: address(testToken),
                     sig: ERC20.transfer.selector,
@@ -72,7 +68,7 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         data[1] = keccak256(
             abi.encode(
                 Permission({
-                    index : 1,
+                    index: 1,
                     valueLimit: 0,
                     target: address(testToken2),
                     sig: ERC20.transfer.selector,
@@ -109,7 +105,7 @@ contract SessionKeyValidatorTest is KernelECDSATest {
                 entryPoint.signUserOpHash(vm, sessionKeyPriv, op),
                 abi.encode(
                     Permission({
-                        index : 0,
+                        index: 0,
                         valueLimit: 0,
                         target: address(testToken),
                         sig: ERC20.transfer.selector,
@@ -127,7 +123,7 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         entryPoint.handleOps(ops, beneficiary);
     }
 
-    function pack_multi_calls() internal view returns(UserOperation memory op) {
+    function pack_multi_calls() internal view returns (UserOperation memory op) {
         Call[] memory calls = new Call[](2);
         calls[0] = Call({
             to: address(testToken),
@@ -139,51 +135,53 @@ contract SessionKeyValidatorTest is KernelECDSATest {
             value: 0,
             data: abi.encodeWithSelector(ERC20.transfer.selector, beneficiary, 100)
         });
-        op = entryPoint.fillUserOp(
-            address(kernel),
-            abi.encodeWithSelector(
-                Kernel.executeBatch.selector,
-                calls
-            )
-        );
+        op = entryPoint.fillUserOp(address(kernel), abi.encodeWithSelector(Kernel.executeBatch.selector, calls));
     }
 
-    function generate_merkle_root(ParamRule[] memory rules, ExecutionRule memory execRule) internal view returns(bytes32) {
+    function generate_merkle_root(ParamRule[] memory rules, ExecutionRule memory execRule)
+        internal
+        view
+        returns (bytes32)
+    {
         bytes32[] memory data = new bytes32[](2);
         data[0] = keccak256(
             abi.encode(
                 Permission({
-            index : 0,
-            valueLimit: 0,
-            target: address(testToken),
-            sig: ERC20.transfer.selector,
-            rules: rules,
-            executionRule: execRule
-        })
-        )
+                    index: 0,
+                    valueLimit: 0,
+                    target: address(testToken),
+                    sig: ERC20.transfer.selector,
+                    rules: rules,
+                    executionRule: execRule
+                })
+            )
         );
 
         data[1] = keccak256(
             abi.encode(
                 Permission({
-            index : 1,
-            valueLimit: 0,
-            target: address(testToken2),
-            sig: ERC20.transfer.selector,
-            executionRule: execRule,
-            rules: rules
-        })
-        )
+                    index: 1,
+                    valueLimit: 0,
+                    target: address(testToken2),
+                    sig: ERC20.transfer.selector,
+                    executionRule: execRule,
+                    rules: rules
+                })
+            )
         );
 
         return _getRoot(data);
     }
 
-    function generate_proofs(ParamRule[] memory rules, ExecutionRule memory execRule) internal view returns(bytes memory){
+    function generate_proofs(ParamRule[] memory rules, ExecutionRule memory execRule)
+        internal
+        view
+        returns (bytes memory)
+    {
         bytes32[] memory proof;
         Permission[] memory permissions = new Permission[](2);
         permissions[0] = Permission({
-            index : 0,
+            index: 0,
             valueLimit: 0,
             target: address(testToken),
             sig: ERC20.transfer.selector,
@@ -191,7 +189,7 @@ contract SessionKeyValidatorTest is KernelECDSATest {
             rules: rules
         });
         permissions[1] = Permission({
-            index : 1,
+            index: 1,
             valueLimit: 0,
             target: address(testToken2),
             sig: ERC20.transfer.selector,
@@ -217,11 +215,7 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         testToken.mint(address(kernel), 100e18);
         UserOperation memory op = pack_multi_calls();
         ParamRule[] memory rules = new ParamRule[](1);
-        ExecutionRule memory execRule = ExecutionRule({
-            validAfter: ValidAfter.wrap(0),
-            interval: 0,
-            runs: 0
-        });
+        ExecutionRule memory execRule = ExecutionRule({validAfter: ValidAfter.wrap(0), interval: 0, runs: 0});
         rules[0] = ParamRule({offset: 32, condition: ParamCondition.LESS_THAN_OR_EQUAL, param: bytes32(uint256(1e18))});
         bytes32 merkleRoot = generate_merkle_root(rules, execRule);
         bytes memory enableData = abi.encodePacked(sessionKey, merkleRoot, uint48(0), uint48(0), address(0));
@@ -250,9 +244,7 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         op.signature = bytes.concat(
             op.signature,
             abi.encodePacked(
-                sessionKey,
-                entryPoint.signUserOpHash(vm, sessionKeyPriv, op),
-                generate_proofs(rules, execRule)
+                sessionKey, entryPoint.signUserOpHash(vm, sessionKeyPriv, op), generate_proofs(rules, execRule)
             )
         );
         UserOperation[] memory ops = new UserOperation[](1);

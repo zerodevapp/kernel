@@ -36,7 +36,7 @@ struct ParamRule {
 
 struct ExecutionRule {
     ValidAfter validAfter; // 48 bits
-    uint48 interval; // 48 bits 
+    uint48 interval; // 48 bits
     uint48 runs; // 48
 }
 

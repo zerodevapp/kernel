@@ -39,7 +39,7 @@ abstract contract KernelTestBase is Test {
         factory.setImplementation(address(kernelImpl), true);
         vm.stopPrank();
     }
-    
+
     function test_external_call_default() external {
         vm.startPrank(owner);
         (bool success,) = address(kernel).call(abi.encodePacked("Hello world"));
@@ -47,16 +47,12 @@ abstract contract KernelTestBase is Test {
     }
 
     function test_initialize_twice() external {
-        (bool success, ) = address(kernel).call(getInitializeData());
+        (bool success,) = address(kernel).call(getInitializeData());
         assertEq(success, false);
     }
-    
+
     function test_should_return_address_if_deployed() external {
-        address proxy = factory.createAccount(
-            address(kernelImpl),
-            getInitializeData(),
-            0
-        );
+        address proxy = factory.createAccount(address(kernelImpl), getInitializeData(), 0);
         assertEq(proxy, address(kernel));
     }
 
@@ -157,24 +153,14 @@ abstract contract KernelTestBase is Test {
         vm.stopPrank();
     }
 
-    function getInitializeData() internal virtual view returns(bytes memory);
+    function getInitializeData() internal view virtual returns (bytes memory);
 
-    function signUserOp(UserOperation memory op) internal virtual view returns(bytes memory);
+    function signUserOp(UserOperation memory op) internal view virtual returns (bytes memory);
 
-    function signHash(bytes32 hash) internal virtual view returns(bytes memory);
+    function signHash(bytes32 hash) internal view virtual returns (bytes memory);
 
     function _setAddress() internal {
-        kernel = Kernel(
-            payable(
-                address(
-                    factory.createAccount(
-                        address(kernelImpl),
-                        getInitializeData(),
-                        0
-                    )
-                )
-            )
-        );
+        kernel = Kernel(payable(address(factory.createAccount(address(kernelImpl), getInitializeData(), 0))));
         vm.deal(address(kernel), 1e30);
     }
 
@@ -210,7 +196,7 @@ abstract contract KernelTestBase is Test {
                 "\x19\x01",
                 _buildDomainSeparator("Kernel", "0.2.2", sender),
                 getStructHash(sig, validUntil, validAfter, validator, executor, enableData)
-        )
+            )
         );
     }
 }

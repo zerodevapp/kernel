@@ -74,7 +74,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
             revert NotAuthorizedCaller();
         }
         uint256 len = calls.length;
-        for(uint256 i = 0; i<len;) {
+        for (uint256 i = 0; i < len;) {
             Call memory call = calls[i];
             address to = call.to;
             uint256 value = call.value;
@@ -135,9 +135,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
             ExecutionDetail storage detail = getKernelStorage().execution[bytes4(userOpCallData[0:4])];
             validator = detail.validator;
             assembly {
-                if iszero(validator) {
-                    validator := shr(80, storage_slot_1)
-                }
+                if iszero(validator) { validator := shr(80, storage_slot_1) }
             }
             userOpSignature = userOpSignature[4:];
             validationData = packValidationData(detail.validAfter, detail.validUntil);

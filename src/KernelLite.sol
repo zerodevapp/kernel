@@ -73,7 +73,7 @@ abstract contract KernelLite is EIP712, Compatibility, KernelStorage {
             revert NotAuthorizedCaller();
         }
         uint256 len = calls.length;
-        for(uint256 i = 0; i<len;) {
+        for (uint256 i = 0; i < len;) {
             Call memory call = calls[i];
             address to = call.to;
             uint256 value = call.value;
@@ -133,7 +133,7 @@ abstract contract KernelLite is EIP712, Compatibility, KernelStorage {
         assembly {
             storage_slot_1 := sload(KERNEL_STORAGE_SLOT_1)
         }
-        if(mode & (storage_slot_1 << 224) != 0x00000000) {
+        if (mode & (storage_slot_1 << 224) != 0x00000000) {
             revert DisabledMode();
         } else if (mode == 0x00000001) {
             bytes calldata userOpCallData;
@@ -272,12 +272,19 @@ abstract contract KernelLite is EIP712, Compatibility, KernelStorage {
         override
         onlyFromEntryPointOrSelf
     {
-        revert ("not implemented");
+        revert("not implemented");
     }
 
-    function _validateUserOp(UserOperation calldata _op, bytes32 _opHash, uint256 _missingFunds) internal virtual returns(ValidationData);
+    function _validateUserOp(UserOperation calldata _op, bytes32 _opHash, uint256 _missingFunds)
+        internal
+        virtual
+        returns (ValidationData);
 
-    function _validateSignature(bytes32 _hash, bytes calldata _signature) internal view virtual returns(ValidationData);
+    function _validateSignature(bytes32 _hash, bytes calldata _signature)
+        internal
+        view
+        virtual
+        returns (ValidationData);
 
     function _validCaller(address _caller, bytes calldata _data) internal view virtual returns (bool);
 }
