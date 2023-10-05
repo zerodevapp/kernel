@@ -79,7 +79,7 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         );
 
         bytes32 merkleRoot = _getRoot(data);
-        bytes memory enableData = abi.encodePacked(sessionKey, merkleRoot, uint48(0), uint48(0), address(0));
+        bytes memory enableData = abi.encodePacked(sessionKey, merkleRoot, uint48(0), uint48(0), address(0), uint256(1));
         bytes32 digest = getTypedDataHash(
             address(kernel), Kernel.execute.selector, 0, 0, address(sessionKeyValidator), address(0), enableData
         );
@@ -218,7 +218,7 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         ExecutionRule memory execRule = ExecutionRule({validAfter: ValidAfter.wrap(0), interval: 0, runs: 0});
         rules[0] = ParamRule({offset: 32, condition: ParamCondition.LESS_THAN_OR_EQUAL, param: bytes32(uint256(1e18))});
         bytes32 merkleRoot = generate_merkle_root(rules, execRule);
-        bytes memory enableData = abi.encodePacked(sessionKey, merkleRoot, uint48(0), uint48(0), address(0));
+        bytes memory enableData = abi.encodePacked(sessionKey, merkleRoot, uint48(0), uint48(0), address(0), uint256(1));
         bytes32 digest = getTypedDataHash(
             address(kernel), Kernel.executeBatch.selector, 0, 0, address(sessionKeyValidator), address(0), enableData
         );

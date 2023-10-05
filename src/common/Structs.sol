@@ -54,5 +54,5 @@ struct SessionData {
     ValidAfter validAfter;
     ValidUntil validUntil;
     address paymaster; // address(0) means accept userOp without paymaster, address(1) means reject userOp with paymaster, other address means accept userOp with paymaster with the address
-    bool enabled;
+    uint256 approvedNonce;
 }

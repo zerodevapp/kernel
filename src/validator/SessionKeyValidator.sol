@@ -1,17 +1,21 @@
 pragma solidity ^0.8.0;
 
 import "solady/utils/ECDSA.sol";
-import "../interfaces/IValidator.sol";
 import "solady/utils/MerkleProofLib.sol";
+
+import "../interfaces/IValidator.sol";
+
 import "../common/Constants.sol";
 import "../common/Enum.sol";
 import "../common/Structs.sol";
 import "../common/Types.sol";
+
 import {Kernel} from "../Kernel.sol";
 
 import "forge-std/console.sol";
 
 contract ExecuteSessionKeyValidator is IKernelValidator {
+    mapping(address kernel => uint256) public invalidNonce;
     mapping(address sessionKey => mapping(address kernel => SessionData)) public sessionData;
     mapping(address sessionKey => mapping(uint32 index => mapping(address kernel => ValidAfter))) public
         executionValidAfter;
@@ -22,13 +26,20 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
         ValidAfter validAfter = ValidAfter.wrap(uint48(bytes6(_data[52:58])));
         ValidUntil validUntil = ValidUntil.wrap(uint48(bytes6(_data[58:64])));
         address paymaster = address(bytes20(_data[64:84]));
-        sessionData[sessionKey][msg.sender] = SessionData(merkleRoot, validAfter, validUntil, paymaster, true);
+        uint256 approvedNonce = uint256(bytes32(_data[84:116]));
+        sessionData[sessionKey][msg.sender] = SessionData(merkleRoot, validAfter, validUntil, paymaster, approvedNonce);
+        require(approvedNonce == invalidNonce[msg.sender] + 1, "SessionKeyValidator: invalid nonce");
     }
 
     function disable(bytes calldata _data) external payable {
+        // invalidate all nonces
+        if (_data.length == 0) {
+            invalidNonce[msg.sender]++;
+            return;
+        }
+        // invalidate specific sessionKey
         address sessionKey = address(bytes20(_data[0:20]));
-        address kernel = msg.sender;
-        sessionData[sessionKey][kernel].enabled = false;
+        delete sessionData[sessionKey][msg.sender];
     }
 
     function _verifyPaymaster(UserOperation calldata userOp, SessionData storage session) internal view {
@@ -118,7 +129,7 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
         // userOp.signature = signer + signature + permission + merkleProof
         address sessionKey = address(bytes20(userOp.signature[0:20]));
         SessionData storage session = sessionData[sessionKey][msg.sender];
-        require(session.enabled, "SessionKeyValidator: session key not enabled");
+        require(session.approvedNonce == invalidNonce[msg.sender] + 1, "SessionKeyValidator: session key not enabled");
         _verifyPaymaster(userOp, session);
 
         // NOTE: although this is allowed in smart contract, it is guided not to use this feature in most usecases
