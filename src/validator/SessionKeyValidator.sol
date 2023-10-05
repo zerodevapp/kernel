@@ -6,7 +6,7 @@ import "solady/utils/MerkleProofLib.sol";
 import "../interfaces/IValidator.sol";
 
 import "../common/Constants.sol";
-import "../common/Enum.sol";
+import "../common/Enums.sol";
 import "../common/Structs.sol";
 import "../common/Types.sol";
 

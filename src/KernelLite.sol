@@ -10,7 +10,7 @@ import "./abstract/KernelStorage.sol";
 import "./utils/KernelHelper.sol";
 
 import "./common/Constants.sol";
-import "./common/Enum.sol";
+import "./common/Enums.sol";
 import "./common/Structs.sol";
 
 /// @title KernelLite

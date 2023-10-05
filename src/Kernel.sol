@@ -10,13 +10,12 @@ import "./abstract/KernelStorage.sol";
 import "./utils/KernelHelper.sol";
 
 import "./common/Constants.sol";
-import "./common/Enum.sol";
+import "./common/Enums.sol";
 import "./common/Structs.sol";
 
 /// @title Kernel
 /// @author taek<leekt216@gmail.com>
 /// @notice wallet kernel for extensible wallet functionality
-
 contract Kernel is EIP712, Compatibility, KernelStorage {
     string public constant name = KERNEL_NAME;
 
@@ -50,13 +49,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         }
     }
 
-    /// @notice Executes a function call to an external contract
-    /// @dev The type of operation (call or delegatecall) is specified as an argument.
-    /// @param to The address of the target contract
-    /// @param value The amount of Ether to send
-    /// @param data The call data to be sent
-    /// operation deprecated operation type, usere executeBatch for batch operation
-    function execute(address to, uint256 value, bytes memory data, Operation) external payable {
+    function execute(address to, uint256 value, bytes memory data, Operation) external payable override {
         if (msg.sender != address(entryPoint) && !_checkCaller()) {
             revert NotAuthorizedCaller();
         }
@@ -69,7 +62,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         }
     }
 
-    function executeBatch(Call[] memory calls) external payable {
+    function executeBatch(Call[] memory calls) external payable override {
         if (msg.sender != address(entryPoint) && !_checkCaller()) {
             revert NotAuthorizedCaller();
         }
@@ -89,15 +82,10 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         }
     }
 
-    /// @notice Validates a user operation based on its mode
-    /// @dev This function will validate user operation and be called by EntryPoint
-    /// @param userOp The user operation to be validated
-    /// @param userOpHash The hash of the user operation
-    /// @param missingAccountFunds The funds needed to be reimbursed
-    /// @return validationData The data used for validation
     function validateUserOp(UserOperation memory userOp, bytes32 userOpHash, uint256 missingAccountFunds)
         external
         payable
+        override
         returns (ValidationData validationData)
     {
         if (msg.sender != address(entryPoint)) {

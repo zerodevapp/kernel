@@ -1,7 +1,7 @@
 pragma solidity ^0.8.0;
 
 import "../interfaces/IValidator.sol";
-import "./Enum.sol";
+import "./Enums.sol";
 import "./Types.sol";
 
 // Defining a struct for execution details
