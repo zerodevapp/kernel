@@ -19,6 +19,8 @@ contract KernelECDSATest is KernelTestBase {
         _setAddress();
     }
 
+    function test() public {}
+
     function getInitializeData() internal view override returns (bytes memory) {
         return abi.encodeWithSelector(KernelStorage.initialize.selector, defaultValidator, abi.encodePacked(owner));
     }

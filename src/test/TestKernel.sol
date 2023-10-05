@@ -5,6 +5,8 @@ import "../Kernel.sol";
 contract TestKernel is Kernel {
     constructor(IEntryPoint _entryPoint) Kernel(_entryPoint) {}
 
+    function test() public {}
+
     function sudoInitialize(IKernelValidator _defaultValidator, bytes calldata _data) external payable {
         WalletKernelStorage storage ws = getKernelStorage();
         ws.defaultValidator = _defaultValidator;

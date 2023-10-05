@@ -10,7 +10,7 @@ import {IKernelValidator} from "src/interfaces/IValidator.sol";
 import {ExecutionDetail} from "src/common/Structs.sol";
 import {ValidUntil, ValidAfter} from "src/common/Types.sol";
 
-import {ERC4337Utils, getStructHash, _buildDomainSeparator} from "test/foundry/utils/ERC4337Utils.sol";
+import {ERC4337Utils} from "test/foundry/utils/ERC4337Utils.sol";
 import {Test} from "forge-std/Test.sol";
 import {console} from "forge-std/Console.sol";
 import {TestValidator} from "src/test/TestValidator.sol";
@@ -194,8 +194,8 @@ abstract contract KernelTestBase is Test {
         return keccak256(
             abi.encodePacked(
                 "\x19\x01",
-                _buildDomainSeparator("Kernel", "0.2.2", sender),
-                getStructHash(sig, validUntil, validAfter, validator, executor, enableData)
+                ERC4337Utils._buildDomainSeparator("Kernel", "0.2.2", sender),
+                ERC4337Utils.getStructHash(sig, validUntil, validAfter, validator, executor, enableData)
             )
         );
     }

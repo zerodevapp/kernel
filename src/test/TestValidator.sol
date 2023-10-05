@@ -11,6 +11,8 @@ contract TestValidator is IKernelValidator {
 
     mapping(address kernel => address) public caller;
 
+    function test() public {}
+
     function sudoSetCaller(address _kernel, address _caller) external {
         caller[_kernel] = _caller;
     }
