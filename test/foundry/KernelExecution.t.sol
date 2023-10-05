@@ -6,9 +6,9 @@ import "src/Kernel.sol";
 import "src/validator/ECDSAValidator.sol";
 import "src/factory/KernelFactory.sol";
 // test artifacts
-import "src/test/TestValidator.sol";
-import "src/test/TestExecutor.sol";
-import "src/test/TestERC721.sol";
+import "./mock/TestValidator.sol";
+import "./mock/TestExecutor.sol";
+import "./mock/TestERC721.sol";
 // test utils
 import "forge-std/Test.sol";
 import "./KernelECDSA.t.sol";

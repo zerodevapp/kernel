@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "../interfaces/IValidator.sol";
-import "../common/Types.sol";
+import "src/interfaces/IValidator.sol";
+import "src/common/Types.sol";
 
 contract TestValidator is IKernelValidator {
     event TestValidateUserOp(bytes32 indexed opHash);
@@ -11,7 +11,7 @@ contract TestValidator is IKernelValidator {
 
     mapping(address kernel => address) public caller;
 
-    function test() public {}
+    function test_ignore() public {}
 
     function sudoSetCaller(address _kernel, address _caller) external {
         caller[_kernel] = _caller;

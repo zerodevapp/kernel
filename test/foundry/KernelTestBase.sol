@@ -13,7 +13,7 @@ import {ValidUntil, ValidAfter} from "src/common/Types.sol";
 import {ERC4337Utils} from "test/foundry/utils/ERC4337Utils.sol";
 import {Test} from "forge-std/Test.sol";
 import {console} from "forge-std/Console.sol";
-import {TestValidator} from "src/test/TestValidator.sol";
+import {TestValidator} from "./mock/TestValidator.sol";
 
 using ERC4337Utils for EntryPoint;
 
