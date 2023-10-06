@@ -12,7 +12,7 @@ import {KernelStorage} from "src/abstract/KernelStorage.sol";
 import {KernelFactory} from "src/factory/KernelFactory.sol";
 import {IKernelValidator} from "src/interfaces/IValidator.sol";
 
-import {Call,ExecutionDetail} from "src/common/Structs.sol";
+import {Call, ExecutionDetail} from "src/common/Structs.sol";
 import {ValidationData, ValidUntil, ValidAfter} from "src/common/Types.sol";
 
 import {ERC4337Utils} from "test/foundry/utils/ERC4337Utils.sol";
@@ -38,7 +38,7 @@ abstract contract KernelTestBase is Test {
         uint256 actualGasCost,
         uint256 actualGasUsed
     );
- 
+
     Kernel kernel;
     Kernel kernelImpl;
     KernelFactory factory;
@@ -63,19 +63,29 @@ abstract contract KernelTestBase is Test {
         vm.stopPrank();
     }
 
-    function getOwners() internal virtual returns(address[] memory _owners);
+    function getOwners() internal virtual returns (address[] memory _owners);
+
+    function getInitializeData() internal view virtual returns (bytes memory);
+
+    function signUserOp(UserOperation memory op) internal view virtual returns (bytes memory);
+
+    function getWrongSignature(UserOperation memory op) internal view virtual returns (bytes memory);
+
+    function signHash(bytes32 hash) internal view virtual returns (bytes memory);
+
+    function getWrongSignature(bytes32 hash) internal view virtual returns (bytes memory);
 
     function test_external_call_execute_success() external {
         address[] memory validCallers = getOwners();
-        for(uint i = 0; i<validCallers.length; i++) {
+        for (uint256 i = 0; i < validCallers.length; i++) {
             vm.prank(validCallers[i]);
             kernel.execute(validCallers[i], 0, "", Operation.Call);
         }
     }
-    
+
     function test_external_call_execute_fail() external {
         address[] memory validCallers = getOwners();
-        for(uint i = 0; i<validCallers.length; i++) {
+        for (uint256 i = 0; i < validCallers.length; i++) {
             vm.prank(address(uint160(validCallers[i]) + 1));
             vm.expectRevert();
             kernel.execute(validCallers[i], 0, "", Operation.Call);
@@ -98,7 +108,8 @@ abstract contract KernelTestBase is Test {
     }
 
     function test_eip712() external {
-        (bytes1 fields, string memory name, string memory version, ,address verifyingContract, bytes32 salt, ) = kernel.eip712Domain();
+        (bytes1 fields, string memory name, string memory version,, address verifyingContract, bytes32 salt,) =
+            kernel.eip712Domain();
         assertEq(fields, bytes1(hex"0f"));
         assertEq(name, "Kernel");
         assertEq(version, "0.2.2");
@@ -128,10 +139,16 @@ abstract contract KernelTestBase is Test {
         assertEq(kernel.isValidSignature(hash, sig), Kernel.isValidSignature.selector);
     }
 
+    function test_fail_validate_wrongsignature() external {
+        bytes32 hash = keccak256(abi.encodePacked("hello world"));
+        bytes memory sig = getWrongSignature(hash);
+        assertEq(kernel.isValidSignature(hash, sig), bytes4(0xffffffff));
+    }
+
     function test_should_emit_event_on_receive() external {
         vm.expectEmit(address(kernel));
         emit Received(address(this), 1000);
-        (bool success, ) = address(kernel).call{value: 1000}("");
+        (bool success,) = address(kernel).call{value: 1000}("");
         assertEq(success, true);
     }
 
@@ -182,6 +199,7 @@ abstract contract KernelTestBase is Test {
         ops[0] = op;
         entryPoint.handleOps(ops, beneficiary);
         assertEq(uint256(bytes32(KernelStorage(address(kernel)).getDisabledMode())), 1 << 224);
+        assertEq(uint256(KernelStorage(address(kernel)).getLastDisabledTime()), block.timestamp);
     }
 
     function test_set_execution() external {
@@ -289,7 +307,7 @@ abstract contract KernelTestBase is Test {
         ValidationData res = kernel.validateUserOp(op, bytes32(hex"deadbeef"), uint256(100));
         assertEq(ValidationData.unwrap(res), 1);
     }
-    
+
     function test_sudo() external {
         UserOperation memory op =
             entryPoint.fillUserOp(address(kernel), abi.encodeWithSelector(TestExecutor.doNothing.selector));
@@ -299,7 +317,17 @@ abstract contract KernelTestBase is Test {
         logGas(op);
         entryPoint.handleOps(ops, beneficiary);
     }
-    
+
+    function test_sudo_wrongSig() external {
+        UserOperation memory op =
+            entryPoint.fillUserOp(address(kernel), abi.encodeWithSelector(TestExecutor.doNothing.selector));
+        op.signature = getWrongSignature(op);
+        UserOperation[] memory ops = new UserOperation[](1);
+        ops[0] = op;
+        vm.expectRevert();
+        entryPoint.handleOps(ops, beneficiary);
+    }
+
     function test_mock_mode_2() external {
         TestValidator testValidator = new TestValidator();
         TestExecutor testExecutor = new TestExecutor();
@@ -363,12 +391,6 @@ abstract contract KernelTestBase is Test {
         logGas(op);
         entryPoint.handleOps(ops, beneficiary);
     }
-
-    function getInitializeData() internal view virtual returns (bytes memory);
-
-    function signUserOp(UserOperation memory op) internal view virtual returns (bytes memory);
-
-    function signHash(bytes32 hash) internal view virtual returns (bytes memory);
 
     function _setAddress() internal {
         kernel = Kernel(payable(address(factory.createAccount(address(kernelImpl), getInitializeData(), 0))));

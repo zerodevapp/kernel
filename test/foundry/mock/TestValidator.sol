@@ -4,6 +4,8 @@ pragma solidity ^0.8.0;
 import "src/interfaces/IValidator.sol";
 import "src/common/Types.sol";
 
+import "src/utils/KernelHelper.sol";
+
 contract TestValidator is IKernelValidator {
     event TestValidateUserOp(bytes32 indexed opHash);
     event TestEnable(bytes data);
@@ -11,14 +13,22 @@ contract TestValidator is IKernelValidator {
 
     mapping(address kernel => address) public caller;
 
+    ValidationData public data;
+
     function test_ignore() public {}
 
     function sudoSetCaller(address _kernel, address _caller) external {
         caller[_kernel] = _caller;
     }
 
-    function validateSignature(bytes32, bytes calldata) external pure override returns (ValidationData) {
-        return ValidationData.wrap(0);
+    function setData(bool success, uint48 validAfter, uint48 validUntil) external {
+        data = success
+            ? packValidationData(ValidAfter.wrap(validAfter), ValidUntil.wrap(validUntil))
+            : ValidationData.wrap(0);
+    }
+
+    function validateSignature(bytes32, bytes calldata) external view override returns (ValidationData) {
+        return data;
     }
 
     function validateUserOp(UserOperation calldata, bytes32 userOpHash, uint256)
@@ -31,12 +41,12 @@ contract TestValidator is IKernelValidator {
         return ValidationData.wrap(0);
     }
 
-    function enable(bytes calldata data) external payable override {
-        emit TestEnable(data);
+    function enable(bytes calldata _data) external payable override {
+        emit TestEnable(_data);
     }
 
-    function disable(bytes calldata data) external payable override {
-        emit TestDisable(data);
+    function disable(bytes calldata _data) external payable override {
+        emit TestDisable(_data);
     }
 
     function validCaller(address _caller, bytes calldata) external view override returns (bool) {

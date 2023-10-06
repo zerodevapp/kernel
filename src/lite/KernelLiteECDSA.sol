@@ -49,10 +49,9 @@ contract KernelLiteECDSA is KernelLite {
         if (signed == getKernelLiteECDSAStorage().owner) {
             return ValidationData.wrap(0);
         }
-        if (ECDSA.recover(_hash, _signature) == getKernelLiteECDSAStorage().owner) {
-            return ValidationData.wrap(0);
+        if (ECDSA.recover(_hash, _signature) != getKernelLiteECDSAStorage().owner) {
+            return SIG_VALIDATION_FAILED;
         }
-        return SIG_VALIDATION_FAILED;
     }
 
     function _validCaller(address _caller, bytes calldata) internal view override returns (bool) {

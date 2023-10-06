@@ -21,7 +21,7 @@ contract KernelECDSATest is KernelTestBase {
 
     function test_ignore() external {}
 
-    function getOwners() internal view override returns(address[] memory) {
+    function getOwners() internal view override returns (address[] memory) {
         address[] memory owners = new address[](1);
         owners[0] = owner;
         return owners;
@@ -35,8 +35,17 @@ contract KernelECDSATest is KernelTestBase {
         return abi.encodePacked(bytes4(0x00000000), entryPoint.signUserOpHash(vm, ownerKey, op));
     }
 
+    function getWrongSignature(UserOperation memory op) internal view override returns (bytes memory) {
+        return abi.encodePacked(bytes4(0x00000000), entryPoint.signUserOpHash(vm, ownerKey + 1, op));
+    }
+
     function signHash(bytes32 hash) internal view override returns (bytes memory) {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, ECDSA.toEthSignedMessageHash(hash));
+        return abi.encodePacked(r, s, v);
+    }
+
+    function getWrongSignature(bytes32 hash) internal view override returns (bytes memory) {
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey + 1, ECDSA.toEthSignedMessageHash(hash));
         return abi.encodePacked(r, s, v);
     }
 }

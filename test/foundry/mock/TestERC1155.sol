@@ -4,10 +4,9 @@ pragma solidity ^0.8.0;
 import "solady/tokens/ERC1155.sol";
 
 contract TestERC1155 is ERC1155 {
-    function test_ignore() public {
-    }
+    function test_ignore() public {}
 
-    function uri(uint256) public pure override returns(string memory) {
+    function uri(uint256) public pure override returns (string memory) {
         return "https://example.com";
     }
 
