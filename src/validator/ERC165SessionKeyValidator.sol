@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "openzeppelin-contracts/contracts/utils/introspection/IERC165.sol";
 import "solady/utils/ECDSA.sol";
 import "../utils/KernelHelper.sol";
 import "../interfaces/IValidator.sol";
@@ -15,6 +14,10 @@ struct ERC165SessionKeyStorage {
     ValidAfter validAfter;
     ValidUntil validUntil;
     uint32 addressOffset;
+}
+
+interface IERC165 {
+    function supportsInterface(bytes4 interfaceId) external view returns (bool);
 }
 
 contract ERC165SessionKeyValidator is IKernelValidator {

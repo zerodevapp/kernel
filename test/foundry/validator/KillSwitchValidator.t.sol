@@ -12,7 +12,7 @@ import "../utils/ERC4337Utils.sol";
 import {KernelTestBase} from "../KernelTestBase.sol";
 import {KernelECDSATest} from "../KernelECDSA.t.sol";
 
-using ERC4337Utils for EntryPoint;
+using ERC4337Utils for IEntryPoint;
 
 contract KillSwitchValidatorTest is KernelECDSATest {
     KillSwitchValidator killSwitch;

@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {EntryPoint, UserOperation} from "account-abstraction/core/EntryPoint.sol";
+import {IEntryPoint} from "I4337/interfaces/IEntryPoint.sol";
+import {UserOperation} from "I4337/interfaces/UserOperation.sol";
 import "solady/utils/ECDSA.sol";
 import {Vm} from "forge-std/Test.sol";
 
 library ERC4337Utils {
     function test() public {}
 
-    function fillUserOp(EntryPoint _entryPoint, address _sender, bytes memory _data)
+    function fillUserOp(IEntryPoint _entryPoint, address _sender, bytes memory _data)
         internal
         view
         returns (UserOperation memory op)
@@ -23,7 +24,7 @@ library ERC4337Utils {
         op.maxPriorityFeePerGas = 1;
     }
 
-    function signUserOpHash(EntryPoint _entryPoint, Vm _vm, uint256 _key, UserOperation memory _op)
+    function signUserOpHash(IEntryPoint _entryPoint, Vm _vm, uint256 _key, UserOperation memory _op)
         internal
         view
         returns (bytes memory signature)

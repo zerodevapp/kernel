@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 // Importing external libraries and contracts
 import "solady/utils/EIP712.sol";
 import "solady/utils/ECDSA.sol";
-import "account-abstraction/interfaces/IEntryPoint.sol";
+import "I4337/interfaces/IEntryPoint.sol";
 import "./abstract/Compatibility.sol";
 import "./abstract/KernelStorage.sol";
 import "./utils/KernelHelper.sol";

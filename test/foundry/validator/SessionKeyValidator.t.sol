@@ -17,7 +17,7 @@ import "src/validator/SessionKeyValidator.sol";
 
 import {KernelECDSATest} from "../KernelECDSA.t.sol";
 
-using ERC4337Utils for EntryPoint;
+using ERC4337Utils for IEntryPoint;
 
 contract SessionKeyValidatorTest is KernelECDSATest {
     ExecuteSessionKeyValidator sessionKeyValidator;

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {EntryPoint, IEntryPoint} from "account-abstraction/core/EntryPoint.sol";
+import {IEntryPoint} from "I4337/interfaces/IEntryPoint.sol";
 import "src/Kernel.sol";
 import "src/lite/KernelLiteECDSA.sol";
 // test artifacts
@@ -11,7 +11,7 @@ import {ERC4337Utils} from "./utils/ERC4337Utils.sol";
 import {KernelTestBase} from "./KernelTestBase.sol";
 import {TestValidator} from "./mock/TestValidator.sol";
 
-using ERC4337Utils for EntryPoint;
+using ERC4337Utils for IEntryPoint;
 
 contract KernelECDSATest is KernelTestBase {
     function setUp() public {

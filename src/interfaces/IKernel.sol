@@ -6,7 +6,7 @@ import {IKernelValidator} from "./IValidator.sol";
 import {ExecutionDetail, Call} from "../common/Structs.sol";
 import {ValidationData, ValidUntil, ValidAfter} from "../common/Types.sol";
 import {Operation} from "../common/Enums.sol";
-import {UserOperation} from "account-abstraction/interfaces/IEntryPoint.sol";
+import {UserOperation} from "I4337/interfaces/UserOperation.sol";
 
 interface IKernel {
     function initialize(IKernelValidator _validator, bytes calldata _data) external payable;

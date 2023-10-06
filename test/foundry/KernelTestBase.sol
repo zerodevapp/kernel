@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {IEntryPoint, EntryPoint, UserOperation} from "account-abstraction/core/EntryPoint.sol";
+import {IEntryPoint} from "I4337/interfaces/IEntryPoint.sol";
+import {ENTRYPOINT_0_6_ADDRESS, ENTRYPOINT_0_6_BYTECODE} from "I4337/artifacts/EntryPoint_0_6.sol";
+import {CREATOR_0_6_BYTECODE, CREATOR_0_6_ADDRESS} from "I4337/artifacts/EntryPoint_0_6.sol";
+import {UserOperation} from "I4337/interfaces/UserOperation.sol";
 import {Kernel} from "src/Kernel.sol";
 import {Operation} from "src/common/Enums.sol";
 import {Compatibility} from "src/abstract/Compatibility.sol";
@@ -20,7 +23,7 @@ import {TestExecutor} from "./mock/TestExecutor.sol";
 import {TestERC721} from "./mock/TestERC721.sol";
 import {TestERC1155} from "./mock/TestERC1155.sol";
 
-using ERC4337Utils for EntryPoint;
+using ERC4337Utils for IEntryPoint;
 
 abstract contract KernelTestBase is Test {
     // to support 0.8.19
@@ -39,7 +42,7 @@ abstract contract KernelTestBase is Test {
     Kernel kernel;
     Kernel kernelImpl;
     KernelFactory factory;
-    EntryPoint entryPoint;
+    IEntryPoint entryPoint;
     IKernelValidator defaultValidator;
     address owner;
     uint256 ownerKey;
@@ -50,7 +53,9 @@ abstract contract KernelTestBase is Test {
         (owner, ownerKey) = makeAddrAndKey("owner");
         (factoryOwner,) = makeAddrAndKey("factoryOwner");
         beneficiary = payable(address(makeAddr("beneficiary")));
-        entryPoint = new EntryPoint();
+        vm.etch(ENTRYPOINT_0_6_ADDRESS, ENTRYPOINT_0_6_BYTECODE);
+        entryPoint = IEntryPoint(payable(ENTRYPOINT_0_6_ADDRESS));
+        vm.etch(CREATOR_0_6_ADDRESS, CREATOR_0_6_BYTECODE);
         kernelImpl = new Kernel(entryPoint);
         factory = new KernelFactory(factoryOwner, entryPoint);
         vm.startPrank(factoryOwner);

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {UserOperation} from "account-abstraction/interfaces/UserOperation.sol";
+import {UserOperation} from "I4337/interfaces/UserOperation.sol";
 import "../common/Types.sol";
 
 interface IKernelValidator {

@@ -3,7 +3,6 @@ pragma solidity ^0.8.0;
 
 import "./AdminLessERC1967Factory.sol";
 
-import "openzeppelin-contracts/contracts/utils/Create2.sol";
 import "../Kernel.sol";
 import "../validator/ECDSAValidator.sol";
 import "solady/auth/Ownable.sol";
