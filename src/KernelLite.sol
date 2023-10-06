@@ -143,11 +143,6 @@ abstract contract KernelLite is EIP712, Compatibility, KernelStorage {
             }
             ExecutionDetail storage detail = getKernelStorage().execution[bytes4(userOpCallData[0:4])];
             validator = detail.validator;
-            if (address(validator) == address(0)) {
-                assembly {
-                    validator := shr(80, storage_slot_1)
-                }
-            }
             userOpSignature = userOpSignature[4:];
             validationData = packValidationData(detail.validAfter, detail.validUntil);
         } else if (mode == 0x00000002) {
