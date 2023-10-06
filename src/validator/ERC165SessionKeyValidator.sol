@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import "solady/utils/ECDSA.sol";
 import "../utils/KernelHelper.sol";
-import "../interfaces/IValidator.sol";
+import "../interfaces/IKernelValidator.sol";
 import "../common/Types.sol";
 
 // idea, we can make this merkle root

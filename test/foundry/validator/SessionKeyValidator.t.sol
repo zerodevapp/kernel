@@ -80,9 +80,8 @@ contract SessionKeyValidatorTest is KernelECDSATest {
 
         bytes32 merkleRoot = _getRoot(data);
         bytes memory enableData = abi.encodePacked(sessionKey, merkleRoot, uint48(0), uint48(0), address(0), uint256(1));
-        bytes32 digest = getTypedDataHash(
-            address(kernel), Kernel.execute.selector, 0, 0, address(sessionKeyValidator), address(0), enableData
-        );
+        bytes32 digest =
+            getTypedDataHash(Kernel.execute.selector, 0, 0, address(sessionKeyValidator), address(0), enableData);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
 
         op.signature = abi.encodePacked(
@@ -118,7 +117,6 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         );
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = op;
-        logGas(op);
 
         entryPoint.handleOps(ops, beneficiary);
     }
@@ -219,9 +217,8 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         rules[0] = ParamRule({offset: 32, condition: ParamCondition.LESS_THAN_OR_EQUAL, param: bytes32(uint256(1e18))});
         bytes32 merkleRoot = generate_merkle_root(rules, execRule);
         bytes memory enableData = abi.encodePacked(sessionKey, merkleRoot, uint48(0), uint48(0), address(0), uint256(1));
-        bytes32 digest = getTypedDataHash(
-            address(kernel), Kernel.executeBatch.selector, 0, 0, address(sessionKeyValidator), address(0), enableData
-        );
+        bytes32 digest =
+            getTypedDataHash(Kernel.executeBatch.selector, 0, 0, address(sessionKeyValidator), address(0), enableData);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
 
         op.signature = abi.encodePacked(
@@ -249,7 +246,6 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         );
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = op;
-        logGas(op);
 
         entryPoint.handleOps(ops, beneficiary);
     }

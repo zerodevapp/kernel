@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "src/interfaces/IValidator.sol";
+import "src/interfaces/IKernelValidator.sol";
 import "src/common/Types.sol";
-
 import "src/utils/KernelHelper.sol";
 
 contract TestValidator is IKernelValidator {
@@ -24,7 +23,7 @@ contract TestValidator is IKernelValidator {
     function setData(bool success, uint48 validAfter, uint48 validUntil) external {
         data = success
             ? packValidationData(ValidAfter.wrap(validAfter), ValidUntil.wrap(validUntil))
-            : ValidationData.wrap(0);
+            : SIG_VALIDATION_FAILED;
     }
 
     function validateSignature(bytes32, bytes calldata) external view override returns (ValidationData) {

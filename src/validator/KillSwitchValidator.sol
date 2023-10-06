@@ -6,7 +6,7 @@ import "solady/utils/ECDSA.sol";
 import "../utils/KernelHelper.sol";
 import "../Kernel.sol";
 import {WalletKernelStorage, ExecutionDetail} from "../common/Structs.sol";
-import "../interfaces/IValidator.sol";
+import "../interfaces/IKernelValidator.sol";
 import "../common/Types.sol";
 import {KillSwitchAction} from "../executor/KillSwitchAction.sol";
 

@@ -44,13 +44,7 @@ contract KillSwitchValidatorTest is KernelECDSATest {
         bytes memory enableData = abi.encodePacked(guardianKeyAddr);
         {
             bytes32 digest = getTypedDataHash(
-                address(kernel),
-                KillSwitchAction.toggleKillSwitch.selector,
-                0,
-                0,
-                address(killSwitch),
-                address(action),
-                enableData
+                KillSwitchAction.toggleKillSwitch.selector, 0, 0, address(killSwitch), address(action), enableData
             );
             (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
 
@@ -83,7 +77,6 @@ contract KillSwitchValidatorTest is KernelECDSATest {
         }
 
         ops[0] = op;
-        logGas(op);
         entryPoint.handleOps(ops, beneficiary);
         assertEq(kernel.getDisabledMode(), bytes4(0xffffffff));
         assertEq(address(kernel.getDefaultValidator()), address(killSwitch));
@@ -112,13 +105,7 @@ contract KillSwitchValidatorTest is KernelECDSATest {
         bytes memory enableData = abi.encodePacked(guardianKeyAddr);
         {
             bytes32 digest = getTypedDataHash(
-                address(kernel),
-                KillSwitchAction.toggleKillSwitch.selector,
-                0,
-                0,
-                address(killSwitch),
-                address(action),
-                enableData
+                KillSwitchAction.toggleKillSwitch.selector, 0, 0, address(killSwitch), address(action), enableData
             );
             (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
 
@@ -151,7 +138,6 @@ contract KillSwitchValidatorTest is KernelECDSATest {
         }
 
         ops[0] = op;
-        logGas(op);
         entryPoint.handleOps(ops, beneficiary);
         assertEq(address(kernel.getDefaultValidator()), address(killSwitch));
         op = entryPoint.fillUserOp(

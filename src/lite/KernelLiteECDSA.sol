@@ -1,16 +1,16 @@
 pragma solidity ^0.8.0;
 
-import "../KernelLite.sol";
+import "../Kernel.sol";
 
 struct KernelLiteECDSAStorage {
     address owner;
 }
 
-contract KernelLiteECDSA is KernelLite {
+contract KernelLiteECDSA is Kernel {
     bytes32 private constant KERNEL_LITE_ECDSA_STORAGE_SLOT =
         0xdea7fea882fba743201b2aeb1babf326b8944488db560784858525d123ee7e97; // keccak256(abi.encodePacked("zerodev.kernel.lite.ecdsa")) - 1
 
-    constructor(IEntryPoint _entryPoint) KernelLite(_entryPoint) {
+    constructor(IEntryPoint _entryPoint) Kernel(_entryPoint) {
         getKernelLiteECDSAStorage().owner = address(1); // set owner to non-zero address to prevent initialization
     }
 
@@ -49,12 +49,19 @@ contract KernelLiteECDSA is KernelLite {
         if (signed == getKernelLiteECDSAStorage().owner) {
             return ValidationData.wrap(0);
         }
-        if (ECDSA.recover(_hash, _signature) != getKernelLiteECDSAStorage().owner) {
-            return SIG_VALIDATION_FAILED;
-        }
+        return SIG_VALIDATION_FAILED;
     }
 
     function _validCaller(address _caller, bytes calldata) internal view override returns (bool) {
         return _caller == getKernelLiteECDSAStorage().owner;
+    }
+
+    function setDefaultValidator(IKernelValidator _defaultValidator, bytes calldata _data)
+        external
+        payable
+        override
+        onlyFromEntryPointOrSelf
+    {
+        revert("not implemented");
     }
 }

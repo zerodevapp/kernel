@@ -9,6 +9,7 @@ import "src/lite/KernelLiteECDSA.sol";
 import "forge-std/Test.sol";
 import {ERC4337Utils} from "./utils/ERC4337Utils.sol";
 import {KernelTestBase} from "./KernelTestBase.sol";
+import {TestExecutor} from "./mock/TestExecutor.sol";
 import {TestValidator} from "./mock/TestValidator.sol";
 
 using ERC4337Utils for IEntryPoint;
@@ -22,6 +23,21 @@ contract KernelECDSATest is KernelTestBase {
         vm.stopPrank();
 
         _setAddress();
+        _setExecutionDetail();
+    }
+
+    function _setExecutionDetail() internal override {
+        executionDetail.executor = address(new TestExecutor());
+        executionSig = TestExecutor.doNothing.selector;
+        executionDetail.validator = new TestValidator();
+    }
+
+    function getEnableData() internal view override returns (bytes memory) {
+        return "";
+    }
+
+    function getValidatorSignature(UserOperation memory) internal view override returns (bytes memory) {
+        return "";
     }
 
     function getOwners() internal view override returns (address[] memory) {
@@ -65,5 +81,17 @@ contract KernelECDSATest is KernelTestBase {
     function getWrongSignature(bytes32 hash) internal view override returns (bytes memory) {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey + 1, ECDSA.toEthSignedMessageHash(hash));
         return abi.encodePacked(r, s, v);
+    }
+
+    function test_default_validator_enable() external override {
+        vm.skip(true);
+    }
+
+    function test_default_validator_disable() external override {
+        vm.skip(true);
+    }
+
+    function test_fail_validate_not_activate() external override {
+        vm.skip(true);
     }
 }

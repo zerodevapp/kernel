@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 // Importing necessary interfaces
 import "I4337/interfaces/IEntryPoint.sol";
-import {IKernelValidator} from "../interfaces/IValidator.sol";
+import {IKernelValidator} from "../interfaces/IKernelValidator.sol";
 import {IKernel} from "../interfaces/IKernel.sol";
 import {KERNEL_STORAGE_SLOT, KERNEL_STORAGE_SLOT_1, IMPLEMENTATION_SLOT} from "../common/Constants.sol";
 import {ExecutionDetail, WalletKernelStorage} from "../common/Structs.sol";

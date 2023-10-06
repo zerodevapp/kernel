@@ -1,6 +1,6 @@
 pragma solidity ^0.8.18;
 
-import "../interfaces/IValidator.sol";
+import "../interfaces/IKernelValidator.sol";
 import "../validator/KillSwitchValidator.sol";
 import "../abstract/KernelStorage.sol";
 

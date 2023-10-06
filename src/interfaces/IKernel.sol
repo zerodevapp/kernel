@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.0;
 
-import {IKernelValidator} from "./IValidator.sol";
+import {IKernelValidator} from "./IKernelValidator.sol";
 import {ExecutionDetail, Call} from "../common/Structs.sol";
 import {ValidationData, ValidUntil, ValidAfter} from "../common/Types.sol";
 import {Operation} from "../common/Enums.sol";

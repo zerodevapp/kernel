@@ -1,6 +1,6 @@
 pragma solidity ^0.8.0;
 
-import "../interfaces/IValidator.sol";
+import "../interfaces/IKernelValidator.sol";
 import "./Enums.sol";
 import "./Types.sol";
 

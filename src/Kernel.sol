@@ -28,7 +28,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     constructor(IEntryPoint _entryPoint) KernelStorage(_entryPoint) {}
 
     function _domainNameAndVersion() internal pure override returns (string memory, string memory) {
-        return (KERNEL_NAME, KERNEL_VERSION);
+        return (name, version);
     }
 
     /// @notice Accepts incoming Ether transactions and calls from the EntryPoint contract
@@ -49,7 +49,13 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         }
     }
 
-    function execute(address to, uint256 value, bytes memory data, Operation) external payable override {
+    /// @notice Executes a function call to an external contract
+    /// @dev The type of operation (call or delegatecall) is specified as an argument.
+    /// @param to The address of the target contract
+    /// @param value The amount of Ether to send
+    /// @param data The call data to be sent
+    /// operation deprecated param, use executeBatch for batched transaction
+    function execute(address to, uint256 value, bytes memory data, Operation) external payable {
         if (msg.sender != address(entryPoint) && !_checkCaller()) {
             revert NotAuthorizedCaller();
         }
@@ -62,7 +68,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         }
     }
 
-    function executeBatch(Call[] memory calls) external payable override {
+    function executeBatch(Call[] memory calls) external payable {
         if (msg.sender != address(entryPoint) && !_checkCaller()) {
             revert NotAuthorizedCaller();
         }
@@ -82,10 +88,15 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         }
     }
 
-    function validateUserOp(UserOperation memory userOp, bytes32 userOpHash, uint256 missingAccountFunds)
+    /// @notice Validates a user operation based on its mode
+    /// @dev This function will validate user operation and be called by EntryPoint
+    /// @param _userOp The user operation to be validated
+    /// @param userOpHash The hash of the user operation
+    /// @param missingAccountFunds The funds needed to be reimbursed
+    /// @return validationData The data used for validation
+    function validateUserOp(UserOperation calldata _userOp, bytes32 userOpHash, uint256 missingAccountFunds)
         external
         payable
-        override
         returns (ValidationData validationData)
     {
         if (msg.sender != address(entryPoint)) {
@@ -93,26 +104,36 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         }
         bytes calldata userOpSignature;
         uint256 userOpEndOffset;
-        bytes32 storage_slot_1;
         assembly {
             userOpEndOffset := add(calldataload(0x04), 0x24)
             userOpSignature.offset := add(calldataload(add(userOpEndOffset, 0x120)), userOpEndOffset)
             userOpSignature.length := calldataload(sub(userOpSignature.offset, 0x20))
-            storage_slot_1 := sload(KERNEL_STORAGE_SLOT_1)
         }
         // mode based signature
         bytes4 mode = bytes4(userOpSignature[0:4]); // mode == 00..00 use validators
         // mode == 0x00000000 use sudo validator
+        if (mode == 0x00000000) {
+            // sudo mode (use default validator)
+            if (missingAccountFunds != 0) {
+                assembly {
+                    pop(call(gas(), caller(), missingAccountFunds, callvalue(), callvalue(), callvalue(), callvalue()))
+                }
+                //ignore failure (its EntryPoint's job to verify, not account.)
+            }
+            // short circuit here for default validator
+            return _validateUserOp(_userOp, userOpHash, missingAccountFunds);
+        }
+
+        UserOperation memory userOp = _userOp;
+
         // mode == 0x00000001 use given validator
         // mode == 0x00000002 enable validator
         IKernelValidator validator;
-        if (mode == 0x00000000) {
-            // sudo mode (use default validator)
-            userOpSignature = userOpSignature[4:];
-            assembly {
-                validator := shr(80, storage_slot_1)
-            }
-        } else if (mode & (storage_slot_1 << 224) != 0x00000000) {
+        bytes32 storage_slot_1;
+        assembly {
+            storage_slot_1 := sload(KERNEL_STORAGE_SLOT_1)
+        }
+        if (mode & (storage_slot_1 << 224) != 0x00000000) {
             revert DisabledMode();
         } else if (mode == 0x00000001) {
             bytes calldata userOpCallData;
@@ -139,12 +160,12 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         } else {
             return SIG_VALIDATION_FAILED;
         }
-        assembly {
-            if iszero(iszero(missingAccountFunds)) {
+        if (missingAccountFunds != 0) {
+            assembly {
                 pop(call(gas(), caller(), missingAccountFunds, callvalue(), callvalue(), callvalue(), callvalue()))
             }
+            //ignore failure (its EntryPoint's job to verify, not account.)
         }
-        //ignore failure (its EntryPoint's job to verify, not account.)
         userOp.signature = userOpSignature;
         validationData =
             _intersectValidationData(validationData, validator.validateUserOp(userOp, userOpHash, missingAccountFunds));
@@ -181,7 +202,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
                 )
             );
             validationData = _intersectValidationData(
-                getKernelStorage().defaultValidator.validateSignature(enableDigest, signature[cursor:cursor + length]),
+                _validateSignature(enableDigest, signature[cursor:cursor + length]),
                 ValidationData.wrap(
                     uint256(bytes32(signature[4:36]))
                         & 0xffffffffffffffffffffffff0000000000000000000000000000000000000000
@@ -208,7 +229,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     /// @param signature The signature to be validated
     /// @return The magic value 0x1626ba7e if the signature is valid, otherwise returns 0xffffffff.
     function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4) {
-        ValidationData validationData = getKernelStorage().defaultValidator.validateSignature(hash, signature);
+        ValidationData validationData = _validateSignature(hash, signature);
         (ValidAfter validAfter, ValidUntil validUntil, address result) = parseValidationData(validationData);
         if (ValidAfter.unwrap(validAfter) > block.timestamp) {
             return 0xffffffff;
@@ -224,7 +245,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     }
 
     function _checkCaller() internal view returns (bool) {
-        if (getKernelStorage().defaultValidator.validCaller(msg.sender, msg.data)) {
+        if (_validCaller(msg.sender, msg.data)) {
             return true;
         }
         bytes4 sig = msg.sig;
@@ -238,5 +259,40 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         } else {
             return detail.validator.validCaller(msg.sender, msg.data);
         }
+    }
+
+    function _validateUserOp(UserOperation calldata _op, bytes32 _opHash, uint256 _missingFunds)
+        internal
+        virtual
+        returns (ValidationData)
+    {
+        address validator;
+        UserOperation memory op = _op;
+        op.signature = _op.signature[4:]; // since this is only called on default validator
+        assembly {
+            validator := shr(80, sload(KERNEL_STORAGE_SLOT_1))
+        }
+        return IKernelValidator(validator).validateUserOp(op, _opHash, _missingFunds);
+    }
+
+    function _validateSignature(bytes32 _hash, bytes calldata _signature)
+        internal
+        view
+        virtual
+        returns (ValidationData)
+    {
+        address validator;
+        assembly {
+            validator := shr(80, sload(KERNEL_STORAGE_SLOT_1))
+        }
+        return IKernelValidator(validator).validateSignature(_hash, _signature);
+    }
+
+    function _validCaller(address _caller, bytes calldata _data) internal view virtual returns (bool) {
+        address validator;
+        assembly {
+            validator := shr(80, sload(KERNEL_STORAGE_SLOT_1))
+        }
+        return IKernelValidator(validator).validCaller(_caller, _data);
     }
 }

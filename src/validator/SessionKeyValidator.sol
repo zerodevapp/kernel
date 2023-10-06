@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 import "solady/utils/ECDSA.sol";
 import "solady/utils/MerkleProofLib.sol";
 
-import "../interfaces/IValidator.sol";
+import "../interfaces/IKernelValidator.sol";
 
 import "../common/Constants.sol";
 import "../common/Enums.sol";

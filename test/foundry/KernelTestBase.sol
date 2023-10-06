@@ -10,7 +10,7 @@ import {Operation} from "src/common/Enums.sol";
 import {Compatibility} from "src/abstract/Compatibility.sol";
 import {KernelStorage} from "src/abstract/KernelStorage.sol";
 import {KernelFactory} from "src/factory/KernelFactory.sol";
-import {IKernelValidator} from "src/interfaces/IValidator.sol";
+import {IKernelValidator} from "src/interfaces/IKernelValidator.sol";
 
 import {Call, ExecutionDetail} from "src/common/Structs.sol";
 import {ValidationData, ValidUntil, ValidAfter} from "src/common/Types.sol";
@@ -38,6 +38,7 @@ abstract contract KernelTestBase is Test {
         uint256 actualGasCost,
         uint256 actualGasUsed
     );
+    event Upgraded(address indexed newImplementation);
 
     Kernel kernel;
     Kernel kernelImpl;
@@ -48,6 +49,9 @@ abstract contract KernelTestBase is Test {
     uint256 ownerKey;
     address payable beneficiary;
     address factoryOwner;
+
+    bytes4 executionSig;
+    ExecutionDetail executionDetail;
 
     function _initialize() internal {
         (owner, ownerKey) = makeAddrAndKey("owner");
@@ -63,6 +67,12 @@ abstract contract KernelTestBase is Test {
         vm.stopPrank();
     }
 
+    function _setExecutionDetail() internal virtual;
+
+    function getEnableData() internal view virtual returns (bytes memory);
+
+    function getValidatorSignature(UserOperation memory op) internal view virtual returns (bytes memory);
+
     function getOwners() internal virtual returns (address[] memory _owners);
 
     function getInitializeData() internal view virtual returns (bytes memory);
@@ -74,6 +84,10 @@ abstract contract KernelTestBase is Test {
     function signHash(bytes32 hash) internal view virtual returns (bytes memory);
 
     function getWrongSignature(bytes32 hash) internal view virtual returns (bytes memory);
+
+    function test_default_validator_enable() external virtual;
+
+    function test_default_validator_disable() external virtual;
 
     function test_external_call_execute_success() external {
         address[] memory validCallers = getOwners();
@@ -107,6 +121,15 @@ abstract contract KernelTestBase is Test {
         kernel.executeBatch(calls);
     }
 
+    function test_get_nonce() external {
+        assertEq(kernel.getNonce(), entryPoint.getNonce(address(kernel), 0));
+        assertEq(kernel.getNonce(100), entryPoint.getNonce(address(kernel), 100));
+    }
+
+    function test_get_nonce(uint192 key) external {
+        assertEq(kernel.getNonce(key), entryPoint.getNonce(address(kernel), key));
+    }
+
     function test_eip712() external {
         (bytes1 fields, string memory name, string memory version,, address verifyingContract, bytes32 salt,) =
             kernel.eip712Domain();
@@ -117,10 +140,21 @@ abstract contract KernelTestBase is Test {
         assertEq(salt, bytes32(0));
     }
 
+    function test_upgrade() external {
+        vm.startPrank(address(entryPoint));
+        vm.expectEmit(true, false, false, false, address(kernel));
+        emit Upgraded(address(0xdeadbeef));
+        kernel.upgradeTo(address(0xdeadbeef));
+    }
+
     function test_external_call_default() external {
         vm.startPrank(owner);
         (bool success,) = address(kernel).call(abi.encodePacked("Hello world"));
         assertEq(success, true);
+    }
+
+    function test_initialize() external {
+        factory.createAccount(address(kernelImpl), getInitializeData(), 1);
     }
 
     function test_initialize_twice() external {
@@ -143,6 +177,24 @@ abstract contract KernelTestBase is Test {
         bytes32 hash = keccak256(abi.encodePacked("hello world"));
         bytes memory sig = getWrongSignature(hash);
         assertEq(kernel.isValidSignature(hash, sig), bytes4(0xffffffff));
+    }
+
+    function test_fail_validate_not_activate() external virtual {
+        TestValidator newDefaultValidator = new TestValidator();
+        vm.startPrank(address(entryPoint));
+        kernel.setDefaultValidator(newDefaultValidator, "");
+        vm.stopPrank();
+
+        newDefaultValidator.setData(false, 0, 0);
+
+        vm.warp(100000);
+
+        bytes32 hash = keccak256(abi.encodePacked("hello world"));
+        assertEq(kernel.isValidSignature(hash, ""), bytes4(0xffffffff));
+        newDefaultValidator.setData(true, uint48(block.timestamp + 1000), uint48(0));
+        assertEq(kernel.isValidSignature(hash, ""), bytes4(0xffffffff));
+        newDefaultValidator.setData(true, uint48(0), uint48(block.timestamp - 1000));
+        assertEq(kernel.isValidSignature(hash, ""), bytes4(0xffffffff));
     }
 
     function test_should_emit_event_on_receive() external {
@@ -174,17 +226,17 @@ abstract contract KernelTestBase is Test {
     }
 
     function test_set_default_validator() external virtual {
-        TestValidator newValidator = new TestValidator();
+        TestValidator newDefaultValidator = new TestValidator();
         bytes memory empty;
         UserOperation memory op = entryPoint.fillUserOp(
             address(kernel),
-            abi.encodeWithSelector(KernelStorage.setDefaultValidator.selector, address(newValidator), empty)
+            abi.encodeWithSelector(KernelStorage.setDefaultValidator.selector, address(newDefaultValidator), empty)
         );
         op.signature = signUserOp(op);
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = op;
         entryPoint.handleOps(ops, beneficiary);
-        assertEq(address(KernelStorage(address(kernel)).getDefaultValidator()), address(newValidator));
+        assertEq(address(KernelStorage(address(kernel)).getDefaultValidator()), address(newDefaultValidator));
     }
 
     function test_disable_mode() external {
@@ -314,7 +366,6 @@ abstract contract KernelTestBase is Test {
         op.signature = signUserOp(op);
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = op;
-        logGas(op);
         entryPoint.handleOps(ops, beneficiary);
     }
 
@@ -328,67 +379,64 @@ abstract contract KernelTestBase is Test {
         entryPoint.handleOps(ops, beneficiary);
     }
 
+    // mode 2 tests
     function test_mock_mode_2() external {
-        TestValidator testValidator = new TestValidator();
-        TestExecutor testExecutor = new TestExecutor();
-        UserOperation memory op =
-            entryPoint.fillUserOp(address(kernel), abi.encodeWithSelector(TestExecutor.doNothing.selector));
+        UserOperation memory op = entryPoint.fillUserOp(address(kernel), abi.encodePacked(executionSig));
 
-        bytes32 digest = getTypedDataHash(
-            address(kernel), TestExecutor.doNothing.selector, 0, 0, address(testValidator), address(testExecutor), ""
-        );
-        bytes memory sig = signHash(digest);
-
-        op.signature = abi.encodePacked(
-            bytes4(0x00000002),
-            uint48(0),
-            uint48(0),
-            address(testValidator),
-            address(testExecutor),
-            uint256(0),
-            uint256(65),
-            sig
+        op.signature = buildEnableSignature(
+            op, executionSig, uint48(0), uint48(0), executionDetail.validator, executionDetail.executor
         );
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = op;
-        // vm.expectEmit(true, false, false, false);
-        // emit TestValidator.TestValidateUserOp(opHash);
-        logGas(op);
-
+        vm.expectEmit(true, true, true, false, address(entryPoint));
+        emit UserOperationEvent(entryPoint.getUserOpHash(op), address(kernel), address(0), op.nonce, false, 0, 0);
         entryPoint.handleOps(ops, beneficiary);
     }
 
-    function test_mock_mode_2_then_mode_1() external {
-        TestValidator testValidator = new TestValidator();
-        TestExecutor testExecutor = new TestExecutor();
-        UserOperation memory op =
-            entryPoint.fillUserOp(address(kernel), abi.encodeWithSelector(TestExecutor.doNothing.selector));
-
-        bytes32 digest = getTypedDataHash(
-            address(kernel), TestExecutor.doNothing.selector, 0, 0, address(testValidator), address(testExecutor), ""
-        );
-        bytes memory sig = signHash(digest);
-
-        op.signature = abi.encodePacked(
+    function buildEnableSignature(
+        UserOperation memory op,
+        bytes4 selector,
+        uint48 validAfter,
+        uint48 validUntil,
+        IKernelValidator validator,
+        address executor
+    ) internal returns (bytes memory sig) {
+        require(address(executionDetail.validator) != address(0), "execution detail not set");
+        bytes memory enableData = getEnableData();
+        bytes32 digest = getTypedDataHash(selector, validAfter, validUntil, address(validator), executor, enableData);
+        sig = getValidatorSignature(op);
+        bytes memory enableSig = signHash(digest);
+        sig = abi.encodePacked(
             bytes4(0x00000002),
-            uint48(0),
-            uint48(0),
-            address(testValidator),
-            address(testExecutor),
-            uint256(0),
-            uint256(65),
+            validAfter,
+            validUntil,
+            address(validator),
+            executor,
+            uint256(enableData.length),
+            enableData,
+            enableSig.length,
+            enableSig,
+            sig.length, //enableSig length
             sig
+        );
+    }
+
+    function test_mock_mode_2_then_mode_1() external {
+        UserOperation memory op = entryPoint.fillUserOp(address(kernel), abi.encodePacked(executionSig));
+
+        op.signature = buildEnableSignature(
+            op, executionSig, uint48(0), uint48(0), executionDetail.validator, executionDetail.executor
         );
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = op;
+
+        entryPoint.handleOps(ops, beneficiary);
         // vm.expectEmit(true, false, false, false);
         // emit TestValidator.TestValidateUserOp(opHash);
-        entryPoint.handleOps(ops, beneficiary);
         op = entryPoint.fillUserOp(address(kernel), abi.encodeWithSelector(TestExecutor.doNothing.selector));
         // registered
-        op.signature = abi.encodePacked(bytes4(0x00000001));
+        op.signature = abi.encodePacked(bytes4(0x00000001), getValidatorSignature(op));
         ops[0] = op;
-        logGas(op);
         entryPoint.handleOps(ops, beneficiary);
     }
 
@@ -397,26 +445,8 @@ abstract contract KernelTestBase is Test {
         vm.deal(address(kernel), 1e30);
     }
 
-    function logGas(UserOperation memory op) internal returns (uint256 used) {
-        try this.consoleGasUsage(op) {
-            revert("should revert");
-        } catch Error(string memory reason) {
-            used = abi.decode(bytes(reason), (uint256));
-            console.log("validation gas usage :", used);
-        }
-    }
-
-    function consoleGasUsage(UserOperation memory op) external {
-        uint256 gas = gasleft();
-        vm.startPrank(address(entryPoint));
-        kernel.validateUserOp(op, entryPoint.getUserOpHash(op), 0);
-        vm.stopPrank();
-        revert(string(abi.encodePacked(gas - gasleft())));
-    }
-
     // computes the hash of the fully encoded EIP-712 message for the domain, which can be used to recover the signer
     function getTypedDataHash(
-        address sender,
         bytes4 sig,
         uint48 validUntil,
         uint48 validAfter,
@@ -427,7 +457,7 @@ abstract contract KernelTestBase is Test {
         return keccak256(
             abi.encodePacked(
                 "\x19\x01",
-                ERC4337Utils._buildDomainSeparator("Kernel", "0.2.2", sender),
+                ERC4337Utils._buildDomainSeparator("Kernel", "0.2.2", address(kernel)),
                 ERC4337Utils.getStructHash(sig, validUntil, validAfter, validator, executor, enableData)
             )
         );
