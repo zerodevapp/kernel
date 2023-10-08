@@ -24,17 +24,17 @@ contract KernelECDSATest is KernelTestBase {
 
     function test_ignore() external {}
 
-    function _setExecutionDetail() internal override {
+    function _setExecutionDetail() internal virtual override {
         executionDetail.executor = address(new TestExecutor());
         executionSig = TestExecutor.doNothing.selector;
         executionDetail.validator = new TestValidator();
     }
 
-    function getEnableData() internal view override returns (bytes memory) {
+    function getEnableData() internal view virtual override returns (bytes memory) {
         return "";
     }
 
-    function getValidatorSignature(UserOperation memory) internal view override returns (bytes memory) {
+    function getValidatorSignature(UserOperation memory) internal view virtual override returns (bytes memory) {
         return "";
     }
 

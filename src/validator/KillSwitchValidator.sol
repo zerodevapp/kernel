@@ -34,16 +34,7 @@ contract KillSwitchValidator is IKernelValidator {
         override
         returns (ValidationData)
     {
-        KillSwitchValidatorStorage storage validatorStorage = killSwitchValidatorStorage[msg.sender];
-        ValidationData res = validatorStorage.validator.validateSignature(hash, signature);
-        ValidAfter pausedUntil = validatorStorage.pausedUntil;
-        (,, address result) = parseValidationData(res);
-        if (result != address(1)) {
-            // if signature verification has not been failed, return with the result
-            ValidationData delayedData = packValidationData(pausedUntil, ValidUntil.wrap(0));
-            return _intersectValidationData(res, delayedData);
-        }
-        return SIG_VALIDATION_FAILED;
+        revert("Not Implemented");
     }
 
     function validateUserOp(UserOperation calldata _userOp, bytes32 _userOpHash, uint256)

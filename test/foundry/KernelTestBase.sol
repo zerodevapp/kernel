@@ -8,7 +8,7 @@ import {UserOperation} from "I4337/interfaces/UserOperation.sol";
 import {Kernel} from "src/Kernel.sol";
 import {Operation} from "src/common/Enums.sol";
 import {Compatibility} from "src/abstract/Compatibility.sol";
-import {KernelStorage} from "src/abstract/KernelStorage.sol";
+import {IKernel} from "src/interfaces/IKernel.sol";
 import {KernelFactory} from "src/factory/KernelFactory.sol";
 import {IKernelValidator} from "src/interfaces/IKernelValidator.sol";
 
@@ -230,13 +230,13 @@ abstract contract KernelTestBase is Test {
         bytes memory empty;
         UserOperation memory op = entryPoint.fillUserOp(
             address(kernel),
-            abi.encodeWithSelector(KernelStorage.setDefaultValidator.selector, address(newDefaultValidator), empty)
+            abi.encodeWithSelector(IKernel.setDefaultValidator.selector, address(newDefaultValidator), empty)
         );
         op.signature = signUserOp(op);
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = op;
         entryPoint.handleOps(ops, beneficiary);
-        assertEq(address(KernelStorage(address(kernel)).getDefaultValidator()), address(newDefaultValidator));
+        assertEq(address(IKernel(address(kernel)).getDefaultValidator()), address(newDefaultValidator));
     }
 
     function test_disable_mode() external {
@@ -244,14 +244,14 @@ abstract contract KernelTestBase is Test {
         bytes memory empty;
         UserOperation memory op = entryPoint.fillUserOp(
             address(kernel),
-            abi.encodeWithSelector(KernelStorage.disableMode.selector, bytes4(0x00000001), address(0), empty)
+            abi.encodeWithSelector(IKernel.disableMode.selector, bytes4(0x00000001), address(0), empty)
         );
         op.signature = signUserOp(op);
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = op;
         entryPoint.handleOps(ops, beneficiary);
-        assertEq(uint256(bytes32(KernelStorage(address(kernel)).getDisabledMode())), 1 << 224);
-        assertEq(uint256(KernelStorage(address(kernel)).getLastDisabledTime()), block.timestamp);
+        assertEq(uint256(bytes32(IKernel(address(kernel)).getDisabledMode())), 1 << 224);
+        assertEq(uint256(IKernel(address(kernel)).getLastDisabledTime()), block.timestamp);
     }
 
     function test_set_execution() external {
@@ -259,7 +259,7 @@ abstract contract KernelTestBase is Test {
         UserOperation memory op = entryPoint.fillUserOp(
             address(kernel),
             abi.encodeWithSelector(
-                KernelStorage.setExecution.selector,
+                IKernel.setExecution.selector,
                 bytes4(0xdeadbeef),
                 address(0xdead),
                 address(newValidator),
@@ -272,7 +272,7 @@ abstract contract KernelTestBase is Test {
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = op;
         entryPoint.handleOps(ops, beneficiary);
-        ExecutionDetail memory execution = KernelStorage(address(kernel)).getExecution(bytes4(0xdeadbeef));
+        ExecutionDetail memory execution = IKernel(address(kernel)).getExecution(bytes4(0xdeadbeef));
         assertEq(execution.executor, address(0xdead));
         assertEq(address(execution.validator), address(newValidator));
         assertEq(uint256(ValidUntil.unwrap(execution.validUntil)), uint256(0));
@@ -284,7 +284,7 @@ abstract contract KernelTestBase is Test {
         UserOperation memory op = entryPoint.fillUserOp(
             address(kernel),
             abi.encodeWithSelector(
-                KernelStorage.setExecution.selector,
+                IKernel.setExecution.selector,
                 bytes4(0xdeadbeef),
                 address(0xdead),
                 address(newValidator),
@@ -297,7 +297,7 @@ abstract contract KernelTestBase is Test {
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = op;
         entryPoint.handleOps(ops, beneficiary);
-        ExecutionDetail memory execution = KernelStorage(address(kernel)).getExecution(bytes4(0xdeadbeef));
+        ExecutionDetail memory execution = IKernel(address(kernel)).getExecution(bytes4(0xdeadbeef));
         assertEq(execution.executor, address(0xdead));
         assertEq(address(execution.validator), address(newValidator));
         assertEq(uint256(ValidUntil.unwrap(execution.validUntil)), uint256(0));
@@ -322,7 +322,7 @@ abstract contract KernelTestBase is Test {
         bytes memory empty;
         UserOperation memory op = entryPoint.fillUserOp(
             address(kernel),
-            abi.encodeWithSelector(KernelStorage.disableMode.selector, bytes4(0x00000001), address(0), empty)
+            abi.encodeWithSelector(IKernel.disableMode.selector, bytes4(0x00000001), address(0), empty)
         );
         op.signature = signUserOp(op);
         UserOperation[] memory ops = new UserOperation[](1);
@@ -331,7 +331,7 @@ abstract contract KernelTestBase is Test {
 
         // try to run with mode 0x00000001
         op = entryPoint.fillUserOp(
-            address(kernel), abi.encodeWithSelector(KernelStorage.disableMode.selector, bytes4(0x00000001))
+            address(kernel), abi.encodeWithSelector(IKernel.disableMode.selector, bytes4(0x00000001))
         );
         op.signature = abi.encodePacked(bytes4(0x00000001), entryPoint.signUserOpHash(vm, ownerKey, op));
         ops[0] = op;
@@ -404,8 +404,8 @@ abstract contract KernelTestBase is Test {
         require(address(executionDetail.validator) != address(0), "execution detail not set");
         bytes memory enableData = getEnableData();
         bytes32 digest = getTypedDataHash(selector, validAfter, validUntil, address(validator), executor, enableData);
-        sig = getValidatorSignature(op);
         bytes memory enableSig = signHash(digest);
+        sig = getValidatorSignature(op);
         sig = abi.encodePacked(
             bytes4(0x00000002),
             validAfter,
@@ -416,24 +416,31 @@ abstract contract KernelTestBase is Test {
             enableData,
             enableSig.length,
             enableSig,
-            sig.length, //enableSig length
             sig
         );
     }
 
-    function test_mock_mode_2_then_mode_1() external {
-        UserOperation memory op = entryPoint.fillUserOp(address(kernel), abi.encodePacked(executionSig));
-
-        op.signature = buildEnableSignature(
-            op, executionSig, uint48(0), uint48(0), executionDetail.validator, executionDetail.executor
+    function test_enable_then_mode_1() external {
+        UserOperation memory op = entryPoint.fillUserOp(
+            address(kernel),
+            abi.encodeWithSelector(
+                IKernel.setExecution.selector,
+                executionSig,
+                executionDetail.executor,
+                executionDetail.validator,
+                ValidUntil.wrap(0),
+                ValidAfter.wrap(0),
+                getEnableData()
+            )
         );
+        op.signature = signUserOp(op);
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = op;
 
         entryPoint.handleOps(ops, beneficiary);
         // vm.expectEmit(true, false, false, false);
         // emit TestValidator.TestValidateUserOp(opHash);
-        op = entryPoint.fillUserOp(address(kernel), abi.encodeWithSelector(TestExecutor.doNothing.selector));
+        op = entryPoint.fillUserOp(address(kernel), abi.encodeWithSelector(executionSig));
         // registered
         op.signature = abi.encodePacked(bytes4(0x00000001), getValidatorSignature(op));
         ops[0] = op;
