@@ -8,15 +8,15 @@ import {UserOperation} from "I4337/interfaces/UserOperation.sol";
 
 import {SIG_VALIDATION_FAILED} from "../common/Constants.sol";
 import {ParamCondition} from "../common/Enums.sol";
-import {ParamRule, SessionData, Permission, Call, ExecutionRule, ExecutionStatus} from "../common/Structs.sol";
+import {ParamRule, SessionData, Permission, Call, ExecutionRule, ExecutionStatus, Nonces} from "../common/Structs.sol";
 import "../common/Types.sol";
 
 import {Kernel} from "../Kernel.sol";
 
 contract SessionKeyValidator is IKernelValidator {
-    mapping(address kernel => uint256) public invalidNonce;
+    mapping(address kernel => Nonces) public nonces;
     mapping(address sessionKey => mapping(address kernel => SessionData)) public sessionData;
-    mapping(address sessionKey => mapping(uint32 index => mapping(address kernel => ExecutionStatus))) public
+    mapping(bytes32 permissionKey => mapping(address kernel => ExecutionStatus)) public
         executionStatus;
 
     function enable(bytes calldata _data) external payable {
@@ -25,17 +25,17 @@ contract SessionKeyValidator is IKernelValidator {
         ValidAfter validAfter = ValidAfter.wrap(uint48(bytes6(_data[52:58])));
         ValidUntil validUntil = ValidUntil.wrap(uint48(bytes6(_data[58:64])));
         address paymaster = address(bytes20(_data[64:84]));
-        uint256 approvedNonce = uint256(bytes32(_data[84:116]));
-        sessionData[sessionKey][msg.sender] = SessionData(merkleRoot, validAfter, validUntil, paymaster, approvedNonce);
-        require(approvedNonce == invalidNonce[msg.sender] + 1, "SessionKeyValidator: invalid nonce");
+        uint256 nonce = uint256(bytes32(_data[84:116]));
+        sessionData[sessionKey][msg.sender] = SessionData(merkleRoot, validAfter, validUntil, paymaster, nonce);
+        require(nonce == nonces[msg.sender].nextNonce++, "SessionKeyValidator: invalid nonce");
+    }
+
+    function invalidateNonce(uint128 nonce) external {
+        require(nonce > nonces[msg.sender].invalidNonce && nonce < nonces[msg.sender].nextNonce, "SessionKeyValidator: invalid nonce");
+        nonces[msg.sender].invalidNonce = nonce;
     }
 
     function disable(bytes calldata _data) external payable {
-        // invalidate all nonces
-        if (_data.length == 0) {
-            invalidNonce[msg.sender]++;
-            return;
-        }
         // invalidate specific sessionKey
         address sessionKey = address(bytes20(_data[0:20]));
         delete sessionData[sessionKey][msg.sender];
@@ -128,7 +128,8 @@ contract SessionKeyValidator is IKernelValidator {
         // userOp.signature = signer + signature + permission + merkleProof
         address sessionKey = address(bytes20(userOp.signature[0:20]));
         SessionData storage session = sessionData[sessionKey][msg.sender];
-        require(session.approvedNonce == invalidNonce[msg.sender] + 1, "SessionKeyValidator: session key not enabled");
+        // nonce starts from 1
+        require(session.nonce <= nonces[msg.sender].invalidNonce, "SessionKeyValidator: session key not enabled");
         _verifyPaymaster(userOp, session);
 
         // NOTE: although this is allowed in smart contract, it is guided not to use this feature in most usecases
@@ -156,7 +157,7 @@ contract SessionKeyValidator is IKernelValidator {
                 data.length := length
             }
             require(verifyPermission(data, permission), "SessionKeyValidator: permission verification failed");
-            ValidAfter validAfter = _updateValidAfter(permission, sessionKey);
+            ValidAfter validAfter = _updateValidAfter(permission, keccak256(abi.encodePacked(session.nonce, permission.index)));
             if (ValidAfter.unwrap(validAfter) < ValidAfter.unwrap(session.validAfter)) {
                 validAfter = session.validAfter;
             }
@@ -178,24 +179,29 @@ contract SessionKeyValidator is IKernelValidator {
         }
     }
 
-    function _updateValidAfter(Permission calldata permission, address sessionKey) internal returns (ValidAfter) {
+    function _updateValidAfter(Permission calldata permission, bytes32 permissionKey) internal returns (ValidAfter validAfter) {
         if (permission.executionRule.interval == 0) {
             // no need to update validAfter
-            return ValidAfter.wrap(0);
-        }
-        ExecutionStatus storage status = executionStatus[sessionKey][permission.index][msg.sender];
-        uint48 validAfter = ValidAfter.unwrap(status.validAfter);
-        if (validAfter == 0) {
-            validAfter = ValidAfter.unwrap(permission.executionRule.validAfter);
-        }
-        if (permission.executionRule.runs != 0) {
-            status.runs += 1;
-            if (status.runs > permission.executionRule.runs) {
-                return ValidAfter.wrap(0xffffffffffff);
+            validAfter = permission.executionRule.validAfter;
+        } else {
+            require(
+                ValidAfter.unwrap(permission.executionRule.validAfter) != 0,
+                "SessionKeyValidator: invalid execution rule"
+            );
+            // should update validAfter for executionStatus
+            ExecutionStatus storage status = executionStatus[permissionKey][msg.sender];
+            if (ValidAfter.unwrap(status.validAfter) != 0 ) {
+                validAfter = ValidAfter.wrap(ValidAfter.unwrap(status.validAfter) + permission.executionRule.interval);
             }
+            status.validAfter = validAfter;
         }
-        status.validAfter = ValidAfter.wrap(validAfter + permission.executionRule.interval);
-        return ValidAfter.wrap(validAfter);
+        // update runs
+        if (permission.executionRule.runs != 0) {
+            ExecutionStatus storage status = executionStatus[permissionKey][msg.sender];
+            status.runs += 1;
+            require(status.runs <= permission.executionRule.runs, "SessionKeyValidator: runs exceeded");
+        }
+        return validAfter;
     }
 
     function _verifyParams(
@@ -213,7 +219,8 @@ contract SessionKeyValidator is IKernelValidator {
         //require(calls.length == index.length, "call length != index length");
         uint256 i = 0;
         leaves = _generateLeaves(index);
-        ValidAfter maxValidAfter = sessionData[sessionKey][msg.sender].validAfter;
+        SessionData storage session = sessionData[sessionKey][msg.sender];
+        ValidAfter maxValidAfter = session.validAfter;
         for (i = 0; i < calls.length; i++) {
             Call calldata call = calls[i];
             Permission calldata permission = _permissions[i];
@@ -222,7 +229,7 @@ contract SessionKeyValidator is IKernelValidator {
             );
             require(uint256(bytes32(call.value)) <= permission.valueLimit, "SessionKeyValidator: value limit exceeded");
             require(verifyPermission(call.data, permission), "SessionKeyValidator: permission verification failed");
-            ValidAfter validAfter = _updateValidAfter(permission, sessionKey);
+            ValidAfter validAfter = _updateValidAfter(permission, keccak256(abi.encodePacked(session.nonce, permission.index)));
             if (ValidAfter.unwrap(validAfter) > ValidAfter.unwrap(maxValidAfter)) {
                 maxValidAfter = validAfter;
             }

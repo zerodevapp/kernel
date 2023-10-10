@@ -28,6 +28,11 @@ struct WalletKernelStorage {
 }
 
 // Param Rule for session key
+struct Nonces {
+    uint128 nextNonce;
+    uint128 invalidNonce;
+}
+
 struct ParamRule {
     uint256 offset;
     ParamCondition condition;
@@ -59,5 +64,5 @@ struct SessionData {
     ValidAfter validAfter;
     ValidUntil validUntil;
     address paymaster; // address(0) means accept userOp without paymaster, address(1) means reject userOp with paymaster, other address means accept userOp with paymaster with the address
-    uint256 approvedNonce;
+    uint256 nonce;
 }
