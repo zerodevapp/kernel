@@ -31,7 +31,7 @@ contract KillSwitchValidator is IKernelValidator {
     }
 
     function validateSignature(bytes32, bytes calldata) external pure override returns (ValidationData) {
-        revert("Not Implemented");
+        revert NotImplemented();
     }
 
     function validateUserOp(UserOperation calldata _userOp, bytes32 _userOpHash, uint256)
@@ -80,6 +80,6 @@ contract KillSwitchValidator is IKernelValidator {
     }
 
     function validCaller(address, bytes calldata) external pure override returns (bool) {
-        revert("not implemented");
+        revert NotImplemented();
     }
 }

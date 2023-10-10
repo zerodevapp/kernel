@@ -264,10 +264,10 @@ contract SessionKeyValidator is IKernelValidator {
     }
 
     function validCaller(address, bytes calldata) external pure returns (bool) {
-        revert("SessionKeyValidator: not implemented");
+        revert NotImplemented();
     }
 
     function validateSignature(bytes32, bytes calldata) external pure returns (ValidationData) {
-        revert("SessionKeyValidator: not implemented");
+        revert NotImplemented();
     }
 }

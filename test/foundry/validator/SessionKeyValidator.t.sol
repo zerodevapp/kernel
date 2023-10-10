@@ -38,7 +38,9 @@ contract SessionKeyValidatorTest is KernelECDSATest {
     // mode - 1, 2
     // paymaster - must, any, none
     // ExecRule
-    // -
+    // - when there is runs
+    // - when there is validAfter
+    // - when there is interval
 
     function test_mode_2_no_paymaster() external {
         testToken.mint(address(kernel), 100e18);

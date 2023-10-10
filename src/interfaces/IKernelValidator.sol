@@ -5,6 +5,8 @@ import {UserOperation} from "I4337/interfaces/UserOperation.sol";
 import "../common/Types.sol";
 
 interface IKernelValidator {
+    error NotImplemented();
+
     function enable(bytes calldata _data) external payable;
 
     function disable(bytes calldata _data) external payable;
