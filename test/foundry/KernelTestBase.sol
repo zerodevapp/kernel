@@ -243,8 +243,7 @@ abstract contract KernelTestBase is Test {
         vm.warp(1000);
         bytes memory empty;
         UserOperation memory op = entryPoint.fillUserOp(
-            address(kernel),
-            abi.encodeWithSelector(IKernel.disableMode.selector, bytes4(0x00000001), address(0), empty)
+            address(kernel), abi.encodeWithSelector(IKernel.disableMode.selector, bytes4(0x00000001), address(0), empty)
         );
         op.signature = signUserOp(op);
         UserOperation[] memory ops = new UserOperation[](1);
@@ -321,8 +320,7 @@ abstract contract KernelTestBase is Test {
         vm.warp(1000);
         bytes memory empty;
         UserOperation memory op = entryPoint.fillUserOp(
-            address(kernel),
-            abi.encodeWithSelector(IKernel.disableMode.selector, bytes4(0x00000001), address(0), empty)
+            address(kernel), abi.encodeWithSelector(IKernel.disableMode.selector, bytes4(0x00000001), address(0), empty)
         );
         op.signature = signUserOp(op);
         UserOperation[] memory ops = new UserOperation[](1);
@@ -347,7 +345,7 @@ abstract contract KernelTestBase is Test {
         UserOperation memory op =
             entryPoint.fillUserOp(address(kernel), abi.encodeWithSelector(TestExecutor.doNothing.selector));
         op.signature = signUserOp(op);
-        vm.expectRevert(Kernel.NotEntryPoint.selector);
+        vm.expectRevert(IKernel.NotEntryPoint.selector);
         kernel.validateUserOp(op, bytes32(hex"deadbeef"), uint256(100));
     }
 
@@ -400,7 +398,7 @@ abstract contract KernelTestBase is Test {
         uint48 validUntil,
         IKernelValidator validator,
         address executor
-    ) internal returns (bytes memory sig) {
+    ) internal view returns (bytes memory sig) {
         require(address(executionDetail.validator) != address(0), "execution detail not set");
         bytes memory enableData = getEnableData();
         bytes32 digest = getTypedDataHash(selector, validAfter, validUntil, address(validator), executor, enableData);

@@ -1,8 +1,8 @@
 pragma solidity ^0.8.0;
 
-import "../interfaces/IKernelValidator.sol";
-import "./Enums.sol";
-import "./Types.sol";
+import {IKernelValidator} from "../interfaces/IKernelValidator.sol";
+import {ParamCondition} from "./Enums.sol";
+import {ValidAfter, ValidUntil} from "./Types.sol";
 
 // Defining a struct for execution details
 struct ExecutionDetail {
@@ -37,7 +37,12 @@ struct ParamRule {
 struct ExecutionRule {
     ValidAfter validAfter; // 48 bits
     uint48 interval; // 48 bits
-    uint48 runs; // 48
+    uint48 runs; // 48 bits
+}
+
+struct ExecutionStatus {
+    ValidAfter validAfter; // 48 bits
+    uint48 runs; // 48 bits
 }
 
 struct Permission {

@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "solady/utils/ECDSA.sol";
-import "../utils/KernelHelper.sol";
-import "../interfaces/IKernelValidator.sol";
-import "../common/Types.sol";
+import {UserOperation} from "I4337/interfaces/UserOperation.sol";
+import {ECDSA} from "solady/utils/ECDSA.sol";
+import {IKernelValidator} from "../interfaces/IKernelValidator.sol";
+import {ValidAfter, ValidUntil, ValidationData, packValidationData} from "../common/Types.sol";
+import {SIG_VALIDATION_FAILED} from "../common/Constants.sol";
 
 // idea, we can make this merkle root
 struct ERC165SessionKeyStorage {

@@ -33,21 +33,39 @@ contract KillSwitchValidatorTest is KernelECDSATest {
         executionDetail.validator = killSwitch;
     }
 
-    function getEnableData() internal view override returns(bytes memory) {
+    function getEnableData() internal view override returns (bytes memory) {
         return abi.encodePacked(guardian);
     }
 
-    function getValidatorSignature(UserOperation memory _op) internal view override returns(bytes memory sig) {
+    function getValidatorSignature(UserOperation memory _op) internal view override returns (bytes memory sig) {
         uint256 pausedUntil = block.timestamp + 1000;
 
         bytes32 hash = entryPoint.getUserOpHash(_op);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(
-            guardianKey,
-            ECDSA.toEthSignedMessageHash(keccak256(bytes.concat(bytes6(uint48(pausedUntil)), hash)))
+            guardianKey, ECDSA.toEthSignedMessageHash(keccak256(bytes.concat(bytes6(uint48(pausedUntil)), hash)))
         );
-        sig = abi.encodePacked(uint48(pausedUntil),r, s, v);
+        sig = abi.encodePacked(uint48(pausedUntil), r, s, v);
     }
 
+    function test_should_fail_with_not_implemented_isValidSignature() public {
+        test_should_fail_with_not_implemented_isValidSignature(
+            bytes32(keccak256(abi.encodePacked("HelloWorld"))), abi.encodePacked("HelloWorld")
+        );
+    }
+
+    function test_should_fail_with_not_implemented_isValidSignature(bytes32 hash, bytes memory sig) public {
+        vm.expectRevert();
+        killSwitch.validateSignature(hash, sig);
+    }
+
+    function test_should_fail_with_not_implemented_validCaller() public {
+        test_should_fail_with_not_implemented_validCaller(address(0), abi.encodePacked("HelloWorld"));
+    }
+
+    function test_should_fail_with_not_implemented_validCaller(address caller, bytes memory data) public {
+        vm.expectRevert();
+        killSwitch.validCaller(caller, data);
+    }
 
     function test_force_unblock() external {
         UserOperation memory op = entryPoint.fillUserOp(
@@ -85,8 +103,7 @@ contract KillSwitchValidatorTest is KernelECDSATest {
         bytes32 hash = entryPoint.getUserOpHash(op);
         {
             (uint8 v, bytes32 r, bytes32 s) = vm.sign(
-                guardianKey,
-                ECDSA.toEthSignedMessageHash(keccak256(bytes.concat(bytes6(uint48(pausedUntil)), hash)))
+                guardianKey, ECDSA.toEthSignedMessageHash(keccak256(bytes.concat(bytes6(uint48(pausedUntil)), hash)))
             );
             bytes memory sig = abi.encodePacked(r, s, v);
 

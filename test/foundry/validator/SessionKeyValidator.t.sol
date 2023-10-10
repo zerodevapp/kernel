@@ -20,7 +20,7 @@ import {KernelECDSATest} from "../KernelECDSA.t.sol";
 using ERC4337Utils for IEntryPoint;
 
 contract SessionKeyValidatorTest is KernelECDSATest {
-    ExecuteSessionKeyValidator sessionKeyValidator;
+    SessionKeyValidator sessionKeyValidator;
     TestERC20 testToken;
     TestERC20 testToken2;
     address sessionKey;
@@ -31,8 +31,14 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         (sessionKey, sessionKeyPriv) = makeAddrAndKey("sessionKey");
         testToken = new TestERC20();
         testToken2 = new TestERC20();
-        sessionKeyValidator = new ExecuteSessionKeyValidator();
+        sessionKeyValidator = new SessionKeyValidator();
     }
+
+    // scenarios to test
+    // mode - 1, 2
+    // paymaster - must, any, none
+    // ExecRule
+    // -
 
     function test_mode_2_no_paymaster() external {
         testToken.mint(address(kernel), 100e18);

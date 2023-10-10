@@ -2,16 +2,25 @@
 pragma solidity ^0.8.0;
 
 // Importing external libraries and contracts
-import "solady/utils/EIP712.sol";
-import "solady/utils/ECDSA.sol";
-import "I4337/interfaces/IEntryPoint.sol";
-import "./abstract/Compatibility.sol";
-import "./abstract/KernelStorage.sol";
-import "./utils/KernelHelper.sol";
+import {EIP712} from "solady/utils/EIP712.sol";
+import {ECDSA} from "solady/utils/ECDSA.sol";
+import {IEntryPoint} from "I4337/interfaces/IEntryPoint.sol";
+import {UserOperation} from "I4337/interfaces/UserOperation.sol";
+import {Compatibility} from "./abstract/Compatibility.sol";
+import {KernelStorage} from "./abstract/KernelStorage.sol";
+import {_intersectValidationData} from "./utils/KernelHelper.sol";
+import {IKernelValidator} from "./interfaces/IKernelValidator.sol";
 
-import "./common/Constants.sol";
-import "./common/Enums.sol";
-import "./common/Structs.sol";
+import {
+    KERNEL_NAME,
+    KERNEL_VERSION,
+    VALIDATOR_APPROVED_STRUCT_HASH,
+    KERNEL_STORAGE_SLOT_1,
+    SIG_VALIDATION_FAILED
+} from "./common/Constants.sol";
+import {Operation} from "./common/Enums.sol";
+import {WalletKernelStorage, Call, ExecutionDetail} from "./common/Structs.sol";
+import {ValidationData, ValidAfter, ValidUntil, parseValidationData, packValidationData} from "./common/Types.sol";
 
 /// @title Kernel
 /// @author taek<leekt216@gmail.com>
@@ -20,9 +29,6 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     string public constant name = KERNEL_NAME;
 
     string public constant version = KERNEL_VERSION;
-
-    error NotEntryPoint();
-    error DisabledMode();
 
     /// @dev Sets up the EIP712 and KernelStorage with the provided entry point
     constructor(IEntryPoint _entryPoint) KernelStorage(_entryPoint) {}
@@ -50,11 +56,10 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     }
 
     /// @notice Executes a function call to an external contract
-    /// @dev The type of operation (call or delegatecall) is specified as an argument.
     /// @param to The address of the target contract
     /// @param value The amount of Ether to send
     /// @param data The call data to be sent
-    /// operation deprecated param, use executeBatch for batched transaction
+    /// @dev operation is deprecated param, use executeBatch for batched transaction
     function execute(address to, uint256 value, bytes memory data, Operation) external payable {
         if (msg.sender != address(entryPoint) && !_checkCaller()) {
             revert NotAuthorizedCaller();
@@ -68,6 +73,9 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         }
     }
 
+    /// @notice Executes a function call to an external contract batched
+    /// @param calls The calls to be executed, in order
+    /// @dev operation deprecated param, use executeBatch for batched transaction
     function executeBatch(Call[] memory calls) external payable {
         if (msg.sender != address(entryPoint) && !_checkCaller()) {
             revert NotAuthorizedCaller();

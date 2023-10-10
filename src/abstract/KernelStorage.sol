@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 // Importing necessary interfaces
-import "I4337/interfaces/IEntryPoint.sol";
+import {IEntryPoint} from "I4337/interfaces/IEntryPoint.sol";
 import {IKernelValidator} from "../interfaces/IKernelValidator.sol";
 import {IKernel} from "../interfaces/IKernel.sol";
 import {KERNEL_STORAGE_SLOT, KERNEL_STORAGE_SLOT_1, IMPLEMENTATION_SLOT} from "../common/Constants.sol";
@@ -15,15 +15,6 @@ import {ValidUntil, ValidAfter} from "../common/Types.sol";
 /// @dev This contract should only be used by the main Kernel contract.
 abstract contract KernelStorage is IKernel {
     IEntryPoint public immutable entryPoint; // The entry point of the contract
-
-    // Event declarations
-    event Upgraded(address indexed newImplementation);
-    event DefaultValidatorChanged(address indexed oldValidator, address indexed newValidator);
-    event ExecutionChanged(bytes4 indexed selector, address indexed executor, address indexed validator);
-
-    // Error declarations
-    error NotAuthorizedCaller();
-    error AlreadyInitialized();
 
     // Modifier to check if the function is called by the entry point, the contract itself or the owner
     modifier onlyFromEntryPointOrSelf() {

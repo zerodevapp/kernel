@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 import "src/interfaces/IKernelValidator.sol";
 import "src/common/Types.sol";
 import "src/utils/KernelHelper.sol";
+import "src/common/Constants.sol";
 
 contract TestValidator is IKernelValidator {
     event TestValidateUserOp(bytes32 indexed opHash);

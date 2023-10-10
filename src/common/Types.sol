@@ -1,14 +1,10 @@
 pragma solidity ^0.8.9;
 
-import "./Constants.sol";
-
 type ValidAfter is uint48;
 
 type ValidUntil is uint48;
 
 type ValidationData is uint256;
-
-ValidationData constant SIG_VALIDATION_FAILED = ValidationData.wrap(SIG_VALIDATION_FAILED_UINT);
 
 function packValidationData(ValidAfter validAfter, ValidUntil validUntil) pure returns (ValidationData) {
     return ValidationData.wrap(

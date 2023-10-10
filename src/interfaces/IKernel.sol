@@ -9,6 +9,22 @@ import {Operation} from "../common/Enums.sol";
 import {UserOperation} from "I4337/interfaces/UserOperation.sol";
 
 interface IKernel {
+    // Event declarations
+    event Upgraded(address indexed newImplementation);
+
+    event DefaultValidatorChanged(address indexed oldValidator, address indexed newValidator);
+
+    event ExecutionChanged(bytes4 indexed selector, address indexed executor, address indexed validator);
+
+    // Error declarations
+    error NotAuthorizedCaller();
+
+    error AlreadyInitialized();
+
+    error NotEntryPoint();
+
+    error DisabledMode();
+
     function initialize(IKernelValidator _validator, bytes calldata _data) external payable;
 
     function upgradeTo(address _newImplementation) external payable;

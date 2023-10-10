@@ -2,13 +2,15 @@
 
 pragma solidity ^0.8.0;
 
-import "solady/utils/ECDSA.sol";
-import "../utils/KernelHelper.sol";
-import "../Kernel.sol";
+import {ECDSA} from "solady/utils/ECDSA.sol";
+import {UserOperation} from "I4337/interfaces/UserOperation.sol";
+import {IKernel} from "../interfaces/IKernel.sol";
+import {_intersectValidationData} from "../utils/KernelHelper.sol";
 import {WalletKernelStorage, ExecutionDetail} from "../common/Structs.sol";
-import "../interfaces/IKernelValidator.sol";
-import "../common/Types.sol";
+import {IKernelValidator} from "../interfaces/IKernelValidator.sol";
+import {ValidationData, ValidAfter, ValidUntil, packValidationData, parseValidationData} from "../common/Types.sol";
 import {KillSwitchAction} from "../executor/KillSwitchAction.sol";
+import {SIG_VALIDATION_FAILED} from "../common/Constants.sol";
 
 struct KillSwitchValidatorStorage {
     address guardian;
@@ -28,12 +30,7 @@ contract KillSwitchValidator is IKernelValidator {
         delete killSwitchValidatorStorage[msg.sender];
     }
 
-    function validateSignature(bytes32 hash, bytes calldata signature)
-        external
-        view
-        override
-        returns (ValidationData)
-    {
+    function validateSignature(bytes32, bytes calldata) external pure override returns (ValidationData) {
         revert("Not Implemented");
     }
 
@@ -69,8 +66,8 @@ contract KillSwitchValidator is IKernelValidator {
         if (_userOp.signature.length == 71) {
             // save data to this storage
             validatorStorage.pausedUntil = ValidAfter.wrap(uint48(bytes6(_userOp.signature[0:6])));
-            validatorStorage.validator = KernelStorage(msg.sender).getDefaultValidator();
-            validatorStorage.disableMode = KernelStorage(msg.sender).getDisabledMode();
+            validatorStorage.validator = IKernel(msg.sender).getDefaultValidator();
+            validatorStorage.disableMode = IKernel(msg.sender).getDisabledMode();
             bytes32 hash = ECDSA.toEthSignedMessageHash(keccak256(bytes.concat(_userOp.signature[0:6], _userOpHash)));
             address recovered = ECDSA.recover(hash, _userOp.signature[6:]);
             if (validatorStorage.guardian != recovered) {

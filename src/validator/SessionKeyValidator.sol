@@ -1,24 +1,23 @@
 pragma solidity ^0.8.0;
 
-import "solady/utils/ECDSA.sol";
-import "solady/utils/MerkleProofLib.sol";
+import {ECDSA} from "solady/utils/ECDSA.sol";
+import {MerkleProofLib} from "solady/utils/MerkleProofLib.sol";
 
-import "../interfaces/IKernelValidator.sol";
+import {IKernelValidator} from "../interfaces/IKernelValidator.sol";
+import {UserOperation} from "I4337/interfaces/UserOperation.sol";
 
-import "../common/Constants.sol";
-import "../common/Enums.sol";
-import "../common/Structs.sol";
+import {SIG_VALIDATION_FAILED} from "../common/Constants.sol";
+import {ParamCondition} from "../common/Enums.sol";
+import {ParamRule, SessionData, Permission, Call, ExecutionRule, ExecutionStatus} from "../common/Structs.sol";
 import "../common/Types.sol";
 
 import {Kernel} from "../Kernel.sol";
 
-import "forge-std/console.sol";
-
-contract ExecuteSessionKeyValidator is IKernelValidator {
+contract SessionKeyValidator is IKernelValidator {
     mapping(address kernel => uint256) public invalidNonce;
     mapping(address sessionKey => mapping(address kernel => SessionData)) public sessionData;
-    mapping(address sessionKey => mapping(uint32 index => mapping(address kernel => ValidAfter))) public
-        executionValidAfter;
+    mapping(address sessionKey => mapping(uint32 index => mapping(address kernel => ExecutionStatus))) public
+        executionStatus;
 
     function enable(bytes calldata _data) external payable {
         address sessionKey = address(bytes20(_data[0:20]));
@@ -101,7 +100,7 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
     }
 
     // to parse batch execute permissions
-    function _getPermissions(bytes calldata _sig) internal view returns (Permission[] calldata permissions) {
+    function _getPermissions(bytes calldata _sig) internal pure returns (Permission[] calldata permissions) {
         assembly {
             permissions.offset := add(add(_sig.offset, 0x20), calldataload(_sig.offset))
             permissions.length := calldataload(permissions.offset)
@@ -111,7 +110,7 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
     // to parse single execute permission
     function _getPermission(bytes calldata _sig)
         internal
-        view
+        pure
         returns (Permission calldata permission, bytes32[] calldata merkleProof)
     {
         assembly {
@@ -184,12 +183,18 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
             // no need to update validAfter
             return ValidAfter.wrap(0);
         }
-        uint48 validAfter = ValidAfter.unwrap(executionValidAfter[sessionKey][permission.index][msg.sender]);
+        ExecutionStatus storage status = executionStatus[sessionKey][permission.index][msg.sender];
+        uint48 validAfter = ValidAfter.unwrap(status.validAfter);
         if (validAfter == 0) {
             validAfter = ValidAfter.unwrap(permission.executionRule.validAfter);
         }
-        executionValidAfter[sessionKey][permission.index][msg.sender] =
-            ValidAfter.wrap(validAfter + permission.executionRule.interval);
+        if (permission.executionRule.runs != 0) {
+            status.runs += 1;
+            if (status.runs > permission.executionRule.runs) {
+                return ValidAfter.wrap(0xffffffffffff);
+            }
+        }
+        status.validAfter = ValidAfter.wrap(validAfter + permission.executionRule.interval);
         return ValidAfter.wrap(validAfter);
     }
 
@@ -236,7 +241,7 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
         leaves = new bytes32[](maxIndex + 1);
     }
 
-    function verifyPermission(bytes calldata data, Permission calldata permission) internal view returns (bool) {
+    function verifyPermission(bytes calldata data, Permission calldata permission) internal pure returns (bool) {
         if (bytes4(data[0:4]) != permission.sig) return false;
         for (uint256 i = 0; i < permission.rules.length; i++) {
             ParamRule calldata rule = permission.rules[i];

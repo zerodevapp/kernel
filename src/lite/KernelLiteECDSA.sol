@@ -1,6 +1,12 @@
 pragma solidity ^0.8.0;
 
-import "../Kernel.sol";
+import {IEntryPoint} from "I4337/interfaces/IEntryPoint.sol";
+import {UserOperation} from "I4337/interfaces/UserOperation.sol";
+import {ECDSA} from "solady/utils/ECDSA.sol";
+import {Kernel} from  "../Kernel.sol";
+import {IKernelValidator} from "../interfaces/IKernelValidator.sol";
+import {ValidationData} from "../common/Types.sol";
+import {SIG_VALIDATION_FAILED} from "../common/Constants.sol";
 
 struct KernelLiteECDSAStorage {
     address owner;
@@ -56,12 +62,7 @@ contract KernelLiteECDSA is Kernel {
         return _caller == getKernelLiteECDSAStorage().owner;
     }
 
-    function setDefaultValidator(IKernelValidator _defaultValidator, bytes calldata _data)
-        external
-        payable
-        override
-        onlyFromEntryPointOrSelf
-    {
+    function setDefaultValidator(IKernelValidator, bytes calldata) external payable override onlyFromEntryPointOrSelf {
         revert("not implemented");
     }
 }

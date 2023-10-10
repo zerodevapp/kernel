@@ -1,8 +1,8 @@
 pragma solidity ^0.8.0;
 
-import "solady/tokens/ERC20.sol";
-import "solady/tokens/ERC721.sol";
-import "solady/tokens/ERC1155.sol";
+import {ERC20} from "solady/tokens/ERC20.sol";
+import {ERC721} from "solady/tokens/ERC721.sol";
+import {ERC1155} from "solady/tokens/ERC1155.sol";
 
 contract TokenActions {
     function transferERC20Action(address _token, uint256 _amount, address _to) external {

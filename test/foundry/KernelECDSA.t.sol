@@ -11,6 +11,7 @@ import {ERC4337Utils} from "./utils/ERC4337Utils.sol";
 import {KernelTestBase} from "./KernelTestBase.sol";
 import {TestExecutor} from "./mock/TestExecutor.sol";
 import {TestValidator} from "./mock/TestValidator.sol";
+import {IKernel} from "src/interfaces/IKernel.sol";
 
 using ERC4337Utils for IEntryPoint;
 
