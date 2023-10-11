@@ -104,6 +104,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     /// @return validationData The data used for validation
     function validateUserOp(UserOperation calldata _userOp, bytes32 userOpHash, uint256 missingAccountFunds)
         external
+        virtual
         payable
         returns (ValidationData validationData)
     {
@@ -236,7 +237,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     /// @param hash The hash of the data that was signed
     /// @param signature The signature to be validated
     /// @return The magic value 0x1626ba7e if the signature is valid, otherwise returns 0xffffffff.
-    function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4) {
+    function isValidSignature(bytes32 hash, bytes calldata signature) public view returns (bytes4) {
         ValidationData validationData = _validateSignature(hash, signature);
         (ValidAfter validAfter, ValidUntil validUntil, address result) = parseValidationData(validationData);
         if (ValidAfter.unwrap(validAfter) > block.timestamp) {

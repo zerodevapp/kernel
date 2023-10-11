@@ -1,7 +1,9 @@
 pragma solidity ^0.8.0;
 
 import "src/factory/KernelFactory.sol";
-import "account-abstraction/interfaces/IStakeManager.sol";
+import "I4337/interfaces/IStakeManager.sol";
+import "src/Kernel.sol";
+import "src/lite/KernelLiteECDSA.sol";
 import "forge-std/Script.sol";
 import "forge-std/console.sol";
 contract DeployKernel is Script {
@@ -12,9 +14,9 @@ contract DeployKernel is Script {
     function run() public {
         uint256 key = vm.envUint("DEPLOYER_PRIVATE_KEY");
         vm.startBroadcast(key);
-        Kernel kernel;
+        KernelLiteECDSA kernel;
 //        if(EXPECTED_KERNEL_ADDRESS.code.length == 0 ){
-            kernel = new Kernel{salt:0}(IEntryPoint(ENTRYPOINT_0_6));
+            kernel = new KernelLiteECDSA{salt:0}(IEntryPoint(ENTRYPOINT_0_6));
             console.log("Kernel address: %s", address(kernel));
 //        } else {
 //            kernel = Kernel(EXPECTED_KERNEL_ADDRESS);

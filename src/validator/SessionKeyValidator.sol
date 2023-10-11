@@ -27,7 +27,7 @@ contract SessionKeyValidator is IKernelValidator {
         address paymaster = address(bytes20(_data[64:84]));
         uint256 nonce = uint256(bytes32(_data[84:116]));
         sessionData[sessionKey][msg.sender] = SessionData(merkleRoot, validAfter, validUntil, paymaster, nonce);
-        require(nonce == nonces[msg.sender].nextNonce++, "SessionKeyValidator: invalid nonce");
+        require(nonce == ++nonces[msg.sender].nextNonce, "SessionKeyValidator: invalid nonce");
     }
 
     function invalidateNonce(uint128 nonce) external {
@@ -129,7 +129,7 @@ contract SessionKeyValidator is IKernelValidator {
         address sessionKey = address(bytes20(userOp.signature[0:20]));
         SessionData storage session = sessionData[sessionKey][msg.sender];
         // nonce starts from 1
-        require(session.nonce <= nonces[msg.sender].invalidNonce, "SessionKeyValidator: session key not enabled");
+        require(session.nonce > nonces[msg.sender].invalidNonce, "SessionKeyValidator: session key not enabled");
         _verifyPaymaster(userOp, session);
 
         // NOTE: although this is allowed in smart contract, it is guided not to use this feature in most usecases

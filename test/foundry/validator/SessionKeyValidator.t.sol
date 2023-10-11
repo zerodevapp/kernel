@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+    // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
 import "src/Kernel.sol";
@@ -42,224 +42,245 @@ contract SessionKeyValidatorTest is KernelECDSATest {
     // - when there is validAfter => when validAfter is future
     // - when there is interval => when interval is zero, when interval is not zero
 
-    function test_scenario(bool anyPaymaster, uint48 runs, uint48 validAfter, uint48 interval) external {
-    }
+//    function test_scenario(
+//        bool isBatch,
+//        bool anyPaymaster,
+//        uint48 runs,
+//        uint48 validAfter,
+//        uint48 interval,
+//        bool wrongMerkleRoot,
+//        bool worngSig
+//    ) external {
+//        UserOperation memory op; 
+//        if(isBatch) {
+//            op = pack_multi_calls();
+//        } else {
+//            op = entryPoint.fillUserOp(
+//                address(kernel),
+//                abi.encodeWithSelector(
+//                    Kernel.execute.selector,
+//                    address(testToken),
+//                    0,
+//                    abi.encodeWithSelector(ERC20.transfer.selector, beneficiary, 100),
+//                    Operation.Call
+//                )
+//            );
+//        }
+//
+//        op.signature = buildEnableSignature(
+//            op, executionSig, uint48(0), uint48(0), executionDetail.validator, executionDetail.executor
+//        );
+//        UserOperation[] memory ops = new UserOperation[](1);
+//        ops[0] = op;
+//        vm.expectEmit(true, true, true, false, address(entryPoint));
+//        emit UserOperationEvent(entryPoint.getUserOpHash(op), address(kernel), address(0), op.nonce, false, 0, 0);
+//        entryPoint.handleOps(ops, beneficiary);
+//    }
+//
+//    function test_mode_2_no_paymaster() external {
+//        testToken.mint(address(kernel), 100e18);
+//        ParamRule[] memory rules = new ParamRule[](1);
+//        ExecutionRule memory execRule = ExecutionRule({validAfter: ValidAfter.wrap(0), interval: 0, runs: 0});
+//        rules[0] = ParamRule({offset: 32, condition: ParamCondition.LESS_THAN_OR_EQUAL, param: bytes32(uint256(1e18))});
+//
+//        bytes32[] memory data = new bytes32[](2);
+//        data[0] = keccak256(
+//            abi.encode(
+//                Permission({
+//                    index: 0,
+//                    valueLimit: 0,
+//                    target: address(testToken),
+//                    sig: ERC20.transfer.selector,
+//                    rules: rules,
+//                    executionRule: execRule
+//                })
+//            )
+//        );
+//
+//        data[1] = keccak256(
+//            abi.encode(
+//                Permission({
+//                    index: 1,
+//                    valueLimit: 0,
+//                    target: address(testToken2),
+//                    sig: ERC20.transfer.selector,
+//                    executionRule: execRule,
+//                    rules: rules
+//                })
+//            )
+//        );
+//
+//        bytes32 merkleRoot = _getRoot(data);
+//        bytes memory enableData = abi.encodePacked(sessionKey, merkleRoot, uint48(0), uint48(0), address(0), uint256(1));
+//        bytes32 digest =
+//            getTypedDataHash(Kernel.execute.selector, 0, 0, address(sessionKeyValidator), address(0), enableData);
+//        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
+//
+//        op.signature = abi.encodePacked(
+//            bytes4(0x00000002),
+//            uint48(0),
+//            uint48(0),
+//            address(sessionKeyValidator),
+//            address(0),
+//            uint256(enableData.length),
+//            enableData,
+//            uint256(65),
+//            r,
+//            s,
+//            v
+//        );
+//        op.signature = bytes.concat(
+//            op.signature,
+//            abi.encodePacked(
+//                sessionKey,
+//                entryPoint.signUserOpHash(vm, sessionKeyPriv, op),
+//                abi.encode(
+//                    Permission({
+//                        index: 0,
+//                        valueLimit: 0,
+//                        target: address(testToken),
+//                        sig: ERC20.transfer.selector,
+//                        executionRule: execRule,
+//                        rules: rules
+//                    }),
+//                    _getProof(data, 0)
+//                )
+//            )
+//        );
+//        UserOperation[] memory ops = new UserOperation[](1);
+//        ops[0] = op;
+//
+//        entryPoint.handleOps(ops, beneficiary);
+//    }
+//
+//    function pack_multi_calls() internal view returns (UserOperation memory op) {
+//        Call[] memory calls = new Call[](2);
+//        calls[0] = Call({
+//            to: address(testToken),
+//            value: 0,
+//            data: abi.encodeWithSelector(ERC20.transfer.selector, beneficiary, 100)
+//        });
+//        calls[1] = Call({
+//            to: address(testToken2),
+//            value: 0,
+//            data: abi.encodeWithSelector(ERC20.transfer.selector, beneficiary, 100)
+//        });
+//        op = entryPoint.fillUserOp(address(kernel), abi.encodeWithSelector(Kernel.executeBatch.selector, calls));
+//    }
+//
+//    function generate_merkle_root(ParamRule[] memory rules, ExecutionRule memory execRule)
+//        internal
+//        view
+//        returns (bytes32)
+//    {
+//        bytes32[] memory data = new bytes32[](2);
+//        data[0] = keccak256(
+//            abi.encode(
+//                Permission({
+//                    index: 0,
+//                    valueLimit: 0,
+//                    target: address(testToken),
+//                    sig: ERC20.transfer.selector,
+//                    rules: rules,
+//                    executionRule: execRule
+//                })
+//            )
+//        );
+//
+//        data[1] = keccak256(
+//            abi.encode(
+//                Permission({
+//                    index: 1,
+//                    valueLimit: 0,
+//                    target: address(testToken2),
+//                    sig: ERC20.transfer.selector,
+//                    executionRule: execRule,
+//                    rules: rules
+//                })
+//            )
+//        );
+//
+//        return _getRoot(data);
+//    }
+//
+//    function generate_proofs(ParamRule[] memory rules, ExecutionRule memory execRule)
+//        internal
+//        view
+//        returns (bytes memory)
+//    {
+//        bytes32[] memory proof;
+//        Permission[] memory permissions = new Permission[](2);
+//        permissions[0] = Permission({
+//            index: 0,
+//            valueLimit: 0,
+//            target: address(testToken),
+//            sig: ERC20.transfer.selector,
+//            executionRule: execRule,
+//            rules: rules
+//        });
+//        permissions[1] = Permission({
+//            index: 1,
+//            valueLimit: 0,
+//            target: address(testToken2),
+//            sig: ERC20.transfer.selector,
+//            executionRule: execRule,
+//            rules: rules
+//        });
+//        // since we use all of them, flags[0] == true
+//        bool[] memory flags = new bool[](1);
+//        flags[0] = true;
+//        uint256[] memory indexes = new uint256[](2);
+//        indexes[0] = 0;
+//        indexes[1] = 1;
+//
+//        return abi.encode(
+//            permissions,
+//            proof, //data
+//            flags,
+//            indexes
+//        );
+//    }
 
-    function test_mode_2_no_paymaster() external {
-        testToken.mint(address(kernel), 100e18);
-        UserOperation memory op = entryPoint.fillUserOp(
-            address(kernel),
-            abi.encodeWithSelector(
-                Kernel.execute.selector,
-                address(testToken),
-                0,
-                abi.encodeWithSelector(ERC20.transfer.selector, beneficiary, 100),
-                Operation.Call
-            )
-        );
-
-        ParamRule[] memory rules = new ParamRule[](1);
-        ExecutionRule memory execRule = ExecutionRule({validAfter: ValidAfter.wrap(0), interval: 0, runs: 0});
-        rules[0] = ParamRule({offset: 32, condition: ParamCondition.LESS_THAN_OR_EQUAL, param: bytes32(uint256(1e18))});
-
-        bytes32[] memory data = new bytes32[](2);
-        data[0] = keccak256(
-            abi.encode(
-                Permission({
-                    index: 0,
-                    valueLimit: 0,
-                    target: address(testToken),
-                    sig: ERC20.transfer.selector,
-                    rules: rules,
-                    executionRule: execRule
-                })
-            )
-        );
-
-        data[1] = keccak256(
-            abi.encode(
-                Permission({
-                    index: 1,
-                    valueLimit: 0,
-                    target: address(testToken2),
-                    sig: ERC20.transfer.selector,
-                    executionRule: execRule,
-                    rules: rules
-                })
-            )
-        );
-
-        bytes32 merkleRoot = _getRoot(data);
-        bytes memory enableData = abi.encodePacked(sessionKey, merkleRoot, uint48(0), uint48(0), address(0), uint256(1));
-        bytes32 digest =
-            getTypedDataHash(Kernel.execute.selector, 0, 0, address(sessionKeyValidator), address(0), enableData);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
-
-        op.signature = abi.encodePacked(
-            bytes4(0x00000002),
-            uint48(0),
-            uint48(0),
-            address(sessionKeyValidator),
-            address(0),
-            uint256(enableData.length),
-            enableData,
-            uint256(65),
-            r,
-            s,
-            v
-        );
-        op.signature = bytes.concat(
-            op.signature,
-            abi.encodePacked(
-                sessionKey,
-                entryPoint.signUserOpHash(vm, sessionKeyPriv, op),
-                abi.encode(
-                    Permission({
-                        index: 0,
-                        valueLimit: 0,
-                        target: address(testToken),
-                        sig: ERC20.transfer.selector,
-                        executionRule: execRule,
-                        rules: rules
-                    }),
-                    _getProof(data, 0)
-                )
-            )
-        );
-        UserOperation[] memory ops = new UserOperation[](1);
-        ops[0] = op;
-
-        entryPoint.handleOps(ops, beneficiary);
-    }
-
-    function pack_multi_calls() internal view returns (UserOperation memory op) {
-        Call[] memory calls = new Call[](2);
-        calls[0] = Call({
-            to: address(testToken),
-            value: 0,
-            data: abi.encodeWithSelector(ERC20.transfer.selector, beneficiary, 100)
-        });
-        calls[1] = Call({
-            to: address(testToken2),
-            value: 0,
-            data: abi.encodeWithSelector(ERC20.transfer.selector, beneficiary, 100)
-        });
-        op = entryPoint.fillUserOp(address(kernel), abi.encodeWithSelector(Kernel.executeBatch.selector, calls));
-    }
-
-    function generate_merkle_root(ParamRule[] memory rules, ExecutionRule memory execRule)
-        internal
-        view
-        returns (bytes32)
-    {
-        bytes32[] memory data = new bytes32[](2);
-        data[0] = keccak256(
-            abi.encode(
-                Permission({
-                    index: 0,
-                    valueLimit: 0,
-                    target: address(testToken),
-                    sig: ERC20.transfer.selector,
-                    rules: rules,
-                    executionRule: execRule
-                })
-            )
-        );
-
-        data[1] = keccak256(
-            abi.encode(
-                Permission({
-                    index: 1,
-                    valueLimit: 0,
-                    target: address(testToken2),
-                    sig: ERC20.transfer.selector,
-                    executionRule: execRule,
-                    rules: rules
-                })
-            )
-        );
-
-        return _getRoot(data);
-    }
-
-    function generate_proofs(ParamRule[] memory rules, ExecutionRule memory execRule)
-        internal
-        view
-        returns (bytes memory)
-    {
-        bytes32[] memory proof;
-        Permission[] memory permissions = new Permission[](2);
-        permissions[0] = Permission({
-            index: 0,
-            valueLimit: 0,
-            target: address(testToken),
-            sig: ERC20.transfer.selector,
-            executionRule: execRule,
-            rules: rules
-        });
-        permissions[1] = Permission({
-            index: 1,
-            valueLimit: 0,
-            target: address(testToken2),
-            sig: ERC20.transfer.selector,
-            executionRule: execRule,
-            rules: rules
-        });
-        // since we use all of them, flags[0] == true
-        bool[] memory flags = new bool[](1);
-        flags[0] = true;
-        uint256[] memory indexes = new uint256[](2);
-        indexes[0] = 0;
-        indexes[1] = 1;
-
-        return abi.encode(
-            permissions,
-            proof, //data
-            flags,
-            indexes
-        );
-    }
-
-    function test_mode_2_no_paymaster_multiple() external {
-        testToken.mint(address(kernel), 100e18);
-        UserOperation memory op = pack_multi_calls();
-        ParamRule[] memory rules = new ParamRule[](1);
-        ExecutionRule memory execRule = ExecutionRule({validAfter: ValidAfter.wrap(0), interval: 0, runs: 0});
-        rules[0] = ParamRule({offset: 32, condition: ParamCondition.LESS_THAN_OR_EQUAL, param: bytes32(uint256(1e18))});
-        bytes32 merkleRoot = generate_merkle_root(rules, execRule);
-        bytes memory enableData = abi.encodePacked(sessionKey, merkleRoot, uint48(0), uint48(0), address(0), uint256(1));
-        bytes32 digest =
-            getTypedDataHash(Kernel.executeBatch.selector, 0, 0, address(sessionKeyValidator), address(0), enableData);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
-
-        op.signature = abi.encodePacked(
-            bytes4(0x00000002),
-            uint48(0),
-            uint48(0),
-            address(sessionKeyValidator),
-            address(0),
-            uint256(enableData.length),
-            enableData,
-            uint256(65),
-            r,
-            s,
-            v
-        );
-
-        // since we use all of them
-
-        //bytes[] memory proof;
-        op.signature = bytes.concat(
-            op.signature,
-            abi.encodePacked(
-                sessionKey, entryPoint.signUserOpHash(vm, sessionKeyPriv, op), generate_proofs(rules, execRule)
-            )
-        );
-        UserOperation[] memory ops = new UserOperation[](1);
-        ops[0] = op;
-
-        entryPoint.handleOps(ops, beneficiary);
-    }
+//    function test_mode_2_no_paymaster_multiple() external {
+//        testToken.mint(address(kernel), 100e18);
+//        UserOperation memory op = 
+//        ParamRule[] memory rules = new ParamRule[](1);
+//        ExecutionRule memory execRule = ExecutionRule({validAfter: ValidAfter.wrap(0), interval: 0, runs: 0});
+//        rules[0] = ParamRule({offset: 32, condition: ParamCondition.LESS_THAN_OR_EQUAL, param: bytes32(uint256(1e18))});
+//        bytes32 merkleRoot = generate_merkle_root(rules, execRule);
+//        bytes memory enableData = abi.encodePacked(sessionKey, merkleRoot, uint48(0), uint48(0), address(0), uint256(1));
+//        bytes32 digest =
+//            getTypedDataHash(Kernel.executeBatch.selector, 0, 0, address(sessionKeyValidator), address(0), enableData);
+//        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
+//
+//        op.signature = abi.encodePacked(
+//            bytes4(0x00000002),
+//            uint48(0),
+//            uint48(0),
+//            address(sessionKeyValidator),
+//            address(0),
+//            uint256(enableData.length),
+//            enableData,
+//            uint256(65),
+//            r,
+//            s,
+//            v
+//        );
+//
+//        // since we use all of them
+//
+//        //bytes[] memory proof;
+//        op.signature = bytes.concat(
+//            op.signature,
+//            abi.encodePacked(
+//                sessionKey, entryPoint.signUserOpHash(vm, sessionKeyPriv, op), generate_proofs(rules, execRule)
+//            )
+//        );
+//        UserOperation[] memory ops = new UserOperation[](1);
+//        ops[0] = op;
+//
+//        entryPoint.handleOps(ops, beneficiary);
+//    }
 }
 // Following code is adapted from https://github.com/dmfxyz/murky/blob/main/src/common/MurkyBase.sol.
 

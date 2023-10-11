@@ -378,7 +378,7 @@ abstract contract KernelTestBase is Test {
     }
 
     // mode 2 tests
-    function test_mode_2() external {
+    function test_mode_2() public {
         UserOperation memory op = entryPoint.fillUserOp(address(kernel), abi.encodePacked(executionSig));
 
         op.signature = buildEnableSignature(
@@ -418,7 +418,7 @@ abstract contract KernelTestBase is Test {
         );
     }
 
-    function test_enable_then_mode_1() external {
+    function test_enable_then_mode_1() public {
         UserOperation memory op = entryPoint.fillUserOp(
             address(kernel),
             abi.encodeWithSelector(
