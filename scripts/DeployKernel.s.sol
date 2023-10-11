@@ -16,7 +16,7 @@ contract DeployKernel is Script {
         vm.startBroadcast(key);
         KernelLiteECDSA kernel;
 //        if(EXPECTED_KERNEL_ADDRESS.code.length == 0 ){
-            kernel = new KernelLiteECDSA{salt:0}(IEntryPoint(ENTRYPOINT_0_6));
+            kernel = new KernelLiteECDSA{salt:0}(IEntryPoint(ENTRYPOINT_0_6), IKernelValidator());
             console.log("Kernel address: %s", address(kernel));
 //        } else {
 //            kernel = Kernel(EXPECTED_KERNEL_ADDRESS);

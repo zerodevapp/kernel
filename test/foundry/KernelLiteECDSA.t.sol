@@ -17,6 +17,7 @@ using ERC4337Utils for IEntryPoint;
 
 contract KernelECDSATest is KernelTestBase {
     ECDSAValidator ecdsa;
+
     function setUp() public {
         ecdsa = new ECDSAValidator();
         _initialize();

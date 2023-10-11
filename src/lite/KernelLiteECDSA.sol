@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 import {IEntryPoint} from "I4337/interfaces/IEntryPoint.sol";
 import {UserOperation} from "I4337/interfaces/UserOperation.sol";
 import {ECDSA} from "solady/utils/ECDSA.sol";
-import {Kernel} from  "../Kernel.sol";
+import {Kernel} from "../Kernel.sol";
 import {IKernelValidator} from "../interfaces/IKernelValidator.sol";
 import {ValidationData} from "../common/Types.sol";
 import {SIG_VALIDATION_FAILED, KERNEL_STORAGE_SLOT_1} from "../common/Constants.sol";
@@ -17,6 +17,7 @@ struct KernelLiteECDSAStorage {
 
 contract KernelLiteECDSA is Kernel {
     error InvalidAccess();
+
     address public immutable KERNEL_ECDSA_VALIDATOR;
     bytes32 private constant KERNEL_LITE_ECDSA_STORAGE_SLOT =
         0xdea7fea882fba743201b2aeb1babf326b8944488db560784858525d123ee7e97; // keccak256(abi.encodePacked("zerodev.kernel.lite.ecdsa")) - 1

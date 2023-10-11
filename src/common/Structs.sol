@@ -29,7 +29,7 @@ struct WalletKernelStorage {
 
 // Param Rule for session key
 struct Nonces {
-    uint128 nextNonce;
+    uint128 lastNonce;
     uint128 invalidNonce;
 }
 

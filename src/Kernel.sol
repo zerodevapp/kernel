@@ -104,8 +104,8 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     /// @return validationData The data used for validation
     function validateUserOp(UserOperation calldata _userOp, bytes32 userOpHash, uint256 missingAccountFunds)
         external
-        virtual
         payable
+        virtual
         returns (ValidationData validationData)
     {
         if (msg.sender != address(entryPoint)) {
