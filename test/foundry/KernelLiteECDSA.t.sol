@@ -11,13 +11,16 @@ import {ERC4337Utils} from "./utils/ERC4337Utils.sol";
 import {KernelTestBase} from "./KernelTestBase.sol";
 import {TestExecutor} from "./mock/TestExecutor.sol";
 import {TestValidator} from "./mock/TestValidator.sol";
+import {ECDSAValidator} from "src/validator/ECDSAValidator.sol";
 
 using ERC4337Utils for IEntryPoint;
 
 contract KernelECDSATest is KernelTestBase {
+    ECDSAValidator ecdsa;
     function setUp() public {
+        ecdsa = new ECDSAValidator();
         _initialize();
-        kernelImpl = Kernel(payable(address(new KernelLiteECDSA(entryPoint))));
+        kernelImpl = Kernel(payable(address(new KernelLiteECDSA(entryPoint, ecdsa))));
         vm.startPrank(factoryOwner);
         factory.setImplementation(address(kernelImpl), true);
         vm.stopPrank();
@@ -47,7 +50,7 @@ contract KernelECDSATest is KernelTestBase {
     }
 
     function getInitializeData() internal view override returns (bytes memory) {
-        return abi.encodeWithSelector(KernelStorage.initialize.selector, address(kernelImpl), abi.encodePacked(owner));
+        return abi.encodeWithSelector(KernelStorage.initialize.selector, address(ecdsa), abi.encodePacked(owner));
     }
 
     function test_set_default_validator() external override {

@@ -8,5 +8,7 @@ cbor_metadata = false
 optimize = true
 via-ir = false
 runs = 1000000
+[fuzz]
+runs = 1024
 
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config
