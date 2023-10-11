@@ -14,7 +14,7 @@ import "../mock/TestPaymaster.sol";
 // test utils
 import "forge-std/Test.sol";
 import "../utils/ERC4337Utils.sol";
-import "../utils/Merkel.sol";
+import "../utils/Merkle.sol";
 // test actions/validators
 import "src/validator/SessionKeyValidator.sol";
 
