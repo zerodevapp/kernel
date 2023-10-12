@@ -8,6 +8,7 @@ import "account-abstraction/interfaces/IEntryPoint.sol";
 import "./abstract/Compatibility.sol";
 import "./abstract/KernelStorage.sol";
 import "./utils/KernelHelper.sol";
+import "./utils/Exec.sol";
 
 import "src/common/Constants.sol";
 import "src/common/Enum.sol";
@@ -74,6 +75,31 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
                 switch success
                 case 0 { revert(0, returndatasize()) }
                 default { return(0, returndatasize()) }
+            }
+        }
+    }
+
+    function executeBatch(address[] memory dest, uint256[] memory values, bytes[] memory func, Operation operation)
+        external
+    {
+        if (msg.sender != address(entryPoint) && !_checkCaller()) {
+            revert NotAuthorizedCaller();
+        }
+        for (uint256 i = 0; i < dest.length; i++) {
+           if (operation == Operation.Call) {
+                (bool success, bytes memory ret) = Exec.call(dest[i], values[i], func[i]);
+                if (!success) {
+                    assembly {
+                        revert(add(ret, 32), mload(ret))
+                    }
+                }
+            } else {
+                (bool success, bytes memory ret) = Exec.delegateCall(dest[i], func[i]);
+                if (!success) {
+                    assembly {
+                        revert(add(ret, 32), mload(ret))
+                    }
+                }
             }
         }
     }
