@@ -10,7 +10,7 @@ contract DeploySessionKey is Script {
         vm.startBroadcast(key);
 //        if(EXPECTED_ADDRESS_SESSION_KEY_VALIDATOR.code.length == 0) {
             console.log("deploying SessionKeyValidator");
-            ExecuteSessionKeyValidator validator = new ExecuteSessionKeyValidator{salt:0}();
+            SessionKeyValidator validator = new SessionKeyValidator{salt:0}();
             console.log("validator address: %s", address(validator));
  //       }
         vm.stopBroadcast();

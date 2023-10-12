@@ -25,6 +25,8 @@ interface IKernel {
 
     error DisabledMode();
 
+    error DeprecatedOperation();
+
     function initialize(IKernelValidator _validator, bytes calldata _data) external payable;
 
     function upgradeTo(address _newImplementation) external payable;

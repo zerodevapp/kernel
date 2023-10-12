@@ -30,11 +30,17 @@ contract SessionKeyValidatorTest is KernelECDSATest {
     bytes32[] data;
     address sessionKey;
     uint256 sessionKeyPriv;
+    TestPaymaster paymaster;
+    TestPaymaster unknownPaymaster;
 
     function setUp() public override {
         super.setUp();
         (sessionKey, sessionKeyPriv) = makeAddrAndKey("sessionKey");
         sessionKeyValidator = new SessionKeyValidator();
+        paymaster = new TestPaymaster();
+        unknownPaymaster = new TestPaymaster();
+        entryPoint.depositTo{value: 1e18}(address(unknownPaymaster));
+        entryPoint.depositTo{value: 1e18}(address(paymaster));
     }
 
     function _setup_permission(uint256 _length) internal returns (Permission[] memory permissions) {
@@ -56,6 +62,70 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         }
     }
 
+    function _buildHashes(Permission[] memory permissions) internal {
+        // setup permission done
+        data = new bytes32[](permissions.length);
+        for (uint8 i = 0; i < permissions.length; i++) {
+            data[i] = keccak256(abi.encode(permissions[i]));
+        }
+    }
+
+    function _buildUserOp(Permission[] memory permissions, SessionData memory sessionData, uint256 indexToUse, uint8 usingPaymasterMode) internal view returns(UserOperation memory op) {
+        op = entryPoint.fillUserOp(
+            address(kernel),
+            abi.encodeWithSelector(
+                IKernel.execute.selector,
+                permissions[indexToUse].target,
+                0,
+                abi.encodeWithSelector(
+                    permissions[indexToUse].sig,
+                    1, // since EQ
+                    1 // since NOT_EQ
+                ),
+                Operation.Call
+            )
+        );
+        if (usingPaymasterMode != 0) {
+            // 0 = no paymaster
+            // 1 = unknown paymaster
+            // 2 = correct paymaster
+            op.paymasterAndData = usingPaymasterMode == 1
+                ? abi.encodePacked(address(unknownPaymaster))
+                : abi.encodePacked(address(paymaster));
+        }
+        bytes memory enableData = abi.encodePacked(
+            sessionKey,
+            sessionData.merkleRoot,
+            sessionData.validAfter,
+            sessionData.validUntil,
+            sessionData.paymaster,
+            sessionData.nonce
+        );
+        bytes32 digest = getTypedDataHash(
+            IKernel.execute.selector,
+            ValidAfter.unwrap(sessionData.validAfter),
+            ValidUntil.unwrap(sessionData.validUntil),
+            address(sessionKeyValidator),
+            address(0),
+            enableData
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
+        op.signature = abi.encodePacked(
+            bytes4(0x00000002),
+            uint48(ValidAfter.unwrap(sessionData.validAfter)),
+            uint48(ValidUntil.unwrap(sessionData.validUntil)),
+            address(sessionKeyValidator),
+            address(0),
+            uint256(enableData.length),
+            enableData,
+            uint256(65),
+            r,
+            s,
+            v
+        );
+
+    }
+
     // scenarios to test
     // mode - 1, 2
     // paymaster - must, any, none
@@ -63,6 +133,8 @@ contract SessionKeyValidatorTest is KernelECDSATest {
     // - when there is runs => when runs expired
     // - when there is validAfter => when validAfter is future
     // - when there is interval => when interval is zero, when interval is not zero
+    // 21, 0, 2, 0, 0, 1, 0
+    // 1, 0, 2, 0, 0, 1, 0
     function test_scenario_non_batch(
         uint8 paymasterMode,
         uint8 usingPaymasterMode,
@@ -76,6 +148,8 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         vm.assume(indexToUse < numberOfPermissions && numberOfPermissions > 1);
         paymasterMode = paymasterMode % 3;
         usingPaymasterMode = usingPaymasterMode % 3;
+        bool shouldFail = usingPaymasterMode < paymasterMode;
+        runs = runs % 3;
         if (interval > 0) {
             vm.assume(validAfter > 0 && validAfter < block.timestamp);
         } else {
@@ -84,78 +158,17 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         // setup permissions
         execRule = ExecutionRule({runs: runs, validAfter: ValidAfter.wrap(validAfter), interval: interval});
         Permission[] memory permissions = _setup_permission(numberOfPermissions);
-        // setup permission done
-        data = new bytes32[](numberOfPermissions);
-        for (uint8 i = 0; i < numberOfPermissions; i++) {
-            data[i] = keccak256(abi.encode(permissions[i]));
-        }
-        (uint128 lastNonce,) = sessionKeyValidator.nonces(address(kernel));
-        TestPaymaster paymaster = new TestPaymaster();
+        _buildHashes(permissions);
+        //(uint128 lastNonce,) = sessionKeyValidator.nonces(address(kernel));
         SessionData memory sessionData = SessionData({
             merkleRoot: _getRoot(data),
             validAfter: ValidAfter.wrap(validAfter),
             validUntil: ValidUntil.wrap(0),
             paymaster: paymasterMode == 2 ? address(paymaster) : address(uint160(paymasterMode)),
-            nonce: lastNonce + 1
+            nonce: 1//lastNonce + 1
         });
         // now encode data to op
-        UserOperation memory op = entryPoint.fillUserOp(
-            address(kernel),
-            abi.encodeWithSelector(
-                IKernel.execute.selector,
-                permissions[indexToUse].target,
-                0,
-                abi.encodeWithSelector(
-                    permissions[indexToUse].sig,
-                    1, // since EQ
-                    1 // since NOT_EQ
-                )
-            )
-        );
-        if (usingPaymasterMode != 0) {
-            // 0 = no paymaster
-            // 1 = unknown paymaster
-            // 2 = correct paymaster
-            TestPaymaster unknownPaymaster = new TestPaymaster();
-            entryPoint.depositTo{value: 1e18}(address(unknownPaymaster));
-            entryPoint.depositTo{value: 1e18}(address(paymaster));
-            op.paymasterAndData = usingPaymasterMode == 1
-                ? abi.encodePacked(address(unknownPaymaster))
-                : abi.encodePacked(address(paymaster));
-        }
-        {
-            bytes memory enableData = abi.encodePacked(
-                sessionKey,
-                sessionData.merkleRoot,
-                sessionData.validAfter,
-                sessionData.validUntil,
-                sessionData.paymaster,
-                sessionData.nonce
-            );
-            bytes32 digest = getTypedDataHash(
-                IKernel.execute.selector,
-                ValidAfter.unwrap(sessionData.validAfter),
-                ValidUntil.unwrap(sessionData.validUntil),
-                address(sessionKeyValidator),
-                address(0),
-                enableData
-            );
-            (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
-            op.signature = abi.encodePacked(
-                bytes4(0x00000002),
-                uint48(ValidAfter.unwrap(sessionData.validAfter)),
-                uint48(ValidUntil.unwrap(sessionData.validUntil)),
-                address(sessionKeyValidator),
-                address(0),
-                uint256(enableData.length),
-                enableData,
-                uint256(65),
-                r,
-                s,
-                v
-            );
-        }
-
+        UserOperation memory op = _buildUserOp(permissions, sessionData, indexToUse, usingPaymasterMode);
         op.signature = bytes.concat(
             op.signature,
             abi.encodePacked(
@@ -167,9 +180,35 @@ contract SessionKeyValidatorTest is KernelECDSATest {
 
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = op;
-        if (usingPaymasterMode < paymasterMode) {
+        if (shouldFail) {
             vm.expectRevert();
         }
         entryPoint.handleOps(ops, beneficiary);
+        if(!shouldFail && runs > 0) {
+            for(uint256 i = 1; i <runs; i++) {
+                op.nonce = op.nonce + 1;
+                op.signature = bytes.concat(
+                    bytes4(0x00000001),
+                    abi.encodePacked(
+                        sessionKey,
+                        entryPoint.signUserOpHash(vm, sessionKeyPriv, op),
+                        abi.encode(permissions[indexToUse], _getProof(data, indexToUse))
+                    )
+                );
+                entryPoint.handleOps(ops, beneficiary);
+            }
+            op.nonce = op.nonce + 1;
+            op.signature = bytes.concat(
+                bytes4(0x00000001),
+                abi.encodePacked(
+                    sessionKey,
+                    entryPoint.signUserOpHash(vm, sessionKeyPriv, op),
+                    abi.encode(permissions[indexToUse], _getProof(data, indexToUse))
+                )
+            );
+            vm.expectRevert();
+            entryPoint.handleOps(ops, beneficiary);
+        }
+
     }
 }

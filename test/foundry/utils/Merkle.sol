@@ -1,3 +1,5 @@
+pragma solidity ^0.8.0;
+
 function _getRoot(bytes32[] memory data) pure returns (bytes32) {
     require(data.length > 1);
     while (data.length > 1) {

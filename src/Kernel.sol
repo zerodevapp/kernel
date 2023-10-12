@@ -60,9 +60,12 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     /// @param value The amount of Ether to send
     /// @param data The call data to be sent
     /// @dev operation is deprecated param, use executeBatch for batched transaction
-    function execute(address to, uint256 value, bytes memory data, Operation) external payable {
-        if (msg.sender != address(entryPoint) && !_checkCaller()) {
+    function execute(address to, uint256 value, bytes memory data, Operation _operation) external payable {
+        if (msg.sender != address(entryPoint) && msg.sender != address(this) && !_checkCaller()) {
             revert NotAuthorizedCaller();
+        }
+        if(_operation != Operation.Call) {
+            revert DeprecatedOperation();
         }
         assembly {
             let success := call(gas(), to, value, add(data, 0x20), mload(data), 0, 0)
