@@ -29,9 +29,9 @@ contract SessionKeyValidator is IKernelValidator {
         require(nonce == ++nonces[msg.sender].lastNonce, "SessionKeyValidator: invalid nonce");
     }
 
-    function invalidateNonce(uint128 nonce) external {
+    function invalidateNonce(uint128 nonce) public {
         require(
-            nonce > nonces[msg.sender].invalidNonce && nonce < nonces[msg.sender].lastNonce,
+            nonce > nonces[msg.sender].invalidNonce && nonce <= nonces[msg.sender].lastNonce,
             "SessionKeyValidator: invalid nonce"
         );
         nonces[msg.sender].invalidNonce = nonce;
@@ -39,8 +39,16 @@ contract SessionKeyValidator is IKernelValidator {
 
     function disable(bytes calldata _data) external payable {
         // invalidate specific sessionKey
-        address sessionKey = address(bytes20(_data[0:20]));
-        delete sessionData[sessionKey][msg.sender];
+        if (_data.length == 20) {
+            address sessionKey = address(bytes20(_data[0:20]));
+            delete sessionData[sessionKey][msg.sender];
+        } else if (_data.length == 16) {
+            // invalidate all sessionKeys before specific nonce
+            invalidateNonce(uint128(bytes16(_data[0:16])));
+        } else {
+            // invalidate all sessionKeys
+            invalidateNonce(nonces[msg.sender].lastNonce);
+        }
     }
 
     function _verifyPaymaster(UserOperation calldata userOp, SessionData storage session) internal view {
@@ -57,7 +65,7 @@ contract SessionKeyValidator is IKernelValidator {
         }
     }
 
-    function _verifyUserOpHash(address _sessionKey, SessionData storage _session)
+    function _verifyUserOpHash(address _sessionKey, ValidAfter validAfter, ValidUntil validUntil)
         internal
         view
         returns (ValidationData)
@@ -98,7 +106,7 @@ contract SessionKeyValidator is IKernelValidator {
         if (_sessionKey != ECDSA.recover(ECDSA.toEthSignedMessageHash(userOpHash), signature)) {
             return SIG_VALIDATION_FAILED;
         }
-        return packValidationData(_session.validAfter, _session.validUntil);
+        return packValidationData(validAfter, validUntil);
     }
 
     // to parse batch execute permissions
@@ -137,7 +145,7 @@ contract SessionKeyValidator is IKernelValidator {
         // NOTE: although this is allowed in smart contract, it is guided not to use this feature in most usecases
         // instead of setting sudo approval to sessionKey, please set specific permission to sessionKey
         if (session.merkleRoot == bytes32(0)) {
-            return _verifyUserOpHash(sessionKey, session);
+            return _verifyUserOpHash(sessionKey, session.validAfter, session.validUntil);
         }
 
         bytes calldata callData = userOp.callData;
@@ -167,16 +175,16 @@ contract SessionKeyValidator is IKernelValidator {
             if (!MerkleProofLib.verify(merkleProof, session.merkleRoot, keccak256(abi.encode(permission)))) {
                 return SIG_VALIDATION_FAILED;
             }
-            return _verifyUserOpHash(sessionKey, session);
+            return _verifyUserOpHash(sessionKey, validAfter, session.validUntil);
         } else if (bytes4(callData[0:4]) == Kernel.executeBatch.selector) {
             Permission[] calldata permissions = _getPermissions(userOp.signature[85:]);
             (, bytes32[] memory merkleProof, bool[] memory flags, uint256[] memory index) =
                 abi.decode(userOp.signature[85:], (Permission[], bytes32[], bool[], uint256[]));
-            bytes32[] memory leaves = _verifyParams(sessionKey, callData, permissions, index);
+            (bytes32[] memory leaves, ValidAfter validAfter) = _verifyParams(sessionKey, callData, permissions, index);
             if (!MerkleProofLib.verifyMultiProof(merkleProof, session.merkleRoot, leaves, flags)) {
                 return SIG_VALIDATION_FAILED;
             }
-            return _verifyUserOpHash(sessionKey, session);
+            return _verifyUserOpHash(sessionKey, validAfter, session.validUntil);
         } else {
             return SIG_VALIDATION_FAILED;
         }
@@ -198,6 +206,8 @@ contract SessionKeyValidator is IKernelValidator {
             ExecutionStatus storage status = executionStatus[permissionKey][msg.sender];
             if (ValidAfter.unwrap(status.validAfter) != 0) {
                 validAfter = ValidAfter.wrap(ValidAfter.unwrap(status.validAfter) + permission.executionRule.interval);
+            } else {
+                validAfter = permission.executionRule.validAfter;
             }
             status.validAfter = validAfter;
         }
@@ -215,18 +225,16 @@ contract SessionKeyValidator is IKernelValidator {
         bytes calldata callData,
         Permission[] calldata _permissions,
         uint256[] memory index
-    ) internal returns (bytes32[] memory leaves) {
+    ) internal returns (bytes32[] memory leaves, ValidAfter maxValidAfter) {
         Call[] calldata calls;
         assembly {
             calls.offset := add(add(callData.offset, 0x24), calldataload(add(callData.offset, 4)))
             calls.length := calldataload(add(add(callData.offset, 4), calldataload(add(callData.offset, 4))))
         }
-        //require(calls.length == permissions.length, "call length != permissions length"); ignore this since we don't care if calls.length < permissions.length
-        //require(calls.length == index.length, "call length != index length");
         uint256 i = 0;
         leaves = _generateLeaves(index);
         SessionData storage session = sessionData[sessionKey][msg.sender];
-        ValidAfter maxValidAfter = session.validAfter;
+        maxValidAfter = session.validAfter;
         for (i = 0; i < calls.length; i++) {
             Call calldata call = calls[i];
             Permission calldata permission = _permissions[i];

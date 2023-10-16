@@ -96,7 +96,7 @@ abstract contract KernelTestBase is Test {
             kernel.execute(validCallers[i], 0, "", Operation.Call);
         }
     }
-    
+
     function test_external_call_execute_delegatecall_fail() external {
         address[] memory validCallers = getOwners();
         for (uint256 i = 0; i < validCallers.length; i++) {

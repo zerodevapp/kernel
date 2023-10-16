@@ -48,7 +48,7 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         callees = new TestCallee[](_length);
         ParamRule[] memory paramRules = new ParamRule[](2);
         paramRules[0] = ParamRule({offset: 0, condition: ParamCondition.EQUAL, param: bytes32(uint256(1))});
-        paramRules[1] = ParamRule({offset: 1, condition: ParamCondition.NOT_EQUAL, param: bytes32(uint256(2))});
+        paramRules[1] = ParamRule({offset: 32, condition: ParamCondition.NOT_EQUAL, param: bytes32(uint256(2))});
         for (uint8 i = 0; i < _length; i++) {
             callees[i] = new TestCallee();
             permissions[i] = Permission({
@@ -70,7 +70,12 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         }
     }
 
-    function _buildUserOp(Permission[] memory permissions, SessionData memory sessionData, uint256 indexToUse, uint8 usingPaymasterMode) internal view returns(UserOperation memory op) {
+    function _buildUserOp(
+        Permission[] memory permissions,
+        SessionData memory sessionData,
+        uint256 indexToUse,
+        uint8 usingPaymasterMode
+    ) internal view returns (UserOperation memory op) {
         op = entryPoint.fillUserOp(
             address(kernel),
             abi.encodeWithSelector(
@@ -123,7 +128,6 @@ contract SessionKeyValidatorTest is KernelECDSATest {
             s,
             v
         );
-
     }
 
     // scenarios to test
@@ -146,9 +150,10 @@ contract SessionKeyValidatorTest is KernelECDSATest {
     ) public {
         vm.warp(1000);
         vm.assume(indexToUse < numberOfPermissions && numberOfPermissions > 1);
+        vm.assume(validAfter < type(uint32).max && interval < type(uint32).max && runs < type(uint32).max);
         paymasterMode = paymasterMode % 3;
         usingPaymasterMode = usingPaymasterMode % 3;
-        bool shouldFail = usingPaymasterMode < paymasterMode;
+        bool shouldFail = (usingPaymasterMode < paymasterMode) || (1000 < validAfter);
         runs = runs % 3;
         if (interval > 0) {
             vm.assume(validAfter > 0 && validAfter < block.timestamp);
@@ -165,7 +170,7 @@ contract SessionKeyValidatorTest is KernelECDSATest {
             validAfter: ValidAfter.wrap(validAfter),
             validUntil: ValidUntil.wrap(0),
             paymaster: paymasterMode == 2 ? address(paymaster) : address(uint160(paymasterMode)),
-            nonce: 1//lastNonce + 1
+            nonce: 1 //lastNonce + 1
         });
         // now encode data to op
         UserOperation memory op = _buildUserOp(permissions, sessionData, indexToUse, usingPaymasterMode);
@@ -184,8 +189,20 @@ contract SessionKeyValidatorTest is KernelECDSATest {
             vm.expectRevert();
         }
         entryPoint.handleOps(ops, beneficiary);
-        if(!shouldFail && runs > 0) {
-            for(uint256 i = 1; i <runs; i++) {
+        if (interval > 0 && validAfter > 0 && !shouldFail) {
+            (ValidAfter updatedValidAfter, uint48 r) = sessionKeyValidator.executionStatus(
+                keccak256(abi.encodePacked(sessionData.nonce, uint32(indexToUse))), address(kernel)
+            );
+            assertEq(uint256(ValidAfter.unwrap(updatedValidAfter)), uint256(validAfter));
+            if (runs > 0) {
+                assertEq(uint256(r), uint256(1));
+            } else {
+                assertEq(uint256(r), uint256(0));
+            }
+        }
+        if (!shouldFail && runs > 0) {
+            for (uint256 i = 1; i < runs; i++) {
+                vm.warp(validAfter + interval * i);
                 op.nonce = op.nonce + 1;
                 op.signature = bytes.concat(
                     bytes4(0x00000001),
@@ -196,6 +213,12 @@ contract SessionKeyValidatorTest is KernelECDSATest {
                     )
                 );
                 entryPoint.handleOps(ops, beneficiary);
+                (ValidAfter updatedValidAfter, uint48 r) = sessionKeyValidator.executionStatus(
+                    keccak256(abi.encodePacked(sessionData.nonce, uint32(indexToUse))), address(kernel)
+                );
+                if (validAfter > 0 && interval > 0) {
+                    assertEq(uint256(ValidAfter.unwrap(updatedValidAfter)), uint256(validAfter + interval * i));
+                }
             }
             op.nonce = op.nonce + 1;
             op.signature = bytes.concat(
@@ -209,6 +232,5 @@ contract SessionKeyValidatorTest is KernelECDSATest {
             vm.expectRevert();
             entryPoint.handleOps(ops, beneficiary);
         }
-
     }
 }

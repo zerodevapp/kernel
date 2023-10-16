@@ -64,7 +64,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         if (msg.sender != address(entryPoint) && msg.sender != address(this) && !_checkCaller()) {
             revert NotAuthorizedCaller();
         }
-        if(_operation != Operation.Call) {
+        if (_operation != Operation.Call) {
             revert DeprecatedOperation();
         }
         assembly {
