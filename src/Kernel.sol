@@ -235,13 +235,17 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         }
     }
 
+    function validateSignature(bytes32 hash, bytes calldata signature) public view returns(ValidationData) {
+        return _validateSignature(hash, signature);
+    }
+
     /// @notice Checks if a signature is valid
     /// @dev This function checks if a signature is valid based on the hash of the data signed.
     /// @param hash The hash of the data that was signed
     /// @param signature The signature to be validated
     /// @return The magic value 0x1626ba7e if the signature is valid, otherwise returns 0xffffffff.
     function isValidSignature(bytes32 hash, bytes calldata signature) public view returns (bytes4) {
-        ValidationData validationData = _validateSignature(hash, signature);
+        ValidationData validationData = validateSignature(hash, signature);
         (ValidAfter validAfter, ValidUntil validUntil, address result) = parseValidationData(validationData);
         if (ValidAfter.unwrap(validAfter) > block.timestamp) {
             return 0xffffffff;

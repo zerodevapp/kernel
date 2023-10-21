@@ -219,6 +219,9 @@ contract SessionKeyValidatorTest is KernelECDSATest {
                 if (validAfter > 0 && interval > 0) {
                     assertEq(uint256(ValidAfter.unwrap(updatedValidAfter)), uint256(validAfter + interval * i));
                 }
+                if(runs > 0) {
+                    assertEq(uint256(r), uint256(i + 1));
+                }
             }
             op.nonce = op.nonce + 1;
             op.signature = bytes.concat(
