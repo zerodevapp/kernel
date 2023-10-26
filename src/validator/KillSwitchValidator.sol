@@ -2,13 +2,15 @@
 
 pragma solidity ^0.8.0;
 
-import "solady/utils/ECDSA.sol";
-import "../utils/KernelHelper.sol";
-import "../Kernel.sol";
-import {WalletKernelStorage, ExecutionDetail} from "../abstract/KernelStorage.sol";
-import "../interfaces/IValidator.sol";
-import "../common/Types.sol";
+import {ECDSA} from "solady/utils/ECDSA.sol";
+import {UserOperation} from "I4337/interfaces/UserOperation.sol";
+import {IKernel} from "../interfaces/IKernel.sol";
+import {_intersectValidationData} from "../utils/KernelHelper.sol";
+import {WalletKernelStorage, ExecutionDetail} from "../common/Structs.sol";
+import {IKernelValidator} from "../interfaces/IKernelValidator.sol";
+import {ValidationData, ValidAfter, ValidUntil, packValidationData, parseValidationData} from "../common/Types.sol";
 import {KillSwitchAction} from "../executor/KillSwitchAction.sol";
+import {SIG_VALIDATION_FAILED} from "../common/Constants.sol";
 
 struct KillSwitchValidatorStorage {
     address guardian;
@@ -28,22 +30,8 @@ contract KillSwitchValidator is IKernelValidator {
         delete killSwitchValidatorStorage[msg.sender];
     }
 
-    function validateSignature(bytes32 hash, bytes calldata signature)
-        external
-        view
-        override
-        returns (ValidationData)
-    {
-        KillSwitchValidatorStorage storage validatorStorage = killSwitchValidatorStorage[msg.sender];
-        ValidationData res = validatorStorage.validator.validateSignature(hash, signature);
-        ValidAfter pausedUntil = validatorStorage.pausedUntil;
-        (,, address result) = parseValidationData(res);
-        if (result != address(1)) {
-            // if signature verification has not been failed, return with the result
-            ValidationData delayedData = packValidationData(pausedUntil, ValidUntil.wrap(0));
-            return _intersectValidationData(res, delayedData);
-        }
-        return SIG_VALIDATION_FAILED;
+    function validateSignature(bytes32, bytes calldata) external pure override returns (ValidationData) {
+        revert NotImplemented();
     }
 
     function validateUserOp(UserOperation calldata _userOp, bytes32 _userOpHash, uint256)
@@ -78,8 +66,8 @@ contract KillSwitchValidator is IKernelValidator {
         if (_userOp.signature.length == 71) {
             // save data to this storage
             validatorStorage.pausedUntil = ValidAfter.wrap(uint48(bytes6(_userOp.signature[0:6])));
-            validatorStorage.validator = KernelStorage(msg.sender).getDefaultValidator();
-            validatorStorage.disableMode = KernelStorage(msg.sender).getDisabledMode();
+            validatorStorage.validator = IKernel(msg.sender).getDefaultValidator();
+            validatorStorage.disableMode = IKernel(msg.sender).getDisabledMode();
             bytes32 hash = ECDSA.toEthSignedMessageHash(keccak256(bytes.concat(_userOp.signature[0:6], _userOpHash)));
             address recovered = ECDSA.recover(hash, _userOp.signature[6:]);
             if (validatorStorage.guardian != recovered) {
@@ -92,6 +80,6 @@ contract KillSwitchValidator is IKernelValidator {
     }
 
     function validCaller(address, bytes calldata) external pure override returns (bool) {
-        revert("not implemented");
+        revert NotImplemented();
     }
 }

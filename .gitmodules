@@ -1,15 +1,9 @@
-[submodule "lib/account-abstraction"]
-	path = lib/account-abstraction
-	url = https://github.com/eth-infinitism/account-abstraction
-	branch = 556f03fadcaba0d7d04cd901e6eb9601db50a998
 [submodule "lib/forge-std"]
 	path = lib/forge-std
 	url = https://github.com/foundry-rs/forge-std
-	branch = v1.5.2
-[submodule "lib/openzeppelin-contracts"]
-	path = lib/openzeppelin-contracts
-	url = https://github.com/OpenZeppelin/openzeppelin-contracts
-	branch = v4.8.2
 [submodule "lib/solady"]
 	path = lib/solady
 	url = https://github.com/vectorized/solady
+[submodule "lib/I4337"]
+	path = lib/I4337
+	url = https://github.com/leekt/I4337

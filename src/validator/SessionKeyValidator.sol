@@ -1,15 +1,22 @@
 pragma solidity ^0.8.0;
 
-import "solady/utils/ECDSA.sol";
-import "../interfaces/IValidator.sol";
-import "solady/utils/MerkleProofLib.sol";
-import "../common/Constants.sol";
-import "../common/Enum.sol";
-import "../common/Structs.sol";
+import {ECDSA} from "solady/utils/ECDSA.sol";
+import {MerkleProofLib} from "solady/utils/MerkleProofLib.sol";
+
+import {IKernelValidator} from "../interfaces/IKernelValidator.sol";
+import {UserOperation} from "I4337/interfaces/UserOperation.sol";
+
+import {SIG_VALIDATION_FAILED} from "../common/Constants.sol";
+import {ParamCondition} from "../common/Enums.sol";
+import {ParamRule, SessionData, Permission, Call, ExecutionRule, ExecutionStatus, Nonces} from "../common/Structs.sol";
 import "../common/Types.sol";
 
-contract ExecuteSessionKeyValidator is IKernelValidator {
+import {Kernel} from "../Kernel.sol";
+
+contract SessionKeyValidator is IKernelValidator {
+    mapping(address kernel => Nonces) public nonces;
     mapping(address sessionKey => mapping(address kernel => SessionData)) public sessionData;
+    mapping(bytes32 permissionKey => mapping(address kernel => ExecutionStatus)) public executionStatus;
 
     function enable(bytes calldata _data) external payable {
         address sessionKey = address(bytes20(_data[0:20]));
@@ -17,86 +24,272 @@ contract ExecuteSessionKeyValidator is IKernelValidator {
         ValidAfter validAfter = ValidAfter.wrap(uint48(bytes6(_data[52:58])));
         ValidUntil validUntil = ValidUntil.wrap(uint48(bytes6(_data[58:64])));
         address paymaster = address(bytes20(_data[64:84]));
-        sessionData[sessionKey][msg.sender] = SessionData(merkleRoot, validAfter, validUntil, paymaster, true);
+        uint256 nonce = uint256(bytes32(_data[84:116]));
+        sessionData[sessionKey][msg.sender] = SessionData(merkleRoot, validAfter, validUntil, paymaster, nonce);
+        require(nonce == ++nonces[msg.sender].lastNonce, "SessionKeyValidator: invalid nonce");
+    }
+
+    function invalidateNonce(uint128 nonce) public {
+        require(
+            nonce > nonces[msg.sender].invalidNonce && nonce <= nonces[msg.sender].lastNonce,
+            "SessionKeyValidator: invalid nonce"
+        );
+        nonces[msg.sender].invalidNonce = nonce;
     }
 
     function disable(bytes calldata _data) external payable {
-        address sessionKey = address(bytes20(_data[0:20]));
-        address kernel = msg.sender;
-        sessionData[sessionKey][kernel].enabled = false;
+        // invalidate specific sessionKey
+        if (_data.length == 20) {
+            address sessionKey = address(bytes20(_data[0:20]));
+            delete sessionData[sessionKey][msg.sender];
+        } else if (_data.length == 16) {
+            // invalidate all sessionKeys before specific nonce
+            invalidateNonce(uint128(bytes16(_data[0:16])));
+        } else {
+            // invalidate all sessionKeys
+            invalidateNonce(nonces[msg.sender].lastNonce);
+        }
     }
 
-    function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256)
+    function _verifyPaymaster(UserOperation calldata userOp, SessionData storage session) internal view {
+        // to make this fully work with paymaster service, prepack the address of paymaster up front
+        if (session.paymaster == address(1)) {
+            // any paymaster
+            require(userOp.paymasterAndData.length != 0, "SessionKeyValidator: paymaster not set");
+        } else if (session.paymaster != address(0)) {
+            // specific paymaster
+            require(
+                address(bytes20(userOp.paymasterAndData[0:20])) == session.paymaster,
+                "SessionKeyValidator: paymaster mismatch"
+            );
+        }
+    }
+
+    function _verifyUserOpHash(address _sessionKey, ValidAfter validAfter, ValidUntil validUntil)
+        internal
+        view
+        returns (ValidationData)
+    {
+        bytes32 userOpHash;
+        assembly {
+            // 0x00 ~ 0x04 : sig
+            // 0x04 ~ 0x24 : userOp.offset
+            // 0x24 ~ 0x44 : userOpHash
+            userOpHash := calldataload(0x24)
+        }
+        bytes calldata signature;
+        assembly {
+            //0x00 ~ 0x04 : selector
+            //0x04 ~ 0x24 : userOp.offset
+            //0x24 ~ 0x44 : userOpHash
+            //0x44 ~ 0x64 : missingAccountFund
+            //[userOp.offset + 0x04]
+            //0x00 ~ 0x20 : sender
+            //0x20 ~ 0x40 : nonce
+            //0x40 ~ 0x60 : initCode
+            //0x60 ~ 0x80 : callData
+            //0x80 ~ 0xa0 : callGasLimit
+            //0xa0 ~ 0xc0 : verificationGasLimit
+            //0xc0 ~ 0xe0 : preVerificationGas
+            //0xe0 ~ 0x100 : maxFeePerGas
+            //0x100 ~ 0x120 : maxPriorityFeePerGas
+            //0x120 ~ 0x140 : paymasterAndData
+            //0x140 ~ 0x160 : signatureOffset
+            //[signatureOffset + userOp.offset + 0x04]
+            //[0x00 ~ 0x20] : length
+            //[0x20 ~]      : signature
+            let userOpOffset := add(calldataload(0x04), 0x04)
+            let signatureOffset := add(calldataload(add(userOpOffset, 0x140)), add(userOpOffset, 0x34))
+            signature.offset := signatureOffset
+            signature.length := 0x41
+        }
+        if (_sessionKey != ECDSA.recover(ECDSA.toEthSignedMessageHash(userOpHash), signature)) {
+            return SIG_VALIDATION_FAILED;
+        }
+        return packValidationData(validAfter, validUntil);
+    }
+
+    // to parse batch execute permissions
+    function _getPermissions(bytes calldata _sig) internal pure returns (Permission[] calldata permissions) {
+        assembly {
+            permissions.offset := add(add(_sig.offset, 0x20), calldataload(_sig.offset))
+            permissions.length := calldataload(permissions.offset)
+        }
+    }
+
+    // to parse single execute permission
+    function _getPermission(bytes calldata _sig)
+        internal
+        pure
+        returns (Permission calldata permission, bytes32[] calldata merkleProof)
+    {
+        assembly {
+            permission := add(_sig.offset, calldataload(_sig.offset))
+            merkleProof.length := calldataload(add(_sig.offset, calldataload(add(_sig.offset, 0x20))))
+            merkleProof.offset := add(add(_sig.offset, 0x20), calldataload(add(_sig.offset, 0x20)))
+        }
+    }
+
+    function validateUserOp(UserOperation calldata userOp, bytes32, uint256)
         external
         payable
         returns (ValidationData)
     {
         // userOp.signature = signer + signature + permission + merkleProof
         address sessionKey = address(bytes20(userOp.signature[0:20]));
-        bytes calldata signature = userOp.signature[20:85];
         SessionData storage session = sessionData[sessionKey][msg.sender];
-        require(session.enabled, "SessionKeyValidator: session key not enabled");
+        // nonce starts from 1
+        require(session.nonce > nonces[msg.sender].invalidNonce, "SessionKeyValidator: session key not enabled");
+        _verifyPaymaster(userOp, session);
+
+        // NOTE: although this is allowed in smart contract, it is guided not to use this feature in most usecases
+        // instead of setting sudo approval to sessionKey, please set specific permission to sessionKey
         if (session.merkleRoot == bytes32(0)) {
-            // sessionKey allowed to execute any tx
-            return packValidationData(session.validAfter, session.validUntil);
-        }
-        if (session.paymaster == address(1)) {
-            require(userOp.paymasterAndData.length != 0, "SessionKeyValidator: paymaster not set");
-        } else if (session.paymaster != address(0)) {
-            require(
-                address(bytes20(userOp.paymasterAndData[0:20])) == session.paymaster,
-                "SessionKeyValidator: paymaster mismatch"
-            );
+            return _verifyUserOpHash(sessionKey, session.validAfter, session.validUntil);
         }
 
-        (Permission memory permission, bytes32[] memory merkleProof) =
-            abi.decode(userOp.signature[85:], (Permission, bytes32[]));
-        require(
-            permission.target == address(0) || address(bytes20(userOp.callData[16:36])) == permission.target,
-            "SessionKeyValidator: target mismatch"
-        );
-        require(
-            uint256(bytes32(userOp.callData[36:68])) <= permission.valueLimit,
-            "SessionKeyValidator: value limit exceeded"
-        );
-        require(
-            Operation(uint8(uint256(bytes32(userOp.callData[100:132])))) == permission.operation,
-            "SessionKeyValidator: operation mismatch"
-        );
-        uint256 dataOffset = uint256(bytes32(userOp.callData[68:100])) + 4; // adding 4 for msg.sig
-        uint256 dataLength = uint256(bytes32(userOp.callData[dataOffset:dataOffset + 32]));
-        bytes calldata data = userOp.callData[dataOffset + 32:dataOffset + 32 + dataLength];
-        require(bytes4(data[0:4]) == permission.sig, "SessionKeyValidator: sig mismatch");
-        for (uint256 i = 0; i < permission.rules.length; i++) {
-            ParamRule memory rule = permission.rules[i];
-            bytes32 param = bytes32(data[4 + rule.offset:4 + rule.offset + 32]);
-            if (rule.condition == ParamCondition.EQUAL) {
-                require(param == rule.param, "SessionKeyValidator: param mismatch");
-            } else if (rule.condition == ParamCondition.GREATER_THAN) {
-                require(param > rule.param, "SessionKeyValidator: param mismatch");
-            } else if (rule.condition == ParamCondition.LESS_THAN) {
-                require(param < rule.param, "SessionKeyValidator: param mismatch");
-            } else if (rule.condition == ParamCondition.GREATER_THAN_OR_EQUAL) {
-                require(param >= rule.param, "SessionKeyValidator: param mismatch");
-            } else if (rule.condition == ParamCondition.LESS_THAN_OR_EQUAL) {
-                require(param <= rule.param, "SessionKeyValidator: param mismatch");
-            } else if (rule.condition == ParamCondition.NOT_EQUAL) {
-                require(param != rule.param, "SessionKeyValidator: param mismatch");
+        bytes calldata callData = userOp.callData;
+        if (bytes4(callData[0:4]) == Kernel.execute.selector) {
+            (Permission calldata permission, bytes32[] calldata merkleProof) = _getPermission(userOp.signature[85:]);
+            require(
+                address(bytes20(userOp.callData[16:36])) == permission.target,
+                "SessionKeyValidator: target mismatch"
+            );
+            require(
+                uint256(bytes32(userOp.callData[36:68])) <= permission.valueLimit,
+                "SessionKeyValidator: value limit exceeded"
+            );
+            bytes calldata data;
+            assembly {
+                let dataOffset := add(add(callData.offset, 0x04), calldataload(add(callData.offset, 0x44)))
+                let length := calldataload(dataOffset)
+                data.offset := add(dataOffset, 32)
+                data.length := length
             }
-        }
-        bool result = MerkleProofLib.verify(merkleProof, session.merkleRoot, keccak256(abi.encode(permission)))
-            && (sessionKey == ECDSA.recover(ECDSA.toEthSignedMessageHash(userOpHash), signature));
-        if (!result) {
+            require(verifyPermission(data, permission), "SessionKeyValidator: permission verification failed");
+            ValidAfter validAfter =
+                _updateValidAfter(permission, keccak256(abi.encodePacked(session.nonce, permission.index)));
+            if (ValidAfter.unwrap(validAfter) < ValidAfter.unwrap(session.validAfter)) {
+                validAfter = session.validAfter;
+            }
+            if (!MerkleProofLib.verify(merkleProof, session.merkleRoot, keccak256(abi.encode(permission)))) {
+                return SIG_VALIDATION_FAILED;
+            }
+            return _verifyUserOpHash(sessionKey, validAfter, session.validUntil);
+        } else if (bytes4(callData[0:4]) == Kernel.executeBatch.selector) {
+            Permission[] calldata permissions = _getPermissions(userOp.signature[85:]);
+            (, bytes32[] memory merkleProof, bool[] memory flags, uint256[] memory index) =
+                abi.decode(userOp.signature[85:], (Permission[], bytes32[], bool[], uint256[]));
+            (bytes32[] memory leaves, ValidAfter validAfter) = _verifyParams(sessionKey, callData, permissions, index);
+            if (!MerkleProofLib.verifyMultiProof(merkleProof, session.merkleRoot, leaves, flags)) {
+                return SIG_VALIDATION_FAILED;
+            }
+            return _verifyUserOpHash(sessionKey, validAfter, session.validUntil);
+        } else {
             return SIG_VALIDATION_FAILED;
         }
-        return packValidationData(session.validAfter, session.validUntil);
+    }
+
+    function _updateValidAfter(Permission calldata permission, bytes32 permissionKey)
+        internal
+        returns (ValidAfter validAfter)
+    {
+        if (permission.executionRule.interval == 0) {
+            // no need to update validAfter
+            validAfter = permission.executionRule.validAfter;
+        } else {
+            require(
+                ValidAfter.unwrap(permission.executionRule.validAfter) != 0,
+                "SessionKeyValidator: invalid execution rule"
+            );
+            // should update validAfter for executionStatus
+            ExecutionStatus storage status = executionStatus[permissionKey][msg.sender];
+            if (ValidAfter.unwrap(status.validAfter) != 0) {
+                validAfter = ValidAfter.wrap(ValidAfter.unwrap(status.validAfter) + permission.executionRule.interval);
+            } else {
+                validAfter = permission.executionRule.validAfter;
+            }
+            status.validAfter = validAfter;
+        }
+        // update runs
+        if (permission.executionRule.runs != 0) {
+            ExecutionStatus storage status = executionStatus[permissionKey][msg.sender];
+            status.runs += 1;
+            require(status.runs <= permission.executionRule.runs, "SessionKeyValidator: runs exceeded");
+        }
+        return validAfter;
+    }
+
+    function _verifyParams(
+        address sessionKey,
+        bytes calldata callData,
+        Permission[] calldata _permissions,
+        uint256[] memory index
+    ) internal returns (bytes32[] memory leaves, ValidAfter maxValidAfter) {
+        Call[] calldata calls;
+        assembly {
+            calls.offset := add(add(callData.offset, 0x24), calldataload(add(callData.offset, 4)))
+            calls.length := calldataload(add(add(callData.offset, 4), calldataload(add(callData.offset, 4))))
+        }
+        uint256 i = 0;
+        leaves = _generateLeaves(index);
+        SessionData storage session = sessionData[sessionKey][msg.sender];
+        maxValidAfter = session.validAfter;
+        for (i = 0; i < calls.length; i++) {
+            Call calldata call = calls[i];
+            Permission calldata permission = _permissions[i];
+            require(
+                call.to == permission.target, "SessionKeyValidator: target mismatch"
+            );
+            require(uint256(bytes32(call.value)) <= permission.valueLimit, "SessionKeyValidator: value limit exceeded");
+            require(verifyPermission(call.data, permission), "SessionKeyValidator: permission verification failed");
+            ValidAfter validAfter =
+                _updateValidAfter(permission, keccak256(abi.encodePacked(session.nonce, permission.index)));
+            if (ValidAfter.unwrap(validAfter) > ValidAfter.unwrap(maxValidAfter)) {
+                maxValidAfter = validAfter;
+            }
+            leaves[index[i]] = keccak256(abi.encode(permission));
+        }
+    }
+
+    function _generateLeaves(uint256[] memory _indexes) internal pure returns (bytes32[] memory leaves) {
+        uint256 maxIndex;
+        uint256 i = 0;
+        for (i = 0; i < _indexes.length; i++) {
+            if (_indexes[i] > maxIndex) {
+                maxIndex = _indexes[i];
+            }
+        }
+        leaves = new bytes32[](maxIndex + 1);
+    }
+
+    function verifyPermission(bytes calldata data, Permission calldata permission) internal pure returns (bool) {
+        if (bytes4(data[0:4]) != permission.sig) return false;
+        for (uint256 i = 0; i < permission.rules.length; i++) {
+            ParamRule calldata rule = permission.rules[i];
+            bytes32 param = bytes32(data[4 + rule.offset:4 + rule.offset + 32]);
+            if (rule.condition == ParamCondition.EQUAL && param != rule.param) {
+                return false;
+            } else if (rule.condition == ParamCondition.GREATER_THAN && param <= rule.param) {
+                return false;
+            } else if (rule.condition == ParamCondition.LESS_THAN && param >= rule.param) {
+                return false;
+            } else if (rule.condition == ParamCondition.GREATER_THAN_OR_EQUAL && param < rule.param) {
+                return false;
+            } else if (rule.condition == ParamCondition.LESS_THAN_OR_EQUAL && param > rule.param) {
+                return false;
+            } else if (rule.condition == ParamCondition.NOT_EQUAL && param == rule.param) {
+                return false;
+            }
+        }
+        return true;
     }
 
     function validCaller(address, bytes calldata) external pure returns (bool) {
-        revert("SessionKeyValidator: not implemented");
+        revert NotImplemented();
     }
 
     function validateSignature(bytes32, bytes calldata) external pure returns (ValidationData) {
-        revert("SessionKeyValidator: not implemented");
+        revert NotImplemented();
     }
 }

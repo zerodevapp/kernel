@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "./AdminLessERC1967Factory.sol";
-
-import "openzeppelin-contracts/contracts/utils/Create2.sol";
-import "../Kernel.sol";
-import "../validator/ECDSAValidator.sol";
-import "solady/auth/Ownable.sol";
+import {AdminLessERC1967Factory} from "./AdminLessERC1967Factory.sol";
+import {IEntryPoint} from "I4337/interfaces/IEntryPoint.sol";
+import {Ownable} from "solady/auth/Ownable.sol";
 
 contract KernelFactory is AdminLessERC1967Factory, Ownable {
     IEntryPoint public entryPoint;

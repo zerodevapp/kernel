@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "openzeppelin-contracts/contracts/utils/introspection/IERC165.sol";
-import "solady/utils/ECDSA.sol";
-import "../utils/KernelHelper.sol";
-import "../interfaces/IValidator.sol";
-import "../common/Types.sol";
+import {UserOperation} from "I4337/interfaces/UserOperation.sol";
+import {ECDSA} from "solady/utils/ECDSA.sol";
+import {IKernelValidator} from "../interfaces/IKernelValidator.sol";
+import {ValidAfter, ValidUntil, ValidationData, packValidationData} from "../common/Types.sol";
+import {SIG_VALIDATION_FAILED} from "../common/Constants.sol";
 
 // idea, we can make this merkle root
 struct ERC165SessionKeyStorage {
@@ -15,6 +15,10 @@ struct ERC165SessionKeyStorage {
     ValidAfter validAfter;
     ValidUntil validUntil;
     uint32 addressOffset;
+}
+
+interface IERC165 {
+    function supportsInterface(bytes4 interfaceId) external view returns (bool);
 }
 
 contract ERC165SessionKeyValidator is IKernelValidator {
@@ -38,7 +42,7 @@ contract ERC165SessionKeyValidator is IKernelValidator {
     }
 
     function validateSignature(bytes32, bytes calldata) external pure override returns (ValidationData) {
-        revert("not implemented");
+        revert NotImplemented();
     }
 
     function validateUserOp(UserOperation calldata _userOp, bytes32 _userOpHash, uint256)
@@ -59,6 +63,6 @@ contract ERC165SessionKeyValidator is IKernelValidator {
     }
 
     function validCaller(address, bytes calldata) external pure override returns (bool) {
-        revert("not implemented");
+        revert NotImplemented();
     }
 }

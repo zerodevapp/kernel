@@ -1,8 +1,8 @@
 pragma solidity ^0.8.18;
 
-import "../interfaces/IValidator.sol";
-import "../validator/KillSwitchValidator.sol";
-import "../abstract/KernelStorage.sol";
+import {IKernelValidator} from "../interfaces/IKernelValidator.sol";
+import {KillSwitchValidator} from "../validator/KillSwitchValidator.sol";
+import {WalletKernelStorage} from "../common/Structs.sol";
 
 contract KillSwitchAction {
     KillSwitchValidator public immutable killSwitchValidator;

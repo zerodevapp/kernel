@@ -8,11 +8,11 @@ contract DeploySessionKey is Script {
     function run() public {
         uint256 key = vm.envUint("DEPLOYER_PRIVATE_KEY");
         vm.startBroadcast(key);
-        if(EXPECTED_ADDRESS_SESSION_KEY_VALIDATOR.code.length == 0) {
+//        if(EXPECTED_ADDRESS_SESSION_KEY_VALIDATOR.code.length == 0) {
             console.log("deploying SessionKeyValidator");
-            ExecuteSessionKeyValidator validator = new ExecuteSessionKeyValidator{salt:0}();
+            SessionKeyValidator validator = new SessionKeyValidator{salt:0}();
             console.log("validator address: %s", address(validator));
-        }
+ //       }
         vm.stopBroadcast();
     }
 }

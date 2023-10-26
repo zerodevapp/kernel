@@ -2,7 +2,6 @@ pragma solidity ^0.8.0;
 
 import "forge-std/Test.sol";
 import "src/utils/KernelHelper.sol";
-import {_packValidationData} from "account-abstraction/core/Helpers.sol";
 import "src/common/Types.sol";
 
 contract KernelHelperTest is Test {
