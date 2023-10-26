@@ -36,8 +36,8 @@ MIT
 
 | Name                 | Address                                    |
 | -------------------- | ------------------------------------------ |
-| Kernel               | 0x277A60Fe8b476df00295ed8D89aFca39F7f73187 |
-| KernelLite           | 0xb0A8C50B57a0Ffe1228FdbbAee89946A3B7786C0 |
+| Kernel               | 0x0DA6a956B9488eD4dd761E59f52FDc6c8068E6B5 |
+| KernelLite           | 0xbEdb61Be086F3f15eE911Cc9AB3EEa945DEbFa96 |
 </details>
 
 <details>
