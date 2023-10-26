@@ -27,6 +27,10 @@ contract KernelLiteECDSA is Kernel {
         getKernelLiteECDSAStorage().owner = address(1); // set owner to non-zero address to prevent initialization
     }
 
+    function transferOwnership(address _newOwner) external payable onlyFromEntryPointOrSelf {
+        getKernelLiteECDSAStorage().owner = _newOwner;
+    }
+
     // FOR KERNEL USAGE
     function getKernelLiteECDSAStorage() internal pure returns (KernelLiteECDSAStorage storage s) {
         assembly {

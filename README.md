@@ -36,8 +36,8 @@ MIT
 
 | Name                 | Address                                    |
 | -------------------- | ------------------------------------------ |
-| Kernel               | 0xfBf45e38D8D741F542740CDddE6D2dDe1ca3602f |
-| SessionKey Validator | 0x563492B19d6180AeFFB1296019EDb33907d61872 |
+| Kernel               | 0x277A60Fe8b476df00295ed8D89aFca39F7f73187 |
+| KernelLite           | 0xb0A8C50B57a0Ffe1228FdbbAee89946A3B7786C0 |
 </details>
 
 <details>
@@ -48,7 +48,6 @@ MIT
 | Kernel               | 0xf048AD83CB2dfd6037A43902a2A5Be04e53cd2Eb |
 | KernelFactory        | 0x5de4839a76cf55d0c90e2061ef4386d962E15ae3 |
 | ECDSA Validator      | 0xd9AB5096a832b9ce79914329DAEE236f8Eea0390 |
-| SessionKey Validator | 0x1C1D5b70aD6e0c04366aab100261A6Bcc251EA3f |
 </details>
 
 <details>

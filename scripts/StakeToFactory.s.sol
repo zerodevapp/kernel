@@ -1,7 +1,7 @@
 pragma solidity ^0.8.0;
 
 import "src/factory/KernelFactory.sol";
-import "account-abstraction/interfaces/IStakeManager.sol";
+import "I4337/interfaces/IStakeManager.sol";
 import "forge-std/Script.sol";
 import "forge-std/console.sol";
 contract StakeToFactory is Script {
@@ -15,8 +15,8 @@ contract StakeToFactory is Script {
         KernelFactory factory = KernelFactory(EXPECTED_KERNEL_FACTORY_ADDRESS);
         IEntryPoint entryPoint = IEntryPoint(ENTRYPOINT_0_6);
         IStakeManager.DepositInfo memory info = entryPoint.getDepositInfo(address(factory));
-        if(info.stake < 1e18) {
-            factory.addStake{value: 1e18}(86400);
+        if(info.stake < 1e17) {
+            factory.addStake{value: 1e17}(86400);
         }
         vm.stopBroadcast();
     }

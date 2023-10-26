@@ -1,4 +1,4 @@
-    // SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
 import "src/Kernel.sol";
@@ -46,11 +46,19 @@ contract SessionKeyValidatorTest is KernelECDSATest {
     function _setup_permission(uint256 _length) internal returns (Permission[] memory permissions) {
         permissions = new Permission[](_length);
         callees = new TestCallee[](_length);
-        ParamRule[] memory paramRules = new ParamRule[](2);
-        paramRules[0] = ParamRule({offset: 0, condition: ParamCondition.EQUAL, param: bytes32(uint256(1))});
-        paramRules[1] = ParamRule({offset: 32, condition: ParamCondition.NOT_EQUAL, param: bytes32(uint256(2))});
         for (uint8 i = 0; i < _length; i++) {
             callees[i] = new TestCallee();
+            ParamRule[] memory paramRules = new ParamRule[](2);
+            paramRules[0] = ParamRule({
+                offset: 0,
+                condition: ParamCondition.EQUAL,
+                param: bytes32(uint256(100))
+            });
+            paramRules[1] = ParamRule({
+                offset: 32,
+                condition: ParamCondition.NOT_EQUAL,
+                param: bytes32(uint256(100))
+            });
             permissions[i] = Permission({
                 index: i,
                 target: address(callees[i]),
@@ -139,47 +147,60 @@ contract SessionKeyValidatorTest is KernelECDSATest {
     // - when there is interval => when interval is zero, when interval is not zero
     // 21, 0, 2, 0, 0, 1, 0
     // 1, 0, 2, 0, 0, 1, 0
+    // 0, 0, 12, 0, 2, 1, 0, 1, false
+    // 0, 0, 2, 0, 2, 1, 1, 7550702249 [7.55e9], false
+    struct TestConfig {
+        uint8 paymasterMode;
+        uint8 usingPaymasterMode;
+        uint8 numberOfPermissions;
+        uint8 indexToUse;
+        uint48 runs;
+        uint48 validAfter;
+        uint48 interval;
+        uint48 earlyRun;
+        bool faultySig;
+        bool param1Faulty;
+        bool param2Faulty;
+    }
     function test_scenario_non_batch(
-        uint8 paymasterMode,
-        uint8 usingPaymasterMode,
-        uint8 numberOfPermissions,
-        uint8 indexToUse,
-        uint48 runs,
-        uint48 validAfter,
-        uint48 interval
+        TestConfig memory config
     ) public {
         vm.warp(1000);
-        vm.assume(indexToUse < numberOfPermissions && numberOfPermissions > 1);
-        vm.assume(validAfter < type(uint32).max && interval < type(uint32).max && runs < type(uint32).max);
-        paymasterMode = paymasterMode % 3;
-        usingPaymasterMode = usingPaymasterMode % 3;
-        bool shouldFail = (usingPaymasterMode < paymasterMode) || (1000 < validAfter);
-        runs = runs % 3;
-        if (interval > 0) {
-            vm.assume(validAfter > 0 && validAfter < block.timestamp);
+        vm.assume(config.indexToUse < config.numberOfPermissions && config.numberOfPermissions > 1);
+        vm.assume(config.validAfter < type(uint32).max && config.interval < type(uint32).max && config.runs < type(uint32).max);
+        config.paymasterMode = config.paymasterMode % 3;
+        config.usingPaymasterMode = config.usingPaymasterMode % 3;
+        bool shouldFail = (config.usingPaymasterMode < config.paymasterMode) || (1000 < config.validAfter) || config.faultySig;
+        config.runs = config.runs % 10;
+        config.earlyRun = config.runs == 0 ? 0 : config.earlyRun % config.runs;
+        if(config.interval == 0 || config.validAfter == 0) {
+            config.earlyRun = 0;
+        }
+        if (config.interval > 0) {
+            vm.assume(config.validAfter > 0 && config.validAfter < block.timestamp);
         } else {
-            vm.assume(validAfter < block.timestamp);
+            vm.assume(config.validAfter < block.timestamp);
         }
         // setup permissions
-        execRule = ExecutionRule({runs: runs, validAfter: ValidAfter.wrap(validAfter), interval: interval});
-        Permission[] memory permissions = _setup_permission(numberOfPermissions);
+        execRule = ExecutionRule({runs: config.runs, validAfter: ValidAfter.wrap(config.validAfter), interval: config.interval});
+        Permission[] memory permissions = _setup_permission(config.numberOfPermissions);
         _buildHashes(permissions);
-        //(uint128 lastNonce,) = sessionKeyValidator.nonces(address(kernel));
+        (uint128 lastNonce,) = sessionKeyValidator.nonces(address(kernel));
         SessionData memory sessionData = SessionData({
             merkleRoot: _getRoot(data),
-            validAfter: ValidAfter.wrap(validAfter),
+            validAfter: ValidAfter.wrap(config.validAfter),
             validUntil: ValidUntil.wrap(0),
-            paymaster: paymasterMode == 2 ? address(paymaster) : address(uint160(paymasterMode)),
-            nonce: 1 //lastNonce + 1
+            paymaster: config.paymasterMode == 2 ? address(paymaster) : address(uint160(config.paymasterMode)),
+            nonce: uint256(lastNonce) + 1//lastNonce + 1
         });
         // now encode data to op
-        UserOperation memory op = _buildUserOp(permissions, sessionData, indexToUse, usingPaymasterMode);
+        UserOperation memory op = _buildUserOp(permissions, sessionData, config.indexToUse, config.usingPaymasterMode);
         op.signature = bytes.concat(
             op.signature,
             abi.encodePacked(
                 sessionKey,
-                entryPoint.signUserOpHash(vm, sessionKeyPriv, op),
-                abi.encode(permissions[indexToUse], _getProof(data, indexToUse))
+                entryPoint.signUserOpHash(vm, config.faultySig ? sessionKeyPriv + 1 : sessionKeyPriv, op),
+                abi.encode(permissions[config.indexToUse], _getProof(data, config.indexToUse))
             )
         );
 
@@ -189,51 +210,59 @@ contract SessionKeyValidatorTest is KernelECDSATest {
             vm.expectRevert();
         }
         entryPoint.handleOps(ops, beneficiary);
-        if (interval > 0 && validAfter > 0 && !shouldFail) {
+        if (config.interval > 0 && config.validAfter > 0 && !shouldFail) {
             (ValidAfter updatedValidAfter, uint48 r) = sessionKeyValidator.executionStatus(
-                keccak256(abi.encodePacked(sessionData.nonce, uint32(indexToUse))), address(kernel)
+                keccak256(abi.encodePacked(sessionData.nonce, uint32(config.indexToUse))), address(kernel)
             );
-            assertEq(uint256(ValidAfter.unwrap(updatedValidAfter)), uint256(validAfter));
-            if (runs > 0) {
+            assertEq(uint256(ValidAfter.unwrap(updatedValidAfter)), uint256(config.validAfter));
+            if (config.runs > 0) {
                 assertEq(uint256(r), uint256(1));
             } else {
                 assertEq(uint256(r), uint256(0));
             }
         }
-        if (!shouldFail && runs > 0) {
-            for (uint256 i = 1; i < runs; i++) {
-                vm.warp(validAfter + interval * i);
-                op.nonce = op.nonce + 1;
-                op.signature = bytes.concat(
-                    bytes4(0x00000001),
-                    abi.encodePacked(
-                        sessionKey,
-                        entryPoint.signUserOpHash(vm, sessionKeyPriv, op),
-                        abi.encode(permissions[indexToUse], _getProof(data, indexToUse))
-                    )
-                );
-                entryPoint.handleOps(ops, beneficiary);
-                (ValidAfter updatedValidAfter, uint48 r) = sessionKeyValidator.executionStatus(
-                    keccak256(abi.encodePacked(sessionData.nonce, uint32(indexToUse))), address(kernel)
-                );
-                if (validAfter > 0 && interval > 0) {
-                    assertEq(uint256(ValidAfter.unwrap(updatedValidAfter)), uint256(validAfter + interval * i));
+        if (!shouldFail && config.runs > 0) {
+            for (uint256 i = 1; i < config.runs; i++) {
+                if(config.earlyRun != i) {
+                    vm.warp(config.validAfter + config.interval * i);
+                } else {
+                    vm.warp(config.validAfter + config.interval * i - 1);
                 }
-                if(runs > 0) {
+                op.nonce = op.nonce + 1;
+                op.signature = _getSingleActionSignature(op, permissions, config.indexToUse);
+                if (config.earlyRun == i) {
+                    vm.expectRevert();
+                }
+                entryPoint.handleOps(ops, beneficiary);
+                if (config.earlyRun == i) {
+                    vm.warp(config.validAfter + config.interval * i);
+                    entryPoint.handleOps(ops, beneficiary);
+                }
+                (ValidAfter updatedValidAfter, uint48 r) = sessionKeyValidator.executionStatus(
+                    keccak256(abi.encodePacked(sessionData.nonce, uint32(config.indexToUse))), address(kernel)
+                );
+                if (config.validAfter > 0 && config.interval > 0) {
+                    assertEq(uint256(ValidAfter.unwrap(updatedValidAfter)), uint256(config.validAfter + config.interval * i));
+                }
+                if(config.runs > 0) {
                     assertEq(uint256(r), uint256(i + 1));
                 }
             }
             op.nonce = op.nonce + 1;
-            op.signature = bytes.concat(
-                bytes4(0x00000001),
-                abi.encodePacked(
-                    sessionKey,
-                    entryPoint.signUserOpHash(vm, sessionKeyPriv, op),
-                    abi.encode(permissions[indexToUse], _getProof(data, indexToUse))
-                )
-            );
+            op.signature = _getSingleActionSignature(op, permissions, config.indexToUse);
             vm.expectRevert();
             entryPoint.handleOps(ops, beneficiary);
         }
+    }
+
+    function _getSingleActionSignature(UserOperation memory _op, Permission[] memory permissions, uint8 indexToUse) internal view returns(bytes memory) {
+        return abi.encodePacked(
+            bytes4(0x00000001),
+            abi.encodePacked(
+                sessionKey,
+                entryPoint.signUserOpHash(vm, sessionKeyPriv, _op),
+                abi.encode(permissions[indexToUse], _getProof(data, indexToUse))
+            )
+        );
     }
 }
