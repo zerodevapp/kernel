@@ -1,10 +1,11 @@
 pragma solidity ^0.8.0;
 
 import "src/common/Types.sol";
-import {UserOperation} from "account-abstraction/interfaces/UserOperation.sol";
+import {UserOperation} from "I4337/interfaces/UserOperation.sol";
 import {ECDSA} from "solady/utils/ECDSA.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
-import {IKernelValidator} from "src/interfaces/IValidator.sol";
+import {IKernelValidator} from "src/interfaces/IKernelValidator.sol";
+import {SIG_VALIDATION_FAILED} from "src/common/Constants.sol";
 
 struct WeightedECDSAValidatorStorage {
     uint24 totalWeight;
