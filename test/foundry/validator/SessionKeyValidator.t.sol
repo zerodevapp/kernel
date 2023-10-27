@@ -51,12 +51,12 @@ contract SessionKeyValidatorTest is KernelECDSATest {
             ParamRule[] memory paramRules = new ParamRule[](2);
             paramRules[0] = ParamRule({
                 offset: 0,
-                condition: ParamCondition.EQUAL,
+                condition: ParamCondition(i % 6),
                 param: bytes32(uint256(100))
             });
             paramRules[1] = ParamRule({
                 offset: 32,
-                condition: ParamCondition.NOT_EQUAL,
+                condition: ParamCondition((i+1) % 6),
                 param: bytes32(uint256(100))
             });
             permissions[i] = Permission({
@@ -78,11 +78,29 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         }
     }
 
+    function _generateParam(ParamCondition condition, bool correct)  internal pure returns(uint256 param) {
+        if(condition == ParamCondition.EQUAL) {
+            param = correct ? 100 : 101;
+        } else if(condition == ParamCondition.GREATER_THAN) {
+            param = correct ? 101 : 100; 
+        } else if(condition == ParamCondition.LESS_THAN) {
+            param = correct ? 99 : 100;
+        } else if(condition == ParamCondition.NOT_EQUAL) {
+            param = correct ? 101 : 100;
+        } else if(condition == ParamCondition.GREATER_THAN_OR_EQUAL) {
+            param = correct ? 100 : 99;
+        } else if(condition == ParamCondition.LESS_THAN_OR_EQUAL) {
+            param = correct ? 100 : 101;
+        }
+    }
+
     function _buildUserOp(
         Permission[] memory permissions,
         SessionData memory sessionData,
         uint256 indexToUse,
-        uint8 usingPaymasterMode
+        uint8 usingPaymasterMode,
+        bool param1Faulty,
+        bool param2Faulty
     ) internal view returns (UserOperation memory op) {
         op = entryPoint.fillUserOp(
             address(kernel),
@@ -92,8 +110,8 @@ contract SessionKeyValidatorTest is KernelECDSATest {
                 0,
                 abi.encodeWithSelector(
                     permissions[indexToUse].sig,
-                    1, // since EQ
-                    1 // since NOT_EQ
+                    _generateParam(ParamCondition(indexToUse%6), !param1Faulty), // since EQ
+                    _generateParam(ParamCondition((indexToUse+1)%6), !param2Faulty) // since NOT_EQ
                 ),
                 Operation.Call
             )
@@ -170,7 +188,7 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         vm.assume(config.validAfter < type(uint32).max && config.interval < type(uint32).max && config.runs < type(uint32).max);
         config.paymasterMode = config.paymasterMode % 3;
         config.usingPaymasterMode = config.usingPaymasterMode % 3;
-        bool shouldFail = (config.usingPaymasterMode < config.paymasterMode) || (1000 < config.validAfter) || config.faultySig;
+        bool shouldFail = (config.usingPaymasterMode < config.paymasterMode) || (1000 < config.validAfter) || config.faultySig || config.param1Faulty || config.param2Faulty;
         config.runs = config.runs % 10;
         config.earlyRun = config.runs == 0 ? 0 : config.earlyRun % config.runs;
         if(config.interval == 0 || config.validAfter == 0) {
@@ -194,7 +212,7 @@ contract SessionKeyValidatorTest is KernelECDSATest {
             nonce: uint256(lastNonce) + 1//lastNonce + 1
         });
         // now encode data to op
-        UserOperation memory op = _buildUserOp(permissions, sessionData, config.indexToUse, config.usingPaymasterMode);
+        UserOperation memory op = _buildUserOp(permissions, sessionData, config.indexToUse, config.usingPaymasterMode, config.param1Faulty, config.param2Faulty);
         op.signature = bytes.concat(
             op.signature,
             abi.encodePacked(
