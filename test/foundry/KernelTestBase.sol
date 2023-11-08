@@ -177,13 +177,17 @@ abstract contract KernelTestBase is Test {
     }
 
     function test_validate_signature() external {
+        Kernel kernel2 = Kernel(payable(factory.createAccount(address(kernelImpl), getInitializeData(), 3)));
         bytes32 hash = keccak256(abi.encodePacked("hello world"));
-        bytes memory sig = signHash(hash);
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", ERC4337Utils._buildDomainSeparator("Kernel", "0.2.2", address(kernel)), hash));
+        bytes memory sig = signHash(digest);
         assertEq(kernel.isValidSignature(hash, sig), Kernel.isValidSignature.selector);
+        assertEq(kernel2.isValidSignature(hash, sig), bytes4(0xffffffff));
     }
 
     function test_fail_validate_wrongsignature() external {
         bytes32 hash = keccak256(abi.encodePacked("hello world"));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", ERC4337Utils._buildDomainSeparator("Kernel", "0.2.2", address(kernel)), hash));
         bytes memory sig = getWrongSignature(hash);
         assertEq(kernel.isValidSignature(hash, sig), bytes4(0xffffffff));
     }

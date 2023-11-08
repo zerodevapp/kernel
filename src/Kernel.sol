@@ -239,25 +239,45 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         return _validateSignature(hash, signature);
     }
 
+    function _domainSeparator() internal view override returns (bytes32) {
+        // Obtain the name and version from the _domainNameAndVersion function.
+        (string memory name, string memory version) = _domainNameAndVersion();
+        bytes32 nameHash = keccak256(bytes(name));
+        bytes32 versionHash = keccak256(bytes(version));
+
+        // Use the proxy address for the EIP-712 domain separator.
+        address proxyAddress = address(this);
+
+        // Construct the domain separator with name, version, chainId, and proxy address.
+        bytes32 typeHash = keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+        return keccak256(abi.encode(typeHash, nameHash, versionHash, block.chainid, proxyAddress));
+    }
+
     /// @notice Checks if a signature is valid
     /// @dev This function checks if a signature is valid based on the hash of the data signed.
     /// @param hash The hash of the data that was signed
     /// @param signature The signature to be validated
     /// @return The magic value 0x1626ba7e if the signature is valid, otherwise returns 0xffffffff.
     function isValidSignature(bytes32 hash, bytes calldata signature) public view returns (bytes4) {
-        ValidationData validationData = validateSignature(hash, signature);
-        (ValidAfter validAfter, ValidUntil validUntil, address result) = parseValidationData(validationData);
-        if (ValidAfter.unwrap(validAfter) > block.timestamp) {
-            return 0xffffffff;
-        }
-        if (ValidUntil.unwrap(validUntil) < block.timestamp) {
-            return 0xffffffff;
-        }
-        if (result != address(0)) {
-            return 0xffffffff;
-        }
+        // Include the proxy address in the domain separator
+        bytes32 domainSeparator = _domainSeparator();
 
-        return 0x1626ba7e;
+        // Recreate the signed message hash with the correct domain separator
+        bytes32 signedMessageHash = keccak256(abi.encodePacked("\x19\x01", domainSeparator, hash));
+
+        ValidationData validationData = validateSignature(signedMessageHash, signature);
+        (ValidAfter validAfter, ValidUntil validUntil, address result) = parseValidationData(validationData);
+
+        // Check if the signature is valid within the specified time frame and the result is successful
+        if (ValidAfter.unwrap(validAfter) <= block.timestamp &&
+            ValidUntil.unwrap(validUntil) >= block.timestamp &&
+            result == address(0)) {
+            // If all checks pass, return the ERC1271 magic value for a valid signature
+            return 0x1626ba7e;
+        } else {
+            // If any check fails, return the failure magic value
+            return 0xffffffff;
+        }
     }
 
     function _checkCaller() internal view returns (bool) {
