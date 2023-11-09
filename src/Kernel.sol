@@ -286,10 +286,9 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         (ValidAfter validAfter, ValidUntil validUntil, address result) = parseValidationData(validationData);
 
         // Check if the signature is valid within the specified time frame and the result is successful
-        if (
-            ValidAfter.unwrap(validAfter) <= block.timestamp && ValidUntil.unwrap(validUntil) >= block.timestamp
-                && result == address(0)
-        ) {
+        if (ValidAfter.unwrap(validAfter) <= block.timestamp &&
+            ValidUntil.unwrap(validUntil) >= block.timestamp &&
+            result == address(0)) {
             // If all checks pass, return the ERC1271 magic value for a valid signature
             return 0x1626ba7e;
         } else {

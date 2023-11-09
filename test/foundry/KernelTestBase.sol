@@ -209,6 +209,7 @@ abstract contract KernelTestBase is Test {
 
     function test_fail_validate_wrongsignature() external {
         bytes32 hash = keccak256(abi.encodePacked("hello world"));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", ERC4337Utils._buildDomainSeparator(KERNEL_NAME, KERNEL_VERSION, address(kernel)), hash));
         bytes memory sig = getWrongSignature(hash);
         assertEq(kernel.isValidSignature(hash, sig), bytes4(0xffffffff));
     }
