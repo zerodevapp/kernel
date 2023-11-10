@@ -75,6 +75,22 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
             default { return(0, returndatasize()) }
         }
     }
+    
+    /// @notice Executes a function call to an external contract with delegatecall
+    /// @param to The address of the target contract
+    /// @param data The call data to be sent
+    function executeDelegateCall(address to, bytes memory data) external payable {
+        if (msg.sender != address(entryPoint) && msg.sender != address(this) && !_checkCaller()) {
+            revert NotAuthorizedCaller();
+        }
+        assembly {
+            let success := delegatecall(gas(), to, add(data, 0x20), mload(data), 0, 0)
+            returndatacopy(0, 0, returndatasize())
+            switch success
+            case 0 { revert(0, returndatasize()) }
+            default { return(0, returndatasize()) }
+        }
+    }
 
     /// @notice Executes a function call to an external contract with delegatecall
     /// @param to The address of the target contract
