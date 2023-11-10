@@ -97,8 +97,24 @@ abstract contract KernelTestBase is Test {
             kernel.execute(validCallers[i], 0, "", Operation.Call);
         }
     }
-
+    
+    function test_external_call_execute_delegatecall_success() external {
+        address[] memory validCallers = getOwners();
+        for (uint256 i = 0; i < validCallers.length; i++) {
+            vm.prank(validCallers[i]);
+            kernel.executeDelegateCall(validCallers[i], "");
+        }
+    }
     function test_external_call_execute_delegatecall_fail() external {
+        address[] memory validCallers = getOwners();
+        for (uint256 i = 0; i < validCallers.length; i++) {
+            vm.prank(address(uint160(validCallers[i]) + 1));
+            vm.expectRevert();
+            kernel.executeDelegateCall(validCallers[i], "");
+        }
+    }
+
+    function test_external_call_execute_delegatecall_option_fail() external {
         address[] memory validCallers = getOwners();
         for (uint256 i = 0; i < validCallers.length; i++) {
             vm.prank(validCallers[i]);
