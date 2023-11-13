@@ -149,7 +149,9 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
             for (uint256 i = 0; i < sigCount; i++) {
                 // last sig is for userOpHash verification
                 signer = ECDSA.recover(
-                    _hashTypedData(keccak256(abi.encode(keccak256("Approve(bytes32 callDataAndNonceHash)"), callDataAndNonceHash))),
+                    _hashTypedData(
+                        keccak256(abi.encode(keccak256("Approve(bytes32 callDataAndNonceHash)"), callDataAndNonceHash))
+                    ),
                     sig[i * 65:(i + 1) * 65]
                 );
                 vote = voteStatus[callDataAndNonceHash][signer][msg.sender];

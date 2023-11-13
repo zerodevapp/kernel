@@ -97,7 +97,7 @@ abstract contract KernelTestBase is Test {
             kernel.execute(validCallers[i], 0, "", Operation.Call);
         }
     }
-    
+
     function test_external_call_execute_delegatecall_success() external {
         address[] memory validCallers = getOwners();
         for (uint256 i = 0; i < validCallers.length; i++) {
@@ -105,6 +105,7 @@ abstract contract KernelTestBase is Test {
             kernel.executeDelegateCall(validCallers[i], "");
         }
     }
+
     function test_external_call_execute_delegatecall_fail() external {
         address[] memory validCallers = getOwners();
         for (uint256 i = 0; i < validCallers.length; i++) {
@@ -196,7 +197,11 @@ abstract contract KernelTestBase is Test {
     function test_validate_signature() external {
         Kernel kernel2 = Kernel(payable(factory.createAccount(address(kernelImpl), getInitializeData(), 3)));
         bytes32 hash = keccak256(abi.encodePacked("hello world"));
-        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", ERC4337Utils._buildDomainSeparator(KERNEL_NAME, KERNEL_VERSION, address(kernel)), hash));
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                "\x19\x01", ERC4337Utils._buildDomainSeparator(KERNEL_NAME, KERNEL_VERSION, address(kernel)), hash
+            )
+        );
         bytes memory sig = signHash(digest);
         assertEq(kernel.isValidSignature(hash, sig), Kernel.isValidSignature.selector);
         assertEq(kernel2.isValidSignature(hash, sig), bytes4(0xffffffff));
@@ -204,7 +209,11 @@ abstract contract KernelTestBase is Test {
 
     function test_fail_validate_wrongsignature() external {
         bytes32 hash = keccak256(abi.encodePacked("hello world"));
-        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", ERC4337Utils._buildDomainSeparator(KERNEL_NAME, KERNEL_VERSION, address(kernel)), hash));
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                "\x19\x01", ERC4337Utils._buildDomainSeparator(KERNEL_NAME, KERNEL_VERSION, address(kernel)), hash
+            )
+        );
         bytes memory sig = getWrongSignature(hash);
         assertEq(kernel.isValidSignature(hash, sig), bytes4(0xffffffff));
     }

@@ -8,7 +8,7 @@ function _getRoot(bytes32[] memory data) pure returns (bytes32) {
     return data[0];
 }
 
-function _getProof(bytes32[] memory data, uint256 nodeIndex) pure returns (bytes32[] memory) {
+function _getProof(bytes32[] memory data, uint256 nodeIndex, bool wrongProof) pure returns (bytes32[] memory) {
     require(data.length > 1);
 
     bytes32[] memory result = new bytes32[](64);
@@ -32,6 +32,9 @@ function _getProof(bytes32[] memory data, uint256 nodeIndex) pure returns (bytes
     /// @solidity memory-safe-assembly
     assembly {
         mstore(result, pos)
+    }
+    if (wrongProof) {
+        result[0] = result[0] ^ bytes32(uint256(0x01));
     }
 
     return result;
