@@ -236,8 +236,17 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         bool wrongProof;
     }
 
-    function test_scenario_batch(TestConfig memory config) public {
+    struct BatchTestConfig {
+        uint8 count;
+    }
+    function test_scenario_batch(TestConfig memory config, BatchTestConfig memory batchConfig) public {
         vm.warp(1000);
+        if(batchConfig.count == 0) {
+            batchConfig.count = 1;
+        }
+        config.runs = 0;
+        config.interval = 0;
+        config.validAfter = 0; // TODO: runs not checked with batch
         vm.assume(config.indexToUse < config.numberOfPermissions && config.numberOfPermissions > 1);
         vm.assume(
             config.validAfter < type(uint32).max && config.interval < type(uint32).max && config.runs < type(uint32).max
@@ -281,10 +290,12 @@ contract SessionKeyValidatorTest is KernelECDSATest {
             config.param1Faulty,
             config.param2Faulty
         );
-        bytes32[][] memory proofs = new bytes32[][](1);
-        proofs[0] = _getProof(data, config.indexToUse, config.wrongProof);
-        Permission[] memory usingPermission = new Permission[](1);
-        usingPermission[0] = permissions[config.indexToUse];
+        bytes32[][] memory proofs = new bytes32[][](batchConfig.count);
+        Permission[] memory usingPermission = new Permission[](batchConfig.count);
+        for(uint256 i = 0; i < batchConfig.count; i++) {
+            proofs[i] = _getProof(data, config.indexToUse, config.wrongProof);
+            usingPermission[i] = permissions[config.indexToUse];
+        }
         op.signature = bytes.concat(
             op.signature,
             abi.encodePacked(
