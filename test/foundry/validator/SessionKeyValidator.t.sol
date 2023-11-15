@@ -239,16 +239,10 @@ contract SessionKeyValidatorTest is KernelECDSATest {
     struct BatchTestConfig {
         uint8 count;
     }
-<<<<<<< HEAD
 
     function test_scenario_batch(TestConfig memory config, BatchTestConfig memory batchConfig) public {
         vm.warp(1000);
         if (batchConfig.count == 0) {
-=======
-    function test_scenario_batch(TestConfig memory config, BatchTestConfig memory batchConfig) public {
-        vm.warp(1000);
-        if(batchConfig.count == 0) {
->>>>>>> fb8d059 (test: fuzz testing for batched options include array)
             batchConfig.count = 1;
         }
         config.runs = 0;
