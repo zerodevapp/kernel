@@ -239,9 +239,10 @@ contract SessionKeyValidatorTest is KernelECDSATest {
     struct BatchTestConfig {
         uint8 count;
     }
+
     function test_scenario_batch(TestConfig memory config, BatchTestConfig memory batchConfig) public {
         vm.warp(1000);
-        if(batchConfig.count == 0) {
+        if (batchConfig.count == 0) {
             batchConfig.count = 1;
         }
         config.runs = 0;
@@ -292,7 +293,7 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         );
         bytes32[][] memory proofs = new bytes32[][](batchConfig.count);
         Permission[] memory usingPermission = new Permission[](batchConfig.count);
-        for(uint256 i = 0; i < batchConfig.count; i++) {
+        for (uint256 i = 0; i < batchConfig.count; i++) {
             proofs[i] = _getProof(data, config.indexToUse, config.wrongProof);
             usingPermission[i] = permissions[config.indexToUse];
         }

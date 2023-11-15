@@ -257,9 +257,9 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
 
     function _domainSeparator() internal view override returns (bytes32) {
         // Obtain the name and version from the _domainNameAndVersion function.
-        (string memory name, string memory version) = _domainNameAndVersion();
-        bytes32 nameHash = keccak256(bytes(name));
-        bytes32 versionHash = keccak256(bytes(version));
+        (string memory _name, string memory _version) = _domainNameAndVersion();
+        bytes32 nameHash = keccak256(bytes(_name));
+        bytes32 versionHash = keccak256(bytes(_version));
 
         // Use the proxy address for the EIP-712 domain separator.
         address proxyAddress = address(this);
