@@ -4,7 +4,7 @@ import {ValidationData} from "./Types.sol";
 
 // constants for kernel metadata
 string constant KERNEL_NAME = "Kernel";
-string constant KERNEL_VERSION = "0.2.2";
+string constant KERNEL_VERSION = "0.2.3";
 
 // ERC4337 constants
 uint256 constant SIG_VALIDATION_FAILED_UINT = 1;

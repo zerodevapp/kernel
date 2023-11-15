@@ -30,11 +30,9 @@ contract SessionKeyValidator is IKernelValidator {
     }
 
     function invalidateNonce(uint128 nonce) public {
-        require(
-            nonce > nonces[msg.sender].invalidNonce && nonce <= nonces[msg.sender].lastNonce,
-            "SessionKeyValidator: invalid nonce"
-        );
+        require(nonce > nonces[msg.sender].invalidNonce, "SessionKeyValidator: invalid nonce");
         nonces[msg.sender].invalidNonce = nonce;
+        nonces[msg.sender].lastNonce = nonce;
     }
 
     function disable(bytes calldata _data) external payable {
@@ -113,7 +111,14 @@ contract SessionKeyValidator is IKernelValidator {
     function _getPermissions(bytes calldata _sig) internal pure returns (Permission[] calldata permissions) {
         assembly {
             permissions.offset := add(add(_sig.offset, 0x20), calldataload(_sig.offset))
-            permissions.length := calldataload(permissions.offset)
+            permissions.length := calldataload(add(_sig.offset, calldataload(_sig.offset)))
+        }
+    }
+
+    function _getProofs(bytes calldata _sig) internal pure returns (bytes32[][] calldata proofs) {
+        assembly {
+            proofs.length := calldataload(add(_sig.offset, calldataload(add(_sig.offset, 0x20))))
+            proofs.offset := add(add(_sig.offset, 0x20), calldataload(add(_sig.offset, 0x20)))
         }
     }
 
@@ -152,8 +157,7 @@ contract SessionKeyValidator is IKernelValidator {
         if (bytes4(callData[0:4]) == Kernel.execute.selector) {
             (Permission calldata permission, bytes32[] calldata merkleProof) = _getPermission(userOp.signature[85:]);
             require(
-                address(bytes20(userOp.callData[16:36])) == permission.target,
-                "SessionKeyValidator: target mismatch"
+                address(bytes20(userOp.callData[16:36])) == permission.target, "SessionKeyValidator: target mismatch"
             );
             require(
                 uint256(bytes32(userOp.callData[36:68])) <= permission.valueLimit,
@@ -178,10 +182,9 @@ contract SessionKeyValidator is IKernelValidator {
             return _verifyUserOpHash(sessionKey, validAfter, session.validUntil);
         } else if (bytes4(callData[0:4]) == Kernel.executeBatch.selector) {
             Permission[] calldata permissions = _getPermissions(userOp.signature[85:]);
-            (, bytes32[] memory merkleProof, bool[] memory flags, uint256[] memory index) =
-                abi.decode(userOp.signature[85:], (Permission[], bytes32[], bool[], uint256[]));
-            (bytes32[] memory leaves, ValidAfter validAfter) = _verifyParams(sessionKey, callData, permissions, index);
-            if (!MerkleProofLib.verifyMultiProof(merkleProof, session.merkleRoot, leaves, flags)) {
+            bytes32[][] calldata merkleProof = _getProofs(userOp.signature[85:]);
+            (ValidAfter validAfter, bool verifyFailed) = _verifyParams(sessionKey, callData, permissions, merkleProof);
+            if (verifyFailed) {
                 return SIG_VALIDATION_FAILED;
             }
             return _verifyUserOpHash(sessionKey, validAfter, session.validUntil);
@@ -224,23 +227,20 @@ contract SessionKeyValidator is IKernelValidator {
         address sessionKey,
         bytes calldata callData,
         Permission[] calldata _permissions,
-        uint256[] memory index
-    ) internal returns (bytes32[] memory leaves, ValidAfter maxValidAfter) {
+        bytes32[][] calldata _merkleProof
+    ) internal returns (ValidAfter maxValidAfter, bool verifyFailed) {
         Call[] calldata calls;
         assembly {
             calls.offset := add(add(callData.offset, 0x24), calldataload(add(callData.offset, 4)))
             calls.length := calldataload(add(add(callData.offset, 4), calldataload(add(callData.offset, 4))))
         }
         uint256 i = 0;
-        leaves = _generateLeaves(index);
         SessionData storage session = sessionData[sessionKey][msg.sender];
         maxValidAfter = session.validAfter;
         for (i = 0; i < calls.length; i++) {
             Call calldata call = calls[i];
             Permission calldata permission = _permissions[i];
-            require(
-                call.to == permission.target, "SessionKeyValidator: target mismatch"
-            );
+            require(call.to == permission.target, "SessionKeyValidator: target mismatch");
             require(uint256(bytes32(call.value)) <= permission.valueLimit, "SessionKeyValidator: value limit exceeded");
             require(verifyPermission(call.data, permission), "SessionKeyValidator: permission verification failed");
             ValidAfter validAfter =
@@ -248,19 +248,10 @@ contract SessionKeyValidator is IKernelValidator {
             if (ValidAfter.unwrap(validAfter) > ValidAfter.unwrap(maxValidAfter)) {
                 maxValidAfter = validAfter;
             }
-            leaves[index[i]] = keccak256(abi.encode(permission));
-        }
-    }
-
-    function _generateLeaves(uint256[] memory _indexes) internal pure returns (bytes32[] memory leaves) {
-        uint256 maxIndex;
-        uint256 i = 0;
-        for (i = 0; i < _indexes.length; i++) {
-            if (_indexes[i] > maxIndex) {
-                maxIndex = _indexes[i];
+            if (!MerkleProofLib.verify(_merkleProof[i], session.merkleRoot, keccak256(abi.encode(permission)))) {
+                return (maxValidAfter, true);
             }
         }
-        leaves = new bytes32[](maxIndex + 1);
     }
 
     function verifyPermission(bytes calldata data, Permission calldata permission) internal pure returns (bool) {

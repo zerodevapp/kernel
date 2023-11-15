@@ -14,6 +14,7 @@ import {IKernelValidator} from "src/interfaces/IKernelValidator.sol";
 
 import {Call, ExecutionDetail} from "src/common/Structs.sol";
 import {ValidationData, ValidUntil, ValidAfter} from "src/common/Types.sol";
+import {KERNEL_VERSION, KERNEL_NAME} from "src/common/Constants.sol";
 
 import {ERC4337Utils} from "test/foundry/utils/ERC4337Utils.sol";
 import {Test} from "forge-std/Test.sol";
@@ -97,7 +98,24 @@ abstract contract KernelTestBase is Test {
         }
     }
 
+    function test_external_call_execute_delegatecall_success() external {
+        address[] memory validCallers = getOwners();
+        for (uint256 i = 0; i < validCallers.length; i++) {
+            vm.prank(validCallers[i]);
+            kernel.executeDelegateCall(validCallers[i], "");
+        }
+    }
+
     function test_external_call_execute_delegatecall_fail() external {
+        address[] memory validCallers = getOwners();
+        for (uint256 i = 0; i < validCallers.length; i++) {
+            vm.prank(address(uint160(validCallers[i]) + 1));
+            vm.expectRevert();
+            kernel.executeDelegateCall(validCallers[i], "");
+        }
+    }
+
+    function test_external_call_execute_delegatecall_option_fail() external {
         address[] memory validCallers = getOwners();
         for (uint256 i = 0; i < validCallers.length; i++) {
             vm.prank(validCallers[i]);
@@ -143,8 +161,8 @@ abstract contract KernelTestBase is Test {
         (bytes1 fields, string memory name, string memory version,, address verifyingContract, bytes32 salt,) =
             kernel.eip712Domain();
         assertEq(fields, bytes1(hex"0f"));
-        assertEq(name, "Kernel");
-        assertEq(version, "0.2.2");
+        assertEq(name, KERNEL_NAME);
+        assertEq(version, KERNEL_VERSION);
         assertEq(verifyingContract, address(kernel));
         assertEq(salt, bytes32(0));
     }
@@ -177,9 +195,16 @@ abstract contract KernelTestBase is Test {
     }
 
     function test_validate_signature() external {
+        Kernel kernel2 = Kernel(payable(factory.createAccount(address(kernelImpl), getInitializeData(), 3)));
         bytes32 hash = keccak256(abi.encodePacked("hello world"));
-        bytes memory sig = signHash(hash);
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                "\x19\x01", ERC4337Utils._buildDomainSeparator(KERNEL_NAME, KERNEL_VERSION, address(kernel)), hash
+            )
+        );
+        bytes memory sig = signHash(digest);
         assertEq(kernel.isValidSignature(hash, sig), Kernel.isValidSignature.selector);
+        assertEq(kernel2.isValidSignature(hash, sig), bytes4(0xffffffff));
     }
 
     function test_fail_validate_wrongsignature() external {
@@ -471,7 +496,7 @@ abstract contract KernelTestBase is Test {
         return keccak256(
             abi.encodePacked(
                 "\x19\x01",
-                ERC4337Utils._buildDomainSeparator("Kernel", "0.2.2", address(kernel)),
+                ERC4337Utils._buildDomainSeparator(KERNEL_NAME, KERNEL_VERSION, address(kernel)),
                 ERC4337Utils.getStructHash(sig, validUntil, validAfter, validator, executor, enableData)
             )
         );

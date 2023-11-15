@@ -127,7 +127,7 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
         proposal.status = ProposalStatus.Rejected;
     }
 
-    function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256 missingFunds)
+    function validateUserOp(UserOperation calldata userOp, bytes32, uint256)
         external
         payable
         returns (ValidationData validationData)
@@ -149,7 +149,9 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
             for (uint256 i = 0; i < sigCount; i++) {
                 // last sig is for userOpHash verification
                 signer = ECDSA.recover(
-                    _hashTypedData(keccak256(abi.encode(keccak256("Approve(bytes32 callDataAndNonceHash)"), callDataAndNonceHash))),
+                    _hashTypedData(
+                        keccak256(abi.encode(keccak256("Approve(bytes32 callDataAndNonceHash)"), callDataAndNonceHash))
+                    ),
                     sig[i * 65:(i + 1) * 65]
                 );
                 vote = voteStatus[callDataAndNonceHash][signer][msg.sender];
@@ -173,11 +175,11 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
         }
     }
 
-    function validCaller(address, bytes calldata) external view override returns (bool) {
+    function validCaller(address, bytes calldata) external pure override returns (bool) {
         return false;
     }
 
-    function validateSignature(bytes32 hash, bytes calldata signature) external view returns (ValidationData) {
+    function validateSignature(bytes32, bytes calldata) external pure returns (ValidationData) {
         return SIG_VALIDATION_FAILED;
     }
 }

@@ -5,6 +5,7 @@ import "src/Kernel.sol";
 import "src/interfaces/IKernel.sol";
 import "src/validator/ECDSAValidator.sol";
 import "src/factory/KernelFactory.sol";
+import {Call} from "src/common/Structs.sol";
 // test artifacts
 import "../mock/TestValidator.sol";
 import "../mock/TestExecutor.sol";
@@ -49,16 +50,9 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         for (uint8 i = 0; i < _length; i++) {
             callees[i] = new TestCallee();
             ParamRule[] memory paramRules = new ParamRule[](2);
-            paramRules[0] = ParamRule({
-                offset: 0,
-                condition: ParamCondition(i % 6),
-                param: bytes32(uint256(100))
-            });
-            paramRules[1] = ParamRule({
-                offset: 32,
-                condition: ParamCondition((i+1) % 6),
-                param: bytes32(uint256(100))
-            });
+            paramRules[0] = ParamRule({offset: 0, condition: ParamCondition(i % 6), param: bytes32(uint256(100))});
+            paramRules[1] =
+                ParamRule({offset: 32, condition: ParamCondition((i + 1) % 6), param: bytes32(uint256(100))});
             permissions[i] = Permission({
                 index: i,
                 target: address(callees[i]),
@@ -78,20 +72,80 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         }
     }
 
-    function _generateParam(ParamCondition condition, bool correct)  internal pure returns(uint256 param) {
-        if(condition == ParamCondition.EQUAL) {
+    function _generateParam(ParamCondition condition, bool correct) internal pure returns (uint256 param) {
+        if (condition == ParamCondition.EQUAL) {
             param = correct ? 100 : 101;
-        } else if(condition == ParamCondition.GREATER_THAN) {
-            param = correct ? 101 : 100; 
-        } else if(condition == ParamCondition.LESS_THAN) {
-            param = correct ? 99 : 100;
-        } else if(condition == ParamCondition.NOT_EQUAL) {
+        } else if (condition == ParamCondition.GREATER_THAN) {
             param = correct ? 101 : 100;
-        } else if(condition == ParamCondition.GREATER_THAN_OR_EQUAL) {
+        } else if (condition == ParamCondition.LESS_THAN) {
+            param = correct ? 99 : 100;
+        } else if (condition == ParamCondition.NOT_EQUAL) {
+            param = correct ? 101 : 100;
+        } else if (condition == ParamCondition.GREATER_THAN_OR_EQUAL) {
             param = correct ? 100 : 99;
-        } else if(condition == ParamCondition.LESS_THAN_OR_EQUAL) {
+        } else if (condition == ParamCondition.LESS_THAN_OR_EQUAL) {
             param = correct ? 100 : 101;
         }
+    }
+
+    function _buildUserOpBatch(
+        Permission[] memory permissions,
+        SessionData memory sessionData,
+        uint256 indexToUse,
+        uint8 usingPaymasterMode,
+        bool param1Faulty,
+        bool param2Faulty
+    ) internal view returns (UserOperation memory op) {
+        Call[] memory calls = new Call[](1);
+        calls[0] = Call({
+            to: permissions[indexToUse].target,
+            value: 0,
+            data: abi.encodeWithSelector(
+                permissions[indexToUse].sig,
+                _generateParam(ParamCondition(indexToUse % 6), !param1Faulty),
+                _generateParam(ParamCondition((indexToUse + 1) % 6), !param2Faulty)
+                )
+        });
+
+        op = entryPoint.fillUserOp(address(kernel), abi.encodeWithSelector(IKernel.executeBatch.selector, calls));
+        if (usingPaymasterMode != 0) {
+            // 0 = no paymaster
+            // 1 = unknown paymaster
+            // 2 = correct paymaster
+            op.paymasterAndData = usingPaymasterMode == 1
+                ? abi.encodePacked(address(unknownPaymaster))
+                : abi.encodePacked(address(paymaster));
+        }
+        bytes memory enableData = abi.encodePacked(
+            sessionKey,
+            sessionData.merkleRoot,
+            sessionData.validAfter,
+            sessionData.validUntil,
+            sessionData.paymaster,
+            sessionData.nonce
+        );
+        bytes32 digest = getTypedDataHash(
+            IKernel.executeBatch.selector,
+            ValidAfter.unwrap(sessionData.validAfter),
+            ValidUntil.unwrap(sessionData.validUntil),
+            address(sessionKeyValidator),
+            address(0),
+            enableData
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
+        op.signature = abi.encodePacked(
+            bytes4(0x00000002),
+            uint48(ValidAfter.unwrap(sessionData.validAfter)),
+            uint48(ValidUntil.unwrap(sessionData.validUntil)),
+            address(sessionKeyValidator),
+            address(0),
+            uint256(enableData.length),
+            enableData,
+            uint256(65),
+            r,
+            s,
+            v
+        );
     }
 
     function _buildUserOp(
@@ -110,8 +164,8 @@ contract SessionKeyValidatorTest is KernelECDSATest {
                 0,
                 abi.encodeWithSelector(
                     permissions[indexToUse].sig,
-                    _generateParam(ParamCondition(indexToUse%6), !param1Faulty), // since EQ
-                    _generateParam(ParamCondition((indexToUse+1)%6), !param2Faulty) // since NOT_EQ
+                    _generateParam(ParamCondition(indexToUse % 6), !param1Faulty), // since EQ
+                    _generateParam(ParamCondition((indexToUse + 1) % 6), !param2Faulty) // since NOT_EQ
                 ),
                 Operation.Call
             )
@@ -179,19 +233,32 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         bool faultySig;
         bool param1Faulty;
         bool param2Faulty;
+        bool wrongProof;
     }
-    function test_scenario_non_batch(
-        TestConfig memory config
-    ) public {
+
+    struct BatchTestConfig {
+        uint8 count;
+    }
+
+    function test_scenario_batch(TestConfig memory config, BatchTestConfig memory batchConfig) public {
         vm.warp(1000);
+        if (batchConfig.count == 0) {
+            batchConfig.count = 1;
+        }
+        config.runs = 0;
+        config.interval = 0;
+        config.validAfter = 0; // TODO: runs not checked with batch
         vm.assume(config.indexToUse < config.numberOfPermissions && config.numberOfPermissions > 1);
-        vm.assume(config.validAfter < type(uint32).max && config.interval < type(uint32).max && config.runs < type(uint32).max);
+        vm.assume(
+            config.validAfter < type(uint32).max && config.interval < type(uint32).max && config.runs < type(uint32).max
+        );
         config.paymasterMode = config.paymasterMode % 3;
         config.usingPaymasterMode = config.usingPaymasterMode % 3;
-        bool shouldFail = (config.usingPaymasterMode < config.paymasterMode) || (1000 < config.validAfter) || config.faultySig || config.param1Faulty || config.param2Faulty;
+        bool shouldFail = (config.usingPaymasterMode < config.paymasterMode) || (1000 < config.validAfter)
+            || config.faultySig || config.param1Faulty || config.param2Faulty || config.wrongProof;
         config.runs = config.runs % 10;
         config.earlyRun = config.runs == 0 ? 0 : config.earlyRun % config.runs;
-        if(config.interval == 0 || config.validAfter == 0) {
+        if (config.interval == 0 || config.validAfter == 0) {
             config.earlyRun = 0;
         }
         if (config.interval > 0) {
@@ -200,7 +267,11 @@ contract SessionKeyValidatorTest is KernelECDSATest {
             vm.assume(config.validAfter < block.timestamp);
         }
         // setup permissions
-        execRule = ExecutionRule({runs: config.runs, validAfter: ValidAfter.wrap(config.validAfter), interval: config.interval});
+        execRule = ExecutionRule({
+            runs: config.runs,
+            validAfter: ValidAfter.wrap(config.validAfter),
+            interval: config.interval
+        });
         Permission[] memory permissions = _setup_permission(config.numberOfPermissions);
         _buildHashes(permissions);
         (uint128 lastNonce,) = sessionKeyValidator.nonces(address(kernel));
@@ -209,16 +280,29 @@ contract SessionKeyValidatorTest is KernelECDSATest {
             validAfter: ValidAfter.wrap(config.validAfter),
             validUntil: ValidUntil.wrap(0),
             paymaster: config.paymasterMode == 2 ? address(paymaster) : address(uint160(config.paymasterMode)),
-            nonce: uint256(lastNonce) + 1//lastNonce + 1
+            nonce: uint256(lastNonce) + 1 //lastNonce + 1
         });
         // now encode data to op
-        UserOperation memory op = _buildUserOp(permissions, sessionData, config.indexToUse, config.usingPaymasterMode, config.param1Faulty, config.param2Faulty);
+        UserOperation memory op = _buildUserOpBatch(
+            permissions,
+            sessionData,
+            config.indexToUse,
+            config.usingPaymasterMode,
+            config.param1Faulty,
+            config.param2Faulty
+        );
+        bytes32[][] memory proofs = new bytes32[][](batchConfig.count);
+        Permission[] memory usingPermission = new Permission[](batchConfig.count);
+        for (uint256 i = 0; i < batchConfig.count; i++) {
+            proofs[i] = _getProof(data, config.indexToUse, config.wrongProof);
+            usingPermission[i] = permissions[config.indexToUse];
+        }
         op.signature = bytes.concat(
             op.signature,
             abi.encodePacked(
                 sessionKey,
                 entryPoint.signUserOpHash(vm, config.faultySig ? sessionKeyPriv + 1 : sessionKeyPriv, op),
-                abi.encode(permissions[config.indexToUse], _getProof(data, config.indexToUse))
+                abi.encode(usingPermission, proofs)
             )
         );
 
@@ -241,7 +325,114 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         }
         if (!shouldFail && config.runs > 0) {
             for (uint256 i = 1; i < config.runs; i++) {
-                if(config.earlyRun != i) {
+                if (config.earlyRun != i) {
+                    vm.warp(config.validAfter + config.interval * i);
+                } else {
+                    vm.warp(config.validAfter + config.interval * i - 1);
+                }
+                op.nonce = op.nonce + 1;
+                op.signature = _getBatchActionSignature(op, permissions, config.indexToUse);
+                if (config.earlyRun == i) {
+                    vm.expectRevert();
+                }
+                entryPoint.handleOps(ops, beneficiary);
+                if (config.earlyRun == i) {
+                    vm.warp(config.validAfter + config.interval * i);
+                    entryPoint.handleOps(ops, beneficiary);
+                }
+                (ValidAfter updatedValidAfter, uint48 r) = sessionKeyValidator.executionStatus(
+                    keccak256(abi.encodePacked(sessionData.nonce, uint32(config.indexToUse))), address(kernel)
+                );
+                if (config.validAfter > 0 && config.interval > 0) {
+                    assertEq(
+                        uint256(ValidAfter.unwrap(updatedValidAfter)), uint256(config.validAfter + config.interval * i)
+                    );
+                }
+                if (config.runs > 0) {
+                    assertEq(uint256(r), uint256(i + 1));
+                }
+            }
+            op.nonce = op.nonce + 1;
+            op.signature = _getBatchActionSignature(op, permissions, config.indexToUse);
+            vm.expectRevert();
+            entryPoint.handleOps(ops, beneficiary);
+        }
+    }
+
+    function test_scenario_non_batch(TestConfig memory config) public {
+        vm.warp(1000);
+        vm.assume(config.indexToUse < config.numberOfPermissions && config.numberOfPermissions > 1);
+        vm.assume(
+            config.validAfter < type(uint32).max && config.interval < type(uint32).max && config.runs < type(uint32).max
+        );
+        config.paymasterMode = config.paymasterMode % 3;
+        config.usingPaymasterMode = config.usingPaymasterMode % 3;
+        bool shouldFail = (config.usingPaymasterMode < config.paymasterMode) || (1000 < config.validAfter)
+            || config.faultySig || config.param1Faulty || config.param2Faulty || config.wrongProof;
+        config.runs = config.runs % 10;
+        config.earlyRun = config.runs == 0 ? 0 : config.earlyRun % config.runs;
+        if (config.interval == 0 || config.validAfter == 0) {
+            config.earlyRun = 0;
+        }
+        if (config.interval > 0) {
+            vm.assume(config.validAfter > 0 && config.validAfter < block.timestamp);
+        } else {
+            vm.assume(config.validAfter < block.timestamp);
+        }
+        // setup permissions
+        execRule = ExecutionRule({
+            runs: config.runs,
+            validAfter: ValidAfter.wrap(config.validAfter),
+            interval: config.interval
+        });
+        Permission[] memory permissions = _setup_permission(config.numberOfPermissions);
+        _buildHashes(permissions);
+        (uint128 lastNonce,) = sessionKeyValidator.nonces(address(kernel));
+        SessionData memory sessionData = SessionData({
+            merkleRoot: _getRoot(data),
+            validAfter: ValidAfter.wrap(config.validAfter),
+            validUntil: ValidUntil.wrap(0),
+            paymaster: config.paymasterMode == 2 ? address(paymaster) : address(uint160(config.paymasterMode)),
+            nonce: uint256(lastNonce) + 1 //lastNonce + 1
+        });
+        // now encode data to op
+        UserOperation memory op = _buildUserOp(
+            permissions,
+            sessionData,
+            config.indexToUse,
+            config.usingPaymasterMode,
+            config.param1Faulty,
+            config.param2Faulty
+        );
+        op.signature = bytes.concat(
+            op.signature,
+            abi.encodePacked(
+                sessionKey,
+                entryPoint.signUserOpHash(vm, config.faultySig ? sessionKeyPriv + 1 : sessionKeyPriv, op),
+                abi.encode(permissions[config.indexToUse], _getProof(data, config.indexToUse, config.wrongProof))
+            )
+        );
+
+        UserOperation[] memory ops = new UserOperation[](1);
+        ops[0] = op;
+        if (shouldFail) {
+            vm.expectRevert();
+        }
+        entryPoint.handleOps(ops, beneficiary);
+        if (config.interval > 0 && config.validAfter > 0 && !shouldFail) {
+            (ValidAfter updatedValidAfter, uint48 r) = sessionKeyValidator.executionStatus(
+                keccak256(abi.encodePacked(sessionData.nonce, uint32(config.indexToUse))), address(kernel)
+            );
+            assertEq(uint256(ValidAfter.unwrap(updatedValidAfter)), uint256(config.validAfter));
+            if (config.runs > 0) {
+                assertEq(uint256(r), uint256(1));
+            } else {
+                assertEq(uint256(r), uint256(0));
+            }
+        }
+        if (!shouldFail && config.runs > 0) {
+            for (uint256 i = 1; i < config.runs; i++) {
+                if (config.earlyRun != i) {
                     vm.warp(config.validAfter + config.interval * i);
                 } else {
                     vm.warp(config.validAfter + config.interval * i - 1);
@@ -260,9 +451,11 @@ contract SessionKeyValidatorTest is KernelECDSATest {
                     keccak256(abi.encodePacked(sessionData.nonce, uint32(config.indexToUse))), address(kernel)
                 );
                 if (config.validAfter > 0 && config.interval > 0) {
-                    assertEq(uint256(ValidAfter.unwrap(updatedValidAfter)), uint256(config.validAfter + config.interval * i));
+                    assertEq(
+                        uint256(ValidAfter.unwrap(updatedValidAfter)), uint256(config.validAfter + config.interval * i)
+                    );
                 }
-                if(config.runs > 0) {
+                if (config.runs > 0) {
                     assertEq(uint256(r), uint256(i + 1));
                 }
             }
@@ -273,13 +466,34 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         }
     }
 
-    function _getSingleActionSignature(UserOperation memory _op, Permission[] memory permissions, uint8 indexToUse) internal view returns(bytes memory) {
+    function _getBatchActionSignature(UserOperation memory _op, Permission[] memory permissions, uint8 indexToUse)
+        internal
+        view
+        returns (bytes memory)
+    {
+        Permission[] memory _permissions = new Permission[](1);
+        _permissions[0] = permissions[indexToUse];
+        bytes32[][] memory _proofs = new bytes32[][](1);
+        _proofs[0] = _getProof(data, indexToUse, false);
+        return abi.encodePacked(
+            bytes4(0x00000001),
+            abi.encodePacked(
+                sessionKey, entryPoint.signUserOpHash(vm, sessionKeyPriv, _op), abi.encode(_permissions, _proofs)
+            )
+        );
+    }
+
+    function _getSingleActionSignature(UserOperation memory _op, Permission[] memory permissions, uint8 indexToUse)
+        internal
+        view
+        returns (bytes memory)
+    {
         return abi.encodePacked(
             bytes4(0x00000001),
             abi.encodePacked(
                 sessionKey,
                 entryPoint.signUserOpHash(vm, sessionKeyPriv, _op),
-                abi.encode(permissions[indexToUse], _getProof(data, indexToUse))
+                abi.encode(permissions[indexToUse], _getProof(data, indexToUse, false))
             )
         );
     }
