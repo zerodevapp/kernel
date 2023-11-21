@@ -8,7 +8,6 @@ cbor_metadata = false
 optimize = true
 via-ir = true
 runs = 1000000
-ffi = true
 [fuzz]
 runs = 1024
 
