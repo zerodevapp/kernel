@@ -10,9 +10,6 @@ import {SIG_VALIDATION_FAILED} from "../common/Constants.sol";
 import {P256} from "p256-verifier/P256.sol";
 
 contract P256Validator is IKernelValidator {
-    uint256 constant n =
-        0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551;
-
     event P256PublicKeysChanged(address indexed kernel, PublicKey indexed oldKeys, PublicKey indexed newKeys);
 
     struct PublicKey {
@@ -26,8 +23,7 @@ contract P256Validator is IKernelValidator {
 
     function enable(bytes calldata _data) external payable override {
         PublicKey memory key = abi.decode(_data, (PublicKey));
-        //throw custom error if key[0] or key[1] is 0, or if key[0] or key[1] is greater than n
-        if (key.x == 0 || key.y == 0 || key.x > n || key.y > n) {
+        if (key.x == 0 || key.y == 0) {
             revert BadKey();
         }
         PublicKey memory oldKey = p256PublicKey[msg.sender];
