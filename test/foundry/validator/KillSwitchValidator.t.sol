@@ -68,16 +68,12 @@ contract KillSwitchValidatorTest is KernelECDSATest {
     }
 
     function test_force_unblock() external {
-        UserOperation memory op = entryPoint.fillUserOp(
-            address(kernel), abi.encodeWithSelector(Kernel.execute.selector, owner, 0, "", Operation.Call)
-        );
+        UserOperation memory op = buildUserOperation(abi.encodeWithSelector(Kernel.execute.selector, owner, 0, "", Operation.Call));
 
         op.signature = bytes.concat(bytes4(0), entryPoint.signUserOpHash(vm, ownerKey, op));
-        UserOperation[] memory ops = new UserOperation[](1);
-        ops[0] = op;
-        entryPoint.handleOps(ops, beneficiary);
+        performUserOperation(op);
 
-        op = entryPoint.fillUserOp(address(kernel), abi.encodeWithSelector(KillSwitchAction.toggleKillSwitch.selector));
+        op = buildUserOperation(abi.encodeWithSelector(KillSwitchAction.toggleKillSwitch.selector));
         bytes memory enableData = abi.encodePacked(guardian);
         {
             bytes32 digest = getTypedDataHash(
@@ -110,15 +106,13 @@ contract KillSwitchValidatorTest is KernelECDSATest {
             op.signature = bytes.concat(op.signature, bytes6(uint48(pausedUntil)), sig);
         }
 
-        ops[0] = op;
-        entryPoint.handleOps(ops, beneficiary);
+        performUserOperation(op);
         assertEq(kernel.getDisabledMode(), bytes4(0xffffffff));
         assertEq(address(kernel.getDefaultValidator()), address(killSwitch));
-        op = entryPoint.fillUserOp(address(kernel), abi.encodeWithSelector(KillSwitchAction.toggleKillSwitch.selector));
+        op = buildUserOperation(abi.encodeWithSelector(KillSwitchAction.toggleKillSwitch.selector));
 
         op.signature = bytes.concat(bytes4(0), entryPoint.signUserOpHash(vm, guardianKey, op));
-        ops[0] = op;
-        entryPoint.handleOps(ops, beneficiary);
+        performUserOperation(op);
         assertEq(kernel.getDisabledMode(), bytes4(0));
     }
 }
