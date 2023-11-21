@@ -124,7 +124,7 @@ contract P256ValidatorTest is Test {
         // vm.assume(uint256(privateKey).toHexString().length == 64);
         vm.assume(hash != 0);
         vm.assume(privateKey != 0);
-        (uint256 x, uint256 y) = generatePublicKeys(privateKey);
+        (uint256 x, uint256 y) = generatePublicKey(privateKey);
         (uint256 r, uint256 s) = generateSignature(privateKey, hash);
         
         vm.assume(x != 0);
