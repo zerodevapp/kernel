@@ -29,16 +29,12 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     /// @dev Selector of the `DisabledMode()` error, to be used in assembly, 'bytes4(keccak256(bytes("DisabledMode()")))', same as DisabledMode.selector()
     uint256 private constant _DISABLED_MODE_SELECTOR = 0xfc2f51c5;
 
-    /// @dev Current kernel name and version
+    /// @dev Current kernel name and version, todo: Need to expose getter for this variables? 
     string public constant name = KERNEL_NAME;
     string public constant version = KERNEL_VERSION;
 
     /// @dev Sets up the EIP712 and KernelStorage with the provided entry point
     constructor(IEntryPoint _entryPoint) KernelStorage(_entryPoint) {}
-
-    function _domainNameAndVersion() internal pure override returns (string memory, string memory) {
-        return (name, version);
-    }
 
     /// @notice Accepts incoming Ether transactions and calls from the EntryPoint contract
     /// @dev This function will delegate any call to the appropriate executor based on the function signature.
@@ -215,6 +211,9 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         return validationData;
     }
 
+    /// @dev This function will approve a new validator for the current kernel
+    /// @param sig The signature of the userOp asking for a validator approval
+    /// @param signature The signature of the userOp asking for a validator approval
     function _approveValidator(bytes4 sig, bytes calldata signature)
         internal
         returns (IKernelValidator validator, ValidationData validationData, bytes calldata validationSig)
@@ -266,10 +265,19 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         }
     }
 
+    /// @dev Validates a signature for the given kernel
+    /// @param hash The hash of the data that was signed
+    /// @param signature The signature to be validated
     function validateSignature(bytes32 hash, bytes calldata signature) public view returns (ValidationData) {
         return _validateSignature(hash, signature);
     }
 
+    /// @dev Get the current name & version of the kernel, used for the EIP-712 domain separator
+    function _domainNameAndVersion() internal pure override returns (string memory, string memory) {
+        return (name, version);
+    }
+
+    /// @dev Get an EIP-712 compliant domain separator
     function _domainSeparator() internal view override returns (bytes32) {
         // Obtain the name and version from the _domainNameAndVersion function.
         (string memory _name, string memory _version) = _domainNameAndVersion();
@@ -313,6 +321,8 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         }
     }
 
+    /// @dev Check if the current caller is authorized or no to perform the call
+    /// @return True if the caller is authorized, otherwise false
     function _checkCaller() internal view returns (bool) {
         if (_validCaller(msg.sender, msg.data)) {
             return true;
@@ -344,13 +354,17 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         // Remove the validation mode flag from the signature
         op.signature = _op.signature[4:];
 
-        address validator;
+        IKernelValidator validator;
         assembly {
             validator := shr(80, sload(KERNEL_STORAGE_SLOT_1))
         }
         return IKernelValidator(validator).validateUserOp(op, _opHash, _missingFunds);
     }
 
+    /// @dev This function will validate a signature for the given kernel
+    /// @param _hash The hash of the data that was signed
+    /// @param _signature The signature to be validated
+    /// @return The magic value 0x1626ba7e if the signature is valid, otherwise returns 0xffffffff.
     function _validateSignature(bytes32 _hash, bytes calldata _signature)
         internal
         view
@@ -364,6 +378,10 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         return IKernelValidator(validator).validateSignature(_hash, _signature);
     }
 
+    /// @dev Check if the given caller is valid for the given data
+    /// @param _caller The caller to be checked
+    /// @param _data The data to be checked
+    /// @return True if the caller is valid, otherwise false
     function _validCaller(address _caller, bytes calldata _data) internal view virtual returns (bool) {
         address validator;
         assembly {

@@ -11,6 +11,8 @@ uint256 constant SIG_VALIDATION_FAILED_UINT = 1;
 ValidationData constant SIG_VALIDATION_FAILED = ValidationData.wrap(SIG_VALIDATION_FAILED_UINT);
 
 // STRUCT_HASH
+
+/// @dev Struct hash for the ValidatorApproved struct -> keccak256("ValidatorApproved(bytes4 sig,uint256 validatorData,address executor,bytes enableData)")
 bytes32 constant VALIDATOR_APPROVED_STRUCT_HASH = 0x3ce406685c1b3551d706d85a68afdaa49ac4e07b451ad9b8ff8b58c3ee964176;
 
 /* -------------------------------------------------------------------------- */
