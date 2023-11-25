@@ -2,7 +2,7 @@ pragma solidity ^0.8.0;
 
 import {ValidationData} from "./Types.sol";
 
-// constants for kernel metadata
+// Constants for kernel metadata
 string constant KERNEL_NAME = "Kernel";
 string constant KERNEL_VERSION = "0.2.3";
 

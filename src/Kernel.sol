@@ -26,8 +26,12 @@ import {ValidationData, ValidAfter, ValidUntil, parseValidationData, packValidat
 /// @author taek<leekt216@gmail.com>
 /// @notice wallet kernel for extensible wallet functionality
 contract Kernel is EIP712, Compatibility, KernelStorage {
-    string public constant name = KERNEL_NAME;
 
+    /// @dev Selector of the `DisabledMode()` error, to be used in assembly, 'bytes4(keccak256(bytes("DisabledMode()")))', same as DisabledMode.selector()
+    uint256 private constant _DISABLED_MODE_SELECTOR = 0xfc2f51c5;
+
+    /// @dev Current kernel name and version
+    string public constant name = KERNEL_NAME;
     string public constant version = KERNEL_VERSION;
 
     /// @dev Sets up the EIP712 and KernelStorage with the provided entry point
@@ -133,7 +137,9 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         bytes calldata userOpSignature;
         uint256 userOpEndOffset;
         assembly {
+            // Store the userOpSignature offset
             userOpEndOffset := add(calldataload(0x04), 0x24)
+            // Extract the user op signature from the calldata (but keep it in the calldata, just extract offset & length)
             userOpSignature.offset := add(calldataload(add(userOpEndOffset, 0x120)), userOpEndOffset)
             userOpSignature.length := calldataload(sub(userOpSignature.offset, 0x20))
         }
@@ -141,7 +147,6 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         bytes4 mode = bytes4(userOpSignature[0:4]); // mode == 00..00 use validators
         // mode == 0x00000000 use sudo validator
         if (mode == 0x00000000) {
-            // sudo mode (use default validator)
             if (missingAccountFunds != 0) {
                 assembly {
                     pop(call(gas(), caller(), missingAccountFunds, callvalue(), callvalue(), callvalue(), callvalue()))
@@ -152,19 +157,26 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
             return _validateUserOp(_userOp, userOpHash, missingAccountFunds);
         }
 
+        // Check if the kernel is disabled, if that's the case, it's only accepting userOperation with sudo mode
+        assembly ("memory-safe") {
+            // Extract the disabled mode from the storage slot
+            let isKernelDisabled := shl(224, sload(KERNEL_STORAGE_SLOT_1))
+            // If we got a non-zero disabled mode, and non zero mode, then revert
+            if and(isKernelDisabled, mode) {
+                mstore(0x00, _DISABLED_MODE_SELECTOR)
+                revert(0x1c, 0x04)
+            }
+        }
+
+        // Replicate the userOp from memory to calldat
         UserOperation memory userOp = _userOp;
+
+        // The validator that will be used
+        IKernelValidator validator;
 
         // mode == 0x00000001 use given validator
         // mode == 0x00000002 enable validator
-        IKernelValidator validator;
-        bytes32 storage_slot_1;
-        assembly {
-            // sslot 1 contain default validator, disabled mode & disabled date
-            storage_slot_1 := sload(KERNEL_STORAGE_SLOT_1)
-        }
-        if (mode & (storage_slot_1 << 224) != 0x00000000) {
-            revert DisabledMode();
-        } else if (mode == 0x00000001) {
+        if (mode == 0x00000001) {
             bytes calldata userOpCallData;
             assembly {
                 userOpCallData.offset := add(calldataload(add(userOpEndOffset, 0x40)), userOpEndOffset)
@@ -189,6 +201,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         } else {
             return SIG_VALIDATION_FAILED;
         }
+
         if (missingAccountFunds != 0) {
             assembly {
                 pop(call(gas(), caller(), missingAccountFunds, callvalue(), callvalue(), callvalue(), callvalue()))
