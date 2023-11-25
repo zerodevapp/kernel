@@ -26,7 +26,6 @@ import {ValidationData, ValidAfter, ValidUntil, parseValidationData, packValidat
 /// @author taek<leekt216@gmail.com>
 /// @notice wallet kernel for extensible wallet functionality
 contract Kernel is EIP712, Compatibility, KernelStorage {
-
     /// @dev Selector of the `DisabledMode()` error, to be used in assembly, 'bytes4(keccak256(bytes("DisabledMode()")))', same as DisabledMode.selector()
     uint256 private constant _DISABLED_MODE_SELECTOR = 0xfc2f51c5;
 
@@ -147,11 +146,11 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         bytes4 mode = bytes4(userOpSignature[0:4]); // mode == 00..00 use validators
         // mode == 0x00000000 use sudo validator
         if (mode == 0x00000000) {
-            if (missingAccountFunds != 0) {
-                assembly {
+            assembly {
+                if missingAccountFunds {
                     pop(call(gas(), caller(), missingAccountFunds, callvalue(), callvalue(), callvalue(), callvalue()))
+                    //ignore failure (its EntryPoint's job to verify, not account.)
                 }
-                //ignore failure (its EntryPoint's job to verify, not account.)
             }
             // short circuit here for default validator
             return _validateUserOp(_userOp, userOpHash, missingAccountFunds);
@@ -167,9 +166,6 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
                 revert(0x1c, 0x04)
             }
         }
-
-        // Replicate the userOp from memory to calldat
-        UserOperation memory userOp = _userOp;
 
         // The validator that will be used
         IKernelValidator validator;
@@ -202,13 +198,18 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
             return SIG_VALIDATION_FAILED;
         }
 
-        if (missingAccountFunds != 0) {
-            assembly {
+        assembly {
+            if missingAccountFunds {
                 pop(call(gas(), caller(), missingAccountFunds, callvalue(), callvalue(), callvalue(), callvalue()))
+                //ignore failure (its EntryPoint's job to verify, not account.)
             }
-            //ignore failure (its EntryPoint's job to verify, not account.)
         }
+
+        // Replicate the userOp from memory to calldata, to update it's signature (since with mode 1 & 2 the signatre can be updated)
+        UserOperation memory userOp = _userOp;
         userOp.signature = userOpSignature;
+
+        // Get the validator data from the designated signer
         validationData =
             _intersectValidationData(validationData, validator.validateUserOp(userOp, userOpHash, missingAccountFunds));
         return validationData;
@@ -329,14 +330,21 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         }
     }
 
+    /// @dev This function will validate user operation and be called by EntryPoint
+    /// @param _op The user operation to be validated
+    /// @param _opHash The hash of the user operation
+    /// @param _missingFunds The funds needed to be reimbursed
     function _validateUserOp(UserOperation calldata _op, bytes32 _opHash, uint256 _missingFunds)
         internal
         virtual
         returns (ValidationData)
     {
-        address validator;
+        // Replace the user op in memory to update the signature
         UserOperation memory op = _op;
-        op.signature = _op.signature[4:]; // since this is only called on default validator
+        // Remove the validation mode flag from the signature
+        op.signature = _op.signature[4:];
+
+        address validator;
         assembly {
             validator := shr(80, sload(KERNEL_STORAGE_SLOT_1))
         }
@@ -359,6 +367,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     function _validCaller(address _caller, bytes calldata _data) internal view virtual returns (bool) {
         address validator;
         assembly {
+            // Load the validator from the storage slot
             validator := shr(80, sload(KERNEL_STORAGE_SLOT_1))
         }
         return IKernelValidator(validator).validCaller(_caller, _data);
