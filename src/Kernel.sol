@@ -159,6 +159,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         IKernelValidator validator;
         bytes32 storage_slot_1;
         assembly {
+            // sslot 1 contain default validator, disabled mode & disabled date
             storage_slot_1 := sload(KERNEL_STORAGE_SLOT_1)
         }
         if (mode & (storage_slot_1 << 224) != 0x00000000) {
