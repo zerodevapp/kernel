@@ -22,6 +22,12 @@ using ERC4337Utils for IEntryPoint;
 contract P256ValidatorTest is KernelTestBase {
     P256Verifier p256Verifier;
     P256Validator p256Validator;
+
+    // Curve order (number of points)
+    uint256 constant n =
+        0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551;
+
+
     uint256 x;
     uint256 y;
 
@@ -121,9 +127,22 @@ contract P256ValidatorTest is KernelTestBase {
         return FCL_ecdsa_utils.ecdsa_derivKpub(privateKey);
     }
 
-    function generateSignature(uint256 privateKey, bytes32 hash) internal view returns (uint256, uint256) {
-        uint256 k = type(uint256).max - 1;
-        return FCL_ecdsa_utils.ecdsa_sign(hash, k, privateKey);
+    function generateSignature(uint256 privateKey, bytes32 hash) internal view returns (uint256 r, uint256 s) {
+        // Securely generate a random k value for each signature
+        uint256 k = uint256(keccak256(abi.encodePacked(hash, block.timestamp, block.difficulty, privateKey))) % n;
+        while (k == 0) {
+            k = uint256(keccak256(abi.encodePacked(k))) % n;
+        }
+
+        // Generate the signature using the k value and the private key
+        (r, s) = FCL_ecdsa_utils.ecdsa_sign(hash, k, privateKey);
+
+        // Ensure that s is in the lower half of the range [1, n-1]
+        if (r == 0 || s == 0 || s > P256.P256_N_DIV_2) {
+            s = n - s; // If s is in the upper half, use n - s instead
+        }
+
+        return (r, s);
     }
 
     function test_utils(uint256 privateKey, bytes32 hash) external {
@@ -132,11 +151,11 @@ contract P256ValidatorTest is KernelTestBase {
         (uint256 x1, uint256 y1) = generatePublicKey(privateKey);
         (uint256 r, uint256 s) = generateSignature(privateKey, hash);
         
-        vm.assume(x != 0);
-        vm.assume(y != 0);
+        vm.assume(x1 != 0);
+        vm.assume(y1 != 0);
         vm.assume(r != 0);
-        vm.assume(s != 0);
-        assertEq(P256.verifySignatureAllowMalleability(hash, r, s, x1, y1), true);
+        vm.assume(s < P256.P256_N_DIV_2);
+        assertEq(P256.verifySignature(hash, r, s, x1, y1), true);
     }
 
     function test_validate_signature() external override {
