@@ -272,7 +272,9 @@ abstract contract KernelTestBase is Test {
     function test_disable_mode() external {
         vm.warp(1000);
         bytes memory empty;
-        UserOperation memory op = buildUserOperation(abi.encodeWithSelector(IKernel.disableMode.selector, bytes4(0x00000001), address(0), empty));
+        UserOperation memory op = buildUserOperation(
+            abi.encodeWithSelector(IKernel.disableMode.selector, bytes4(0x00000001), address(0), empty)
+        );
         performUserOperationWithSig(op);
         assertEq(uint256(bytes32(IKernel(address(kernel)).getDisabledMode())), 1 << 224);
         assertEq(uint256(IKernel(address(kernel)).getLastDisabledTime()), block.timestamp);
@@ -336,7 +338,8 @@ abstract contract KernelTestBase is Test {
     function test_revert_when_mode_disabled() external {
         vm.warp(1000);
         bytes memory empty;
-        UserOperation memory op = buildUserOperation(abi.encodeWithSelector(IKernel.disableMode.selector, bytes4(0x00000001), address(0), empty)
+        UserOperation memory op = buildUserOperation(
+            abi.encodeWithSelector(IKernel.disableMode.selector, bytes4(0x00000001), address(0), empty)
         );
         performUserOperationWithSig(op);
 

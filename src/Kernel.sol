@@ -29,7 +29,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     /// @dev Selector of the `DisabledMode()` error, to be used in assembly, 'bytes4(keccak256(bytes("DisabledMode()")))', same as DisabledMode.selector()
     uint256 private constant _DISABLED_MODE_SELECTOR = 0xfc2f51c5;
 
-    /// @dev Current kernel name and version, todo: Need to expose getter for this variables? 
+    /// @dev Current kernel name and version, todo: Need to expose getter for this variables?
     string public constant name = KERNEL_NAME;
     string public constant version = KERNEL_VERSION;
 

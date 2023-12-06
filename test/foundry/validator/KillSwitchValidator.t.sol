@@ -68,7 +68,8 @@ contract KillSwitchValidatorTest is KernelECDSATest {
     }
 
     function test_force_unblock() external {
-        UserOperation memory op = buildUserOperation(abi.encodeWithSelector(Kernel.execute.selector, owner, 0, "", Operation.Call));
+        UserOperation memory op =
+            buildUserOperation(abi.encodeWithSelector(Kernel.execute.selector, owner, 0, "", Operation.Call));
 
         op.signature = bytes.concat(bytes4(0), entryPoint.signUserOpHash(vm, ownerKey, op));
         performUserOperation(op);
