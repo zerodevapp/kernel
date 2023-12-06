@@ -57,16 +57,12 @@ contract KernelECDSATest is KernelTestBase {
     function test_set_default_validator() external override {
         TestValidator newValidator = new TestValidator();
         bytes memory empty;
-        UserOperation memory op = entryPoint.fillUserOp(
-            address(kernel),
+        UserOperation memory op = buildUserOperation(
             abi.encodeWithSelector(KernelStorage.setDefaultValidator.selector, address(newValidator), empty)
         );
-        op.signature = signUserOp(op);
-        UserOperation[] memory ops = new UserOperation[](1);
-        ops[0] = op;
         vm.expectEmit(true, true, true, false, address(entryPoint));
         emit UserOperationEvent(entryPoint.getUserOpHash(op), address(kernel), address(0), op.nonce, false, 0, 0);
-        entryPoint.handleOps(ops, beneficiary);
+        performUserOperationWithSig(op);
     }
 
     function signUserOp(UserOperation memory op) internal view override returns (bytes memory) {
@@ -101,14 +97,9 @@ contract KernelECDSATest is KernelTestBase {
 
     function test_transfer_ownership() external {
         address newOwner = makeAddr("new owner");
-        UserOperation memory op = entryPoint.fillUserOp(
-            address(kernel), abi.encodeWithSelector(KernelLiteECDSA.transferOwnership.selector, newOwner)
-        );
-        op.signature = signUserOp(op);
-        UserOperation[] memory ops = new UserOperation[](1);
-        ops[0] = op;
+        UserOperation memory op = buildUserOperation(abi.encodeWithSelector(KernelLiteECDSA.transferOwnership.selector, newOwner));
         vm.expectEmit(true, true, true, false, address(entryPoint));
         emit UserOperationEvent(entryPoint.getUserOpHash(op), address(kernel), address(0), op.nonce, false, 0, 0);
-        entryPoint.handleOps(ops, beneficiary);
+        performUserOperationWithSig(op);
     }
 }
