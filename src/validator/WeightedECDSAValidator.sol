@@ -84,6 +84,7 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
 
     function approve(bytes32 _callDataAndNonceHash, address _kernel) external {
         require(guardian[msg.sender][_kernel].weight != 0, "Guardian not enabled");
+        require(weightedStorage[_kernel].threoshold != 0, "Kernel not enabled");
         ProposalStorage storage proposal = proposalStatus[_callDataAndNonceHash][_kernel];
         require(proposal.status == ProposalStatus.Ongoing, "Proposal not ongoing");
         VoteStorage storage vote = voteStatus[_callDataAndNonceHash][msg.sender][_kernel];
@@ -98,6 +99,7 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
 
     function approveWithSig(bytes32 _callDataAndNonceHash, address _kernel, bytes calldata sigs) external {
         uint256 sigCount = sigs.length / 65;
+        require(weightedStorage[_kernel].threoshold != 0, "Kernel not enabled");
         ProposalStorage storage proposal = proposalStatus[_callDataAndNonceHash][_kernel];
         require(proposal.status == ProposalStatus.Ongoing, "Proposal not ongoing");
         for (uint256 i = 0; i < sigCount; i++) {
@@ -135,6 +137,9 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
         bytes32 callDataAndNonceHash = keccak256(abi.encode(userOp.callData, userOp.nonce));
         ProposalStorage storage proposal = proposalStatus[callDataAndNonceHash][msg.sender];
         WeightedECDSAValidatorStorage storage strg = weightedStorage[msg.sender];
+        if(strg.threshold == 0) {
+            return SIG_VALIDATION_FAILED;
+        }
         if (proposal.status == ProposalStatus.Ongoing) {
             if (strg.delay != 0) {
                 // if delay > 0, only allow proposal to be approved before execution
