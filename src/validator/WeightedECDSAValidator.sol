@@ -59,6 +59,7 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
         require(weightedStorage[msg.sender].totalWeight == 0, "Already enabled");
         weightedStorage[msg.sender].firstGuardian = msg.sender;
         for (uint256 i = 0; i < _guardians.length; i++) {
+            require(_guardians[i] != msg.sender, "Guardian cannot be self");
             require(_guardians[i] != address(0), "Guardian cannot be 0");
             require(_weights[i] != 0, "Weight cannot be 0");
             require(guardian[_guardians[i]][msg.sender].weight == 0, "Guardian already enabled");
