@@ -16,7 +16,7 @@ contract P256Validator is IKernelValidator {
     error BadKey();
 
     /// @notice Emitted when the public key of a kernel is changed.
-    event P256PublicKeysChanged(address indexed kernel, PublicKey oldKeys, PublicKey newKeys);
+    event P256PublicKeysChanged(address indexed kernel, PublicKey newKeys);
 
     /// @notice The P256 public key of a kernel.
     struct PublicKey {
@@ -35,14 +35,10 @@ contract P256Validator is IKernelValidator {
         if (key.x == 0 || key.y == 0) {
             revert BadKey();
         }
-        // TODO: Should evaluate if the previous key is rly needed for this event, since it will prevent a `sload` during the enabling of this validator for a kernel account
-        // TODO: It will also prevent to store too much data inside the memory before sending the event, and so with only the two uint256 of the key, the compiler would use the two initial slots of the memstack and not assign 4 mem slots just for the events
-        // Copy the previous key for the event (so a sload)
-        PublicKey memory oldKey = p256PublicKey[msg.sender];
         // Update the key (so a sstore)
         p256PublicKey[msg.sender] = key;
         // And emit the event
-        emit P256PublicKeysChanged(msg.sender, oldKey, key);
+        emit P256PublicKeysChanged(msg.sender, key);
     }
 
     /// @notice Disable this validator for a kernel account.
