@@ -1,7 +1,7 @@
 pragma solidity ^0.8.0;
 
 import {IKernelValidator} from "../interfaces/IKernelValidator.sol";
-import {ParamCondition} from "./Enums.sol";
+import {ParamCondition, Operation} from "./Enums.sol";
 import {ValidAfter, ValidUntil} from "./Types.sol";
 
 // Defining a struct for execution details
@@ -57,6 +57,7 @@ struct Permission {
     uint256 valueLimit;
     ParamRule[] rules;
     ExecutionRule executionRule;
+    Operation operation;
 }
 
 struct SessionData {

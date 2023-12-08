@@ -7,7 +7,7 @@ import {IKernelValidator} from "../interfaces/IKernelValidator.sol";
 import {UserOperation} from "I4337/interfaces/UserOperation.sol";
 
 import {SIG_VALIDATION_FAILED} from "../common/Constants.sol";
-import {ParamCondition} from "../common/Enums.sol";
+import {ParamCondition, Operation} from "../common/Enums.sol";
 import {ParamRule, SessionData, Permission, Call, ExecutionRule, ExecutionStatus, Nonces} from "../common/Structs.sol";
 import "../common/Types.sol";
 
@@ -154,29 +154,13 @@ contract SessionKeyValidator is IKernelValidator {
         }
 
         bytes calldata callData = userOp.callData;
-        if (bytes4(callData[0:4]) == Kernel.execute.selector) {
+        if (
+            bytes4(callData[0:4]) == Kernel.execute.selector
+                || bytes4(callData[0:4]) == Kernel.executeDelegateCall.selector
+        ) {
             (Permission calldata permission, bytes32[] calldata merkleProof) = _getPermission(userOp.signature[85:]);
-            require(
-                address(bytes20(userOp.callData[16:36])) == permission.target, "SessionKeyValidator: target mismatch"
-            );
-            require(
-                uint256(bytes32(userOp.callData[36:68])) <= permission.valueLimit,
-                "SessionKeyValidator: value limit exceeded"
-            );
-            bytes calldata data;
-            assembly {
-                let dataOffset := add(add(callData.offset, 0x04), calldataload(add(callData.offset, 0x44)))
-                let length := calldataload(dataOffset)
-                data.offset := add(dataOffset, 32)
-                data.length := length
-            }
-            require(verifyPermission(data, permission), "SessionKeyValidator: permission verification failed");
-            ValidAfter validAfter =
-                _updateValidAfter(permission, keccak256(abi.encodePacked(session.nonce, permission.index)));
-            if (ValidAfter.unwrap(validAfter) < ValidAfter.unwrap(session.validAfter)) {
-                validAfter = session.validAfter;
-            }
-            if (!MerkleProofLib.verify(merkleProof, session.merkleRoot, keccak256(abi.encode(permission)))) {
+            (ValidAfter validAfter, bool verifyFailed) = _verifyParam(sessionKey, callData, permission, merkleProof);
+            if (verifyFailed) {
                 return SIG_VALIDATION_FAILED;
             }
             return _verifyUserOpHash(sessionKey, validAfter, session.validUntil);
@@ -251,6 +235,40 @@ contract SessionKeyValidator is IKernelValidator {
             if (!MerkleProofLib.verify(_merkleProof[i], session.merkleRoot, keccak256(abi.encode(permission)))) {
                 return (maxValidAfter, true);
             }
+        }
+    }
+
+    function _verifyParam(
+        address sessionKey,
+        bytes calldata callData,
+        Permission calldata _permission,
+        bytes32[] calldata _merkleProof
+    ) internal returns (ValidAfter validAfter, bool verifyFailed) {
+        SessionData storage session = sessionData[sessionKey][msg.sender];
+        bool isExecute = bytes4(callData[0:4]) == Kernel.execute.selector;
+        require(address(bytes20(callData[16:36])) == _permission.target, "SessionKeyValidator: target mismatch");
+        if (isExecute) {
+            require(
+                uint256(bytes32(callData[36:68])) <= _permission.valueLimit, "SessionKeyValidator: value limit exceeded"
+            );
+        } else {
+            require(_permission.operation == Operation.DelegateCall, "SessionKeyValidator: operation mismatch");
+        }
+        bytes calldata data;
+        uint8 dataParamOffset = isExecute ? 0x44 : 0x24;
+        assembly {
+            let dataOffset := add(add(callData.offset, 0x04), calldataload(add(callData.offset, dataParamOffset)))
+            let length := calldataload(dataOffset)
+            data.offset := add(dataOffset, 32)
+            data.length := length
+        }
+        require(verifyPermission(data, _permission), "SessionKeyValidator: permission verification failed");
+        validAfter = _updateValidAfter(_permission, keccak256(abi.encodePacked(session.nonce, _permission.index)));
+        if (ValidAfter.unwrap(validAfter) < ValidAfter.unwrap(session.validAfter)) {
+            validAfter = session.validAfter;
+        }
+        if (!MerkleProofLib.verify(_merkleProof, session.merkleRoot, keccak256(abi.encode(_permission)))) {
+            return (validAfter, true);
         }
     }
 
