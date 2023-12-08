@@ -56,13 +56,10 @@ contract P256Validator is IKernelValidator {
     {
         (uint256 r, uint256 s) = abi.decode(_userOp.signature, (uint256, uint256));
         PublicKey memory key = p256PublicKey[_userOp.sender];
-        bytes32 hash = ECDSA.toEthSignedMessageHash(_userOpHash);
-        if (P256.verifySignature(hash, r, s, key.x, key.y)) {
+        if (P256.verifySignature(_userOpHash, r, s, key.x, key.y)) {
             return ValidationData.wrap(0);
         }
-        if (!P256.verifySignature(_userOpHash, r, s, key.x, key.y)) {
-            return SIG_VALIDATION_FAILED;
-        }
+        return SIG_VALIDATION_FAILED;
     }
 
     /// @notice Validate a signature.
@@ -77,11 +74,7 @@ contract P256Validator is IKernelValidator {
         if (P256.verifySignature(hash, r, s, key.x, key.y)) {
             return ValidationData.wrap(0);
         }
-        bytes32 ethHash = ECDSA.toEthSignedMessageHash(hash);
-        if (!P256.verifySignature(ethHash, r, s, key.x, key.y)) {
-            return SIG_VALIDATION_FAILED;
-        }
-        return ValidationData.wrap(0);
+        return SIG_VALIDATION_FAILED;
     }
 
     function validCaller(address _caller, bytes calldata) external view override returns (bool) {
