@@ -16,7 +16,6 @@ import {P256} from "p256-verifier/P256.sol";
 import {FCL_ecdsa_utils} from "FreshCryptoLib/FCL_ecdsa_utils.sol";
 import {IKernel} from "src/interfaces/IKernel.sol";
 
-
 using ERC4337Utils for IEntryPoint;
 
 contract P256ValidatorTest is KernelTestBase {
@@ -24,9 +23,7 @@ contract P256ValidatorTest is KernelTestBase {
     P256Validator p256Validator;
 
     // Curve order (number of points)
-    uint256 constant n =
-        0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551;
-
+    uint256 constant n = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551;
 
     uint256 x;
     uint256 y;
@@ -55,7 +52,7 @@ contract P256ValidatorTest is KernelTestBase {
         return abi.encodePacked(bytes4(0x00000000), abi.encode(r, s));
     }
 
-    function getOwners() internal virtual override returns (address[] memory _owners){
+    function getOwners() internal virtual override returns (address[] memory _owners) {
         _owners = new address[](1);
         _owners[0] = address(0);
         return _owners;
@@ -69,7 +66,7 @@ contract P256ValidatorTest is KernelTestBase {
         return abi.encodeWithSelector(KernelStorage.initialize.selector, p256Validator, abi.encode(x, y));
     }
 
-    function test_default_validator_enable() external override{
+    function test_default_validator_enable() external override {
         UserOperation memory op = buildUserOperation(
             abi.encodeWithSelector(
                 IKernel.execute.selector,
@@ -106,7 +103,7 @@ contract P256ValidatorTest is KernelTestBase {
     function test_external_call_execute_success() external override {
         vm.skip(true);
     }
-    
+
     function test_external_call_execute_delegatecall_success() external override {
         vm.skip(true);
     }
@@ -150,7 +147,7 @@ contract P256ValidatorTest is KernelTestBase {
         vm.assume(privateKey != 0);
         (uint256 x1, uint256 y1) = generatePublicKey(privateKey);
         (uint256 r, uint256 s) = generateSignature(privateKey, hash);
-        
+
         vm.assume(x1 != 0);
         vm.assume(y1 != 0);
         vm.assume(r != 0);
@@ -161,7 +158,7 @@ contract P256ValidatorTest is KernelTestBase {
     function test_validate_signature() external override {
         Kernel kernel2 = Kernel(payable(factory.createAccount(address(kernelImpl), getInitializeData(), 3)));
         bytes32 hash = keccak256(abi.encodePacked("hello world"));
-        
+
         bytes32 digest = keccak256(
             abi.encodePacked(
                 "\x19\x01", ERC4337Utils._buildDomainSeparator(KERNEL_NAME, KERNEL_VERSION, address(kernel)), hash
