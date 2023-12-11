@@ -29,8 +29,8 @@ enum ProposalStatus {
 struct ProposalStorage {
     ProposalStatus status;
     ValidAfter validAfter;
-    uint24 weightApproved;
 }
+// TODO add validUntil
 
 enum VoteStatus {
     NA,
@@ -85,22 +85,17 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
 
     function approve(bytes32 _callDataAndNonceHash, address _kernel) external {
         require(guardian[msg.sender][_kernel].weight != 0, "Guardian not enabled");
-        require(weightedStorage[_kernel].threoshold != 0, "Kernel not enabled");
+        require(weightedStorage[_kernel].threshold != 0, "Kernel not enabled");
         ProposalStorage storage proposal = proposalStatus[_callDataAndNonceHash][_kernel];
         require(proposal.status == ProposalStatus.Ongoing, "Proposal not ongoing");
         VoteStorage storage vote = voteStatus[_callDataAndNonceHash][msg.sender][_kernel];
         require(vote.status == VoteStatus.NA, "Already voted");
         vote.status = VoteStatus.Approved;
-        proposal.weightApproved += guardian[msg.sender][_kernel].weight;
-        if (proposal.weightApproved >= weightedStorage[_kernel].threshold) {
-            proposal.status = ProposalStatus.Approved;
-            proposal.validAfter = ValidAfter.wrap(uint48(block.timestamp + weightedStorage[_kernel].delay));
-        }
     }
 
     function approveWithSig(bytes32 _callDataAndNonceHash, address _kernel, bytes calldata sigs) external {
         uint256 sigCount = sigs.length / 65;
-        require(weightedStorage[_kernel].threoshold != 0, "Kernel not enabled");
+        require(weightedStorage[_kernel].threshold != 0, "Kernel not enabled");
         ProposalStorage storage proposal = proposalStatus[_callDataAndNonceHash][_kernel];
         require(proposal.status == ProposalStatus.Ongoing, "Proposal not ongoing");
         for (uint256 i = 0; i < sigCount; i++) {
@@ -113,11 +108,6 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
             VoteStorage storage vote = voteStatus[_callDataAndNonceHash][signer][_kernel];
             require(vote.status == VoteStatus.NA, "Already voted");
             vote.status = VoteStatus.Approved;
-            proposal.weightApproved += guardian[signer][_kernel].weight;
-        }
-        if (proposal.weightApproved >= weightedStorage[_kernel].threshold) {
-            proposal.status = ProposalStatus.Approved;
-            proposal.validAfter = ValidAfter.wrap(uint48(block.timestamp + weightedStorage[_kernel].delay));
         }
     }
 
@@ -149,7 +139,7 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
             bytes calldata sig = userOp.signature;
             // parse sig with 65 bytes
             uint256 sigCount = sig.length / 65;
-            uint256 totalWeight = proposal.weightApproved;
+            (uint256 totalWeight, bool passed) = getApproval(msg.sender, callDataAndNonceHash);
             address signer;
             VoteStorage storage vote;
             for (uint256 i = 0; i < sigCount; i++) {
@@ -179,6 +169,20 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
         } else {
             return SIG_VALIDATION_FAILED;
         }
+    }
+
+    function getApproval(address kernel, bytes32 hash) public view returns (uint256 approvals, bool passed) {
+        WeightedECDSAValidatorStorage storage strg = weightedStorage[kernel];
+        for (
+            address currentGuardian = strg.firstGuardian;
+            currentGuardian != address(0);
+            currentGuardian = guardian[currentGuardian][kernel].nextGuardian
+        ) {
+            if (voteStatus[hash][currentGuardian][kernel].status == VoteStatus.Approved) {
+                approvals += guardian[currentGuardian][kernel].weight;
+            }
+        }
+        passed = approvals >= strg.threshold;
     }
 
     function validCaller(address, bytes calldata) external pure override returns (bool) {
