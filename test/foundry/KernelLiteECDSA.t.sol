@@ -97,7 +97,8 @@ contract KernelECDSATest is KernelTestBase {
 
     function test_transfer_ownership() external {
         address newOwner = makeAddr("new owner");
-        UserOperation memory op = buildUserOperation(abi.encodeWithSelector(KernelLiteECDSA.transferOwnership.selector, newOwner));
+        UserOperation memory op =
+            buildUserOperation(abi.encodeWithSelector(KernelLiteECDSA.transferOwnership.selector, newOwner));
         vm.expectEmit(true, true, true, false, address(entryPoint));
         emit UserOperationEvent(entryPoint.getUserOpHash(op), address(kernel), address(0), op.nonce, false, 0, 0);
         performUserOperationWithSig(op);
