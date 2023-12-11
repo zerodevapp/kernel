@@ -135,10 +135,10 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
         payable
         returns (ValidationData validationData)
     {
-        bytes32 callDataAndNonceHash = keccak256(abi.encode(userOp.sender, userOp.callData, userOp.nonce)); // TODO: what about block.chainid and address(this)??
+        bytes32 callDataAndNonceHash = keccak256(abi.encode(userOp.sender, userOp.callData, userOp.nonce));
         ProposalStorage storage proposal = proposalStatus[callDataAndNonceHash][msg.sender];
         WeightedECDSAValidatorStorage storage strg = weightedStorage[msg.sender];
-        if(strg.threshold == 0) {
+        if (strg.threshold == 0) {
             return SIG_VALIDATION_FAILED;
         }
         if (proposal.status == ProposalStatus.Ongoing) {
