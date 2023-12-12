@@ -20,13 +20,21 @@ contract ECDSATypedValidator is IKernelValidator, EIP712 {
     /// @notice The type hash used for kernel user op validation
     bytes32 constant USER_OP_TYPEHASH = keccak256("AllowUserOp(address owner,address kernelWallet,bytes32 hash)");
     /// @notice The type hash used for kernel signature validation
-    bytes32 constant SIGNATURE_TYPEHASH = keccak256("AllowSignature(address owner,address kernelWallet,bytes32 hash)");
+    bytes32 constant SIGNATURE_TYPEHASH = keccak256("KernelSignature(address owner,address kernelWallet,bytes32 hash)");
 
     /// @notice Emitted when the owner of a kernel is changed.
     event OwnerChanged(address indexed kernel, address oldOwner, address newOwner);
 
+    /* -------------------------------------------------------------------------- */
+    /*                                   Storage                                  */
+    /* -------------------------------------------------------------------------- */
+
     /// @notice The validator storage of a kernel.
-    mapping(address kernel => ECDSATypedValidatorStorage validatorStorage) public ecdsaValidatorStorage;
+    mapping(address kernel => ECDSATypedValidatorStorage validatorStorage) private ecdsaValidatorStorage;
+
+    /* -------------------------------------------------------------------------- */
+    /*                               EIP-712 Methods                              */
+    /* -------------------------------------------------------------------------- */
 
     /// @dev Get the current name & version of the validator, used for the EIP-712 domain separator from Solady
     function _domainNameAndVersion() internal pure override returns (string memory, string memory) {
@@ -37,6 +45,15 @@ contract ECDSATypedValidator is IKernelValidator, EIP712 {
     function _domainNameAndVersionMayChange() internal pure override returns (bool) {
         return false;
     }
+
+    /// @dev Export the current domain seperator
+    function getDomainSeperator() public view returns (bytes32) {
+        return _domainSeparator();
+    }
+
+    /* -------------------------------------------------------------------------- */
+    /*                          Kernel validator Methods                          */
+    /* -------------------------------------------------------------------------- */
 
     /// @dev Enable this validator for a given `kernel` (msg.sender)
     function enable(bytes calldata _data) external payable override {
@@ -96,5 +113,14 @@ contract ECDSATypedValidator is IKernelValidator, EIP712 {
     /// @dev Check if the caller is a valid signer for this kernel account
     function validCaller(address _caller, bytes calldata) external view override returns (bool) {
         return ecdsaValidatorStorage[msg.sender].owner == _caller;
+    }
+
+    /* -------------------------------------------------------------------------- */
+    /*                             Public view methods                            */
+    /* -------------------------------------------------------------------------- */
+
+    /// @dev Get the owner of a given `kernel`
+    function getOwner(address _kernel) public view returns (address) {
+        return ecdsaValidatorStorage[_kernel].owner;
     }
 }
