@@ -30,7 +30,6 @@ struct ProposalStorage {
     ProposalStatus status;
     ValidAfter validAfter;
 }
-// TODO add validUntil
 
 enum VoteStatus {
     NA,
