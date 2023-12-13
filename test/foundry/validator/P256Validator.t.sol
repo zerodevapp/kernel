@@ -191,11 +191,12 @@ contract P256ValidatorTest is KernelTestBase {
 
     function signHash(bytes32 hash) internal view override returns (bytes memory) {
         (uint256 r, uint256 s) = generateSignature(ownerKey, hash);
+
         return abi.encode(r, s);
     }
 
     function getWrongSignature(bytes32 hash) internal view override returns (bytes memory) {
-        (uint256 r, uint256 s) = generateSignature(ownerKey + 1, hash);
+        (uint256 r, uint256 s) = generateSignature(ownerKey + 1, ECDSA.toEthSignedMessageHash(hash));
         return abi.encode(r, s);
     }
 
