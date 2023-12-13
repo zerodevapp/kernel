@@ -224,7 +224,9 @@ contract SessionKeyValidator is IKernelValidator {
         for (i = 0; i < calls.length; i++) {
             Call calldata call = calls[i];
             Permission calldata permission = _permissions[i];
-            require(call.to == permission.target, "SessionKeyValidator: target mismatch");
+            require(
+                permission.target == address(0) || call.to == permission.target, "SessionKeyValidator: target mismatch"
+            );
             require(uint256(bytes32(call.value)) <= permission.valueLimit, "SessionKeyValidator: value limit exceeded");
             require(verifyPermission(call.data, permission), "SessionKeyValidator: permission verification failed");
             ValidAfter validAfter =
@@ -246,7 +248,10 @@ contract SessionKeyValidator is IKernelValidator {
     ) internal returns (ValidAfter validAfter, bool verifyFailed) {
         SessionData storage session = sessionData[sessionKey][msg.sender];
         bool isExecute = bytes4(callData[0:4]) == Kernel.execute.selector;
-        require(address(bytes20(callData[16:36])) == _permission.target, "SessionKeyValidator: target mismatch");
+        require(
+            _permission.target == address(0) || address(bytes20(callData[16:36])) == _permission.target,
+            "SessionKeyValidator: target mismatch"
+        );
         if (isExecute) {
             require(
                 uint256(bytes32(callData[36:68])) <= _permission.valueLimit, "SessionKeyValidator: value limit exceeded"
