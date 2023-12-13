@@ -6,8 +6,14 @@ import {IEntryPoint} from "I4337/interfaces/IEntryPoint.sol";
 import {Ownable} from "solady/auth/Ownable.sol";
 
 contract KernelFactory is AdminLessERC1967Factory, Ownable {
+    /// Error throwned when an implementation isn't allowed
+    error ImplementationNotAllowed();
+
+    /// @dev The entry point contract.
     IEntryPoint public entryPoint;
-    mapping(address => bool) public isAllowedImplementation;
+
+    /// @dev Check if an implementation is allowed.
+    mapping(address implementation => bool isAllowed) public isAllowedImplementation;
 
     constructor(address _owner, IEntryPoint _entryPoint) {
         _initializeOwner(_owner);
@@ -27,8 +33,11 @@ contract KernelFactory is AdminLessERC1967Factory, Ownable {
         payable
         returns (address proxy)
     {
-        require(isAllowedImplementation[_implementation], "KernelFactory: implementation not allowed");
+        // Ensure that the implementation contract is allowed
+        if (!isAllowedImplementation[_implementation]) revert ImplementationNotAllowed();
+        // Create the salt for the account
         bytes32 salt = bytes32(uint256(keccak256(abi.encodePacked(_data, _index))) & type(uint96).max);
+        // Deploy the proxy and return it's address
         proxy = deployDeterministicAndCall(_implementation, salt, _data);
     }
 

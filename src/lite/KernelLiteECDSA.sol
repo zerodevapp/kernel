@@ -19,6 +19,7 @@ struct KernelLiteECDSAStorage {
 /// @dev A lite version of the Kernel contract which only uses ECDSA signatures for validation
 contract KernelLiteECDSA is Kernel {
     error InvalidAccess();
+    error InvalidValidator();
 
     address public immutable KERNEL_ECDSA_VALIDATOR;
 
@@ -45,8 +46,11 @@ contract KernelLiteECDSA is Kernel {
 
     /// @dev Set the initial data for this kernel (setup ecdsa signer address)
     function _setInitialData(IKernelValidator _validator, bytes calldata _data) internal override {
-        require(address(_validator) == KERNEL_ECDSA_VALIDATOR, "KernelLiteECDSA: invalid validator");
-        require(getKernelLiteECDSAStorage().owner == address(0), "KernelLiteECDSA: already initialized");
+        // Ensure the validator is valid
+        if (address(_validator) != KERNEL_ECDSA_VALIDATOR) revert InvalidValidator();
+        // Ensure the account isn't already initialized
+        if (getKernelLiteECDSAStorage().owner != address(0)) revert AlreadyInitialized();
+
         address owner = address(bytes20(_data[0:20]));
         getKernelLiteECDSAStorage().owner = owner;
     }
