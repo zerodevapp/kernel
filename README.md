@@ -8,7 +8,12 @@ Kernel is a smart contract account that is:
 
 Kernel is also a winner of [the inaugural Ethereum AA grant](https://erc4337.mirror.xyz/hRn_41cef8oKn44ZncN9pXvY3VID6LZOtpLlktXYtmA).  At the time of writing, [Kernel powers over 60% of all AA wallets](https://twitter.com/SixdegreeLab/status/1705585256638849325?s=20).
 
-Kernel can be used as a standalone smart contract account, but most people use it through [ZeroDev](https://docs.zerodev.app/).
+Kernel is supported by all major AA SDKs, including:
+
+- [ZeroDev](https://docs.zerodev.app/)
+- [Permissionless.js](https://docs.pimlico.io/permissionless/how-to/accounts/use-kernel-account)
+- [UserOp.js](https://docs.stackup.sh/docs/useropjs-presets#kernel)
+- [Account Kit](https://github.com/alchemyplatform/aa-sdk/tree/main/packages/accounts/src/kernel-zerodev)
 
 ## Resources
 
