@@ -18,12 +18,12 @@ struct ECDSATypedValidatorStorage {
 /// @notice It's using EIP-712 format signature to validate user operations signature & classic signature
 contract ECDSATypedValidator is IKernelValidator, EIP712 {
     /// @notice The type hash used for kernel user op validation
-    bytes32 constant USER_OP_TYPEHASH = keccak256("AllowUserOp(address owner,address kernelWallet,bytes32 hash)");
+    bytes32 constant USER_OP_TYPEHASH = keccak256("AllowUserOp(address owner,address kernelWallet,bytes32 userOpHash)");
     /// @notice The type hash used for kernel signature validation
     bytes32 constant SIGNATURE_TYPEHASH = keccak256("KernelSignature(address owner,address kernelWallet,bytes32 hash)");
 
     /// @notice Emitted when the owner of a kernel is changed.
-    event OwnerChanged(address indexed kernel, address oldOwner, address newOwner);
+    event OwnerChanged(address indexed kernel, address newOwner);
 
     /* -------------------------------------------------------------------------- */
     /*                                   Storage                                  */
@@ -58,9 +58,8 @@ contract ECDSATypedValidator is IKernelValidator, EIP712 {
     /// @dev Enable this validator for a given `kernel` (msg.sender)
     function enable(bytes calldata _data) external payable override {
         address owner = address(bytes20(_data[0:20]));
-        address oldOwner = ecdsaValidatorStorage[msg.sender].owner;
         ecdsaValidatorStorage[msg.sender].owner = owner;
-        emit OwnerChanged(msg.sender, oldOwner, owner);
+        emit OwnerChanged(msg.sender, owner);
     }
 
     /// @dev Disable this validator for a given `kernel` (msg.sender)

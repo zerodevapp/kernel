@@ -17,7 +17,7 @@ using ERC4337Utils for IEntryPoint;
 
 /// @author @KONFeature
 /// @title KernelECDSATypedTest
-/// @notice Unit test on the Kernel ECDSA typed validator 
+/// @notice Unit test on the Kernel ECDSA typed validator
 contract KernelECDSATypedTest is KernelTestBase {
     ECDSATypedValidator private ecdsaTypedValidator;
 
@@ -106,7 +106,7 @@ contract KernelECDSATypedTest is KernelTestBase {
     /* -------------------------------------------------------------------------- */
 
     /// @notice The type hash used for kernel user op validation
-    bytes32 constant USER_OP_TYPEHASH = keccak256("AllowUserOp(address owner,address kernelWallet,bytes32 hash)");
+    bytes32 constant USER_OP_TYPEHASH = keccak256("AllowUserOp(address owner,address kernelWallet,bytes32 userOpHash)");
 
     /// @dev Generate the signature for a user op
     function _generateUserOpSignature(IEntryPoint _entryPoint, UserOperation memory _op, uint256 _privateKey)
