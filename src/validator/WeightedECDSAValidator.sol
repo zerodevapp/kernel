@@ -83,7 +83,10 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
         delete weightedStorage[msg.sender];
     }
 
-    function renew(address[] calldata _guardians, uint24[] calldata _weights, uint24 _threshold, uint48 _delay) external payable {
+    function renew(address[] calldata _guardians, uint24[] calldata _weights, uint24 _threshold, uint48 _delay)
+        external
+        payable
+    {
         require(weightedStorage[msg.sender].totalWeight != 0, "Not enabled");
         address currentGuardian = weightedStorage[msg.sender].firstGuardian;
         while (currentGuardian != msg.sender) {
