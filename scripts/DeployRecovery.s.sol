@@ -7,11 +7,12 @@ import "forge-std/console.sol";
 
 contract DeployRecovery is Script  {
     function run() public {
-        uint256 key = vm.envUint("DEPLOYER_PRIVATE_KEY");
-        vm.startBroadcast(key);
-        RecoveryAction action = new RecoveryAction();
-        console.log("Deploying RecoveryAction at address: ", address(action));
-        WeightedECDSAValidator validator = new WeightedECDSAValidator();
+        address deployer = vm.envAddress("DEPLOYER");
+        vm.startBroadcast(deployer);
+        console.log("Deployer address: ", deployer);
+        //RecoveryAction action = new RecoveryAction{salt:0}();
+        //console.log("Deploying RecoveryAction at address: ", address(action));
+        WeightedECDSAValidator validator = new WeightedECDSAValidator{salt:0}();
         console.log("Deploying WeightedECDSAValidator at address: ", address(validator));
         vm.stopBroadcast();
     }
