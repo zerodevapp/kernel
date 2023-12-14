@@ -72,7 +72,8 @@ contract SessionKeyValidatorTest is KernelECDSATest {
             }
             ParamRule[] memory paramRules = new ParamRule[](2);
             if (isDelegateCall) {
-                paramRules[0] = ParamRule({offset: 0, condition: ParamCondition(0), param: bytes32(uint256(uint160(recipient)))});
+                paramRules[0] =
+                    ParamRule({offset: 0, condition: ParamCondition(0), param: bytes32(uint256(uint160(recipient)))});
             } else {
                 paramRules[0] = ParamRule({offset: 0, condition: ParamCondition(i % 6), param: bytes32(uint256(100))});
             }
@@ -405,7 +406,8 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         config.paymasterMode = config.paymasterMode % 3;
         config.usingPaymasterMode = config.usingPaymasterMode % 3;
         bool shouldFail = (config.usingPaymasterMode < config.paymasterMode) || (1000 < config.validAfter)
-            || config.faultySig || (config.param1Faulty && !config.isDelegateCall) || config.param2Faulty || config.wrongProof;
+            || config.faultySig || (config.param1Faulty && !config.isDelegateCall) || config.param2Faulty
+            || config.wrongProof;
         config.runs = config.runs % 10;
         config.earlyRun = config.runs == 0 ? 0 : config.earlyRun % config.runs;
         if (config.interval == 0 || config.validAfter == 0) {
