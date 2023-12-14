@@ -133,7 +133,7 @@ contract SessionKeyValidatorTest is KernelECDSATest {
                 )
         });
 
-        op = entryPoint.fillUserOp(address(kernel), abi.encodeWithSelector(IKernel.executeBatch.selector, calls));
+        op = buildUserOperation(abi.encodeWithSelector(IKernel.executeBatch.selector, calls));
         if (usingPaymasterMode != 0) {
             // 0 = no paymaster
             // 1 = unknown paymaster
@@ -184,8 +184,7 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         bool isDelegateCall
     ) internal view returns (UserOperation memory op) {
         bytes4 selector = isDelegateCall ? IKernel.executeDelegateCall.selector : IKernel.execute.selector;
-        op = entryPoint.fillUserOp(
-            address(kernel),
+        op = buildUserOperation(
             isDelegateCall
                 ? abi.encodeWithSelector(
                     selector,
@@ -346,12 +345,10 @@ contract SessionKeyValidatorTest is KernelECDSATest {
             )
         );
 
-        UserOperation[] memory ops = new UserOperation[](1);
-        ops[0] = op;
         if (shouldFail) {
             vm.expectRevert();
         }
-        entryPoint.handleOps(ops, beneficiary);
+        performUserOperation(op);
         if (config.interval > 0 && config.validAfter > 0 && !shouldFail) {
             (ValidAfter updatedValidAfter, uint48 r) = sessionKeyValidator.executionStatus(
                 keccak256(abi.encodePacked(sessionData.nonce, uint32(config.indexToUse))), address(kernel)
@@ -375,10 +372,10 @@ contract SessionKeyValidatorTest is KernelECDSATest {
                 if (config.earlyRun == i) {
                     vm.expectRevert();
                 }
-                entryPoint.handleOps(ops, beneficiary);
+                performUserOperation(op);
                 if (config.earlyRun == i) {
                     vm.warp(config.validAfter + config.interval * i);
-                    entryPoint.handleOps(ops, beneficiary);
+                    performUserOperation(op);
                 }
                 (ValidAfter updatedValidAfter, uint48 r) = sessionKeyValidator.executionStatus(
                     keccak256(abi.encodePacked(sessionData.nonce, uint32(config.indexToUse))), address(kernel)
@@ -395,7 +392,7 @@ contract SessionKeyValidatorTest is KernelECDSATest {
             op.nonce = op.nonce + 1;
             op.signature = _getBatchActionSignature(op, permissions, config.indexToUse);
             vm.expectRevert();
-            entryPoint.handleOps(ops, beneficiary);
+            performUserOperation(op);
         }
     }
 
@@ -454,12 +451,10 @@ contract SessionKeyValidatorTest is KernelECDSATest {
             )
         );
 
-        UserOperation[] memory ops = new UserOperation[](1);
-        ops[0] = op;
         if (shouldFail) {
             vm.expectRevert();
         }
-        entryPoint.handleOps(ops, beneficiary);
+        performUserOperation(op);
         if (config.interval > 0 && config.validAfter > 0 && !shouldFail) {
             (ValidAfter updatedValidAfter, uint48 r) = sessionKeyValidator.executionStatus(
                 keccak256(abi.encodePacked(sessionData.nonce, uint32(config.indexToUse))), address(kernel)
@@ -483,10 +478,10 @@ contract SessionKeyValidatorTest is KernelECDSATest {
                 if (config.earlyRun == i) {
                     vm.expectRevert();
                 }
-                entryPoint.handleOps(ops, beneficiary);
+                performUserOperation(op);
                 if (config.earlyRun == i) {
                     vm.warp(config.validAfter + config.interval * i);
-                    entryPoint.handleOps(ops, beneficiary);
+                    performUserOperation(op);
                 }
                 (ValidAfter updatedValidAfter, uint48 r) = sessionKeyValidator.executionStatus(
                     keccak256(abi.encodePacked(sessionData.nonce, uint32(config.indexToUse))), address(kernel)
@@ -503,7 +498,7 @@ contract SessionKeyValidatorTest is KernelECDSATest {
             op.nonce = op.nonce + 1;
             op.signature = _getSingleActionSignature(op, permissions, config.indexToUse);
             vm.expectRevert();
-            entryPoint.handleOps(ops, beneficiary);
+            performUserOperation(op);
         }
     }
 
