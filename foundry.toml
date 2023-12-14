@@ -3,6 +3,7 @@ src = 'src'
 out = 'out'
 libs = ['lib']
 solc_version = '0.8.21'
+evm_version = 'paris'
 bytecode_hash = "none"
 cbor_metadata = false
 optimize = true
@@ -11,4 +12,12 @@ runs = 1000000
 [fuzz]
 runs = 1024
 
-# See more config options https://github.com/foundry-rs/foundry/tree/master/config
+[etherscan]
+mainnet = { key = "${ETHERSCAN_API_KEY}" }
+goerli = { key = "${ETHERSCAN_API_KEY}" }
+polygon = { key = "${POLYGONSCAN_API_KEY}" }
+mumbai = { key = "${POLYGONSCAN_API_KEY}" }
+base = { key = "${BASESCAN_API_KEY}" }
+base-goerli = { key = "${BASESCAN_API_KEY}" }
+arbitrum = { key = "${ARBISCAN_API_KEY}" }
+arbitrum-goerli = { key = "${ARBISCAN_API_KEY}" }
