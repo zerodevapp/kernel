@@ -80,6 +80,8 @@ interface IKernel {
 
     function executeBatch(Call[] memory calls) external payable;
 
+    function executeDelegateCall(address to, bytes memory data) external payable;
+
     /// @notice Validates a user operation based on its mode
     /// @dev This function will validate user operation and be called by EntryPoint
     /// @param userOp The user operation to be validated
