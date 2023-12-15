@@ -15,9 +15,30 @@ runs = 1024
 [etherscan]
 mainnet = { key = "${ETHERSCAN_API_KEY}" }
 goerli = { key = "${ETHERSCAN_API_KEY}" }
+sepolia = { key = "${ETHERSCAN_API_KEY}" }
+
 polygon = { key = "${POLYGONSCAN_API_KEY}" }
 mumbai = { key = "${POLYGONSCAN_API_KEY}" }
+
 base = { key = "${BASESCAN_API_KEY}" }
 base-goerli = { key = "${BASESCAN_API_KEY}" }
+base-sepolia = { key = "${BASESCAN_API_KEY}" }
+
 arbitrum = { key = "${ARBISCAN_API_KEY}" }
 arbitrum-goerli = { key = "${ARBISCAN_API_KEY}" }
+arbitrum-sepolia = { key = "${ARBISCAN_API_KEY}" }
+
+optimism = { key = "${OPTIMISMSCAN_API_KEY}" }
+optimism-goerli = { key = "${OPTIMISMSCAN_API_KEY}" }
+optimism-sepolia = { key = "${OPTIMISMSCAN_API_KEY}" }
+
+avalanche = { key = "${AVALANCHE_API_KEY}" }
+fuji = { key = "${AVALANCHE_API_KEY}" }
+
+linea = { key = "${LINEASCAN_API_KEY}" }
+linea-testnet = { key = "${LINEASCAN_API_KEY}" }
+
+bsc = { key = "${BSCSCAN_API_KEY}" }
+opbnb = { key = "${BSCSCAN_API_KEY}" }
+
+# astar-testnet = { key = "${BSCSCAN_API_KEY}" }
