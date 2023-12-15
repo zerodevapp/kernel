@@ -12,8 +12,7 @@ import "./deterministic/Kernel2_3.s.sol";
 contract DeployDeterministic is Script {
     address constant DEPLOYER = 0x9775137314fE595c943712B0b336327dfa80aE8A;
     function run() external {
-        uint256 key = vm.envUint("DEPLOYER_PRIVATE_KEY");
-        vm.startBroadcast(key);
+        vm.startBroadcast(DEPLOYER);
         KernelFactory factory = KernelFactory(payable(FactoryDeploy.deploy()));
 
         ECDSAValidatorDeploy.deploy();
