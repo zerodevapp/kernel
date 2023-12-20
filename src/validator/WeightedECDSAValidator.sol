@@ -47,6 +47,9 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
     mapping(bytes32 callDataAndNonceHash => mapping(address guardian => mapping(address kernel => VoteStorage))) public
         voteStatus;
 
+    event GuardianAdded(address indexed guardian, address indexed kernel, uint24 weight);
+    event GuardianRemoved(address indexed guardian, address indexed kernel);
+
     function _domainNameAndVersion() internal pure override returns (string memory, string memory) {
         return ("WeightedECDSAValidator", "0.0.1");
     }
@@ -66,6 +69,7 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
                 GuardianStorage({weight: _weights[i], nextGuardian: weightedStorage[msg.sender].firstGuardian});
             weightedStorage[msg.sender].firstGuardian = _guardians[i];
             weightedStorage[msg.sender].totalWeight += _weights[i];
+            emit GuardianAdded(_guardians[i], msg.sender, _weights[i]);
         }
         weightedStorage[msg.sender].delay = _delay;
         weightedStorage[msg.sender].threshold = _threshold;
@@ -76,6 +80,7 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
         address currentGuardian = weightedStorage[msg.sender].firstGuardian;
         while (currentGuardian != msg.sender) {
             address nextGuardian = guardian[currentGuardian][msg.sender].nextGuardian;
+            emit GuardianRemoved(currentGuardian, msg.sender);
             delete guardian[currentGuardian][msg.sender];
             currentGuardian = nextGuardian;
         }
@@ -90,6 +95,7 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
         address currentGuardian = weightedStorage[msg.sender].firstGuardian;
         while (currentGuardian != msg.sender) {
             address nextGuardian = guardian[currentGuardian][msg.sender].nextGuardian;
+            emit GuardianRemoved(currentGuardian, msg.sender);
             delete guardian[currentGuardian][msg.sender];
             currentGuardian = nextGuardian;
         }
@@ -105,6 +111,7 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
                 GuardianStorage({weight: _weights[i], nextGuardian: weightedStorage[msg.sender].firstGuardian});
             weightedStorage[msg.sender].firstGuardian = _guardians[i];
             weightedStorage[msg.sender].totalWeight += _weights[i];
+            emit GuardianAdded(_guardians[i], msg.sender, _weights[i]);
         }
         weightedStorage[msg.sender].delay = _delay;
         weightedStorage[msg.sender].threshold = _threshold;
