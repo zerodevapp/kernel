@@ -37,6 +37,15 @@ MIT
 ## Addresses
 
 <details>
+<summary>v2.3</summary>
+
+| Name                 | Address                                    |
+| -------------------- | ------------------------------------------ |
+| Kernel               | 0xD3F582F6B4814E989Ee8E96bc3175320B5A540ab |
+| KernelLite           | 0x482EC42E88a781485E1B6A4f07a0C5479d183291 |
+</details>
+
+<details>
 <summary>v2.2</summary>
 
 | Name                 | Address                                    |
