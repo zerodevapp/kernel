@@ -42,6 +42,7 @@ MIT
 | Name                 | Address                                    |
 | -------------------- | ------------------------------------------ |
 | Kernel               | 0xD3F582F6B4814E989Ee8E96bc3175320B5A540ab |
+| KernelFactory        | 0x5de4839a76cf55d0c90e2061ef4386d962E15ae3 |
 | KernelLite           | 0x482EC42E88a781485E1B6A4f07a0C5479d183291 |
 </details>
 
@@ -51,6 +52,7 @@ MIT
 | Name                 | Address                                    |
 | -------------------- | ------------------------------------------ |
 | Kernel               | 0x0DA6a956B9488eD4dd761E59f52FDc6c8068E6B5 |
+| KernelFactory        | 0x5de4839a76cf55d0c90e2061ef4386d962E15ae3 |
 | KernelLite           | 0xbEdb61Be086F3f15eE911Cc9AB3EEa945DEbFa96 |
 </details>
 
