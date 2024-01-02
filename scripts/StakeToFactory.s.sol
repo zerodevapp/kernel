@@ -10,13 +10,12 @@ contract StakeToFactory is Script {
     address payable constant EXPECTED_KERNEL_ADDRESS = payable(0xf048AD83CB2dfd6037A43902a2A5Be04e53cd2Eb);
     address payable constant EXPECTED_KERNEL_FACTORY_ADDRESS = payable(0x5de4839a76cf55d0c90e2061ef4386d962E15ae3);
     function run() public {
-        uint256 key = vm.envUint("DEPLOYER_PRIVATE_KEY");
-        vm.startBroadcast(key);
+        vm.startBroadcast(DEPLOYER);
         KernelFactory factory = KernelFactory(EXPECTED_KERNEL_FACTORY_ADDRESS);
         IEntryPoint entryPoint = IEntryPoint(ENTRYPOINT_0_6);
         IStakeManager.DepositInfo memory info = entryPoint.getDepositInfo(address(factory));
         if(info.stake < 1e17) {
-            factory.addStake{value: 1e17}(86400);
+            factory.addStake{value: 1e17 - info.stake}(86400);
         }
         vm.stopBroadcast();
     }
