@@ -68,8 +68,7 @@ contract KernelECDSATest is KernelTestBase {
     }
 
     function test_default_validator_enable() external override {
-        UserOperation memory op = entryPoint.fillUserOp(
-            address(kernel),
+        UserOperation memory op = buildUserOperation(
             abi.encodeWithSelector(
                 IKernel.execute.selector,
                 address(defaultValidator),
@@ -78,17 +77,13 @@ contract KernelECDSATest is KernelTestBase {
                 Operation.Call
             )
         );
-        op.signature = signUserOp(op);
-        UserOperation[] memory ops = new UserOperation[](1);
-        ops[0] = op;
-        entryPoint.handleOps(ops, beneficiary);
+        performUserOperationWithSig(op);
         (address owner) = ECDSAValidator(address(defaultValidator)).ecdsaValidatorStorage(address(kernel));
         assertEq(owner, address(0xdeadbeef), "owner should be 0xdeadbeef");
     }
 
     function test_default_validator_disable() external override {
-        UserOperation memory op = entryPoint.fillUserOp(
-            address(kernel),
+        UserOperation memory op = buildUserOperation(
             abi.encodeWithSelector(
                 IKernel.execute.selector,
                 address(defaultValidator),
@@ -97,10 +92,7 @@ contract KernelECDSATest is KernelTestBase {
                 Operation.Call
             )
         );
-        op.signature = signUserOp(op);
-        UserOperation[] memory ops = new UserOperation[](1);
-        ops[0] = op;
-        entryPoint.handleOps(ops, beneficiary);
+        performUserOperationWithSig(op);
         (address owner) = ECDSAValidator(address(defaultValidator)).ecdsaValidatorStorage(address(kernel));
         assertEq(owner, address(0), "owner should be 0");
     }

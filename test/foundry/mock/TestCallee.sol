@@ -9,5 +9,10 @@ contract TestCallee {
         result = a + b + msg.value;
     }
 
+    function transferErc20Tester(address token, address to, uint256 amount) external {
+        (bool success, bytes memory data) = token.call(abi.encodeWithSignature("transfer(address,uint256)", to, amount));
+        require(success, string(data));
+    }
+
     function notThis() external {}
 }

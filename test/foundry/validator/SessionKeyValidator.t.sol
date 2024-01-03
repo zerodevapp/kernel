@@ -21,18 +21,21 @@ import "src/validator/SessionKeyValidator.sol";
 
 import {KernelECDSATest} from "../KernelECDSA.t.sol";
 import "../mock/TestCallee.sol";
+import "../mock/TestERC20.sol";
 
 using ERC4337Utils for IEntryPoint;
 
 contract SessionKeyValidatorTest is KernelECDSATest {
     SessionKeyValidator sessionKeyValidator;
     TestCallee[] callees;
+    TestERC20[] erc20s;
     ExecutionRule execRule;
     bytes32[] data;
     address sessionKey;
     uint256 sessionKeyPriv;
     TestPaymaster paymaster;
     TestPaymaster unknownPaymaster;
+    address recipient;
 
     function setUp() public override {
         super.setUp();
@@ -42,24 +45,48 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         unknownPaymaster = new TestPaymaster();
         entryPoint.depositTo{value: 1e18}(address(unknownPaymaster));
         entryPoint.depositTo{value: 1e18}(address(paymaster));
+        recipient = makeAddr("recipient");
     }
 
-    function _setup_permission(uint256 _length) internal returns (Permission[] memory permissions) {
+    function _setup_permission(uint256 _length, bool isDelegateCall)
+        internal
+        returns (Permission[] memory permissions)
+    {
         permissions = new Permission[](_length);
         callees = new TestCallee[](_length);
+        if (isDelegateCall) {
+            erc20s = new TestERC20[](_length);
+        }
         for (uint8 i = 0; i < _length; i++) {
-            callees[i] = new TestCallee();
+            address target;
+            bytes4 sig;
+            if (isDelegateCall) {
+                erc20s[i] = new TestERC20();
+                target = address(callees[i]);
+                sig = TestCallee.transferErc20Tester.selector;
+                erc20s[i].mint(address(kernel), 200);
+            } else {
+                callees[i] = new TestCallee();
+                target = address(callees[i]);
+                sig = TestCallee.addTester.selector;
+            }
             ParamRule[] memory paramRules = new ParamRule[](2);
-            paramRules[0] = ParamRule({offset: 0, condition: ParamCondition(i % 6), param: bytes32(uint256(100))});
+            if (isDelegateCall) {
+                paramRules[0] =
+                    ParamRule({offset: 0, condition: ParamCondition(0), param: bytes32(uint256(uint160(recipient)))});
+            } else {
+                paramRules[0] = ParamRule({offset: 0, condition: ParamCondition(i % 6), param: bytes32(uint256(100))});
+            }
             paramRules[1] =
                 ParamRule({offset: 32, condition: ParamCondition((i + 1) % 6), param: bytes32(uint256(100))});
             permissions[i] = Permission({
                 index: i,
-                target: address(callees[i]),
-                sig: TestCallee.addTester.selector,
+                target: target,
+                sig: sig,
                 valueLimit: 0,
                 rules: paramRules,
-                executionRule: execRule
+                executionRule: execRule,
+                operation: isDelegateCall ? Operation.DelegateCall : Operation.Call
             });
         }
     }
@@ -107,7 +134,7 @@ contract SessionKeyValidatorTest is KernelECDSATest {
                 )
         });
 
-        op = entryPoint.fillUserOp(address(kernel), abi.encodeWithSelector(IKernel.executeBatch.selector, calls));
+        op = buildUserOperation(abi.encodeWithSelector(IKernel.executeBatch.selector, calls));
         if (usingPaymasterMode != 0) {
             // 0 = no paymaster
             // 1 = unknown paymaster
@@ -154,21 +181,32 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         uint256 indexToUse,
         uint8 usingPaymasterMode,
         bool param1Faulty,
-        bool param2Faulty
+        bool param2Faulty,
+        bool isDelegateCall
     ) internal view returns (UserOperation memory op) {
-        op = entryPoint.fillUserOp(
-            address(kernel),
-            abi.encodeWithSelector(
-                IKernel.execute.selector,
-                permissions[indexToUse].target,
-                0,
-                abi.encodeWithSelector(
-                    permissions[indexToUse].sig,
-                    _generateParam(ParamCondition(indexToUse % 6), !param1Faulty), // since EQ
-                    _generateParam(ParamCondition((indexToUse + 1) % 6), !param2Faulty) // since NOT_EQ
-                ),
-                Operation.Call
-            )
+        bytes4 selector = isDelegateCall ? IKernel.executeDelegateCall.selector : IKernel.execute.selector;
+        op = buildUserOperation(
+            isDelegateCall
+                ? abi.encodeWithSelector(
+                    selector,
+                    permissions[indexToUse].target,
+                    abi.encodeWithSelector(
+                        permissions[indexToUse].sig,
+                        recipient,
+                        _generateParam(ParamCondition((indexToUse + 1) % 6), !param2Faulty) // since NOT_EQ
+                    )
+                )
+                : abi.encodeWithSelector(
+                    selector,
+                    permissions[indexToUse].target,
+                    0,
+                    abi.encodeWithSelector(
+                        permissions[indexToUse].sig,
+                        _generateParam(ParamCondition(indexToUse % 6), !param1Faulty), // since EQ
+                        _generateParam(ParamCondition((indexToUse + 1) % 6), !param2Faulty) // since NOT_EQ
+                    ),
+                    Operation.Call
+                )
         );
         if (usingPaymasterMode != 0) {
             // 0 = no paymaster
@@ -187,7 +225,7 @@ contract SessionKeyValidatorTest is KernelECDSATest {
             sessionData.nonce
         );
         bytes32 digest = getTypedDataHash(
-            IKernel.execute.selector,
+            selector,
             ValidAfter.unwrap(sessionData.validAfter),
             ValidUntil.unwrap(sessionData.validUntil),
             address(sessionKeyValidator),
@@ -234,6 +272,7 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         bool param1Faulty;
         bool param2Faulty;
         bool wrongProof;
+        bool isDelegateCall;
     }
 
     struct BatchTestConfig {
@@ -248,6 +287,7 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         config.runs = 0;
         config.interval = 0;
         config.validAfter = 0; // TODO: runs not checked with batch
+        vm.assume(!config.isDelegateCall);
         vm.assume(config.indexToUse < config.numberOfPermissions && config.numberOfPermissions > 1);
         vm.assume(
             config.validAfter < type(uint32).max && config.interval < type(uint32).max && config.runs < type(uint32).max
@@ -272,7 +312,7 @@ contract SessionKeyValidatorTest is KernelECDSATest {
             validAfter: ValidAfter.wrap(config.validAfter),
             interval: config.interval
         });
-        Permission[] memory permissions = _setup_permission(config.numberOfPermissions);
+        Permission[] memory permissions = _setup_permission(config.numberOfPermissions, false);
         _buildHashes(permissions);
         (uint128 lastNonce,) = sessionKeyValidator.nonces(address(kernel));
         SessionData memory sessionData = SessionData({
@@ -306,12 +346,10 @@ contract SessionKeyValidatorTest is KernelECDSATest {
             )
         );
 
-        UserOperation[] memory ops = new UserOperation[](1);
-        ops[0] = op;
         if (shouldFail) {
             vm.expectRevert();
         }
-        entryPoint.handleOps(ops, beneficiary);
+        performUserOperation(op);
         if (config.interval > 0 && config.validAfter > 0 && !shouldFail) {
             (ValidAfter updatedValidAfter, uint48 r) = sessionKeyValidator.executionStatus(
                 keccak256(abi.encodePacked(sessionData.nonce, uint32(config.indexToUse))), address(kernel)
@@ -335,10 +373,10 @@ contract SessionKeyValidatorTest is KernelECDSATest {
                 if (config.earlyRun == i) {
                     vm.expectRevert();
                 }
-                entryPoint.handleOps(ops, beneficiary);
+                performUserOperation(op);
                 if (config.earlyRun == i) {
                     vm.warp(config.validAfter + config.interval * i);
-                    entryPoint.handleOps(ops, beneficiary);
+                    performUserOperation(op);
                 }
                 (ValidAfter updatedValidAfter, uint48 r) = sessionKeyValidator.executionStatus(
                     keccak256(abi.encodePacked(sessionData.nonce, uint32(config.indexToUse))), address(kernel)
@@ -355,7 +393,7 @@ contract SessionKeyValidatorTest is KernelECDSATest {
             op.nonce = op.nonce + 1;
             op.signature = _getBatchActionSignature(op, permissions, config.indexToUse);
             vm.expectRevert();
-            entryPoint.handleOps(ops, beneficiary);
+            performUserOperation(op);
         }
     }
 
@@ -368,7 +406,8 @@ contract SessionKeyValidatorTest is KernelECDSATest {
         config.paymasterMode = config.paymasterMode % 3;
         config.usingPaymasterMode = config.usingPaymasterMode % 3;
         bool shouldFail = (config.usingPaymasterMode < config.paymasterMode) || (1000 < config.validAfter)
-            || config.faultySig || config.param1Faulty || config.param2Faulty || config.wrongProof;
+            || config.faultySig || (config.param1Faulty && !config.isDelegateCall) || config.param2Faulty
+            || config.wrongProof;
         config.runs = config.runs % 10;
         config.earlyRun = config.runs == 0 ? 0 : config.earlyRun % config.runs;
         if (config.interval == 0 || config.validAfter == 0) {
@@ -385,7 +424,7 @@ contract SessionKeyValidatorTest is KernelECDSATest {
             validAfter: ValidAfter.wrap(config.validAfter),
             interval: config.interval
         });
-        Permission[] memory permissions = _setup_permission(config.numberOfPermissions);
+        Permission[] memory permissions = _setup_permission(config.numberOfPermissions, config.isDelegateCall);
         _buildHashes(permissions);
         (uint128 lastNonce,) = sessionKeyValidator.nonces(address(kernel));
         SessionData memory sessionData = SessionData({
@@ -402,7 +441,8 @@ contract SessionKeyValidatorTest is KernelECDSATest {
             config.indexToUse,
             config.usingPaymasterMode,
             config.param1Faulty,
-            config.param2Faulty
+            config.param2Faulty,
+            config.isDelegateCall
         );
         op.signature = bytes.concat(
             op.signature,
@@ -413,12 +453,10 @@ contract SessionKeyValidatorTest is KernelECDSATest {
             )
         );
 
-        UserOperation[] memory ops = new UserOperation[](1);
-        ops[0] = op;
         if (shouldFail) {
             vm.expectRevert();
         }
-        entryPoint.handleOps(ops, beneficiary);
+        performUserOperation(op);
         if (config.interval > 0 && config.validAfter > 0 && !shouldFail) {
             (ValidAfter updatedValidAfter, uint48 r) = sessionKeyValidator.executionStatus(
                 keccak256(abi.encodePacked(sessionData.nonce, uint32(config.indexToUse))), address(kernel)
@@ -442,10 +480,10 @@ contract SessionKeyValidatorTest is KernelECDSATest {
                 if (config.earlyRun == i) {
                     vm.expectRevert();
                 }
-                entryPoint.handleOps(ops, beneficiary);
+                performUserOperation(op);
                 if (config.earlyRun == i) {
                     vm.warp(config.validAfter + config.interval * i);
-                    entryPoint.handleOps(ops, beneficiary);
+                    performUserOperation(op);
                 }
                 (ValidAfter updatedValidAfter, uint48 r) = sessionKeyValidator.executionStatus(
                     keccak256(abi.encodePacked(sessionData.nonce, uint32(config.indexToUse))), address(kernel)
@@ -462,7 +500,7 @@ contract SessionKeyValidatorTest is KernelECDSATest {
             op.nonce = op.nonce + 1;
             op.signature = _getSingleActionSignature(op, permissions, config.indexToUse);
             vm.expectRevert();
-            entryPoint.handleOps(ops, beneficiary);
+            performUserOperation(op);
         }
     }
 
