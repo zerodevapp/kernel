@@ -55,7 +55,7 @@ contract WebAuthnValidator is IKernelValidator {
         WebAuthnValidatorStorage memory kernelValidatorStorage = webAuthnValidatorStorage[_userOp.sender];
 
         // Perform a check against the direct userOpHash, if ok consider the user op as validated
-        if (!_checkSignature(kernelValidatorStorage, _userOpHash, _userOp.signature)) {
+        if (_checkSignature(kernelValidatorStorage, _userOpHash, _userOp.signature)) {
             return ValidationData.wrap(0);
         }
 
@@ -88,13 +88,13 @@ contract WebAuthnValidator is IKernelValidator {
         WebAuthnValidatorStorage memory _kernelValidatorStorage,
         bytes32 _hash,
         bytes memory _signature
-    ) private view returns (bool) {
+    ) private view returns (bool isValid) {
         // Decode the signature
         (bytes memory authenticatorData, bytes memory clientData, uint256 challengeOffset, uint256[2] memory rs) =
             abi.decode(_signature, (bytes, bytes, uint256, uint256[2]));
 
         // Verify the signature
-        return WebAuthnWrapper.checkSignature(
+        try WebAuthnWrapper.checkSignature(
             authenticatorData,
             0x01,
             clientData,
@@ -102,7 +102,11 @@ contract WebAuthnValidator is IKernelValidator {
             challengeOffset,
             rs,
             [_kernelValidatorStorage.x, _kernelValidatorStorage.y]
-        );
+        ) returns (bool _result) {
+            isValid = _result;
+        } catch {
+            isValid = false;
+        }
     }
 
     /// @dev Check if the caller is a valid signer, this don't apply to the WebAuthN validator, since it's using a public key
