@@ -1,0 +1,32 @@
+{
+  "transactions": [
+    {
+      "hash": null,
+      "transactionType": "CREATE2",
+      "contractName": "MockToken",
+      "contractAddress": "0xE70ea9F5Ac0d8E0052F0c62f241660367E81eAf5",
+      "function": null,
+      "arguments": null,
+      "transaction": {
+        "type": "0x02",
+        "from": "0x9775137314fe595c943712b0b336327dfa80ae8a",
+        "to": "0x4e59b44847b379578588920ca78fbf26c0b4956c",
+        "gas": "0x184bc",
+        "value": "0x0",
+        "data": "0x0000000000000000000000000000000000000000000000000000000000000000608080604052346014576055908161001a8239f35b600080fdfe6080806040526004361015601257600080fd5b600090813560e01c63a9059cbb14602857600080fd5b3460515760403660031901126051576004356001600160a01b0381160360515780600160209252f35b5080fd",
+        "nonce": "0xe",
+        "accessList": []
+      },
+      "additionalContracts": [],
+      "isFixedGasLimit": false
+    }
+  ],
+  "receipts": [],
+  "libraries": [],
+  "pending": [],
+  "returns": {},
+  "timestamp": 1703181115,
+  "chain": 1085713,
+  "multi": false,
+  "commit": "1a400cc"
+}
