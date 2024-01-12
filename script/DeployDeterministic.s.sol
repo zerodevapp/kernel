@@ -18,14 +18,14 @@ contract DeployDeterministic is Script {
         ECDSAValidatorDeploy.deploy();
         SessionKeyDeploy.deploy();
 
-        (address k22, address k22lite) = Kernel_2_2_Deploy.deploy();
+        //(address k22, address k22lite) = Kernel_2_2_Deploy.deploy();
 
-        if(!factory.isAllowedImplementation(k22)) {
-            factory.setImplementation(k22, true);
-        }
-        if(!factory.isAllowedImplementation(k22lite)) {
-            factory.setImplementation(k22lite, true);
-        }
+        //if(!factory.isAllowedImplementation(k22)) {
+        //    factory.setImplementation(k22, true);
+        //}
+        //if(!factory.isAllowedImplementation(k22lite)) {
+        //    factory.setImplementation(k22lite, true);
+        //}
 
         (address k23, address k23lite) = Kernel_2_3_Deploy.deploy();
         if(!factory.isAllowedImplementation(k23)) {
