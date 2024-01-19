@@ -32,7 +32,7 @@ library WebAuthnWrapper {
     ) external view returns (bool) {
         // Format the msg signed via the p256 curve
         bytes32 message = formatWebAuthNChallenge(
-            authenticatorData, authenticatorDataFlagMask, clientData, clientChallenge, clientChallengeDataOffset, rs
+            authenticatorData, authenticatorDataFlagMask, clientData, clientChallenge, clientChallengeDataOffset
         );
 
         // Perform the verification
@@ -45,9 +45,8 @@ library WebAuthnWrapper {
         bytes1 authenticatorDataFlagMask,
         bytes calldata clientData,
         bytes32 clientChallenge,
-        uint256 clientChallengeDataOffset,
-        uint256[2] calldata // rs
-    ) internal pure returns (bytes32) {
+        uint256 clientChallengeDataOffset
+    ) public pure returns (bytes32) {
         // Let the caller check if User Presence (0x01) or User Verification (0x04) are set
         {
             if ((authenticatorData[32] & authenticatorDataFlagMask) != authenticatorDataFlagMask) {
