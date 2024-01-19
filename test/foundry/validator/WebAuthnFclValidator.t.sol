@@ -10,7 +10,7 @@ import {TestExecutor} from "../mock/TestExecutor.sol";
 import {TestValidator} from "../mock/TestValidator.sol";
 import {P256Validator} from "src/validator/P256Validator.sol";
 import {WebAuthnWrapper} from "src/utils/WebAuthnWrapper.sol";
-import {WebAuthnValidator} from "src/validator/WebAuthnValidator.sol";
+import {WebAuthnFclValidator} from "src/validator/WebAuthnFclValidator.sol";
 import {P256} from "p256-verifier/P256.sol";
 import {FCL_ecdsa_utils} from "FreshCryptoLib/FCL_ecdsa_utils.sol";
 import {Base64Url} from "FreshCryptoLib/utils/Base64Url.sol";
@@ -18,8 +18,8 @@ import {IKernel} from "src/interfaces/IKernel.sol";
 
 using ERC4337Utils for IEntryPoint;
 
-contract WebAuthnValidatorTest is KernelTestBase {
-    WebAuthnValidator webAuthNValidator;
+contract WebAuthnFclValidatorTest is KernelTestBase {
+    WebAuthnFclValidator webAuthNValidator;
 
     // Curve order (number of points)
     uint256 constant n = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551;
@@ -29,7 +29,7 @@ contract WebAuthnValidatorTest is KernelTestBase {
     uint256 y;
 
     function setUp() public {
-        webAuthNValidator = new WebAuthnValidator();
+        webAuthNValidator = new WebAuthnFclValidator();
 
         _initialize();
         (x, y) = _getPublicKey(ownerKey);
@@ -74,7 +74,7 @@ contract WebAuthnValidatorTest is KernelTestBase {
             )
         );
         performUserOperationWithSig(op);
-        (uint256 x2, uint256 y2) = WebAuthnValidator(address(webAuthNValidator)).getPublicKey(address(kernel));
+        (uint256 x2, uint256 y2) = WebAuthnFclValidator(address(webAuthNValidator)).getPublicKey(address(kernel));
         verifyPublicKey(x2, y2, x, y);
     }
 
@@ -89,7 +89,7 @@ contract WebAuthnValidatorTest is KernelTestBase {
             )
         );
         performUserOperationWithSig(op);
-        (uint256 x2, uint256 y2) = WebAuthnValidator(address(webAuthNValidator)).getPublicKey(address(kernel));
+        (uint256 x2, uint256 y2) = WebAuthnFclValidator(address(webAuthNValidator)).getPublicKey(address(kernel));
         verifyPublicKey(x2, y2, 0, 0);
     }
 

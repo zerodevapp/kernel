@@ -9,7 +9,7 @@ import {SIG_VALIDATION_FAILED} from "../common/Constants.sol";
 import {WebAuthnWrapper} from "../utils/WebAuthnWrapper.sol";
 
 /// @dev Storage layout for a kernel in the WebAuthnValidator contract.
-struct WebAuthnValidatorStorage {
+struct WebAuthnFclValidatorStorage {
     /// @dev The `x` coord of the secp256r1 public key used to sign the user operation.
     uint256 x;
     /// @dev The `y` coord of the secp256r1 public key used to sign the user operation.
@@ -17,16 +17,16 @@ struct WebAuthnValidatorStorage {
 }
 
 /// @author @KONFeature
-/// @title WebAuthnValidator
+/// @title WebAuthnFclValidator
 /// @notice Kernel validator used to validated user operations via WebAuthn signature (using P256 under the hood)
 /// @notice Using the awesome FreshCryptoLib: https://github.com/rdubois-crypto/FreshCryptoLib/
 /// @notice Inspired by the cometh Gnosis Safe signer: https://github.com/cometh-game/p256-signer
-contract WebAuthnValidator is IKernelValidator {
+contract WebAuthnFclValidator is IKernelValidator {
     /// @dev Event emitted when the public key signing the WebAuthN user operation is changed for a given `kernel`.
     event WebAuthnPublicKeyChanged(address indexed kernel, uint256 x, uint256 y);
 
     /// @dev Mapping of kernel address to each webAuthn specific storage
-    mapping(address kernel => WebAuthnValidatorStorage webAuthnStorage) private webAuthnValidatorStorage;
+    mapping(address kernel => WebAuthnFclValidatorStorage webAuthnStorage) private webAuthnValidatorStorage;
 
     /// @dev Disable this validator for a given `kernel` (msg.sender)
     function disable(bytes calldata) external payable override {
@@ -38,7 +38,7 @@ contract WebAuthnValidator is IKernelValidator {
         // Extract the x & y coordinates of the public key from the `_data` bytes
         (uint256 x, uint256 y) = abi.decode(_data, (uint256, uint256));
         // Update the pub key data
-        WebAuthnValidatorStorage storage kernelValidatorStorage = webAuthnValidatorStorage[msg.sender];
+        WebAuthnFclValidatorStorage storage kernelValidatorStorage = webAuthnValidatorStorage[msg.sender];
         kernelValidatorStorage.x = x;
         kernelValidatorStorage.y = y;
         // Emit the update event
@@ -52,7 +52,7 @@ contract WebAuthnValidator is IKernelValidator {
         override
         returns (ValidationData validationData)
     {
-        WebAuthnValidatorStorage memory kernelValidatorStorage = webAuthnValidatorStorage[_userOp.sender];
+        WebAuthnFclValidatorStorage memory kernelValidatorStorage = webAuthnValidatorStorage[_userOp.sender];
 
         // Perform a check against the direct userOpHash, if ok consider the user op as validated
         if (_checkSignature(kernelValidatorStorage, _userOpHash, _userOp.signature)) {
@@ -69,7 +69,7 @@ contract WebAuthnValidator is IKernelValidator {
         override
         returns (ValidationData)
     {
-        WebAuthnValidatorStorage memory kernelValidatorStorage = webAuthnValidatorStorage[msg.sender];
+        WebAuthnFclValidatorStorage memory kernelValidatorStorage = webAuthnValidatorStorage[msg.sender];
 
         // Check the validity againt the hash directly
         if (_checkSignature(kernelValidatorStorage, _hash, _signature)) {
@@ -85,7 +85,7 @@ contract WebAuthnValidator is IKernelValidator {
     /// @param _hash The hash signed
     /// @param _signature The signature
     function _checkSignature(
-        WebAuthnValidatorStorage memory _kernelValidatorStorage,
+        WebAuthnFclValidatorStorage memory _kernelValidatorStorage,
         bytes32 _hash,
         bytes memory _signature
     ) private view returns (bool isValid) {
@@ -121,7 +121,7 @@ contract WebAuthnValidator is IKernelValidator {
     /// @dev Get the owner of a given `kernel`
     function getPublicKey(address _kernel) public view returns (uint256 x, uint256 y) {
         // Compute the storage slot
-        WebAuthnValidatorStorage storage kernelValidatorStorage = webAuthnValidatorStorage[_kernel];
+        WebAuthnFclValidatorStorage storage kernelValidatorStorage = webAuthnValidatorStorage[_kernel];
 
         // Access it for x and y
         x = kernelValidatorStorage.x;
