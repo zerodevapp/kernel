@@ -6,10 +6,10 @@ import "src/Kernel.sol";
 // test artifacts
 // test utils
 import "forge-std/Test.sol";
-import {ERC4337Utils} from "../utils/ERC4337Utils.sol";
-import {KernelTestBase} from "../KernelTestBase.sol";
-import {TestExecutor} from "../mock/TestExecutor.sol";
-import {TestValidator} from "../mock/TestValidator.sol";
+import {ERC4337Utils} from "test/foundry/utils/ERC4337Utils.sol";
+import {KernelTestBase} from "test/foundry/KernelTestBase.sol";
+import {TestExecutor} from "test/foundry/mock/TestExecutor.sol";
+import {TestValidator} from "test/foundry/mock/TestValidator.sol";
 import {P256Validator} from "src/validator/P256Validator.sol";
 import {P256Verifier} from "p256-verifier/P256Verifier.sol";
 import {P256} from "p256-verifier/P256.sol";

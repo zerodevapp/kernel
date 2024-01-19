@@ -4,9 +4,9 @@ pragma solidity ^0.8.0;
 
 import {UserOperation} from "I4337/interfaces/UserOperation.sol";
 import {ECDSA} from "solady/utils/ECDSA.sol";
-import {IKernelValidator} from "../interfaces/IKernelValidator.sol";
-import {ValidationData} from "../common/Types.sol";
-import {SIG_VALIDATION_FAILED} from "../common/Constants.sol";
+import {IKernelValidator} from "src/interfaces/IKernelValidator.sol";
+import {ValidationData} from "src/common/Types.sol";
+import {SIG_VALIDATION_FAILED} from "src/common/Constants.sol";
 import {P256} from "p256-verifier/P256.sol";
 
 /// @title P256Validator

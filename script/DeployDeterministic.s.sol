@@ -11,6 +11,7 @@ import "./deterministic/Kernel2_3.s.sol";
 
 contract DeployDeterministic is Script {
     address constant DEPLOYER = 0x9775137314fE595c943712B0b336327dfa80aE8A;
+
     function run() external {
         vm.startBroadcast(DEPLOYER);
         KernelFactory factory = KernelFactory(payable(FactoryDeploy.deploy()));
@@ -28,10 +29,10 @@ contract DeployDeterministic is Script {
         //}
 
         (address k23, address k23lite) = Kernel_2_3_Deploy.deploy();
-        if(!factory.isAllowedImplementation(k23)) {
+        if (!factory.isAllowedImplementation(k23)) {
             factory.setImplementation(k23, true);
         }
-        if(!factory.isAllowedImplementation(k23lite)) {
+        if (!factory.isAllowedImplementation(k23lite)) {
             factory.setImplementation(k23lite, true);
         }
         vm.stopBroadcast();

@@ -5,9 +5,9 @@ import {UserOperation} from "I4337/interfaces/UserOperation.sol";
 import {ECDSA} from "solady/utils/ECDSA.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
 import {StealthAggreagteSignature} from "./StealthAggreagteSignature.sol";
-import {IKernelValidator} from "../../interfaces/IKernelValidator.sol";
-import {ValidationData} from "../../common/Types.sol";
-import {SIG_VALIDATION_FAILED} from "../../common/Constants.sol";
+import {IKernelValidator} from "src/interfaces/IKernelValidator.sol";
+import {ValidationData} from "src/common/Types.sol";
+import {SIG_VALIDATION_FAILED} from "src/common/Constants.sol";
 
 /**
  * @dev Storage structure for Stealth Address Registry Module.

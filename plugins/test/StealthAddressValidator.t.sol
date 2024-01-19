@@ -7,9 +7,9 @@ import {EllipticCurve} from "src/validator/stealthAddressValidator/EllipticCurve
 import {IKernel} from "src/interfaces/IKernel.sol";
 import {StealthAddressValidator} from "src/validator/stealthAddressValidator/StealthAddressValidator.sol";
 // test utils
-import {KernelTestBase} from "../KernelTestBase.sol";
-import {TestExecutor} from "../mock/TestExecutor.sol";
-import {TestValidator} from "../mock/TestValidator.sol";
+import {KernelTestBase} from "test/foundry/KernelTestBase.sol";
+import {TestExecutor} from "test/foundry/mock/TestExecutor.sol";
+import {TestValidator} from "test/foundry/mock/TestValidator.sol";
 import "forge-std/Vm.sol";
 
 struct StealthAddressKey {
