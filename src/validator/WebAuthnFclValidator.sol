@@ -6,7 +6,7 @@ import {ECDSA} from "solady/utils/ECDSA.sol";
 import {IKernelValidator} from "../interfaces/IKernelValidator.sol";
 import {ValidationData} from "../common/Types.sol";
 import {SIG_VALIDATION_FAILED} from "../common/Constants.sol";
-import {WebAuthnWrapper} from "../utils/WebAuthnWrapper.sol";
+import {WebAuthnFclVerifier} from "../utils/WebAuthnFclVerifier.sol";
 
 /// @dev Storage layout for a kernel in the WebAuthnValidator contract.
 struct WebAuthnFclValidatorStorage {
@@ -27,6 +27,14 @@ contract WebAuthnFclValidator is IKernelValidator {
 
     /// @dev Mapping of kernel address to each webAuthn specific storage
     mapping(address kernel => WebAuthnFclValidatorStorage webAuthnStorage) private webAuthnValidatorStorage;
+
+    /// @dev The address of the p256 verifier contract (should be 0x100 on the RIP-7212 compliant chains)
+    address public immutable P256_VERIFIER;
+
+    /// @dev Simple constructor, setting the P256 verifier address
+    constructor(address _p256Verifier) {
+        P256_VERIFIER = _p256Verifier;
+    }
 
     /// @dev Disable this validator for a given `kernel` (msg.sender)
     function disable(bytes calldata) external payable override {
@@ -87,26 +95,15 @@ contract WebAuthnFclValidator is IKernelValidator {
     function _checkSignature(
         WebAuthnFclValidatorStorage memory _kernelValidatorStorage,
         bytes32 _hash,
-        bytes memory _signature
+        bytes calldata _signature
     ) private view returns (bool isValid) {
-        // Decode the signature
-        (bytes memory authenticatorData, bytes memory clientData, uint256 challengeOffset, uint256[2] memory rs) =
-            abi.decode(_signature, (bytes, bytes, uint256, uint256[2]));
-
-        // Verify the signature
-        try WebAuthnWrapper.checkSignature(
-            authenticatorData,
-            0x01,
-            clientData,
+        return WebAuthnFclVerifier._verifyWebAuthNSignature(
+            P256_VERIFIER,
             _hash,
-            challengeOffset,
-            rs,
-            [_kernelValidatorStorage.x, _kernelValidatorStorage.y]
-        ) returns (bool _result) {
-            isValid = _result;
-        } catch {
-            isValid = false;
-        }
+            _signature,
+            _kernelValidatorStorage.x,
+            _kernelValidatorStorage.y
+        );
     }
 
     /// @dev Check if the caller is a valid signer, this don't apply to the WebAuthN validator, since it's using a public key
