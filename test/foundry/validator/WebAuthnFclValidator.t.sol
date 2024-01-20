@@ -8,11 +8,9 @@ import {ERC4337Utils} from "../utils/ERC4337Utils.sol";
 import {KernelTestBase} from "../KernelTestBase.sol";
 import {TestExecutor} from "../mock/TestExecutor.sol";
 import {TestValidator} from "../mock/TestValidator.sol";
-import {P256Validator} from "src/validator/P256Validator.sol";
 import {WebAuthnFclVerifier} from "src/utils/WebAuthnFclVerifier.sol";
 import {P256VerifierWrapper} from "src/utils/P256VerifierWrapper.sol";
 import {WebAuthnFclValidator} from "src/validator/WebAuthnFclValidator.sol";
-import {P256} from "p256-verifier/P256.sol";
 import {FCL_ecdsa_utils} from "FreshCryptoLib/FCL_ecdsa_utils.sol";
 import {Base64Url} from "FreshCryptoLib/utils/Base64Url.sol";
 import {IKernel} from "src/interfaces/IKernel.sol";
@@ -93,7 +91,7 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
                 IKernel.execute.selector,
                 address(webAuthNValidator),
                 0,
-                abi.encodeWithSelector(P256Validator.disable.selector, ""),
+                abi.encodeWithSelector(webAuthNValidator.disable.selector, ""),
                 Operation.Call
             )
         );
@@ -242,6 +240,28 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
         assertEq(isValid, true);
     }
 
+    /// @dev Ensure that our flow to generate a webauthn signature is working
+    function test_webAuthnSignatureGeneration_solo() public {
+        uint256 _privateKey = 0x1;
+        bytes32 _hash = keccak256(abi.encodePacked("hello world"));
+        (uint256 pubX, uint256 pubY) = _getPublicKey(_privateKey);
+
+        // Build all the data required
+        (bytes32 msgToSign, bytes memory authenticatorData, bytes memory clientData, uint256 clientChallengeDataOffset)
+        = _prepapreWebAuthnMsg(_hash);
+
+        // Then sign them
+        (uint256 r, uint256 s) = _getP256Signature(_privateKey, msgToSign);
+        uint256[2] memory rs = [r, s];
+
+        // Encode all of that into a signature
+        bytes memory signature = abi.encode(authenticatorData, clientData, clientChallengeDataOffset, rs);
+
+        // Ensure the signature is valid
+        bool isValid = webAuthNTester.verifySignature(address(p256VerifierWrapper), _hash, signature, pubX, pubY);
+        assertEq(isValid, true);
+    }
+
     /* -------------------------------------------------------------------------- */
     /*                      Signature & P256 helper functions                     */
     /* -------------------------------------------------------------------------- */
@@ -305,6 +325,9 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
         return FCL_ecdsa_utils.ecdsa_derivKpub(_privateKey);
     }
 
+    /// P256 curve order n/2 for malleability check
+    uint256 constant P256_N_DIV_2 = 57896044605178124381348723474703786764998477612067880171211129530534256022184;
+
     /// @dev Generate a p256 signature, from the given `_privateKey` on the given `_hash`
     function _getP256Signature(uint256 _privateKey, bytes32 _hash) internal view returns (uint256 r, uint256 s) {
         // Securely generate a random k value for each signature
@@ -317,7 +340,7 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
         (r, s) = FCL_ecdsa_utils.ecdsa_sign(_hash, k, _privateKey);
 
         // Ensure that s is in the lower half of the range [1, n-1]
-        if (r == 0 || s == 0 || s > P256.P256_N_DIV_2) {
+        if (r == 0 || s == 0 || s > P256_N_DIV_2) {
             s = n - s; // If s is in the upper half, use n - s instead
         }
 
