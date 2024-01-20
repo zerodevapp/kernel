@@ -19,16 +19,10 @@ import {IKernel} from "src/interfaces/IKernel.sol";
 
 using ERC4337Utils for IEntryPoint;
 
-/*
-TODO:
- - Figure out why the msg signature fail? Maybe pre hashing stuff missed out?
- - Add a test case arround the dummy signature bypass 
-
-*/
 contract WebAuthnFclValidatorTest is KernelTestBase {
-    WebAuthnFclValidator webAuthNValidator;
-    WebAuthNTester webAuthNTester;
-    P256VerifierWrapper p256VerifierWrapper;
+    WebAuthnFclValidator private webAuthNValidator;
+    WebAuthNTester private webAuthNTester;
+    P256VerifierWrapper private p256VerifierWrapper;
 
     // Curve order (number of points)
     uint256 constant n = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551;
@@ -90,7 +84,7 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
         );
         performUserOperationWithSig(op);
         (uint256 x2, uint256 y2) = WebAuthnFclValidator(address(webAuthNValidator)).getPublicKey(address(kernel));
-        verifyPublicKey(x2, y2, x, y);
+        _assertPublicKey(x2, y2, x, y);
     }
 
     function test_default_validator_disable() external override {
@@ -105,7 +99,7 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
         );
         performUserOperationWithSig(op);
         (uint256 x2, uint256 y2) = WebAuthnFclValidator(address(webAuthNValidator)).getPublicKey(address(kernel));
-        verifyPublicKey(x2, y2, 0, 0);
+        _assertPublicKey(x2, y2, 0, 0);
     }
 
     function test_external_call_batch_execute_success() external override {
@@ -133,10 +127,6 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
     }
 
     function test_validate_signature() external override {
-        vm.skip(true);
-        // TODO: Find out why it's bugy
-
-        Kernel kernel2 = Kernel(payable(factory.createAccount(address(kernelImpl), getInitializeData(), 3)));
         bytes32 _hash = keccak256(abi.encodePacked("hello world"));
 
         bytes32 digest = keccak256(
@@ -145,18 +135,42 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
             )
         );
 
-        bytes memory signature = _generateWebAuthnSignature(ownerKey, digest);
+        bytes memory signature = signHash(digest);
 
         assertEq(kernel.isValidSignature(_hash, signature), Kernel.isValidSignature.selector);
-        assertEq(kernel2.isValidSignature(_hash, signature), bytes4(0xffffffff));
     }
 
     function test_fail_validate_wrongsignature() external override {
-        vm.skip(true);
-        // TODO: Find out why it's bugy
-        bytes32 hash = keccak256(abi.encodePacked("hello world"));
-        bytes memory sig = getWrongSignature(hash);
-        assertEq(kernel.isValidSignature(hash, sig), bytes4(0xffffffff));
+        // Prepare the hash to sign
+        bytes32 _hash = keccak256(abi.encodePacked("hello world"));
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                "\x19\x01", ERC4337Utils._buildDomainSeparator(KERNEL_NAME, KERNEL_VERSION, address(kernel)), _hash
+            )
+        );
+
+        // Sign it (via a wrong signer)
+        bytes memory sig = getWrongSignature(digest);
+        assertEq(kernel.isValidSignature(_hash, sig), bytes4(0xffffffff));
+    }
+
+    function test_fail_validate_InvalidWebAuthnData() external {
+        // Prepare the data to sign
+        bytes32 _hash = keccak256(abi.encodePacked("hello world"));
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                "\x19\x01", ERC4337Utils._buildDomainSeparator(KERNEL_NAME, KERNEL_VERSION, address(kernel)), _hash
+            )
+        );
+
+        bytes32 _wrongHash = keccak256(abi.encodePacked("bye world"));
+
+        // Sign it
+        bytes memory sig = signHash(digest);
+
+        // Ensure it's reverting
+        vm.expectRevert(WebAuthnFclVerifier.InvalidWebAuthNData.selector);
+        kernel.isValidSignature(_wrongHash, sig);
     }
 
     function signUserOp(UserOperation memory op) internal view override returns (bytes memory) {
@@ -179,9 +193,32 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
         return _generateWebAuthnSignature(ownerKey + 1, _hash);
     }
 
-    function verifyPublicKey(uint256 actualX, uint256 actualY, uint256 expectedX, uint256 expectedY) internal {
+    function _assertPublicKey(uint256 actualX, uint256 actualY, uint256 expectedX, uint256 expectedY) internal {
         assertEq(actualX, expectedX, "Public key X component mismatch");
         assertEq(actualY, expectedY, "Public key Y component mismatch");
+    }
+
+    /// @dev Ensure that the validation won't revert when using the dummy signature bypass (challenge offset to uint256.max)
+    function test_dontRevertForDummySig() public {
+        // Build rly dummy data for authenticator data and client data
+        bytes memory authenticatorData = hex"1312";
+        bytes memory clientData = hex"1312";
+        // Set the client challenge data offset to the max value
+        uint256 clientChallengeDataOffset = type(uint256).max;
+
+        // Build an incoherent signature
+        uint256[2] memory rs = [type(uint256).max, type(uint256).max];
+
+        // Encode all of that into a signature
+        bytes memory signature = abi.encode(authenticatorData, clientData, clientChallengeDataOffset, rs);
+
+        // Check the sig (and ensure we didn't revert here)
+        bool isValid = webAuthNTester.verifySignature(address(p256VerifierWrapper), bytes32(0), signature, x, y);
+        assertEq(isValid, false);
+
+        // Ensure we can go through the validator with that signature
+        ValidationData validationData = webAuthNValidator.validateSignature(bytes32(0), signature);
+        assertEq(ValidationData.unwrap(validationData), 1);
     }
 
     /// @dev Ensure that our flow to generate a webauthn signature is working
@@ -202,7 +239,6 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
 
         // Ensure the signature is valid
         bool isValid = webAuthNTester.verifySignature(address(p256VerifierWrapper), _hash, signature, pubX, pubY);
-
         assertEq(isValid, true);
     }
 
