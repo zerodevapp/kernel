@@ -29,6 +29,7 @@ contract WebAuthnFclValidator is IKernelValidator {
     mapping(address kernel => WebAuthnFclValidatorStorage webAuthnStorage) private webAuthnValidatorStorage;
 
     /// @dev The address of the p256 verifier contract (should be 0x100 on the RIP-7212 compliant chains)
+    /// @dev To follow up for the deployment: https://forum.polygon.technology/t/pip-27-precompiled-for-secp256r1-curve-support/13049
     address public immutable P256_VERIFIER;
 
     /// @dev Simple constructor, setting the P256 verifier address
@@ -98,11 +99,7 @@ contract WebAuthnFclValidator is IKernelValidator {
         bytes calldata _signature
     ) private view returns (bool isValid) {
         return WebAuthnFclVerifier._verifyWebAuthNSignature(
-            P256_VERIFIER,
-            _hash,
-            _signature,
-            _kernelValidatorStorage.x,
-            _kernelValidatorStorage.y
+            P256_VERIFIER, _hash, _signature, _kernelValidatorStorage.x, _kernelValidatorStorage.y
         );
     }
 

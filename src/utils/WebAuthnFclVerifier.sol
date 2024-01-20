@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {Base64Url} from "FreshCryptoLib/utils/Base64Url.sol";
+import {Base64} from "solady/utils/Base64.sol";
 
 /// @title WebAuthnFclVerifier
 /// @author rdubois-crypto
@@ -24,17 +24,6 @@ library WebAuthnFclVerifier {
         bytes clientData;
         uint256 challengeOffset;
         uint256[2] rs;
-    }
-
-    /// @dev Extract the signature from the calldata
-    function _extractWebAuthnSignature(bytes calldata _signature) internal pure returns (FclSignatureLayout calldata) {
-        FclSignatureLayout calldata signaturePointer;
-        // This code should precalculate the offsets of variables as defined in the layout
-        // From: https://twitter.com/k06a/status/1706934230779883656
-        assembly {
-            signaturePointer := _signature.offset
-        }
-        return signaturePointer;
     }
 
     /// @dev Format the webauthn challenge into a p256 message
@@ -66,8 +55,8 @@ library WebAuthnFclVerifier {
             }
             // Verify that clientData commits to the expected client challenge
             // Use the Base64Url encoding which omits padding characters to match WebAuthn Specification
-            string memory challengeEncoded = Base64Url.encode(abi.encodePacked(_hash));
-            bytes memory challengeExtracted = new bytes(bytes(challengeEncoded).length);
+            bytes memory challengeEncoded = bytes(Base64.encode(abi.encodePacked(_hash), true, true));
+            bytes memory challengeExtracted = new bytes(challengeEncoded.length);
 
             assembly {
                 calldatacopy(
@@ -80,7 +69,7 @@ library WebAuthnFclVerifier {
                 moreData := keccak256(add(challengeExtracted, 32), mload(challengeExtracted))
             }
 
-            if (keccak256(abi.encodePacked(bytes(challengeEncoded))) != moreData) {
+            if (keccak256(abi.encodePacked(challengeEncoded)) != moreData) {
                 revert InvalidWebAuthNData();
             }
         } //avoid stack full
@@ -115,7 +104,12 @@ library WebAuthnFclVerifier {
         uint256 _y
     ) internal view returns (bool isValid) {
         // Extract the signature
-        FclSignatureLayout calldata signature = _extractWebAuthnSignature(_signature);
+        FclSignatureLayout calldata signature;
+        // This code should precalculate the offsets of variables as defined in the layout
+        // From: https://twitter.com/k06a/status/1706934230779883656
+        assembly {
+            signature := _signature.offset
+        }
 
         // Format the webauthn challenge into a p256 message
         bytes32 challenge = _formatWebAuthNChallenge(_hash, signature);

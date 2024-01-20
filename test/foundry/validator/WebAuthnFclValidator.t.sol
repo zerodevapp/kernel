@@ -190,12 +190,8 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
         (uint256 pubX, uint256 pubY) = _getPublicKey(_privateKey);
 
         // Build all the data required
-        (
-            bytes32 msgToSign,
-            bytes memory authenticatorData,
-            bytes memory clientData,
-            uint256 clientChallengeDataOffset
-        ) = _prepapreWebAuthnMsg(_hash);
+        (bytes32 msgToSign, bytes memory authenticatorData, bytes memory clientData, uint256 clientChallengeDataOffset)
+        = _prepapreWebAuthnMsg(_hash);
 
         // Then sign them
         (uint256 r, uint256 s) = _getP256Signature(_privateKey, msgToSign);
@@ -220,12 +216,8 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
         view
         returns (bytes memory signature)
     {
-        (
-            bytes32 msgToSign,
-            bytes memory authenticatorData,
-            bytes memory clientData,
-            uint256 clientChallengeDataOffset
-        ) = _prepapreWebAuthnMsg(_hash);
+        (bytes32 msgToSign, bytes memory authenticatorData, bytes memory clientData, uint256 clientChallengeDataOffset)
+        = _prepapreWebAuthnMsg(_hash);
 
         // Get the signature
         (uint256 r, uint256 s) = _getP256Signature(_privateKey, msgToSign);
@@ -246,7 +238,6 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
             uint256 clientChallengeDataOffset
         )
     {
-
         // Base Mapping of the message
         bytes memory encodedChallenge = bytes(Base64Url.encode(abi.encodePacked(_hash)));
 
@@ -259,7 +250,7 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
             hex"222c226f726967696e223a22687474703a2f2f6c6f63616c686f73743a33303032222c2263726f73734f726967696e223a66616c73657d";
         clientData = bytes.concat(clientDataStart, encodedChallenge, clientDataEnd);
         clientChallengeDataOffset = 36;
-        
+
         // Build the signature layout
         WebAuthnFclVerifier.FclSignatureLayout memory sigLayout = WebAuthnFclVerifier.FclSignatureLayout({
             authenticatorData: authenticatorData,
@@ -300,13 +291,20 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
 
 /// @dev simple contract to format a webauthn challenge (using to convert stuff in memory during test to calldata)
 contract WebAuthNTester {
-
-    function formatSigLayout(bytes32 _hash, WebAuthnFclVerifier.FclSignatureLayout calldata signatureLayout) public view returns (bytes32) {
+    function formatSigLayout(bytes32 _hash, WebAuthnFclVerifier.FclSignatureLayout calldata signatureLayout)
+        public
+        view
+        returns (bytes32)
+    {
         console.log("hash: %d", uint256(_hash));
         return WebAuthnFclVerifier._formatWebAuthNChallenge(_hash, signatureLayout);
     }
 
-    function verifySignature(address _p256Verifier, bytes32 _hash, bytes calldata _signature, uint256 _x, uint256 _y) public view returns (bool) {
+    function verifySignature(address _p256Verifier, bytes32 _hash, bytes calldata _signature, uint256 _x, uint256 _y)
+        public
+        view
+        returns (bool)
+    {
         return WebAuthnFclVerifier._verifyWebAuthNSignature(_p256Verifier, _hash, _signature, _x, _y);
     }
 }
