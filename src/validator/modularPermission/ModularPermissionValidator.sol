@@ -111,8 +111,7 @@ contract PermissionValidator is IKernelValidator {
         bytes calldata signerData,
         bytes[] calldata permissionData
     ) external pure returns (bytes32) {
-        return
-            keccak256(abi.encode(nonce, validAfter, validUntil, signer,_permissions, signerData, permissionData));
+        return keccak256(abi.encode(nonce, validAfter, validUntil, signer, _permissions, signerData, permissionData));
     }
 
     function enable(bytes calldata data) external payable {
@@ -143,19 +142,18 @@ contract PermissionValidator is IKernelValidator {
         bytes calldata signerData,
         bytes[] calldata policyData
     ) public payable {
-        bytes32 permissionId = keccak256(
-            abi.encode(msg.sender, nonce, validAfter, validUntil, signer, policy, signerData, policyData)
-        );
+        bytes32 permissionId =
+            keccak256(abi.encode(msg.sender, nonce, validAfter, validUntil, signer, policy, signerData, policyData));
 
-        for(uint256 i = 0; i < policy.length; i++) {
+        for (uint256 i = 0; i < policy.length; i++) {
             policy[i].registerPolicy(msg.sender, permissionId, policyData[i]);
         }
         signer.registerSigner(msg.sender, permissionId, signerData);
-        
+
         IPolicy firstPolicy = policy[0]; // NOTE : policy should not be empty array
         permissions[permissionId][msg.sender] = Permission(nonce, 1, validAfter, validUntil, signer, firstPolicy);
-        for(uint256 i = 1; i < policy.length; i++) {
-            nextPolicy[permissionId][policy[i-1]][msg.sender] = policy[i];
+        for (uint256 i = 1; i < policy.length; i++) {
+            nextPolicy[permissionId][policy[i - 1]][msg.sender] = policy[i];
         }
         emit PermissionRegistered(msg.sender, permissionId);
     }
@@ -185,15 +183,18 @@ contract PermissionValidator is IKernelValidator {
     {
         require(_userOp.sender == msg.sender, "sender must be msg.sender");
         bytes32 permissionId = bytes32(_userOp.signature[0:32]);
-        if(address(permissions[permissionId][msg.sender].firstPolicy) != address(0) && permissions[permissionId][msg.sender].nonce < nonces[msg.sender].revoked) {
+        if (
+            address(permissions[permissionId][msg.sender].firstPolicy) != address(0)
+                && permissions[permissionId][msg.sender].nonce < nonces[msg.sender].revoked
+        ) {
             return SIG_VALIDATION_FAILED;
         }
         Permission memory permission = permissions[permissionId][msg.sender];
         IPolicy policy = permission.firstPolicy;
         uint256 cursor = 32;
-        while(address(policy) != address(0)) {
+        while (address(policy) != address(0)) {
             (ValidationData policyValidation, uint256 sigOffset) =
-                policy.validatePolicy(msg.sender, permissionId, _userOp, _userOp.signature[cursor:] );
+                policy.validatePolicy(msg.sender, permissionId, _userOp, _userOp.signature[cursor:]);
             // DO validationdata merge
             policy = nextPolicy[permissionId][policy][msg.sender];
             cursor += sigOffset;
@@ -228,7 +229,7 @@ contract PermissionValidator is IKernelValidator {
         ValidationSigMemory memory sigMemory;
         sigMemory.permissionId = bytes32(signature[0:32]);
         Permission memory permission = permissions[sigMemory.permissionId][msg.sender];
-        // signature should be packed with 
+        // signature should be packed with
         // (permissionId, rawMessage, [proof || signature])
 
         bytes calldata proofAndSignature; //) = abi.decode(signature[32:], (bytes, bytes));
@@ -245,15 +246,17 @@ contract PermissionValidator is IKernelValidator {
 
         sigMemory.cursor = 0;
         sigMemory.policy = permission.firstPolicy;
-        while(address(sigMemory.policy) != address(0)) {
-            (ValidationData policyValidation, uint256 sigOffset) =
-                sigMemory.policy.validateSignature(msg.sender, msg.sender, sigMemory.permissionId, hash, proofAndSignature[sigMemory.cursor:]);
+        while (address(sigMemory.policy) != address(0)) {
+            (ValidationData policyValidation, uint256 sigOffset) = sigMemory.policy.validateSignature(
+                msg.sender, msg.sender, sigMemory.permissionId, hash, proofAndSignature[sigMemory.cursor:]
+            );
             // DO validationdata merge
             sigMemory.policy = nextPolicy[sigMemory.permissionId][sigMemory.policy][msg.sender];
             sigMemory.cursor += sigOffset;
         }
-        ValidationData signatureValidation =
-            permission.signer.validateSignature(msg.sender, sigMemory.permissionId, hash, proofAndSignature[sigMemory.cursor:]);
+        ValidationData signatureValidation = permission.signer.validateSignature(
+            msg.sender, sigMemory.permissionId, hash, proofAndSignature[sigMemory.cursor:]
+        );
         // DO validationdata merge
         return signatureValidation;
     }

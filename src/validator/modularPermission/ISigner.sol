@@ -1,5 +1,7 @@
 pragma solidity ^0.8.0;
+
 import {ValidationData} from "src/common/Types.sol";
+
 interface ISigner {
     function registerSigner(address kernel, bytes32 permissionId, bytes calldata signerData) external payable;
     function validateUserOp(address kernel, bytes32 permissionId, bytes32 userOpHash, bytes calldata signature)

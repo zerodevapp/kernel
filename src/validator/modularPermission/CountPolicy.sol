@@ -1,5 +1,6 @@
 import "./IPolicy.sol";
 import "src/common/Types.sol";
+
 struct Count {
     uint128 current;
     uint128 allowed;
@@ -7,24 +8,29 @@ struct Count {
 
 contract CountPolicy is IPolicy {
     address public immutable permissionValidator;
+
     constructor(address _permissionValidator) {
         permissionValidator = _permissionValidator;
     }
 
     mapping(bytes32 permissionId => mapping(address kernel => Count)) public counts;
 
-    function registerPolicy(address kernel, bytes32 permissionId, bytes calldata policyData) external payable override {
+    function registerPolicy(address kernel, bytes32 permissionId, bytes calldata policyData)
+        external
+        payable
+        override
+    {
         require(policyData.length == 16, "Invalid policy data");
         uint128 allowed = uint128(bytes16(policyData[0:16]));
         counts[permissionId][kernel].allowed = allowed;
     }
 
-    function validatePolicy(address kernel, bytes32 permissionId, UserOperation calldata userOp, bytes calldata proofAndSig)
-        external
-        payable
-        override
-        returns (ValidationData, uint256 consumedSignatureLength)
-    {
+    function validatePolicy(
+        address kernel,
+        bytes32 permissionId,
+        UserOperation calldata userOp,
+        bytes calldata proofAndSig
+    ) external payable override returns (ValidationData, uint256 consumedSignatureLength) {
         Count storage count = counts[permissionId][kernel];
         require(count.current < count.allowed, "Permission revoked");
         count.current++;
