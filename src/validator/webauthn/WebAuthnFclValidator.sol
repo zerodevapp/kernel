@@ -3,10 +3,10 @@ pragma solidity ^0.8.0;
 
 import {UserOperation} from "I4337/interfaces/UserOperation.sol";
 import {ECDSA} from "solady/utils/ECDSA.sol";
-import {IKernelValidator} from "../interfaces/IKernelValidator.sol";
-import {ValidationData} from "../common/Types.sol";
-import {SIG_VALIDATION_FAILED} from "../common/Constants.sol";
-import {WebAuthnFclVerifier} from "../utils/WebAuthnFclVerifier.sol";
+import {IKernelValidator} from "../../interfaces/IKernelValidator.sol";
+import {ValidationData} from "../../common/Types.sol";
+import {SIG_VALIDATION_FAILED} from "../../common/Constants.sol";
+import {WebAuthnFclVerifier} from "./WebAuthnFclVerifier.sol";
 
 /// @dev Storage layout for a kernel in the WebAuthnValidator contract.
 struct WebAuthnFclValidatorStorage {
