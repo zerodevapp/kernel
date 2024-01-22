@@ -15,7 +15,7 @@ contract DeployKillSwitch is Script {
         KillSwitchValidator validator;
         if (EXPECTED_ADDRESS_KILL_SWITCH_VALIDATOR.code.length == 0) {
             console.log("deploying KillSwitchValidator");
-            validator = new KillSwitchValidator{salt:0}();
+            validator = new KillSwitchValidator{salt: 0}();
             console.log("validator address: %s", address(validator));
         } else {
             validator = KillSwitchValidator(EXPECTED_ADDRESS_KILL_SWITCH_VALIDATOR);
@@ -23,7 +23,7 @@ contract DeployKillSwitch is Script {
         }
         if (EXPECTED_ADDRESS_KILL_SWITCH_ACTION.code.length == 0) {
             console.log("deploying KillSwitchAction");
-            KillSwitchAction action = new KillSwitchAction{salt:0}(validator);
+            KillSwitchAction action = new KillSwitchAction{salt: 0}(validator);
             console.log("KillSwitchAction address: %s", address(action));
         } else {
             console.log("KillSwitchAction address: %s", address(EXPECTED_ADDRESS_KILL_SWITCH_ACTION));
