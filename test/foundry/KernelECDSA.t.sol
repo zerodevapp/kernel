@@ -93,7 +93,7 @@ contract KernelECDSATest is KernelTestBase {
             )
         );
         performUserOperationWithSig(op);
-        (address owner) = ECDSAValidator(address(defaultValidator)).ecdsaValidatorStorage(address(kernel));
-        assertEq(owner, address(0), "owner should be 0");
+        (address owner_) = ECDSAValidator(address(defaultValidator)).ecdsaValidatorStorage(address(kernel));
+        assertEq(owner_, address(0), "owner should be 0");
     }
 }
