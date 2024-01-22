@@ -8,8 +8,8 @@ import "src/validator/KillSwitchValidator.sol";
 import "src/executor/KillSwitchAction.sol";
 // test utils
 import "forge-std/Test.sol";
-import "../utils/ERC4337Utils.sol";
-import {KernelTestBase} from "../KernelTestBase.sol";
+import "src/utils/ERC4337Utils.sol";
+import {KernelTestBase} from "src/utils/KernelTestBase.sol";
 import {KernelECDSATest} from "../KernelECDSA.t.sol";
 
 using ERC4337Utils for IEntryPoint;

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "src/interfaces/IKernelValidator.sol";
-import "src/common/Types.sol";
-import "src/utils/KernelHelper.sol";
-import "src/common/Constants.sol";
+import "../interfaces/IKernelValidator.sol";
+import "../common/Types.sol";
+import "../utils/KernelHelper.sol";
+import "../common/Constants.sol";
 
 contract TestValidator is IKernelValidator {
     event TestValidateUserOp(bytes32 indexed opHash);
