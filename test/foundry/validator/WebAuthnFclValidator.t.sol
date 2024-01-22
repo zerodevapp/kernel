@@ -222,6 +222,7 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
     /// @dev Ensure that our flow to generate a webauthn signature is working
     function test_webAuthnSignatureGeneration(bytes32 _hash, uint256 _privateKey) public {
         vm.assume(_privateKey > 0);
+        vm.assume(_privateKey < n);
         (uint256 pubX, uint256 pubY) = _getPublicKey(_privateKey);
 
         // Build all the data required
@@ -329,22 +330,10 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
     uint256 constant P256_N_DIV_2 = 57896044605178124381348723474703786764998477612067880171211129530534256022184;
 
     /// @dev Generate a p256 signature, from the given `_privateKey` on the given `_hash`
-    function _getP256Signature(uint256 _privateKey, bytes32 _hash) internal view returns (uint256 r, uint256 s) {
-        // Securely generate a random k value for each signature
-        uint256 k = uint256(keccak256(abi.encodePacked(_hash, block.timestamp, block.prevrandao, _privateKey))) % n;
-        while (k == 0) {
-            k = uint256(keccak256(abi.encodePacked(k))) % n;
-        }
-
+    function _getP256Signature(uint256 _privateKey, bytes32 _hash) internal view returns (uint256, uint256) {
         // Generate the signature using the k value and the private key
-        (r, s) = FCL_ecdsa_utils.ecdsa_sign(_hash, k, _privateKey);
-
-        // Ensure that s is in the lower half of the range [1, n-1]
-        if (r == 0 || s == 0 || s > P256_N_DIV_2) {
-            s = n - s; // If s is in the upper half, use n - s instead
-        }
-
-        return (r, s);
+        (bytes32 r, bytes32 s) = vm.signP256(_privateKey, _hash);
+        return (uint256(r), uint256(s));
     }
 }
 
