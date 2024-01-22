@@ -78,8 +78,8 @@ contract KernelECDSATest is KernelTestBase {
             )
         );
         performUserOperationWithSig(op);
-        (address owner) = ECDSAValidator(address(defaultValidator)).ecdsaValidatorStorage(address(kernel));
-        assertEq(owner, address(0xdeadbeef), "owner should be 0xdeadbeef");
+        (address owner_) = ECDSAValidator(address(defaultValidator)).ecdsaValidatorStorage(address(kernel));
+        assertEq(owner_, address(0xdeadbeef), "owner should be 0xdeadbeef");
     }
 
     function test_default_validator_disable() external override {
