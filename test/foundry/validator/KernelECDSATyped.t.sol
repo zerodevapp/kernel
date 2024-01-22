@@ -7,10 +7,10 @@ import "src/validator/ECDSATypedValidator.sol";
 // test artifacts
 // test utils
 import "forge-std/Test.sol";
-import {ERC4337Utils} from "../utils/ERC4337Utils.sol";
-import {KernelTestBase} from "../KernelTestBase.sol";
-import {TestExecutor} from "../mock/TestExecutor.sol";
-import {TestValidator} from "../mock/TestValidator.sol";
+import {ERC4337Utils} from "src/utils/ERC4337Utils.sol";
+import {KernelTestBase} from "src/utils/KernelTestBase.sol";
+import {TestExecutor} from "src/mock/TestExecutor.sol";
+import {TestValidator} from "src/mock/TestValidator.sol";
 import {IKernel} from "src/interfaces/IKernel.sol";
 
 using ERC4337Utils for IEntryPoint;
@@ -140,9 +140,6 @@ contract KernelECDSATypedTest is KernelTestBase {
         view
         returns (bytes memory)
     {
-        // Get the kernel private key owner address
-        address owner = vm.addr(_privateKey);
-
         // Get the validator domain separator
         bytes32 domainSeparator = ecdsaTypedValidator.getDomainSeperator();
         bytes32 typedMsgHash = keccak256(

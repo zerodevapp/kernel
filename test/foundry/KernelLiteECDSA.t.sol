@@ -7,10 +7,10 @@ import "src/lite/KernelLiteECDSA.sol";
 // test artifacts
 // test utils
 import "forge-std/Test.sol";
-import {ERC4337Utils} from "./utils/ERC4337Utils.sol";
-import {KernelTestBase} from "./KernelTestBase.sol";
-import {TestExecutor} from "./mock/TestExecutor.sol";
-import {TestValidator} from "./mock/TestValidator.sol";
+import {ERC4337Utils} from "src/utils/ERC4337Utils.sol";
+import {KernelTestBase} from "src/utils/KernelTestBase.sol";
+import {TestExecutor} from "src/mock/TestExecutor.sol";
+import {TestValidator} from "src/mock/TestValidator.sol";
 import {ECDSAValidator} from "src/validator/ECDSAValidator.sol";
 
 using ERC4337Utils for IEntryPoint;

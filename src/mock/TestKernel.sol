@@ -1,6 +1,6 @@
 pragma solidity ^0.8.0;
 
-import "src/Kernel.sol";
+import "../Kernel.sol";
 
 contract TestKernel is Kernel {
     constructor(IEntryPoint _entryPoint) Kernel(_entryPoint) {}

@@ -5,24 +5,24 @@ import {IEntryPoint} from "I4337/interfaces/IEntryPoint.sol";
 import {ENTRYPOINT_0_6_ADDRESS, ENTRYPOINT_0_6_BYTECODE} from "I4337/artifacts/EntryPoint_0_6.sol";
 import {CREATOR_0_6_BYTECODE, CREATOR_0_6_ADDRESS} from "I4337/artifacts/EntryPoint_0_6.sol";
 import {UserOperation} from "I4337/interfaces/UserOperation.sol";
-import {Kernel} from "src/Kernel.sol";
-import {Operation} from "src/common/Enums.sol";
-import {Compatibility} from "src/abstract/Compatibility.sol";
-import {IKernel} from "src/interfaces/IKernel.sol";
-import {KernelFactory} from "src/factory/KernelFactory.sol";
-import {IKernelValidator} from "src/interfaces/IKernelValidator.sol";
+import {Kernel} from "../Kernel.sol";
+import {Operation} from "../common/Enums.sol";
+import {Compatibility} from "../abstract/Compatibility.sol";
+import {IKernel} from "../interfaces/IKernel.sol";
+import {KernelFactory} from "../factory/KernelFactory.sol";
+import {IKernelValidator} from "../interfaces/IKernelValidator.sol";
 
-import {Call, ExecutionDetail} from "src/common/Structs.sol";
-import {ValidationData, ValidUntil, ValidAfter} from "src/common/Types.sol";
-import {KERNEL_VERSION, KERNEL_NAME} from "src/common/Constants.sol";
+import {Call, ExecutionDetail} from "../common/Structs.sol";
+import {ValidationData, ValidUntil, ValidAfter} from "../common/Types.sol";
+import {KERNEL_VERSION, KERNEL_NAME} from "../common/Constants.sol";
 
-import {ERC4337Utils} from "test/foundry/utils/ERC4337Utils.sol";
+import {ERC4337Utils} from "./ERC4337Utils.sol";
 import {Test} from "forge-std/Test.sol";
 import {console} from "forge-std/Console.sol";
-import {TestValidator} from "./mock/TestValidator.sol";
-import {TestExecutor} from "./mock/TestExecutor.sol";
-import {TestERC721} from "./mock/TestERC721.sol";
-import {TestERC1155} from "./mock/TestERC1155.sol";
+import {TestValidator} from "../mock/TestValidator.sol";
+import {TestExecutor} from "../mock/TestExecutor.sol";
+import {TestERC721} from "../mock/TestERC721.sol";
+import {TestERC1155} from "../mock/TestERC1155.sol";
 
 using ERC4337Utils for IEntryPoint;
 

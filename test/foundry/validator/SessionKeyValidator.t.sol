@@ -7,21 +7,21 @@ import "src/validator/ECDSAValidator.sol";
 import "src/factory/KernelFactory.sol";
 import {Call} from "src/common/Structs.sol";
 // test artifacts
-import "../mock/TestValidator.sol";
-import "../mock/TestExecutor.sol";
-import "../mock/TestERC721.sol";
-import "../mock/TestERC20.sol";
-import "../mock/TestPaymaster.sol";
+import "src/mock/TestValidator.sol";
+import "src/mock/TestExecutor.sol";
+import "src/mock/TestERC721.sol";
+import "src/mock/TestERC20.sol";
+import "src/mock/TestPaymaster.sol";
 // test utils
 import "forge-std/Test.sol";
-import "../utils/ERC4337Utils.sol";
+import "src/utils/ERC4337Utils.sol";
 import "../utils/Merkle.sol";
 // test actions/validators
 import "src/validator/SessionKeyValidator.sol";
 
 import {KernelECDSATest} from "../KernelECDSA.t.sol";
-import "../mock/TestCallee.sol";
-import "../mock/TestERC20.sol";
+import "src/mock/TestCallee.sol";
+import "src/mock/TestERC20.sol";
 
 using ERC4337Utils for IEntryPoint;
 
