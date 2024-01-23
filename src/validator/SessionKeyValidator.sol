@@ -301,7 +301,7 @@ contract SessionKeyValidator is IKernelValidator {
         return true;
     }
 
-    function validCaller(address, bytes calldata) external pure returns (bool) {
+    function validCaller(address, bytes calldata) external payable returns (bool) {
         revert NotImplemented();
     }
 

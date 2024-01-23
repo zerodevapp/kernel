@@ -79,7 +79,7 @@ contract KillSwitchValidator is IKernelValidator {
         }
     }
 
-    function validCaller(address, bytes calldata) external pure override returns (bool) {
+    function validCaller(address, bytes calldata) external payable override returns (bool) {
         revert NotImplemented();
     }
 }

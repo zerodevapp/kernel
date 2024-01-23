@@ -234,7 +234,7 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
         passed = approvals >= strg.threshold;
     }
 
-    function validCaller(address, bytes calldata) external pure override returns (bool) {
+    function validCaller(address, bytes calldata) external payable override returns (bool) {
         return false;
     }
 

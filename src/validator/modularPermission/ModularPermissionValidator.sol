@@ -162,7 +162,7 @@ contract ModularPermissionValidator is IKernelValidator {
 
     function validCaller(address caller, bytes calldata data)
         external
-        pure // TODO: this will turn non-view from 2.4
+        payable // TODO: this will turn non-view from 2.4
         override
         returns (bool)
     {
@@ -192,9 +192,9 @@ contract ModularPermissionValidator is IKernelValidator {
             bytes calldata rawMessage;
             assembly {
                 rawMessage.offset := add(signature.offset, calldataload(add(signature.offset, 32)))
-                rawMessage.length := calldataload(rawMessage.offset)
+                rawMessage.length := calldataload(sub(rawMessage.offset, 32))
                 proofAndSignature.offset := add(signature.offset, calldataload(add(signature.offset, 64)))
-                proofAndSignature.length := calldataload(proofAndSignature.offset)
+                proofAndSignature.length := calldataload(sub(proofAndSignature.offset, 32))
             }
             require(hash == keccak256(rawMessage));
         }
