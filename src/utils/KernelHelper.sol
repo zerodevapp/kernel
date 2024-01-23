@@ -13,12 +13,13 @@ function _intersectValidationData(ValidationData a, ValidationData b) pure retur
         // a == 0 || b == 0 || xor(a,b) == 0
         // invalidCase :
         // a mul b != 0 && xor(a,b) != 0
+        let sum := shl(96, add(a, b))
         switch or(
             iszero(and(xor(a, b), 0x000000000000000000000000ffffffffffffffffffffffffffffffffffffffff)),
-            or(iszero(a), iszero(b))
+            or(eq(sum, shl(96, a)), eq(sum, shl(96, b)))
         )
         case 1 {
-            validationData := and(and(a, b), 0x000000000000000000000000ffffffffffffffffffffffffffffffffffffffff)
+            validationData := and(or(a, b), 0x000000000000000000000000ffffffffffffffffffffffffffffffffffffffff)
             // validAfter
             let a_vd := and(0xffffffffffff0000000000000000000000000000000000000000000000000000, a)
             let b_vd := and(0xffffffffffff0000000000000000000000000000000000000000000000000000, b)
