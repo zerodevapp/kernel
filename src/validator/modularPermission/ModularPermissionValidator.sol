@@ -6,6 +6,7 @@ import {SIG_VALIDATION_FAILED} from "src/common/Constants.sol";
 import {IKernelValidator} from "src/interfaces/IKernelValidator.sol";
 import {ISigner} from "./ISigner.sol";
 import {IPolicy} from "./IPolicy.sol";
+import {_intersectValidationData} from "src/utils/KernelHelper.sol";
 
 // permission should handle the flag of following
 // - check if permission is allowed to sign arbitrary signature, notice this is view so this cannot guarantee if signature is used
@@ -105,20 +106,21 @@ contract ModularPermissionValidator is IKernelValidator {
     event NonceRevoked(address kernel, uint256 nonce);
 
     function getPermissionId(
-        uint256 nonce,
+        address kernel,
+        uint128 nonce,
         uint48 validAfter,
         uint48 validUntil,
         ISigner signer,
         IPolicy[] calldata _permissions,
         bytes calldata signerData,
         bytes[] calldata permissionData
-    ) external pure returns (bytes32) {
-        return keccak256(abi.encode(nonce, validAfter, validUntil, signer, _permissions, signerData, permissionData));
+    ) public pure returns (bytes32) {
+        return keccak256(abi.encode(kernel, nonce, validAfter, validUntil, signer, _permissions, signerData, permissionData));
     }
 
     function parseData(bytes calldata data)
         public
-        view
+        pure
         returns (
             uint128 nonce,
             uint48 validAfter,
@@ -166,8 +168,7 @@ contract ModularPermissionValidator is IKernelValidator {
         bytes calldata signerData,
         bytes[] calldata policyData
     ) public payable {
-        bytes32 permissionId =
-            keccak256(abi.encode(msg.sender, nonce, validAfter, validUntil, signer, policy, signerData, policyData));
+        bytes32 permissionId = getPermissionId(msg.sender, nonce, validAfter, validUntil, signer, policy, signerData, policyData);
 
         for (uint256 i = 0; i < policy.length; i++) {
             policy[i].registerPolicy(msg.sender, permissionId, policyData[i]);
@@ -220,13 +221,14 @@ contract ModularPermissionValidator is IKernelValidator {
             (ValidationData policyValidation, uint256 sigOffset) =
                 policy.validatePolicy(msg.sender, permissionId, _userOp, _userOp.signature[cursor:]);
             // DO validationdata merge
+            validationData = _intersectValidationData(validationData, policyValidation);
             policy = nextPolicy[permissionId][policy][msg.sender];
             cursor += sigOffset;
         }
         ValidationData signatureValidation =
             permission.signer.validateUserOp(msg.sender, permissionId, _userOpHash, _userOp.signature[cursor:]);
         // DO validationdata merge
-        return signatureValidation;
+        validationData = _intersectValidationData(validationData, signatureValidation);
     }
 
     function validCaller(address caller, bytes calldata data)
@@ -248,7 +250,7 @@ contract ModularPermissionValidator is IKernelValidator {
         external
         view
         override
-        returns (ValidationData)
+        returns (ValidationData validationData)
     {
         ValidationSigMemory memory sigMemory;
         sigMemory.permissionId = bytes32(signature[0:32]);
@@ -272,8 +274,9 @@ contract ModularPermissionValidator is IKernelValidator {
         sigMemory.policy = permission.firstPolicy;
         while (address(sigMemory.policy) != address(0)) {
             (ValidationData policyValidation, uint256 sigOffset) = sigMemory.policy.validateSignature(
-                msg.sender, msg.sender, sigMemory.permissionId, hash, proofAndSignature[sigMemory.cursor:]
+                msg.sender, address(bytes20(msg.data[msg.data.length - 20 :])), sigMemory.permissionId, hash, proofAndSignature[sigMemory.cursor:]
             );
+            validationData = _intersectValidationData(validationData, policyValidation);
             // DO validationdata merge
             sigMemory.policy = nextPolicy[sigMemory.permissionId][sigMemory.policy][msg.sender];
             sigMemory.cursor += sigOffset;
@@ -282,6 +285,6 @@ contract ModularPermissionValidator is IKernelValidator {
             msg.sender, sigMemory.permissionId, hash, proofAndSignature[sigMemory.cursor:]
         );
         // DO validationdata merge
-        return signatureValidation;
+        validationData = _intersectValidationData(validationData, signatureValidation);
     }
 }

@@ -375,7 +375,9 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         assembly {
             validator := shr(80, sload(KERNEL_STORAGE_SLOT_1))
         }
-        return IKernelValidator(validator).validateSignature(_hash, _signature);
+        // 20 bytes added at the end of the signature to store the address of the caller
+        (bool success, bytes memory res) = validator.staticcall(abi.encodePacked(abi.encodeWithSelector(IKernelValidator.validateSignature.selector, _hash, _signature), msg.sender));
+        return abi.decode(res, (ValidationData));
     }
 
     /// @dev Check if the given caller is valid for the given data
