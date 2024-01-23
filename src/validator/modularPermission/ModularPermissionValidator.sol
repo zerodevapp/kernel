@@ -107,6 +107,7 @@ contract ModularPermissionValidator is IKernelValidator {
         IPolicy firstPolicy = policy[0]; // NOTE : policy should not be empty array
         permissions[permissionId][msg.sender] = Permission(nonce, 1, validAfter, validUntil, signer, firstPolicy);
         for (uint256 i = 1; i < policy.length; i++) {
+            // TODO: remove infinite loop by forcing incremental address
             nextPolicy[permissionId][policy[i - 1]][msg.sender] = policy[i];
         }
         emit PermissionRegistered(msg.sender, permissionId);
@@ -185,18 +186,12 @@ contract ModularPermissionValidator is IKernelValidator {
         sigMemory.permissionId = bytes32(signature[0:32]);
         Permission memory permission = permissions[sigMemory.permissionId][msg.sender];
         // signature should be packed with
-        // (permissionId, rawMessage, [proof || signature])
+        // (permissionId, [proof || signature])
 
         bytes calldata proofAndSignature; //) = abi.decode(signature[32:], (bytes, bytes));
-        {
-            bytes calldata rawMessage;
-            assembly {
-                rawMessage.offset := add(signature.offset, calldataload(add(signature.offset, 32)))
-                rawMessage.length := calldataload(sub(rawMessage.offset, 32))
-                proofAndSignature.offset := add(signature.offset, calldataload(add(signature.offset, 64)))
-                proofAndSignature.length := calldataload(sub(proofAndSignature.offset, 32))
-            }
-            require(hash == keccak256(rawMessage));
+        assembly {
+            proofAndSignature.offset := add(signature.offset, calldataload(add(signature.offset, 32)))
+            proofAndSignature.length := calldataload(sub(proofAndSignature.offset, 32))
         }
 
         sigMemory.cursor = 0;
