@@ -93,7 +93,9 @@ Response
 }
 */
 
-contract PermissionValidator is IKernelValidator {
+import "forge-std/console.sol";
+
+contract ModularPermissionValidator is IKernelValidator {
     mapping(bytes32 permissionId => mapping(address kernel => Permission)) public permissions;
     mapping(bytes32 permissionId => mapping(IPolicy policy => mapping(address kernel => IPolicy))) public nextPolicy;
     mapping(address kernel => Nonce) public nonces;
@@ -114,22 +116,44 @@ contract PermissionValidator is IKernelValidator {
         return keccak256(abi.encode(nonce, validAfter, validUntil, signer, _permissions, signerData, permissionData));
     }
 
-    function enable(bytes calldata data) external payable {
-        uint128 nonce = uint128(bytes16(data[0:16]));
-        uint48 validAfter = uint48(bytes6(data[16:22]));
-        uint48 validUntil = uint48(bytes6(data[22:28]));
-        ISigner signer = ISigner(address(bytes20(data[28:48])));
-        IPolicy[] calldata policies;
-        bytes calldata signerData;
-        bytes[] calldata policyData;
+    function parseData(bytes calldata data)
+        public
+        view
+        returns (
+            uint128 nonce,
+            uint48 validAfter,
+            uint48 validUntil,
+            ISigner signer,
+            IPolicy[] calldata policies,
+            bytes calldata signerData,
+            bytes[] calldata policyData
+        )
+    {
+        nonce = uint128(bytes16(data[0:16]));
+        validAfter = uint48(bytes6(data[16:22]));
+        validUntil = uint48(bytes6(data[22:28]));
+        signer = ISigner(address(bytes20(data[28:48])));
         assembly {
-            policies.offset := add(data.offset, calldataload(add(data.offset, 48)))
-            policies.length := calldataload(policies.offset)
-            signerData.offset := add(data.offset, calldataload(add(data.offset, 80)))
-            signerData.length := calldataload(signerData.offset)
-            policyData.offset := add(data.offset, calldataload(add(data.offset, 112)))
-            policyData.length := calldataload(policyData.offset)
+            let offset := add(data.offset, 48)
+            policies.offset := add(add(offset, 32), calldataload(offset))
+            policies.length := calldataload(sub(policies.offset, 32))
+            signerData.offset := add(add(offset, 32), calldataload(add(offset, 32)))
+            signerData.length := calldataload(sub(signerData.offset, 32))
+            policyData.offset := add(add(offset, 32), calldataload(add(offset, 64)))
+            policyData.length := calldataload(sub(policyData.offset, 32))
         }
+    }
+
+    function enable(bytes calldata data) external payable {
+        (
+            uint128 nonce,
+            uint48 validAfter,
+            uint48 validUntil,
+            ISigner signer,
+            IPolicy[] calldata policies,
+            bytes calldata signerData,
+            bytes[] calldata policyData
+        ) = parseData(data);
         registerPermission(nonce, validAfter, validUntil, signer, policies, signerData, policyData);
     }
 
