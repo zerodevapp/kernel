@@ -9,12 +9,17 @@ function _intersectValidationData(ValidationData a, ValidationData b) pure retur
         // xor(a,b) == shows only matching bits
         // and(xor(a,b), 0x000000000000000000000000ffffffffffffffffffffffffffffffffffffffff) == filters out the validAfter and validUntil bits
         // if the result is not zero, then aggregator part is not matching
-        switch iszero(and(xor(a, b), 0x000000000000000000000000ffffffffffffffffffffffffffffffffffffffff))
+        // validCase :
+        // a == 0 || b == 0 || xor(a,b) == 0
+        // invalidCase :
+        // a mul b != 0 && xor(a,b) != 0
+        switch or(iszero(and(xor(a, b), 0x000000000000000000000000ffffffffffffffffffffffffffffffffffffffff)), or(iszero(a), iszero(b)))
         case 1 {
+            validationData := and(and(a,b), 0x000000000000000000000000ffffffffffffffffffffffffffffffffffffffff)
             // validAfter
-            let a_vd := and(0xffffffffffff000000000000ffffffffffffffffffffffffffffffffffffffff, a)
-            let b_vd := and(0xffffffffffff000000000000ffffffffffffffffffffffffffffffffffffffff, b)
-            validationData := xor(a_vd, mul(xor(a_vd, b_vd), gt(b_vd, a_vd)))
+            let a_vd := and(0xffffffffffff0000000000000000000000000000000000000000000000000000, a)
+            let b_vd := and(0xffffffffffff0000000000000000000000000000000000000000000000000000, b)
+            validationData := or(validationData, xor(a_vd, mul(xor(a_vd, b_vd), gt(b_vd, a_vd))))
             // validUntil
             a_vd := and(0x000000000000ffffffffffff0000000000000000000000000000000000000000, a)
             if iszero(a_vd) { a_vd := 0x000000000000ffffffffffff0000000000000000000000000000000000000000 }
