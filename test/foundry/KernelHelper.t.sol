@@ -36,7 +36,6 @@ contract KernelHelperTest is Test {
         ValidAfter validAfterB,
         ValidUntil validUntilB
     ) external {
-
         if (ValidUntil.unwrap(validUntilB) == 0) {
             validUntilB = ValidUntil.wrap(0xffffffffffff);
         }
@@ -47,7 +46,8 @@ contract KernelHelperTest is Test {
         ValidationData b = packValidationData(aggregatorB, validAfterB, validUntilB);
         ValidationData c = _intersectValidationData(a, b);
 
-        address expectedAggregator = aggregatorA == address(0) ? aggregatorB : aggregatorA == aggregatorB ? aggregatorA : address(1);
+        address expectedAggregator =
+            aggregatorA == address(0) ? aggregatorB : aggregatorA == aggregatorB ? aggregatorA : address(1);
         console.log("expectedAggregator", expectedAggregator);
         // a : b
         // 0 : 0 => 0

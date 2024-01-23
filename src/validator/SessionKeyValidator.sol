@@ -32,7 +32,9 @@ contract SessionKeyValidator is IKernelValidator {
     function invalidateNonce(uint128 nonce) public {
         require(nonce > nonces[msg.sender].invalidNonce, "SessionKeyValidator: invalid nonce");
         nonces[msg.sender].invalidNonce = nonce;
-        nonces[msg.sender].lastNonce = nonce;
+        if (nonces[msg.sender].lastNonce < nonce) {
+            nonces[msg.sender].lastNonce = nonce;
+        }
     }
 
     function disable(bytes calldata _data) external payable {

@@ -29,7 +29,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     /// @dev Selector of the `DisabledMode()` error, to be used in assembly, 'bytes4(keccak256(bytes("DisabledMode()")))', same as DisabledMode.selector()
     uint256 private constant _DISABLED_MODE_SELECTOR = 0xfc2f51c5;
 
-    /// @dev Current kernel name and version, todo: Need to expose getter for this variables?
+    /// @dev Current kernel name and version
     string public constant name = KERNEL_NAME;
     string public constant version = KERNEL_VERSION;
 
@@ -376,7 +376,11 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
             validator := shr(80, sload(KERNEL_STORAGE_SLOT_1))
         }
         // 20 bytes added at the end of the signature to store the address of the caller
-        (bool success, bytes memory res) = validator.staticcall(abi.encodePacked(abi.encodeWithSelector(IKernelValidator.validateSignature.selector, _hash, _signature), msg.sender));
+        (bool success, bytes memory res) = validator.staticcall(
+            abi.encodePacked(
+                abi.encodeWithSelector(IKernelValidator.validateSignature.selector, _hash, _signature), msg.sender
+            )
+        );
         return abi.decode(res, (ValidationData));
     }
 

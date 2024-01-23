@@ -11,7 +11,9 @@ contract MockSigner is ISigner {
     bytes public signerData;
 
     function mock(uint48 validAfter, uint48 validUntil, bool success) external {
-        validationData = success ? packValidationData(ValidAfter.wrap(validAfter), ValidUntil.wrap(validUntil)) : SIG_VALIDATION_FAILED;
+        validationData = success
+            ? packValidationData(ValidAfter.wrap(validAfter), ValidUntil.wrap(validUntil))
+            : SIG_VALIDATION_FAILED;
     }
 
     function registerSigner(address, bytes32, bytes calldata data) external payable override {
@@ -19,12 +21,22 @@ contract MockSigner is ISigner {
         signerData = data;
     }
 
-    function validateUserOp(address, bytes32 permissionId, bytes32, bytes calldata) external payable override returns (ValidationData) {
+    function validateUserOp(address, bytes32 permissionId, bytes32, bytes calldata)
+        external
+        payable
+        override
+        returns (ValidationData)
+    {
         count[permissionId]++;
         return validationData;
     }
 
-    function validateSignature(address, bytes32, bytes32, bytes calldata) external view override returns (ValidationData) {
+    function validateSignature(address, bytes32, bytes32, bytes calldata)
+        external
+        view
+        override
+        returns (ValidationData)
+    {
         return validationData;
     }
 }

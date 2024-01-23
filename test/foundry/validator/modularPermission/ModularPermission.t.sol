@@ -82,16 +82,7 @@ contract ModularPermissionTest is Test {
         p[0] = mockPolicy;
         bytes[] memory pd = new bytes[](1);
         pd[0] = abi.encodePacked("hello policy");
-        bytes32 permissionId = validator.getPermissionId(
-            kernel,
-            0,
-            uint48(1),
-            until,
-            mockSigner,
-            p,
-            sd,
-            pd
-        );
+        bytes32 permissionId = validator.getPermissionId(kernel, 0, uint48(1), until, mockSigner, p, sd, pd);
 
         bytes memory data = abi.encodePacked(
             abi.encodePacked(
@@ -106,14 +97,8 @@ contract ModularPermissionTest is Test {
         validator.enable(data);
         vm.stopPrank();
 
-        (
-            uint128 nonce,
-            uint128 status,
-            uint48 validAfter,
-            uint48 validUntil,
-            ISigner signer,
-            IPolicy firstPolicy
-        ) = validator.permissions(permissionId, kernel);
+        (uint128 nonce, uint128 status, uint48 validAfter, uint48 validUntil, ISigner signer, IPolicy firstPolicy) =
+            validator.permissions(permissionId, kernel);
         assertEq(nonce, uint128(0));
         assertEq(status, uint128(1));
         assertEq(validAfter, uint48(1));

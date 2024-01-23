@@ -12,7 +12,9 @@ contract MockPolicy is IPolicy {
     bytes public policyData;
 
     function mock(uint48 validAfter, uint48 validUntil, bool success, uint256 consume) external {
-        validationData = success ? packValidationData(ValidAfter.wrap(validAfter), ValidUntil.wrap(validUntil)) : SIG_VALIDATION_FAILED;
+        validationData = success
+            ? packValidationData(ValidAfter.wrap(validAfter), ValidUntil.wrap(validUntil))
+            : SIG_VALIDATION_FAILED;
     }
 
     function registerPolicy(address, bytes32, bytes calldata data) external payable override {
@@ -20,12 +22,12 @@ contract MockPolicy is IPolicy {
         policyData = data;
     }
 
-    function validatePolicy(
-        address,
-        bytes32 permissionId,
-        UserOperation calldata,
-        bytes calldata
-    ) external payable override returns (ValidationData, uint256 consumedSignatureLength) {
+    function validatePolicy(address, bytes32 permissionId, UserOperation calldata, bytes calldata)
+        external
+        payable
+        override
+        returns (ValidationData, uint256 consumedSignatureLength)
+    {
         count[permissionId]++;
         return (validationData, sigConsume);
     }

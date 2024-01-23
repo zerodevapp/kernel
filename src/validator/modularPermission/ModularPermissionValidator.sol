@@ -8,27 +8,6 @@ import {ISigner} from "./ISigner.sol";
 import {IPolicy} from "./IPolicy.sol";
 import {_intersectValidationData} from "src/utils/KernelHelper.sol";
 
-// permission should handle the flag of following
-// - check if permission is allowed to sign arbitrary signature, notice this is view so this cannot guarantee if signature is used
-// - check if permission is allowed to call function directly
-// - if aggregator address is returned from policy.validatePolicy, DO NOT invoke signer, delegate signer role to aggregator instead => CHECK is this safe???
-//   - TODO : test this is aggregator can be setup as signer
-// - if no policy is defined, should bypass policy
-// - if no signer is defined, revert
-// - if nonce is revoked, and policy is not 0, revert
-//   note that nonce revokation revokes all permissions that has lower nonce than revoked nonce
-// - if nonce is revoked, and policy is 0, do not revert, this will act as sudo permission
-//   note that permissionId revokation should be considered revoked
-// Policy should handle followings
-// - check if permission is allowed to sign userOp with/without the gas spent by user
-// - check if permission is allowed to sign given signature
-// - check if permission is allowed to call function directly
-// - return aggregator address if needed
-// Signer should handle followings
-// - check if userOpHash is signed
-// - check msgHash is signed
-// - note that checking signature prefix, checking replay attack should not be handled by signer
-//   - this remains responsibility of app / kernel
 struct Permission {
     uint128 nonce;
     uint128 status; // status == 0 => revoked, status == 1 => active
@@ -42,59 +21,6 @@ struct Nonce {
     uint128 latest;
     uint128 revoked;
 }
-
-/*
-eth_requestPermissions
-Request
-{
-    "type": "call",
-    "data" : [{
-        "to": "<address to call>",
-        "amount": "<amount of ether to send>",
-        "data" : "<data to send>",
-    }],
-    "gas" : "sponsored | not sponsored | max priority fee limit, preVerificationGas limit"
-    "validUntil" : "<timestamp>",
-    "validAfter" : "<timestamp>",
-    "signer" : {
-        "address" : "<signer contract address>",
-        "data" : "<signer initialization data>"
-    }
-}
-{
-    "type" : "erc20",
-    "data" : [{
-        "amount" : "<amount of token to allow>",
-    }]
-    "gas" : "sponsored | not sponsored | max priority fee limit, preVerificationGas limit"
-    "validUntil" : "<timestamp>",
-    "validAfter" : "<timestamp>",
-    "signer" : {
-        "address" : "<signer contract address>",
-        "data" : "<signer initialization data>"
-    }
-}
-Response
-{
-    "permissionId": "<permissionId>",
-    "nonce": "<nonce>",
-    "validAfter": "<validAfter>",
-    "validUntil": "<validUntil>",
-
-}
-eth_requestPolicyProof
-Request
-{
-    "permissionId": "<permissionId>",
-    "userOperation": "<userOperation>",
-}
-Response
-{
-    "proof": "<proof>"
-}
-*/
-
-import "forge-std/console.sol";
 
 contract ModularPermissionValidator is IKernelValidator {
     mapping(bytes32 permissionId => mapping(address kernel => Permission)) public permissions;
@@ -115,7 +41,9 @@ contract ModularPermissionValidator is IKernelValidator {
         bytes calldata signerData,
         bytes[] calldata permissionData
     ) public pure returns (bytes32) {
-        return keccak256(abi.encode(kernel, nonce, validAfter, validUntil, signer, _permissions, signerData, permissionData));
+        return keccak256(
+            abi.encode(kernel, nonce, validAfter, validUntil, signer, _permissions, signerData, permissionData)
+        );
     }
 
     function parseData(bytes calldata data)
@@ -168,7 +96,8 @@ contract ModularPermissionValidator is IKernelValidator {
         bytes calldata signerData,
         bytes[] calldata policyData
     ) public payable {
-        bytes32 permissionId = getPermissionId(msg.sender, nonce, validAfter, validUntil, signer, policy, signerData, policyData);
+        bytes32 permissionId =
+            getPermissionId(msg.sender, nonce, validAfter, validUntil, signer, policy, signerData, policyData);
 
         for (uint256 i = 0; i < policy.length; i++) {
             policy[i].registerPolicy(msg.sender, permissionId, policyData[i]);
@@ -274,7 +203,11 @@ contract ModularPermissionValidator is IKernelValidator {
         sigMemory.policy = permission.firstPolicy;
         while (address(sigMemory.policy) != address(0)) {
             (ValidationData policyValidation, uint256 sigOffset) = sigMemory.policy.validateSignature(
-                msg.sender, address(bytes20(msg.data[msg.data.length - 20 :])), sigMemory.permissionId, hash, proofAndSignature[sigMemory.cursor:]
+                msg.sender,
+                address(bytes20(msg.data[msg.data.length - 20:])),
+                sigMemory.permissionId,
+                hash,
+                proofAndSignature[sigMemory.cursor:]
             );
             validationData = _intersectValidationData(validationData, policyValidation);
             // DO validationdata merge

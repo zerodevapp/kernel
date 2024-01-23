@@ -20,4 +20,3 @@ interface IPolicy {
         bytes calldata signature
     ) external view returns (ValidationData, uint256 consumedSignatureLength);
 }
-

@@ -12,9 +12,13 @@ function packValidationData(ValidAfter validAfter, ValidUntil validUntil) pure r
     );
 }
 
-function packValidationData(address aggregator, ValidAfter validAfter, ValidUntil validUntil) pure returns (ValidationData) {
+function packValidationData(address aggregator, ValidAfter validAfter, ValidUntil validUntil)
+    pure
+    returns (ValidationData)
+{
     return ValidationData.wrap(
-        uint256(ValidAfter.unwrap(validAfter)) << 208 | uint256(ValidUntil.unwrap(validUntil)) << 160 | uint160(aggregator)
+        uint256(ValidAfter.unwrap(validAfter)) << 208 | uint256(ValidUntil.unwrap(validUntil)) << 160
+            | uint160(aggregator)
     );
 }
 
