@@ -323,7 +323,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
 
     /// @dev Check if the current caller is authorized or no to perform the call
     /// @return True if the caller is authorized, otherwise false
-    function _checkCaller() internal view returns (bool) {
+    function _checkCaller() internal returns (bool) {
         if (_validCaller(msg.sender, msg.data)) {
             return true;
         }
@@ -388,7 +388,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     /// @param _caller The caller to be checked
     /// @param _data The data to be checked
     /// @return True if the caller is valid, otherwise false
-    function _validCaller(address _caller, bytes calldata _data) internal view virtual returns (bool) {
+    function _validCaller(address _caller, bytes calldata _data) internal virtual returns (bool) {
         address validator;
         assembly {
             // Load the validator from the storage slot

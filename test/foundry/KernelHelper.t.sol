@@ -46,8 +46,9 @@ contract KernelHelperTest is Test {
         ValidationData b = packValidationData(aggregatorB, validAfterB, validUntilB);
         ValidationData c = _intersectValidationData(a, b);
 
-        address expectedAggregator =
-            aggregatorA == address(0) ? aggregatorB : aggregatorA == aggregatorB ? aggregatorA : address(1);
+        address expectedAggregator = aggregatorA == address(0)
+            ? aggregatorB
+            : aggregatorA == aggregatorB || aggregatorB == address(0) ? aggregatorA : address(1);
         console.log("expectedAggregator", expectedAggregator);
         // a : b
         // 0 : 0 => 0
