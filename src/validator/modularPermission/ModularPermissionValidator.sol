@@ -21,6 +21,9 @@ struct Nonce {
     uint128 latest;
     uint128 revoked;
 }
+/// @title ModularPermissionValidator
+/// @notice ModularPermissionValidator is a Kernel validator that allows to register and revoke permissions
+/// @dev modular architecture to allow composable permission system
 
 contract ModularPermissionValidator is IKernelValidator {
     mapping(bytes32 permissionId => mapping(address kernel => Permission)) public permissions;
@@ -187,7 +190,6 @@ contract ModularPermissionValidator is IKernelValidator {
         Permission memory permission = permissions[sigMemory.permissionId][msg.sender];
         // signature should be packed with
         // (permissionId, [proof || signature])
-
         bytes calldata proofAndSignature; //) = abi.decode(signature[32:], (bytes, bytes));
         assembly {
             proofAndSignature.offset := add(signature.offset, calldataload(add(signature.offset, 32)))
