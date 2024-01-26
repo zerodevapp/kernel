@@ -244,11 +244,11 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
             return SIG_VALIDATION_FAILED;
         }
 
-        uint256 totalWeight = strg.totalWeight;
         uint256 sigCount = signature.length / 65;
         if (sigCount == 0) {
             return SIG_VALIDATION_FAILED;
         }
+        uint256 totalWeight = 0;
         address signer;
         for (uint256 i = 0; i < sigCount; i++) {
             signer = ECDSA.recover(
