@@ -1,6 +1,6 @@
 pragma solidity ^0.8.0;
 
-import "./IPolicy.sol";
+import "../IPolicy.sol";
 
 struct ExecutionConfig {
     uint48 interval;
@@ -26,24 +26,24 @@ contract ExecutePolicy is IPolicy {
         external
         payable
         override
-        returns (ValidationData, uint256)
+        returns (ValidationData)
     {
         ExecutionConfig memory config = executionConfigs[permissionId][kernel];
         if (config.count == 0) {
-            return (SIG_VALIDATION_FAILED, 0);
+            return SIG_VALIDATION_FAILED;
         }
         executionConfigs[permissionId][kernel].count = config.count - 1;
         executionConfigs[permissionId][kernel].startAt =
             ValidAfter.wrap(ValidAfter.unwrap(config.startAt) + config.interval);
-        return (packValidationData(config.startAt, ValidUntil.wrap(0)), 0);
+        return packValidationData(config.startAt, ValidUntil.wrap(0));
     }
 
     function validateSignature(address, address, bytes32, bytes32, bytes calldata)
         external
         view
         override
-        returns (ValidationData, uint256)
+        returns (ValidationData)
     {
-        return (ValidationData.wrap(0), 0);
+        return ValidationData.wrap(0);
     }
 }

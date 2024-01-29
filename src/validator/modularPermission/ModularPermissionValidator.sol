@@ -1,7 +1,7 @@
 pragma solidity ^0.8.0;
 
 import {UserOperation} from "I4337/interfaces/UserOperation.sol";
-import {ValidationData} from "src/common/Types.sol";
+import {ValidationData, ValidAfter, ValidUntil} from "src/common/Types.sol";
 import {SIG_VALIDATION_FAILED} from "src/common/Constants.sol";
 import {IKernelValidator} from "src/interfaces/IKernelValidator.sol";
 import {ISigner} from "./ISigner.sol";
@@ -10,24 +10,78 @@ import {_intersectValidationData} from "src/utils/KernelHelper.sol";
 
 struct Permission {
     uint128 nonce;
-    uint128 status; // status == 0 => revoked, status == 1 => active
-    uint48 validAfter;
-    uint48 validUntil;
+    bytes12 flag; // flag represents what permission can do
     ISigner signer;
-    IPolicy firstPolicy;
+    PolicyConfig firstPolicy;
+    ValidAfter validAfter;
+    ValidUntil validUntil;
 }
 
 struct Nonce {
     uint128 latest;
     uint128 revoked;
 }
-/// @title ModularPermissionValidator
-/// @notice ModularPermissionValidator is a Kernel validator that allows to register and revoke permissions
-/// @dev modular architecture to allow composable permission system
 
+type PolicyConfig is bytes32;
+
+// PolicyData is a 32 bytes array that contains the address of the policy
+// [flags(12 bytes), address(20 bytes)]
+// flags is 96 bits that contains the following information
+// from last to first bit
+// 1 bit : not for validatUserOp
+// 1 bit : not for validateSignature
+// 1 bit : not for validateCaller
+library PolicyConfigLib {
+    function pack(IPolicy addr, bytes12 flag) internal pure returns (PolicyConfig data) {
+        assembly {
+            data := or(addr, shl(160, flag))
+        }
+    }
+
+    function getAddress(PolicyConfig data) internal pure returns (IPolicy policy) {
+        assembly {
+            policy := and(data, 0xffffffffffffffffffffffffffffffffffffffff)
+        }
+    }
+
+    function getFlags(PolicyConfig data) internal pure returns (bytes12 flags) {
+        assembly {
+            flags := shr(160, data)
+        }
+    }
+
+    function skipOnValidateUserOp(PolicyConfig data) internal pure returns (bool result) {
+        assembly {
+            let flags := shr(160, data)
+            let mask := 0x1
+            result := and(flags, mask)
+        }
+    }
+
+    function skipOnValidateSignature(PolicyConfig data) internal pure returns (bool result) {
+        assembly {
+            let flags := shr(161, data)
+            let mask := 0x1
+            result := and(flags, mask)
+        }
+    }
+
+    function skipOnValidateCaller(PolicyConfig data) internal pure returns (bool result) {
+        assembly {
+            let flags := shr(162, data)
+            let mask := 0x1
+            result := and(flags, mask)
+        }
+    }
+}
+
+/// @title ModularPermissionValidator
+/// @notice Validator that allows to register and revoke permissions
+/// @dev modular architecture to allow composable permission system
 contract ModularPermissionValidator is IKernelValidator {
     mapping(bytes32 permissionId => mapping(address kernel => Permission)) public permissions;
-    mapping(bytes32 permissionId => mapping(IPolicy policy => mapping(address kernel => IPolicy))) public nextPolicy;
+    mapping(bytes32 permissionId => mapping(PolicyConfig policy => mapping(address kernel => PolicyConfig))) public
+        nextPolicy;
     mapping(address kernel => Nonce) public nonces;
 
     event PermissionRegistered(address kernel, bytes32 permissionId);
@@ -37,15 +91,26 @@ contract ModularPermissionValidator is IKernelValidator {
     function getPermissionId(
         address kernel,
         uint128 nonce,
-        uint48 validAfter,
-        uint48 validUntil,
+        bytes12 flag,
         ISigner signer,
-        IPolicy[] calldata _permissions,
+        ValidAfter validAfter,
+        ValidUntil validUntil,
+        PolicyConfig[] calldata _policyConfig,
         bytes calldata signerData,
-        bytes[] calldata permissionData
+        bytes[] calldata policyData
     ) public pure returns (bytes32) {
         return keccak256(
-            abi.encode(kernel, nonce, validAfter, validUntil, signer, _permissions, signerData, permissionData)
+            abi.encode(
+                kernel,
+                nonce,
+                flag,
+                signer,
+                ValidAfter.unwrap(validAfter),
+                ValidUntil.unwrap(validUntil),
+                _policyConfig,
+                signerData,
+                policyData
+            )
         );
     }
 
@@ -54,20 +119,22 @@ contract ModularPermissionValidator is IKernelValidator {
         pure
         returns (
             uint128 nonce,
-            uint48 validAfter,
-            uint48 validUntil,
+            bytes12 flag,
             ISigner signer,
-            IPolicy[] calldata policies,
+            ValidAfter validAfter,
+            ValidUntil validUntil,
+            PolicyConfig[] calldata policies,
             bytes calldata signerData,
             bytes[] calldata policyData
         )
     {
         nonce = uint128(bytes16(data[0:16]));
-        validAfter = uint48(bytes6(data[16:22]));
-        validUntil = uint48(bytes6(data[22:28]));
-        signer = ISigner(address(bytes20(data[28:48])));
+        flag = bytes12(data[16:28]);
+        validAfter = ValidAfter.wrap(uint48(bytes6(data[28:34])));
+        validUntil = ValidUntil.wrap(uint48(bytes6(data[34:40])));
+        signer = ISigner(address(bytes20(data[40:60])));
         assembly {
-            let offset := add(data.offset, 48)
+            let offset := add(data.offset, 60)
             policies.offset := add(add(offset, 32), calldataload(offset))
             policies.length := calldataload(sub(policies.offset, 32))
             signerData.offset := add(add(offset, 32), calldataload(add(offset, 32)))
@@ -80,37 +147,39 @@ contract ModularPermissionValidator is IKernelValidator {
     function enable(bytes calldata data) external payable {
         (
             uint128 nonce,
-            uint48 validAfter,
-            uint48 validUntil,
+            bytes12 flag,
             ISigner signer,
-            IPolicy[] calldata policies,
+            ValidAfter validAfter,
+            ValidUntil validUntil,
+            PolicyConfig[] calldata policies,
             bytes calldata signerData,
             bytes[] calldata policyData
         ) = parseData(data);
-        registerPermission(nonce, validAfter, validUntil, signer, policies, signerData, policyData);
+        registerPermission(nonce, flag, signer, validAfter, validUntil, policies, signerData, policyData);
     }
 
     function registerPermission(
         uint128 nonce,
-        uint48 validAfter,
-        uint48 validUntil,
+        bytes12 flag,
         ISigner signer,
-        IPolicy[] calldata policy,
+        ValidAfter validAfter,
+        ValidUntil validUntil,
+        PolicyConfig[] calldata policy,
         bytes calldata signerData,
         bytes[] calldata policyData
     ) public payable {
+        require(flag != bytes12(0), "flag should not be empty");
         bytes32 permissionId =
-            getPermissionId(msg.sender, nonce, validAfter, validUntil, signer, policy, signerData, policyData);
+            getPermissionId(msg.sender, nonce, flag, signer, validAfter, validUntil, policy, signerData, policyData);
 
         for (uint256 i = 0; i < policy.length; i++) {
-            policy[i].registerPolicy(msg.sender, permissionId, policyData[i]);
+            PolicyConfigLib.getAddress(policy[i]).registerPolicy(msg.sender, permissionId, policyData[i]);
         }
         signer.registerSigner(msg.sender, permissionId, signerData);
 
-        IPolicy firstPolicy = policy[0]; // NOTE : policy should not be empty array
-        permissions[permissionId][msg.sender] = Permission(nonce, 1, validAfter, validUntil, signer, firstPolicy);
+        PolicyConfig firstPolicy = policy[0]; // NOTE : policy should not be empty array
+        permissions[permissionId][msg.sender] = Permission(nonce, flag, signer, firstPolicy, validAfter, validUntil);
         for (uint256 i = 1; i < policy.length; i++) {
-            // TODO: remove infinite loop by forcing incremental address
             nextPolicy[permissionId][policy[i - 1]][msg.sender] = policy[i];
         }
         emit PermissionRegistered(msg.sender, permissionId);
@@ -125,7 +194,7 @@ contract ModularPermissionValidator is IKernelValidator {
     }
 
     function revokePermission(bytes32 permissionId) public payable {
-        permissions[permissionId][msg.sender].status = 0;
+        permissions[permissionId][msg.sender].flag = bytes12(0); // NOTE: making flag == 0 makes it invalid
         emit PermissionRevoked(msg.sender, permissionId);
     }
 
@@ -142,41 +211,52 @@ contract ModularPermissionValidator is IKernelValidator {
         require(_userOp.sender == msg.sender, "sender must be msg.sender");
         bytes32 permissionId = bytes32(_userOp.signature[0:32]);
         if (
-            address(permissions[permissionId][msg.sender].firstPolicy) != address(0)
+            address(PolicyConfigLib.getAddress(permissions[permissionId][msg.sender].firstPolicy)) != address(0)
                 && permissions[permissionId][msg.sender].nonce < nonces[msg.sender].revoked
         ) {
             return SIG_VALIDATION_FAILED;
         }
         Permission memory permission = permissions[permissionId][msg.sender];
-        IPolicy policy = permission.firstPolicy;
+        PolicyConfig policy = permission.firstPolicy;
         uint256 cursor = 32;
-        while (address(policy) != address(0)) {
-            (ValidationData policyValidation, uint256 sigOffset) =
-                policy.validatePolicy(msg.sender, permissionId, _userOp, _userOp.signature[cursor:]);
-            // DO validationdata merge
+        while (address(PolicyConfigLib.getAddress(policy)) != address(0)) {
+            if (PolicyConfigLib.skipOnValidateUserOp(policy)) {
+                policy = nextPolicy[permissionId][policy][msg.sender];
+                continue;
+            }
+            bytes calldata policyData;
+            if (
+                _userOp.signature.length >= cursor + 52
+                    && address(bytes20(_userOp.signature[cursor:cursor + 20]))
+                        == address(PolicyConfigLib.getAddress(policy))
+            ) {
+                // only when policy address is same as the one in signature
+                uint256 length = uint256(bytes32(_userOp.signature[cursor + 20:cursor + 52]));
+                require(_userOp.signature.length >= cursor + 52 + length, "policyData length exceeds signature length");
+                policyData = _userOp.signature[cursor + 52:cursor + 52 + length]; // [policyAddress, policyDataLength, policyData]
+                cursor += 52 + length;
+            } else {
+                policyData = _userOp.signature[cursor:cursor];
+            }
+            ValidationData policyValidation =
+                PolicyConfigLib.getAddress(policy).validatePolicy(msg.sender, permissionId, _userOp, policyData);
             validationData = _intersectValidationData(validationData, policyValidation);
             policy = nextPolicy[permissionId][policy][msg.sender];
-            cursor += sigOffset;
         }
         ValidationData signatureValidation =
             permission.signer.validateUserOp(msg.sender, permissionId, _userOpHash, _userOp.signature[cursor:]);
-        // DO validationdata merge
         validationData = _intersectValidationData(validationData, signatureValidation);
     }
 
-    function validCaller(address caller, bytes calldata data)
-        external
-        payable // TODO: this will turn non-view from 2.4
-        override
-        returns (bool)
-    {
+    function validCaller(address caller, bytes calldata data) external payable override returns (bool) {
         revert("not implemented");
     }
 
     struct ValidationSigMemory {
+        address caller;
         bytes32 permissionId;
         uint256 cursor;
-        IPolicy policy;
+        PolicyConfig policy;
     }
 
     function validateSignature(bytes32 hash, bytes calldata signature)
@@ -190,6 +270,7 @@ contract ModularPermissionValidator is IKernelValidator {
         Permission memory permission = permissions[sigMemory.permissionId][msg.sender];
         // signature should be packed with
         // (permissionId, [proof || signature])
+        // (permissionId, [ (policyAddress) + (policyProof) || signature]
         bytes calldata proofAndSignature; //) = abi.decode(signature[32:], (bytes, bytes));
         assembly {
             proofAndSignature.offset := add(signature.offset, calldataload(add(signature.offset, 32)))
@@ -198,23 +279,34 @@ contract ModularPermissionValidator is IKernelValidator {
 
         sigMemory.cursor = 0;
         sigMemory.policy = permission.firstPolicy;
-        while (address(sigMemory.policy) != address(0)) {
-            (ValidationData policyValidation, uint256 sigOffset) = sigMemory.policy.validateSignature(
-                msg.sender,
-                address(bytes20(msg.data[msg.data.length - 20:])),
-                sigMemory.permissionId,
-                hash,
-                proofAndSignature[sigMemory.cursor:]
+        sigMemory.caller = address(bytes20(msg.data[msg.data.length - 20:]));
+        while (address(PolicyConfigLib.getAddress(sigMemory.policy)) != address(0)) {
+            if (PolicyConfigLib.skipOnValidateSignature(sigMemory.policy)) {
+                sigMemory.policy = nextPolicy[sigMemory.permissionId][sigMemory.policy][msg.sender];
+                continue;
+            }
+            bytes calldata policyData;
+            if (
+                address(bytes20(proofAndSignature[sigMemory.cursor:sigMemory.cursor + 20]))
+                    == address(PolicyConfigLib.getAddress(sigMemory.policy))
+            ) {
+                // only when policy address is same as the one in signature
+                uint256 length = uint256(bytes32(proofAndSignature[sigMemory.cursor + 20:sigMemory.cursor + 52]));
+                policyData = proofAndSignature[sigMemory.cursor + 52:]; // [policyAddress, policyDataLength, policyData]
+                sigMemory.cursor += 52 + length;
+            } else {
+                policyData = proofAndSignature[sigMemory.cursor:sigMemory.cursor];
+                // not move cursor here
+            }
+            ValidationData policyValidation = PolicyConfigLib.getAddress(sigMemory.policy).validateSignature(
+                msg.sender, sigMemory.caller, sigMemory.permissionId, hash, policyData
             );
             validationData = _intersectValidationData(validationData, policyValidation);
-            // DO validationdata merge
             sigMemory.policy = nextPolicy[sigMemory.permissionId][sigMemory.policy][msg.sender];
-            sigMemory.cursor += sigOffset;
         }
         ValidationData signatureValidation = permission.signer.validateSignature(
             msg.sender, sigMemory.permissionId, hash, proofAndSignature[sigMemory.cursor:]
         );
-        // DO validationdata merge
         validationData = _intersectValidationData(validationData, signatureValidation);
     }
 }

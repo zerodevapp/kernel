@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 import {UserOperation} from "I4337/interfaces/UserOperation.sol";
 import {ValidationData, ValidUntil, ValidAfter, packValidationData} from "src/common/Types.sol";
 import {SIG_VALIDATION_FAILED} from "src/common/Constants.sol";
-import {IPolicy} from "./IPolicy.sol";
+import {IPolicy} from "../IPolicy.sol";
 
 contract GasPolicy is IPolicy {
     struct GasPolicyConfig {
@@ -23,7 +23,7 @@ contract GasPolicy is IPolicy {
         external
         payable
         override
-        returns (ValidationData, uint256 consumedSignatureLength)
+        returns (ValidationData)
     {
         uint128 maxAmount = uint128(
             (userOp.preVerificationGas + userOp.verificationGasLimit + userOp.callGasLimit) * userOp.maxFeePerGas
@@ -34,14 +34,14 @@ contract GasPolicy is IPolicy {
                     && address(bytes20(userOp.paymasterAndData[0:20]))
                         != gasPolicyConfig[permissionId][kernel].allowedPaymaster
             ) {
-                return (SIG_VALIDATION_FAILED, 0);
+                return SIG_VALIDATION_FAILED;
             }
         }
         if (maxAmount > gasPolicyConfig[permissionId][kernel].allowed) {
-            return (SIG_VALIDATION_FAILED, 0);
+            return SIG_VALIDATION_FAILED;
         }
         gasPolicyConfig[permissionId][kernel].allowed -= maxAmount;
-        return (ValidationData.wrap(0), 0);
+        return ValidationData.wrap(0);
     }
 
     function validateSignature(
@@ -50,7 +50,7 @@ contract GasPolicy is IPolicy {
         bytes32 permissionId,
         bytes32 messageHash,
         bytes calldata signature
-    ) external view override returns (ValidationData, uint256 consumedSignatureLength) {
-        return (ValidationData.wrap(0), 0);
+    ) external view override returns (ValidationData) {
+        return ValidationData.wrap(0);
     }
 }

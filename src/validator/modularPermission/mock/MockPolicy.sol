@@ -26,10 +26,10 @@ contract MockPolicy is IPolicy {
         external
         payable
         override
-        returns (ValidationData, uint256 consumedSignatureLength)
+        returns (ValidationData)
     {
         count[permissionId]++;
-        return (validationData, sigConsume);
+        return validationData;
     }
 
     function validateSignature(
@@ -38,7 +38,7 @@ contract MockPolicy is IPolicy {
         bytes32 permissionId,
         bytes32 messageHash,
         bytes calldata signature
-    ) external view override returns (ValidationData, uint256 consumedSignatureLength) {
-        return (validationData, sigConsume);
+    ) external view override returns (ValidationData) {
+        return validationData;
     }
 }

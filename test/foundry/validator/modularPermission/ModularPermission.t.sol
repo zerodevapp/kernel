@@ -20,15 +20,16 @@ contract ModularPermissionTest is Test {
     function testParseData() external {
         uint48 until = uint48(block.timestamp + 100);
         bytes memory sd = abi.encodePacked("hello world");
-        address[] memory p = new address[](2);
-        p[0] = address(0xdeadbeef);
-        p[1] = address(0xcafecafe);
+        PolicyConfig[] memory p = new PolicyConfig[](2);
+        p[0] = PolicyConfigLib.pack(IPolicy(address(0xdeadbeef)), toFlag(0));
+        p[1] = PolicyConfigLib.pack(IPolicy(address(0xcafecafe)), toFlag(0));
         bytes[] memory pd = new bytes[](2);
         pd[0] = abi.encodePacked("policy data 1");
         pd[1] = abi.encodePacked("policy data 2");
         bytes memory data = abi.encodePacked(
             abi.encodePacked(
                 uint128(0), // nonce
+                toFlag(1),
                 uint48(1), //`validAfter
                 until, // validUntil
                 address(0xdead)
@@ -37,19 +38,21 @@ contract ModularPermissionTest is Test {
         );
         (
             uint128 nonce,
-            uint48 validAfter,
-            uint48 validUntil,
+            bytes12 flag,
             ISigner signer,
-            IPolicy[] memory policies,
+            ValidAfter validAfter,
+            ValidUntil validUntil,
+            PolicyConfig[] memory policies,
             bytes memory signerData,
             bytes[] memory policyData
         ) = validator.parseData(data);
         assertEq(nonce, uint128(0));
-        assertEq(validAfter, uint48(1));
-        assertEq(validUntil, until);
+        assertEq(flag, toFlag(1));
+        assertEq(ValidAfter.unwrap(validAfter), uint48(1));
+        assertEq(ValidUntil.unwrap(validUntil), until);
         assertEq(address(signer), address(0xdead));
-        assertEq(address(policies[0]), address(0xdeadbeef));
-        assertEq(address(policies[1]), address(0xcafecafe));
+        assertEq(address(PolicyConfigLib.getAddress(policies[0])), address(0xdeadbeef));
+        assertEq(address(PolicyConfigLib.getAddress(policies[1])), address(0xcafecafe));
         assertEq(signerData, abi.encodePacked("hello world"));
         assertEq(policyData[0], abi.encodePacked("policy data 1"));
         assertEq(policyData[1], abi.encodePacked("policy data 2"));
@@ -58,13 +61,14 @@ contract ModularPermissionTest is Test {
     function testRegister() external {
         uint48 until = uint48(block.timestamp + 100);
         bytes memory sd = abi.encodePacked("hello signer");
-        address[] memory p = new address[](1);
-        p[0] = address(mockPolicy);
+        PolicyConfig[] memory p = new PolicyConfig[](1);
+        p[0] = PolicyConfigLib.pack(IPolicy(address(mockPolicy)), toFlag(0));
         bytes[] memory pd = new bytes[](1);
         pd[0] = abi.encodePacked("hello policy");
         bytes memory data = abi.encodePacked(
             abi.encodePacked(
                 uint128(0), // nonce
+                toFlag(1), //flag
                 uint48(1), //`validAfter
                 until, // validUntil
                 address(mockSigner)
@@ -76,17 +80,28 @@ contract ModularPermissionTest is Test {
 
     function testValidateUserOp() external {
         address kernel = makeAddr("Kernel");
-        uint48 until = uint48(block.timestamp + 100);
+        ValidUntil until = ValidUntil.wrap(uint48(block.timestamp + 100));
         bytes memory sd = abi.encodePacked("hello signer");
-        IPolicy[] memory p = new IPolicy[](1);
-        p[0] = mockPolicy;
+        PolicyConfig[] memory p = new PolicyConfig[](1);
+        p[0] = PolicyConfigLib.pack(mockPolicy, toFlag(0));
         bytes[] memory pd = new bytes[](1);
         pd[0] = abi.encodePacked("hello policy");
-        bytes32 permissionId = validator.getPermissionId(kernel, 0, uint48(1), until, mockSigner, p, sd, pd);
+        bytes32 permissionId = validator.getPermissionId(
+            kernel,
+            0,
+            toFlag(1), // flag
+            mockSigner,
+            ValidAfter.wrap(1),
+            until,
+            p,
+            sd,
+            pd
+        );
 
         bytes memory data = abi.encodePacked(
             abi.encodePacked(
                 uint128(0), // nonce
+                toFlag(1), //flag
                 uint48(1), //`validAfter
                 until, // validUntil
                 address(mockSigner)
@@ -97,14 +112,20 @@ contract ModularPermissionTest is Test {
         validator.enable(data);
         vm.stopPrank();
 
-        (uint128 nonce, uint128 status, uint48 validAfter, uint48 validUntil, ISigner signer, IPolicy firstPolicy) =
-            validator.permissions(permissionId, kernel);
+        (
+            uint128 nonce,
+            bytes12 flag,
+            ISigner signer,
+            PolicyConfig firstPolicy,
+            ValidAfter validAfter,
+            ValidUntil validUntil
+        ) = validator.permissions(permissionId, kernel);
         assertEq(nonce, uint128(0));
-        assertEq(status, uint128(1));
-        assertEq(validAfter, uint48(1));
-        assertEq(validUntil, until);
+        assertEq(flag, toFlag(1));
+        assertEq(ValidAfter.unwrap(validAfter), uint48(1));
+        assertEq(ValidUntil.unwrap(validUntil), ValidUntil.unwrap(until));
         assertEq(address(signer), address(mockSigner));
-        assertEq(address(firstPolicy), address(mockPolicy));
+        assertEq(address(PolicyConfigLib.getAddress(firstPolicy)), address(mockPolicy));
 
         assertEq(mockSigner.signerData(), sd);
         assertEq(mockPolicy.policyData(), pd[0]);
@@ -118,4 +139,8 @@ contract ModularPermissionTest is Test {
         assertEq(mockSigner.count(permissionId), 1);
         assertEq(mockPolicy.count(permissionId), 1);
     }
+}
+
+function toFlag(uint256 x) returns (bytes12) {
+    return bytes12(bytes32(x << 160));
 }

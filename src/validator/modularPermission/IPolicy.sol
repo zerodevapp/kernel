@@ -11,12 +11,12 @@ interface IPolicy {
         bytes32 permissionId,
         UserOperation calldata userOp,
         bytes calldata proofAndSig
-    ) external payable returns (ValidationData, uint256 consumedSignatureLength);
+    ) external payable returns (ValidationData);
     function validateSignature(
         address kernel,
         address caller,
         bytes32 permissionId,
         bytes32 messageHash,
         bytes calldata signature
-    ) external view returns (ValidationData, uint256 consumedSignatureLength);
+    ) external view returns (ValidationData);
 }

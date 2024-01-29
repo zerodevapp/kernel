@@ -2,7 +2,7 @@
 src = 'src'
 out = 'out'
 libs = ['lib']
-solc_version = '0.8.21'
+solc_version = '0.8.24'
 evm_version = 'paris'
 bytecode_hash = "none"
 cbor_metadata = false
