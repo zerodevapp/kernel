@@ -238,7 +238,25 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
         return false;
     }
 
-    function validateSignature(bytes32, bytes calldata) external pure returns (ValidationData) {
+    function validateSignature(bytes32 hash, bytes calldata signature) external view returns (ValidationData) {
+        WeightedECDSAValidatorStorage storage strg = weightedStorage[msg.sender];
+        if (strg.threshold == 0) {
+            return SIG_VALIDATION_FAILED;
+        }
+
+        uint256 sigCount = signature.length / 65;
+        if (sigCount == 0) {
+            return SIG_VALIDATION_FAILED;
+        }
+        uint256 totalWeight = 0;
+        address signer;
+        for (uint256 i = 0; i < sigCount; i++) {
+            signer = ECDSA.recover(hash, signature[i * 65:(i + 1) * 65]);
+            totalWeight += guardian[signer][msg.sender].weight;
+            if (totalWeight >= strg.threshold) {
+                return packValidationData(ValidAfter.wrap(0), ValidUntil.wrap(0));
+            }
+        }
         return SIG_VALIDATION_FAILED;
     }
 }
