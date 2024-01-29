@@ -381,6 +381,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
                 abi.encodeWithSelector(IKernelValidator.validateSignature.selector, _hash, _signature), msg.sender
             )
         );
+        require(success, "Kernel::_validateSignature: failed to validate signature");
         return abi.decode(res, (ValidationData));
     }
 
