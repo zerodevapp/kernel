@@ -70,12 +70,14 @@ library WebAuthnFclVerifier {
                 )
 
                 // Check that the challenge extracted from the clientData is the same as the one provided in the userOp
-                if iszero(eq(
-                    // Hash of the challenge exracted from the `clientData`
-                    keccak256(add(challengeExtracted, 32), mload(challengeExtracted)), 
-                    // Hash of the provided challenge, encoded in Base64Url (to match the clientData encoding)
-                    keccak256(add(challengeEncoded, 32), mload(challengeEncoded))
-                )) {
+                if iszero(
+                    eq(
+                        // Hash of the challenge exracted from the `clientData`
+                        keccak256(add(challengeExtracted, 32), mload(challengeExtracted)),
+                        // Hash of the provided challenge, encoded in Base64Url (to match the clientData encoding)
+                        keccak256(add(challengeEncoded, 32), mload(challengeEncoded))
+                    )
+                ) {
                     mstore(0x00, _INVALID_WEBAUTHN_DATA_SELECTOR)
                     revert(0x1c, 0x04)
                 }

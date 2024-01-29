@@ -51,7 +51,7 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
     event GuardianRemoved(address indexed guardian, address indexed kernel);
 
     function _domainNameAndVersion() internal pure override returns (string memory, string memory) {
-        return ("WeightedECDSAValidator", "0.0.1");
+        return ("WeightedECDSAValidator", "0.0.2");
     }
 
     function enable(bytes calldata _data) external payable override {
