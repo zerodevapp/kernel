@@ -261,7 +261,7 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
         uint256 totalWeight = 0;
         address signer;
         for (uint256 i = 0; i < sigCount; i++) {
-            signer = ECDSA.recover(hash, signature[i * 65:(i + 1) * 65]);
+            signer = ECDSA.recover(ECDSA.toEthSignedMessageHash(hash), signature[i * 65:(i + 1) * 65]);
             totalWeight += guardian[signer][msg.sender].weight;
             if (totalWeight >= strg.threshold) {
                 return packValidationData(ValidAfter.wrap(0), ValidUntil.wrap(0));
