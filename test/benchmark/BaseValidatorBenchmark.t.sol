@@ -7,11 +7,16 @@ import {console} from "forge-std/Console.sol";
 import {Kernel} from "src/Kernel.sol";
 import {KernelFactory} from "src/factory/KernelFactory.sol";
 import {IKernelValidator} from "src/interfaces/IKernelValidator.sol";
+import {ValidationData} from "src/common/Types.sol";
+import {ERC4337Utils} from "src/utils/ERC4337Utils.sol";
 
 import {IEntryPoint} from "I4337/interfaces/IEntryPoint.sol";
 import {UserOperation} from "I4337/interfaces/UserOperation.sol";
 import {ENTRYPOINT_0_6_ADDRESS, ENTRYPOINT_0_6_BYTECODE} from "I4337/artifacts/EntryPoint_0_6.sol";
 import {CREATOR_0_6_BYTECODE, CREATOR_0_6_ADDRESS} from "I4337/artifacts/EntryPoint_0_6.sol";
+
+using ERC4337Utils for IEntryPoint;
+using ERC4337Utils for Kernel;
 
 /// @dev Test contract used to perform benchmark of the differents validators
 /// @author KONFeature
@@ -124,7 +129,8 @@ abstract contract BaseValidatorBenchmark is Test {
 
         // Run the signature related test
         console.log("Signature:");
-        // TODO
+        _benchmark_signature_viaValidator();
+        _benchmark_signature_viaKernel();
         _addToGlobalJson("signature");
 
         // Write the json output
@@ -157,7 +163,7 @@ abstract contract BaseValidatorBenchmark is Test {
 
         // Perform the validator enable
         uint256 gasConsumed = gasleft();
-        vm.prank(_fakeKernel);
+        vm.prank(address(_fakeKernel));
         _validator.enable(enableData);
         gasConsumed = gasConsumed - gasleft();
         _addToGlobal("enable", gasConsumed);
@@ -174,6 +180,60 @@ abstract contract BaseValidatorBenchmark is Test {
         _validator.disable(disableData);
         gasConsumed = gasConsumed - gasleft();
         _addToGlobal("disable", gasConsumed);
+    }
+
+    /* -------------------------------------------------------------------------- */
+    /*                               User op methods                              */
+    /* -------------------------------------------------------------------------- */
+
+    /// @dev Benchmark the user op validation process only
+    function _benchmark_userOp_validation() private {
+        // Build a dummy user op
+
+        // TODO
+    }
+
+    /* -------------------------------------------------------------------------- */
+    /*                               User op methods                              */
+    /* -------------------------------------------------------------------------- */
+
+    /// @dev Benchmark on a direct signature validation on the validator level
+    function _benchmark_signature_viaValidator() private {
+        bytes32 _hash = keccak256("0xacab");
+        bytes memory signature = _generateHashSignature(_hash);
+
+        // Perform the validator signature check directly
+        uint256 gasConsumed = gasleft();
+        vm.prank(address(_kernel));
+        ValidationData isValid = _validator.validateSignature(_hash, signature);
+        gasConsumed = gasConsumed - gasleft();
+        _addToSignature("viaValidator", gasConsumed);
+
+        // Ensure the signature was valid
+        assertEq(ValidationData.unwrap(isValid), uint256(0), "Direct signature check should be valid");
+    }
+
+    /// @dev Benchmark on a direct signature validation on the kernel level
+    function _benchmark_signature_viaKernel() private {
+        bytes32 _hash = keccak256("0xacab");
+        // Get a few data for the domain separator
+        bytes32 domainSeparator = _kernel.getDomainSeparator();
+        // Should create a digest of the hash
+        bytes32 _digest = keccak256(
+            abi.encodePacked(
+                "\x19\x01", domainSeparator, _hash
+            )
+        );
+        bytes memory signature = _generateHashSignature(_digest);
+
+        // Perform the validator signature check directly
+        uint256 gasConsumed = gasleft();
+        bytes4 sigResponse = _kernel.isValidSignature(_hash, signature);
+        gasConsumed = gasConsumed - gasleft();
+        _addToSignature("viaKernel", gasConsumed);
+
+        // Ensure the signature was valid
+        assertEq(sigResponse, Kernel.isValidSignature.selector, "Direct signature check should be valid");
     }
 
     /* -------------------------------------------------------------------------- */

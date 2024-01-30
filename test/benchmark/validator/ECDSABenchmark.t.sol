@@ -16,6 +16,8 @@ import {BaseValidatorBenchmark} from "../BaseValidatorBenchmark.t.sol";
 import {IEntryPoint} from "I4337/interfaces/IEntryPoint.sol";
 import {UserOperation} from "I4337/interfaces/UserOperation.sol";
 
+import {ECDSA} from "solady/utils/ECDSA.sol";
+
 /// @dev Benchmark of the ECDSA validator
 /// @author KONFeature
 contract ECDSABenchmark is BaseValidatorBenchmark {
@@ -72,6 +74,7 @@ contract ECDSABenchmark is BaseValidatorBenchmark {
 
     /// @dev Generate the signature for the given `_hash`
     function _generateHashSignature(bytes32 _hash) internal view virtual override returns (bytes memory) {
-        return abi.encodePacked(_hash);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(_ecdsaOwnerKey, ECDSA.toEthSignedMessageHash(_hash));
+        return abi.encodePacked(r, s, v);
     }
 }
