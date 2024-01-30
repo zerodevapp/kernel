@@ -1,18 +1,18 @@
 {
   "global": {
-    "disable": 10488,
-    "enable": 32571,
-    "fullDeployment": 14120
+    "disable": 2418,
+    "enable": 44714,
+    "fullDeployment": 24858
   },
   "signature": {
-    "ko_viaKernel": 18429,
-    "ko_viaValidator": 11456,
-    "viaKernel": 18412,
-    "viaValidator": 17943
+    "ko_viaKernel": 40973,
+    "ko_viaValidator": 28724,
+    "viaKernel": 40953,
+    "viaValidator": 31214
   },
   "userOp": {
-    "viaEntryPoint": 178360,
-    "viaKernel": 26730,
-    "viaValidator": 13672
+    "viaEntryPoint": 169741,
+    "viaKernel": 41548,
+    "viaValidator": 30463
   }
 }

@@ -10,3 +10,6 @@
 [submodule "lib/FreshCryptoLib"]
 	path = lib/FreshCryptoLib
 	url = https://github.com/rdubois-crypto/FreshCryptoLib
+[submodule "lib/forge-gas-metering"]
+	path = lib/forge-gas-metering
+	url = https://github.com/emo-eth/forge-gas-metering

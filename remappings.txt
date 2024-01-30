@@ -2,3 +2,4 @@ ds-test/=lib/forge-std/lib/ds-test/src/
 forge-std/=lib/forge-std/src/
 solady/=lib/solady/src/
 FreshCryptoLib/=lib/FreshCryptoLib/solidity/src/
+gas-metering/=lib/forge-gas-metering/src/

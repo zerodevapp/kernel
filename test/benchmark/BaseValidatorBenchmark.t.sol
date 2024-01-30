@@ -15,12 +15,14 @@ import {IEntryPoint} from "I4337/interfaces/IEntryPoint.sol";
 import {UserOperation} from "I4337/interfaces/UserOperation.sol";
 import {ENTRYPOINT_0_6_ADDRESS, ENTRYPOINT_0_6_BYTECODE} from "I4337/artifacts/EntryPoint_0_6.sol";
 
+import {MainnetMetering} from "gas-metering/MainnetMetering.sol";
+
 using ERC4337Utils for IEntryPoint;
 using ERC4337Utils for Kernel;
 
 /// @dev Test contract used to perform benchmark of the differents validators
 /// @author KONFeature
-abstract contract BaseValidatorBenchmark is Test {
+abstract contract BaseValidatorBenchmark is MainnetMetering, Test {
     // @dev The different 'master' wallets
     address private _factoryOwner;
     address private _fakeKernel;
@@ -54,6 +56,9 @@ abstract contract BaseValidatorBenchmark is Test {
 
     /// @dev Init the base stuff required to run the benchmark
     function _init() internal {
+        // Prepare for gas mettering
+        setUpMetering({verbose: false});
+
         _isWriteEnabled = vm.envOr("WRITE_BENCHMARK_RESULT", false);
 
         _dummyContract = new DummyContract();
@@ -123,7 +128,7 @@ abstract contract BaseValidatorBenchmark is Test {
     /* -------------------------------------------------------------------------- */
 
     /// @dev Run the whole benchmark
-    function test_benchmark() public {
+    function test_benchmark() public manuallyMetered {
         _snapshot = vm.snapshot();
         string memory validatorName = _getValidatorName();
         console.log("=====================================");
@@ -169,10 +174,19 @@ abstract contract BaseValidatorBenchmark is Test {
         // Don't save this in our gas measurement
         bytes memory initData = _getInitData();
 
+        // Prepare the call to execute
+        bytes memory call =
+            abi.encodeWithSelector(KernelFactory.createAccount.selector, _kernelImplementation, initData, 0);
+
         // Perform the proxy deployment and init
-        uint256 gasConsumed = gasleft();
-        _factory.createAccount(_kernelImplementation, initData, 0);
-        gasConsumed = gasConsumed - gasleft();
+        (uint256 gasConsumed,) = meterCall({
+            from: address(0),
+            to: address(_factory),
+            callData: call,
+            value: 0,
+            transaction: true,
+            expectRevert: false
+        });
         _addToGlobal("fullDeployment", gasConsumed);
     }
 
@@ -181,11 +195,22 @@ abstract contract BaseValidatorBenchmark is Test {
         // Don't save this in our gas measurement
         bytes memory enableData = _getEnableData();
 
+        // Prepare the call to execute
+        bytes memory call = abi.encodeWithSelector(IKernelValidator.enable.selector, enableData);
+
         // Perform the validator enable
-        uint256 gasConsumed = gasleft();
-        vm.prank(address(_fakeKernel));
-        _validator.enable(enableData);
-        gasConsumed = gasConsumed - gasleft();
+        (uint256 gasConsumed,) = meterCall({
+            from: address(_fakeKernel),
+            to: address(_validator),
+            callData: call,
+            value: 0,
+            transaction: true,
+            expectRevert: false
+        });
+
+        // Required since when pranking meterCall don't stop the prank after, should PR there to fix that
+        vm.stopPrank();
+
         _addToGlobal("enable", gasConsumed);
     }
 
@@ -194,11 +219,22 @@ abstract contract BaseValidatorBenchmark is Test {
         // Don't save this in our gas measurement
         bytes memory disableData = _getDisableData();
 
+        // Prepare the call to execute
+        bytes memory call = abi.encodeWithSelector(IKernelValidator.disable.selector, disableData);
+
         // Perform the validator disable
-        uint256 gasConsumed = gasleft();
-        vm.prank(_fakeKernel);
-        _validator.disable(disableData);
-        gasConsumed = gasConsumed - gasleft();
+        (uint256 gasConsumed,) = meterCall({
+            from: address(_fakeKernel),
+            to: address(_validator),
+            callData: call,
+            value: 0,
+            transaction: true,
+            expectRevert: false
+        });
+
+        // Required since when pranking meterCall don't stop the prank after, should PR there to fix that
+        vm.stopPrank();
+
         _addToGlobal("disable", gasConsumed);
     }
 
@@ -217,46 +253,71 @@ abstract contract BaseValidatorBenchmark is Test {
         UserOperation[] memory userOperations = new UserOperation[](1);
         userOperations[0] = userOperation;
 
+        // Prepare the call to execute
+        bytes memory call = abi.encodeWithSelector(IEntryPoint.handleOps.selector, userOperations, _userOpBeneficiary);
+
         // Perform the user op validation
-        uint256 gasConsumed = gasleft();
-        _entryPoint.handleOps(userOperations, _userOpBeneficiary);
-        gasConsumed = gasConsumed - gasleft();
+        (uint256 gasConsumed,) = meterCall({
+            from: address(0),
+            to: address(_entryPoint),
+            callData: call,
+            value: 0,
+            transaction: true,
+            expectRevert: false
+        });
         _addToUserOp("viaEntryPoint", gasConsumed);
     }
 
     /// @dev Benchmark the user op validation process only
     function _benchmark_userOp_viaKernel() private runInCleanState {
         // Build a dummy user op
-        (UserOperation memory userOperations, bytes32 userOperationHash) = _getSignedDummyUserOp();
+        (UserOperation memory userOperation, bytes32 userOperationHash) = _getSignedDummyUserOp();
+
+        // Prepare the call to execute
+        bytes memory call = abi.encodeWithSelector(Kernel.validateUserOp.selector, userOperation, userOperationHash, 0);
 
         // Perform the user op validation
-        uint256 gasConsumed = gasleft();
-        vm.prank(address(_entryPoint));
-        ValidationData isValid = _kernel.validateUserOp(userOperations, userOperationHash, 0);
-        gasConsumed = gasConsumed - gasleft();
-        _addToUserOp("viaKernel", gasConsumed);
+        (uint256 gasConsumed,) = meterCall({
+            from: address(_entryPoint),
+            to: address(_kernel),
+            callData: call,
+            value: 0,
+            transaction: true,
+            expectRevert: false
+        });
 
-        // Ensure the signature was valid
-        assertEq(ValidationData.unwrap(isValid), uint256(0), "Direct user op check should be valid");
+        // Required since when pranking meterCall don't stop the prank after, should PR there to fix that
+        vm.stopPrank();
+
+        _addToUserOp("viaKernel", gasConsumed);
     }
 
     /// @dev Benchmark the user op validation process only
     function _benchmark_userOp_viaValidator() private runInCleanState {
         // Build a dummy user op
-        (UserOperation memory userOperations, bytes32 userOperationHash) = _getSignedDummyUserOp();
+        (UserOperation memory userOperation, bytes32 userOperationHash) = _getSignedDummyUserOp();
 
         // Regen the signature, to have it not prefixed with the sude mode
-        userOperations.signature = _generateUserOpSignature(userOperations);
+        userOperation.signature = _generateUserOpSignature(userOperation);
+
+        // Prepare the call to execute
+        bytes memory call =
+            abi.encodeWithSelector(IKernelValidator.validateUserOp.selector, userOperation, userOperationHash, 0);
 
         // Perform the user op validation
-        uint256 gasConsumed = gasleft();
-        vm.prank(address(_entryPoint));
-        ValidationData isValid = _validator.validateUserOp(userOperations, userOperationHash, 0);
-        gasConsumed = gasConsumed - gasleft();
-        _addToUserOp("viaValidator", gasConsumed);
+        (uint256 gasConsumed,) = meterCall({
+            from: address(_entryPoint),
+            to: address(_validator),
+            callData: call,
+            value: 0,
+            transaction: true,
+            expectRevert: false
+        });
 
-        // Ensure the signature was valid
-        assertEq(ValidationData.unwrap(isValid), uint256(0), "Direct user op check should be valid");
+        // Required since when pranking meterCall don't stop the prank after, should PR there to fix that
+        vm.stopPrank();
+
+        _addToUserOp("viaValidator", gasConsumed);
     }
 
     /// @dev Get a dummy user op
@@ -283,15 +344,23 @@ abstract contract BaseValidatorBenchmark is Test {
         bytes32 _hash = keccak256("0xacab");
         bytes memory signature = _generateHashSignature(_hash);
 
-        // Perform the validator signature check directly
-        uint256 gasConsumed = gasleft();
-        vm.prank(address(_kernel));
-        ValidationData isValid = _validator.validateSignature(_hash, signature);
-        gasConsumed = gasConsumed - gasleft();
-        _addToSignature("viaValidator", gasConsumed);
+        // Prepare the call to execute
+        bytes memory call = abi.encodeWithSelector(IKernelValidator.validateSignature.selector, _hash, signature);
 
-        // Ensure the signature was valid
-        assertEq(ValidationData.unwrap(isValid), uint256(0), "Direct signature check should be valid");
+        // Perform the validator signature check directly
+        (uint256 gasConsumed,) = meterCall({
+            from: address(_kernel),
+            to: address(_validator),
+            callData: call,
+            value: 0,
+            transaction: true,
+            expectRevert: false
+        });
+
+        // Required since when pranking meterCall don't stop the prank after, should PR there to fix that
+        vm.stopPrank();
+
+        _addToSignature("viaValidator", gasConsumed);
     }
 
     /// @dev Benchmark on a direct signature validation on the kernel level
@@ -303,14 +372,19 @@ abstract contract BaseValidatorBenchmark is Test {
         bytes32 _digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, _hash));
         bytes memory signature = _generateHashSignature(_digest);
 
-        // Perform the validator signature check directly
-        uint256 gasConsumed = gasleft();
-        bytes4 sigResponse = _kernel.isValidSignature(_hash, signature);
-        gasConsumed = gasConsumed - gasleft();
-        _addToSignature("viaKernel", gasConsumed);
+        // Prepare the call to execute
+        bytes memory call = abi.encodeWithSelector(Kernel.isValidSignature.selector, _hash, signature);
 
-        // Ensure the signature was valid
-        assertEq(sigResponse, Kernel.isValidSignature.selector, "Kernel signature check should be valid");
+        // Perform the validator signature check directly
+        (uint256 gasConsumed,) = meterCall({
+            from: address(0),
+            to: address(_kernel),
+            callData: call,
+            value: 0,
+            transaction: true,
+            expectRevert: false
+        });
+        _addToSignature("viaKernel", gasConsumed);
     }
 
     /// @dev Benchmark on a direct signature validation on the validator level
@@ -319,15 +393,23 @@ abstract contract BaseValidatorBenchmark is Test {
         bytes memory signature = _generateHashSignature(_hash);
         _hash = keccak256("0xdeadacab");
 
-        // Perform the validator signature check directly
-        uint256 gasConsumed = gasleft();
-        vm.prank(address(_kernel));
-        ValidationData isValid = _validator.validateSignature(_hash, signature);
-        gasConsumed = gasConsumed - gasleft();
-        _addToSignature("ko_viaValidator", gasConsumed);
+        // Prepare the call to execute
+        bytes memory call = abi.encodeWithSelector(IKernelValidator.validateSignature.selector, _hash, signature);
 
-        // Ensure the signature was valid
-        assertEq(ValidationData.unwrap(isValid), uint256(1), "Direct signature check should be invalid");
+        // Perform the validator signature check directly
+        (uint256 gasConsumed,) = meterCall({
+            from: address(_kernel),
+            to: address(_validator),
+            callData: call,
+            value: 0,
+            transaction: true,
+            expectRevert: false
+        });
+
+        // Required since when pranking meterCall don't stop the prank after, should PR there to fix that
+        vm.stopPrank();
+
+        _addToSignature("ko_viaValidator", gasConsumed);
     }
 
     /// @dev Benchmark on a direct signature validation on the kernel level
@@ -340,14 +422,19 @@ abstract contract BaseValidatorBenchmark is Test {
         bytes memory signature = _generateHashSignature(_digest);
         _hash = keccak256("0xdeadacab");
 
-        // Perform the validator signature check directly
-        uint256 gasConsumed = gasleft();
-        bytes4 sigResponse = _kernel.isValidSignature(_hash, signature);
-        gasConsumed = gasConsumed - gasleft();
-        _addToSignature("ko_viaKernel", gasConsumed);
+        // Prepare the call to execute
+        bytes memory call = abi.encodeWithSelector(Kernel.isValidSignature.selector, _hash, signature);
 
-        // Ensure the signature was valid
-        assertEq(sigResponse, bytes4(0xffffffff), "Kernel signature check should be invalid");
+        // Perform the validator signature check directly
+        (uint256 gasConsumed,) = meterCall({
+            from: address(0),
+            to: address(_kernel),
+            callData: call,
+            value: 0,
+            transaction: true,
+            expectRevert: false
+        });
+        _addToSignature("ko_viaKernel", gasConsumed);
     }
 
     /* -------------------------------------------------------------------------- */

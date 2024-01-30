@@ -23,6 +23,9 @@ contract ECDSABenchmark is BaseValidatorBenchmark {
     ECDSAValidator private _ecdsaValidator;
 
     function setUp() public virtual {
+        // Init test suite
+        _init();
+
         // Create the ecdsa owner
         (_ecdsaOwner, _ecdsaOwnerKey) = makeAddrAndKey("ecdsaOwner");
 
@@ -31,7 +34,6 @@ contract ECDSABenchmark is BaseValidatorBenchmark {
         _validator = _ecdsaValidator;
 
         // Init test suite
-        _init();
         _setupKernel();
     }
 
