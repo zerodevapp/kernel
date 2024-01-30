@@ -37,7 +37,6 @@ contract ModularPermissionValidator is IKernelValidator {
     event NonceRevoked(address kernel, uint256 nonce);
 
     function getPermissionId(
-        address kernel,
         uint128 nonce,
         bytes12 flag,
         ISigner signer,
@@ -49,7 +48,6 @@ contract ModularPermissionValidator is IKernelValidator {
     ) public pure returns (bytes32) {
         return keccak256(
             abi.encode(
-                kernel,
                 nonce,
                 flag,
                 signer,
@@ -118,7 +116,7 @@ contract ModularPermissionValidator is IKernelValidator {
     ) public payable {
         require(flag != bytes12(0), "flag should not be empty");
         bytes32 permissionId =
-            getPermissionId(msg.sender, nonce, flag, signer, validAfter, validUntil, policy, signerData, policyData);
+            getPermissionId(nonce, flag, signer, validAfter, validUntil, policy, signerData, policyData);
 
         for (uint256 i = 0; i < policy.length; i++) {
             PolicyConfigLib.getAddress(policy[i]).registerPolicy(msg.sender, permissionId, policyData[i]);

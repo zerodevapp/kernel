@@ -87,7 +87,6 @@ contract ModularPermissionTest is Test {
         bytes[] memory pd = new bytes[](1);
         pd[0] = abi.encodePacked("hello policy");
         bytes32 permissionId = validator.getPermissionId(
-            kernel,
             0,
             toFlag(1), // flag
             mockSigner,
