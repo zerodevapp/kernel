@@ -9,6 +9,7 @@ cbor_metadata = false
 optimize = true
 via-ir = false
 runs = 1000000
+fs_permissions = [{ access = "write", path = "./benchmarks"}]
 
 [profile.deploy]
 via-ir = true
