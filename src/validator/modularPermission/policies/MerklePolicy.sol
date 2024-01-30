@@ -23,20 +23,21 @@ struct ParamRule {
 contract MerklePolicy is IPolicy {
     error MerklePolicyError(uint256 code); // todo: should policy revert instead of returning SIG_VALIDATION_FAILED?
 
-    mapping(bytes32 => mapping(address => bytes32)) public merkleRoot;
+    mapping(address permissionValidator => mapping(bytes32 => mapping(address => bytes32))) public merkleRoot;
 
     function registerPolicy(address kernel, bytes32 permissionId, bytes calldata policyData) external payable {
         bytes32 root = bytes32(policyData[0:32]);
-        merkleRoot[permissionId][kernel] = root;
+        merkleRoot[msg.sender][permissionId][kernel] = root;
     }
 
-    function validatePolicy(address kernel, bytes32 permissionId, UserOperation calldata userOp, bytes calldata proof)
-        external
-        payable
-        returns (ValidationData)
-    {
+    function checkUserOpPolicy(
+        address kernel,
+        bytes32 permissionId,
+        UserOperation calldata userOp,
+        bytes calldata proof
+    ) external payable returns (ValidationData) {
         bytes calldata callData = userOp.callData;
-        bytes32 root = merkleRoot[permissionId][kernel];
+        bytes32 root = merkleRoot[msg.sender][permissionId][kernel];
         bytes4 sig = bytes4(userOp.signature[0:4]);
         if (sig == Kernel.execute.selector || sig == Kernel.executeDelegateCall.selector) {
             (Permission calldata permission, bytes32[] calldata merkleProof) = _getPermission(userOp.signature[85:]);
@@ -63,7 +64,7 @@ contract MerklePolicy is IPolicy {
         bytes calldata callData,
         Permission[] calldata _permissions,
         bytes32[][] calldata _merkleProof
-    ) internal returns (bool verifyFailed) {
+    ) internal pure returns (bool verifyFailed) {
         Call[] calldata calls;
         assembly {
             calls.offset := add(add(callData.offset, 0x24), calldataload(add(callData.offset, 4)))
@@ -117,7 +118,7 @@ contract MerklePolicy is IPolicy {
         bytes calldata callData,
         Permission calldata _permission,
         bytes32[] calldata _merkleProof
-    ) internal returns (bool verifyFailed) {
+    ) internal pure returns (bool verifyFailed) {
         bool isExecute = bytes4(callData[0:4]) == Kernel.execute.selector;
         require(
             _permission.target == address(0) || address(bytes20(callData[16:36])) == _permission.target,

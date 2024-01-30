@@ -14,7 +14,7 @@ type PolicyConfig is bytes32;
 library PolicyConfigLib {
     function pack(IPolicy addr, bytes12 flag) internal pure returns (PolicyConfig data) {
         assembly {
-            data := or(addr, shl(160, flag))
+            data := or(addr, flag)
         }
     }
 
@@ -33,24 +33,21 @@ library PolicyConfigLib {
     function skipOnValidateUserOp(PolicyConfig data) internal pure returns (bool result) {
         assembly {
             let flags := shr(160, data)
-            let mask := 0x1
-            result := and(flags, mask)
+            result := and(flags, 0x1)
         }
     }
 
     function skipOnValidateSignature(PolicyConfig data) internal pure returns (bool result) {
         assembly {
             let flags := shr(161, data)
-            let mask := 0x1
-            result := and(flags, mask)
+            result := and(flags, 0x1)
         }
     }
 
     function skipOnValidateCaller(PolicyConfig data) internal pure returns (bool result) {
         assembly {
             let flags := shr(162, data)
-            let mask := 0x1
-            result := and(flags, mask)
+            result := and(flags, 0x1)
         }
     }
 }

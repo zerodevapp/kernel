@@ -119,6 +119,7 @@ contract ModularPermissionValidator is IKernelValidator {
             getPermissionId(nonce, flag, signer, validAfter, validUntil, policy, signerData, policyData);
 
         for (uint256 i = 0; i < policy.length; i++) {
+            //TODO make sure address of the policy is sorted
             PolicyConfigLib.getAddress(policy[i]).registerPolicy(msg.sender, permissionId, policyData[i]);
         }
         signer.registerSigner(msg.sender, permissionId, signerData);
@@ -159,6 +160,7 @@ contract ModularPermissionValidator is IKernelValidator {
         if (
             address(PolicyConfigLib.getAddress(permissions[permissionId][msg.sender].firstPolicy)) != address(0)
                 && permissions[permissionId][msg.sender].nonce < nonces[msg.sender].revoked
+                && permissions[permissionId][msg.sender].flag != bytes12(0)
         ) {
             return SIG_VALIDATION_FAILED;
         }
@@ -185,7 +187,7 @@ contract ModularPermissionValidator is IKernelValidator {
                 policyData = _userOp.signature[cursor:cursor];
             }
             ValidationData policyValidation =
-                PolicyConfigLib.getAddress(policy).validatePolicy(msg.sender, permissionId, _userOp, policyData);
+                PolicyConfigLib.getAddress(policy).checkUserOpPolicy(msg.sender, permissionId, _userOp, policyData);
             validationData = _intersectValidationData(validationData, policyValidation);
             policy = nextPolicy[permissionId][policy][msg.sender];
         }
@@ -213,14 +215,19 @@ contract ModularPermissionValidator is IKernelValidator {
     {
         ValidationSigMemory memory sigMemory;
         sigMemory.permissionId = bytes32(signature[0:32]);
+        require(
+            nonces[msg.sender].revoked <= permissions[sigMemory.permissionId][msg.sender].nonce
+                && permissions[sigMemory.permissionId][msg.sender].flag != bytes12(0),
+            "nonce revoked"
+        );
         Permission memory permission = permissions[sigMemory.permissionId][msg.sender];
         // signature should be packed with
         // (permissionId, [proof || signature])
         // (permissionId, [ (policyAddress) + (policyProof) || signature]
         bytes calldata proofAndSignature; //) = abi.decode(signature[32:], (bytes, bytes));
         assembly {
-            proofAndSignature.offset := add(signature.offset, calldataload(add(signature.offset, 32)))
-            proofAndSignature.length := calldataload(sub(proofAndSignature.offset, 32))
+            proofAndSignature.offset := add(signature.offset, 32)
+            proofAndSignature.length := sub(signature.length, 32)
         }
 
         sigMemory.cursor = 0;

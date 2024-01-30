@@ -7,14 +7,15 @@ import {IPolicy} from "../IPolicy.sol";
 
 contract MockPolicy is IPolicy {
     ValidationData public validationData;
-    uint256 public sigConsume;
     mapping(bytes32 => uint256) public count;
     bytes public policyData;
+    bool public revertOnSignature;
 
-    function mock(uint48 validAfter, uint48 validUntil, bool success, uint256 consume) external {
+    function mock(uint48 validAfter, uint48 validUntil, bool success, bool revertOnSig) external {
         validationData = success
             ? packValidationData(ValidAfter.wrap(validAfter), ValidUntil.wrap(validUntil))
             : SIG_VALIDATION_FAILED;
+        revertOnSignature = revertOnSig;
     }
 
     function registerPolicy(address, bytes32, bytes calldata data) external payable override {
@@ -22,7 +23,7 @@ contract MockPolicy is IPolicy {
         policyData = data;
     }
 
-    function validatePolicy(address, bytes32 permissionId, UserOperation calldata, bytes calldata)
+    function checkUserOpPolicy(address, bytes32 permissionId, UserOperation calldata, bytes calldata)
         external
         payable
         override
@@ -39,6 +40,9 @@ contract MockPolicy is IPolicy {
         bytes32 messageHash,
         bytes calldata signature
     ) external view override returns (ValidationData) {
+        if (revertOnSignature) {
+            revert("MockPolicy: signature validation failed");
+        }
         return validationData;
     }
 }

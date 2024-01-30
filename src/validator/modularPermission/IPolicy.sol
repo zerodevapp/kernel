@@ -6,7 +6,7 @@ import {UserOperation} from "I4337/interfaces/UserOperation.sol";
 
 interface IPolicy {
     function registerPolicy(address kernel, bytes32 permissionId, bytes calldata policyData) external payable;
-    function validatePolicy(
+    function checkUserOpPolicy(
         address kernel,
         bytes32 permissionId,
         UserOperation calldata userOp,

@@ -12,14 +12,15 @@ contract GasPolicy is IPolicy {
         address allowedPaymaster;
     }
 
-    mapping(bytes32 permissionId => mapping(address kernel => GasPolicyConfig)) public gasPolicyConfig;
+    mapping(address permissionValidator => mapping(bytes32 permissionId => mapping(address kernel => GasPolicyConfig)))
+        public gasPolicyConfig;
 
     function registerPolicy(address kernel, bytes32 permissionId, bytes calldata data) external payable override {
         (uint128 allowed, bool enforcePaymaster, address allowedPaymaster) = abi.decode(data, (uint128, bool, address));
-        gasPolicyConfig[permissionId][kernel] = GasPolicyConfig(allowed, enforcePaymaster, allowedPaymaster);
+        gasPolicyConfig[msg.sender][permissionId][kernel] = GasPolicyConfig(allowed, enforcePaymaster, allowedPaymaster);
     }
 
-    function validatePolicy(address kernel, bytes32 permissionId, UserOperation calldata userOp, bytes calldata)
+    function checkUserOpPolicy(address kernel, bytes32 permissionId, UserOperation calldata userOp, bytes calldata)
         external
         payable
         override
@@ -28,19 +29,19 @@ contract GasPolicy is IPolicy {
         uint128 maxAmount = uint128(
             (userOp.preVerificationGas + userOp.verificationGasLimit + userOp.callGasLimit) * userOp.maxFeePerGas
         );
-        if (gasPolicyConfig[permissionId][kernel].enforcePaymaster) {
+        if (gasPolicyConfig[msg.sender][permissionId][kernel].enforcePaymaster) {
             if (
-                gasPolicyConfig[permissionId][kernel].allowedPaymaster != address(0)
+                gasPolicyConfig[msg.sender][permissionId][kernel].allowedPaymaster != address(0)
                     && address(bytes20(userOp.paymasterAndData[0:20]))
-                        != gasPolicyConfig[permissionId][kernel].allowedPaymaster
+                        != gasPolicyConfig[msg.sender][permissionId][kernel].allowedPaymaster
             ) {
                 return SIG_VALIDATION_FAILED;
             }
         }
-        if (maxAmount > gasPolicyConfig[permissionId][kernel].allowed) {
+        if (maxAmount > gasPolicyConfig[msg.sender][permissionId][kernel].allowed) {
             return SIG_VALIDATION_FAILED;
         }
-        gasPolicyConfig[permissionId][kernel].allowed -= maxAmount;
+        gasPolicyConfig[msg.sender][permissionId][kernel].allowed -= maxAmount;
         return ValidationData.wrap(0);
     }
 
