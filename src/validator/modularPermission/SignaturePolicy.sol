@@ -8,7 +8,7 @@ contract SignaturePolicy is IPolicy {
     function registerPolicy(address kernel, bytes32 permissionId, bytes calldata policyData) external payable {
         address[] memory callers = abi.decode(policyData, (address[]));
         for (uint256 i = 0; i < callers.length; i++) {
-            if(callers[i] == address(0)) {
+            if (callers[i] == address(0)) {
                 allowedRequestor[permissionId][kernel][kernel] = true;
             } else {
                 allowedRequestor[permissionId][callers[i]][kernel] = true;

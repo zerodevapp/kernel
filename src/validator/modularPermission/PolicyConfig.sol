@@ -16,6 +16,7 @@ bytes12 constant MAX_FLAG = 0xffffffffffffffffffffffff;
 // 1 bit : not for validatUserOp
 // 1 bit : not for validateSignature
 // 1 bit : not for validateCaller
+
 library PolicyConfigLib {
     function pack(IPolicy addr, bytes12 flag) internal pure returns (PolicyConfig data) {
         assembly {

@@ -70,7 +70,7 @@ contract KernelLiteECDSA is Kernel {
     }
 
     /// @dev Validate a signature
-    function _validateSignature(address /*_requestor*/, bytes32 _hash, bytes calldata _signature)
+    function _validateSignature(address, /*_requestor*/ bytes32 _hash, bytes calldata _signature)
         internal
         view
         override

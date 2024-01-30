@@ -119,7 +119,7 @@ contract ModularPermissionValidator is IKernelValidator {
         require(nonce == nonces[msg.sender].next, "nonce should be next");
         bytes32 permissionId =
             getPermissionId(nonce, flag, signer, validAfter, validUntil, policy, signerData, policyData);
-        if(flag == MAX_FLAG) {
+        if (flag == MAX_FLAG) {
             priorityPermission[msg.sender] = permissionId;
         }
 
@@ -219,7 +219,7 @@ contract ModularPermissionValidator is IKernelValidator {
     {
         ValidationSigMemory memory sigMemory;
         sigMemory.permissionId = bytes32(signature[0:32]);
-        if(
+        if (
             nonces[msg.sender].revoked > permissions[sigMemory.permissionId][msg.sender].nonce
                 || permissions[sigMemory.permissionId][msg.sender].flag & toFlag(2) == toFlag(0)
         ) {
