@@ -49,6 +49,9 @@ abstract contract BaseValidatorBenchmark is Test {
     /// @dev dummy contract we will use to test user op
     DummyContract private _dummyContract;
 
+    /// @dev Snapshot used to reset the gas measurement
+    uint256 private _snapshot;
+
     /// @dev Init the base stuff required to run the benchmark
     function _init() internal {
         _isWriteEnabled = vm.envOr("WRITE_BENCHMARK_RESULT", false);
@@ -121,6 +124,7 @@ abstract contract BaseValidatorBenchmark is Test {
 
     /// @dev Run the whole benchmark
     function test_benchmark() public {
+        _snapshot = vm.snapshot();
         string memory validatorName = _getValidatorName();
         console.log("=====================================");
         console.log("Benchmarking: %s", validatorName);
@@ -161,7 +165,7 @@ abstract contract BaseValidatorBenchmark is Test {
     /* -------------------------------------------------------------------------- */
 
     /// @dev Benchmark the enable of the given validator
-    function _benchmark_fullDeployment() private {
+    function _benchmark_fullDeployment() private runInCleanState {
         // Don't save this in our gas measurement
         bytes memory initData = _getInitData();
 
@@ -173,7 +177,7 @@ abstract contract BaseValidatorBenchmark is Test {
     }
 
     /// @dev Benchmark the enable of the given validator
-    function _benchmark_enable() private {
+    function _benchmark_enable() private runInCleanState {
         // Don't save this in our gas measurement
         bytes memory enableData = _getEnableData();
 
@@ -186,7 +190,7 @@ abstract contract BaseValidatorBenchmark is Test {
     }
 
     /// @dev Benchmark the disable of the given validator
-    function _benchmark_disable() private {
+    function _benchmark_disable() private runInCleanState {
         // Don't save this in our gas measurement
         bytes memory disableData = _getDisableData();
 
@@ -205,7 +209,7 @@ abstract contract BaseValidatorBenchmark is Test {
     /* -------------------------------------------------------------------------- */
 
     /// @dev Benchmark the user op validation process only
-    function _benchmark_userOp_viaEntryPoint() private {
+    function _benchmark_userOp_viaEntryPoint() private runInCleanState {
         // Build a dummy user op
         (UserOperation memory userOperation,) = _getSignedDummyUserOp();
 
@@ -221,7 +225,7 @@ abstract contract BaseValidatorBenchmark is Test {
     }
 
     /// @dev Benchmark the user op validation process only
-    function _benchmark_userOp_viaKernel() private {
+    function _benchmark_userOp_viaKernel() private runInCleanState {
         // Build a dummy user op
         (UserOperation memory userOperations, bytes32 userOperationHash) = _getSignedDummyUserOp();
 
@@ -237,7 +241,7 @@ abstract contract BaseValidatorBenchmark is Test {
     }
 
     /// @dev Benchmark the user op validation process only
-    function _benchmark_userOp_viaValidator() private {
+    function _benchmark_userOp_viaValidator() private runInCleanState {
         // Build a dummy user op
         (UserOperation memory userOperations, bytes32 userOperationHash) = _getSignedDummyUserOp();
 
@@ -275,7 +279,7 @@ abstract contract BaseValidatorBenchmark is Test {
     /* -------------------------------------------------------------------------- */
 
     /// @dev Benchmark on a direct signature validation on the validator level
-    function _benchmark_signature_viaValidator() private {
+    function _benchmark_signature_viaValidator() private runInCleanState {
         bytes32 _hash = keccak256("0xacab");
         bytes memory signature = _generateHashSignature(_hash);
 
@@ -291,7 +295,7 @@ abstract contract BaseValidatorBenchmark is Test {
     }
 
     /// @dev Benchmark on a direct signature validation on the kernel level
-    function _benchmark_signature_viaKernel() private {
+    function _benchmark_signature_viaKernel() private runInCleanState {
         bytes32 _hash = keccak256("0xacab");
         // Get a few data for the domain separator
         bytes32 domainSeparator = _kernel.getDomainSeparator();
@@ -327,7 +331,7 @@ abstract contract BaseValidatorBenchmark is Test {
     }
 
     /// @dev Benchmark on a direct signature validation on the kernel level
-    function _benchmark_signature_ko_viaKernel() private {
+    function _benchmark_signature_ko_viaKernel() private runInCleanState {
         bytes32 _hash = keccak256("0xacab");
         // Get a few data for the domain separator
         bytes32 domainSeparator = _kernel.getDomainSeparator();
@@ -382,6 +386,12 @@ abstract contract BaseValidatorBenchmark is Test {
         }
         // Reset the current json
         _currentJson = "";
+    }
+
+    /// @dev Revert the state after the run of the method
+    modifier runInCleanState() {
+        vm.revertTo(_snapshot);
+        _;
     }
 }
 
