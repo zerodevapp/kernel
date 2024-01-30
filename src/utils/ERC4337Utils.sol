@@ -71,13 +71,9 @@ library ERC4337Utils {
     }
 
     /// @dev Returns the EIP-712 domain separator for the given kernel account.
-    function getDomainSeparator(Kernel kernel)
-        internal
-        view
-        returns (bytes32 domainSeparator)
-    {
+    function getDomainSeparator(Kernel kernel) internal view returns (bytes32 domainSeparator) {
         // Extract a few infos from the kernel
-        (,string memory name, string memory version,,,,) = kernel.eip712Domain();
+        (, string memory name, string memory version,,,,) = kernel.eip712Domain();
         // Build the domain separator
         domainSeparator = _buildDomainSeparator(name, version, address(kernel));
     }

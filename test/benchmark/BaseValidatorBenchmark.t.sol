@@ -134,7 +134,7 @@ abstract contract BaseValidatorBenchmark is Test {
         _addToGlobalJson("signature");
 
         // Write the json output
-        if(_isWriteEnabled) {
+        if (_isWriteEnabled) {
             string memory fileName = string.concat("./benchmarks/validator/", validatorName, ".json");
             vm.writeJson(_jsonOutput, fileName);
         }
@@ -219,11 +219,7 @@ abstract contract BaseValidatorBenchmark is Test {
         // Get a few data for the domain separator
         bytes32 domainSeparator = _kernel.getDomainSeparator();
         // Should create a digest of the hash
-        bytes32 _digest = keccak256(
-            abi.encodePacked(
-                "\x19\x01", domainSeparator, _hash
-            )
-        );
+        bytes32 _digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, _hash));
         bytes memory signature = _generateHashSignature(_digest);
 
         // Perform the validator signature check directly

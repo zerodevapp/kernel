@@ -16,6 +16,7 @@ import {Base64Url} from "FreshCryptoLib/utils/Base64Url.sol";
 import {IKernel} from "src/interfaces/IKernel.sol";
 
 using ERC4337Utils for IEntryPoint;
+using ERC4337Utils for Kernel;
 
 contract WebAuthnFclValidatorTest is KernelTestBase {
     WebAuthnFclValidator private webAuthNValidator;
@@ -127,11 +128,7 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
     function test_validate_signature() external override {
         bytes32 _hash = keccak256(abi.encodePacked("hello world"));
 
-        bytes32 digest = keccak256(
-            abi.encodePacked(
-                "\x19\x01", ERC4337Utils._buildDomainSeparator(KERNEL_NAME, KERNEL_VERSION, address(kernel)), _hash
-            )
-        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", kernel.getDomainSeparator(), _hash));
 
         bytes memory signature = signHash(digest);
 
@@ -141,11 +138,7 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
     function test_fail_validate_wrongsignature() external override {
         // Prepare the hash to sign
         bytes32 _hash = keccak256(abi.encodePacked("hello world"));
-        bytes32 digest = keccak256(
-            abi.encodePacked(
-                "\x19\x01", ERC4337Utils._buildDomainSeparator(KERNEL_NAME, KERNEL_VERSION, address(kernel)), _hash
-            )
-        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", kernel.getDomainSeparator(), _hash));
 
         // Sign it (via a wrong signer)
         bytes memory sig = getWrongSignature(digest);
@@ -155,11 +148,7 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
     function test_fail_validate_InvalidWebAuthnData() external {
         // Prepare the data to sign
         bytes32 _hash = keccak256(abi.encodePacked("hello world"));
-        bytes32 digest = keccak256(
-            abi.encodePacked(
-                "\x19\x01", ERC4337Utils._buildDomainSeparator(KERNEL_NAME, KERNEL_VERSION, address(kernel)), _hash
-            )
-        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", kernel.getDomainSeparator(), _hash));
 
         bytes32 _wrongHash = keccak256(abi.encodePacked("bye world"));
 
