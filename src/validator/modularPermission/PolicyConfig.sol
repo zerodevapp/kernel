@@ -4,6 +4,11 @@ import "./IPolicy.sol";
 
 type PolicyConfig is bytes32;
 
+function toFlag(uint256 x) pure returns (bytes12) {
+    return bytes12(bytes32(x << 160));
+}
+
+bytes12 constant MAX_FLAG = 0xffffffffffffffffffffffff;
 // PolicyData is a 32 bytes array that contains the address of the policy
 // [flags(12 bytes), address(20 bytes)]
 // flags is 96 bits that contains the following information

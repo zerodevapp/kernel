@@ -244,7 +244,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
                 )
             );
             validationData = _intersectValidationData(
-                _validateSignature(enableDigest, signature[cursor:cursor + length]),
+                _validateSignature(address(this), enableDigest, signature[cursor:cursor + length]),
                 ValidationData.wrap(
                     uint256(bytes32(signature[4:36]))
                         & 0xffffffffffffffffffffffff0000000000000000000000000000000000000000
@@ -269,7 +269,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     /// @param hash The hash of the data that was signed
     /// @param signature The signature to be validated
     function validateSignature(bytes32 hash, bytes calldata signature) public view returns (ValidationData) {
-        return _validateSignature(hash, signature);
+        return _validateSignature(msg.sender, hash, signature);
     }
 
     /// @dev Get the current name & version of the kernel, used for the EIP-712 domain separator
@@ -305,7 +305,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         // Recreate the signed message hash with the correct domain separator
         bytes32 signedMessageHash = keccak256(abi.encodePacked("\x19\x01", domainSeparator, hash));
 
-        ValidationData validationData = validateSignature(signedMessageHash, signature);
+        ValidationData validationData = _validateSignature(msg.sender, signedMessageHash, signature);
         (ValidAfter validAfter, ValidUntil validUntil, address result) = parseValidationData(validationData);
 
         // Check if the signature is valid within the specified time frame and the result is successful
@@ -365,7 +365,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     /// @param _hash The hash of the data that was signed
     /// @param _signature The signature to be validated
     /// @return The magic value 0x1626ba7e if the signature is valid, otherwise returns 0xffffffff.
-    function _validateSignature(bytes32 _hash, bytes calldata _signature)
+    function _validateSignature(address _requestor, bytes32 _hash, bytes calldata _signature)
         internal
         view
         virtual
@@ -378,7 +378,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         // 20 bytes added at the end of the signature to store the address of the caller
         (bool success, bytes memory res) = validator.staticcall(
             abi.encodePacked(
-                abi.encodeWithSelector(IKernelValidator.validateSignature.selector, _hash, _signature), msg.sender
+                abi.encodeWithSelector(IKernelValidator.validateSignature.selector, _hash, _signature), _requestor
             )
         );
         require(success, "Kernel::_validateSignature: failed to validate signature");

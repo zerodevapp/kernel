@@ -7,7 +7,7 @@ import {IKernelValidator} from "src/interfaces/IKernelValidator.sol";
 import {ISigner} from "./ISigner.sol";
 import {IPolicy} from "./IPolicy.sol";
 import {_intersectValidationData} from "src/utils/KernelHelper.sol";
-import {PolicyConfig, PolicyConfigLib} from "./PolicyConfig.sol";
+import {PolicyConfig, PolicyConfigLib, toFlag, MAX_FLAG} from "./PolicyConfig.sol";
 
 struct Permission {
     uint128 nonce;
@@ -19,7 +19,7 @@ struct Permission {
 }
 
 struct Nonce {
-    uint128 latest;
+    uint128 next;
     uint128 revoked;
 }
 
@@ -27,6 +27,7 @@ struct Nonce {
 /// @notice Validator that allows to register and revoke permissions
 /// @dev modular architecture to allow composable permission system
 contract ModularPermissionValidator is IKernelValidator {
+    mapping(address => bytes32) public priorityPermission;
     mapping(bytes32 permissionId => mapping(address kernel => Permission)) public permissions;
     mapping(bytes32 permissionId => mapping(PolicyConfig policy => mapping(address kernel => PolicyConfig))) public
         nextPolicy;
@@ -114,9 +115,13 @@ contract ModularPermissionValidator is IKernelValidator {
         bytes calldata signerData,
         bytes[] calldata policyData
     ) public payable {
-        require(flag != bytes12(0), "flag should not be empty");
+        require(flag != toFlag(0), "flag should not be empty");
+        require(nonce == nonces[msg.sender].next, "nonce should be next");
         bytes32 permissionId =
             getPermissionId(nonce, flag, signer, validAfter, validUntil, policy, signerData, policyData);
+        if(flag == MAX_FLAG) {
+            priorityPermission[msg.sender] = permissionId;
+        }
 
         for (uint256 i = 0; i < policy.length; i++) {
             //TODO make sure address of the policy is sorted
@@ -141,7 +146,7 @@ contract ModularPermissionValidator is IKernelValidator {
     }
 
     function revokePermission(bytes32 permissionId) public payable {
-        permissions[permissionId][msg.sender].flag = bytes12(0); // NOTE: making flag == 0 makes it invalid
+        permissions[permissionId][msg.sender].flag = toFlag(0); // NOTE: making flag == 0 makes it invalid
         emit PermissionRevoked(msg.sender, permissionId);
     }
 
@@ -158,9 +163,8 @@ contract ModularPermissionValidator is IKernelValidator {
         require(_userOp.sender == msg.sender, "sender must be msg.sender");
         bytes32 permissionId = bytes32(_userOp.signature[0:32]);
         if (
-            address(PolicyConfigLib.getAddress(permissions[permissionId][msg.sender].firstPolicy)) != address(0)
-                && permissions[permissionId][msg.sender].nonce < nonces[msg.sender].revoked
-                && permissions[permissionId][msg.sender].flag != bytes12(0)
+            permissions[permissionId][msg.sender].flag & toFlag(1) == toFlag(0)
+                || permissions[permissionId][msg.sender].nonce > nonces[msg.sender].revoked
         ) {
             return SIG_VALIDATION_FAILED;
         }
@@ -215,11 +219,12 @@ contract ModularPermissionValidator is IKernelValidator {
     {
         ValidationSigMemory memory sigMemory;
         sigMemory.permissionId = bytes32(signature[0:32]);
-        require(
-            nonces[msg.sender].revoked <= permissions[sigMemory.permissionId][msg.sender].nonce
-                && permissions[sigMemory.permissionId][msg.sender].flag != bytes12(0),
-            "nonce revoked"
-        );
+        if(
+            nonces[msg.sender].revoked > permissions[sigMemory.permissionId][msg.sender].nonce
+                || permissions[sigMemory.permissionId][msg.sender].flag & toFlag(2) == toFlag(0)
+        ) {
+            return SIG_VALIDATION_FAILED;
+        }
         Permission memory permission = permissions[sigMemory.permissionId][msg.sender];
         // signature should be packed with
         // (permissionId, [proof || signature])

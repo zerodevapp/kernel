@@ -6,7 +6,14 @@ contract SignaturePolicy is IPolicy {
     mapping(bytes32 => mapping(address => mapping(address => bool))) public allowedCaller;
 
     function registerPolicy(address kernel, bytes32 permissionId, bytes calldata policyData) external payable {
-        allowedCaller[permissionId][address(bytes20(policyData))][kernel] = true;
+        address[] memory callers = abi.decode(policyData, (address[]));
+        for (uint256 i = 0; i < callers.length; i++) {
+            if(callers[i] == address(0)) {
+                allowedCaller[permissionId][kernel][kernel] = true;
+            } else {
+                allowedCaller[permissionId][callers[i]][kernel] = true;
+            }
+        }
     }
 
     function checkUserOpPolicy(
