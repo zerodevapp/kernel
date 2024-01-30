@@ -5,8 +5,14 @@
     "fullDeployment": 14120
   },
   "signature": {
-    "viaKernel": 13902,
-    "viaValidator": 13442
+    "ko_viaKernel": 11929,
+    "ko_viaValidator": 9455,
+    "viaKernel": 11911,
+    "viaValidator": 9443
   },
-  "userOp": ""
+  "userOp": {
+    "viaEntryPoint": 173360,
+    "viaKernel": 13229,
+    "viaValidator": 7173
+  }
 }

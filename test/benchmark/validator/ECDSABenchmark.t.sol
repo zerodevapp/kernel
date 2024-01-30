@@ -1,22 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {Test} from "forge-std/Test.sol";
-import {console} from "forge-std/Console.sol";
-
 import {Kernel} from "src/Kernel.sol";
-import {KernelFactory} from "src/factory/KernelFactory.sol";
-import {IKernel} from "src/interfaces/IKernel.sol";
-import {IKernelValidator} from "src/interfaces/IKernelValidator.sol";
 import {ECDSAValidator} from "src/validator/ECDSAValidator.sol";
-import {KernelStorage} from "src/abstract/KernelStorage.sol";
+import {ERC4337Utils} from "src/utils/ERC4337Utils.sol";
 
 import {BaseValidatorBenchmark} from "../BaseValidatorBenchmark.t.sol";
-
 import {IEntryPoint} from "I4337/interfaces/IEntryPoint.sol";
 import {UserOperation} from "I4337/interfaces/UserOperation.sol";
-
 import {ECDSA} from "solady/utils/ECDSA.sol";
+
+using ERC4337Utils for IEntryPoint;
 
 /// @dev Benchmark of the ECDSA validator
 /// @author KONFeature
@@ -56,11 +50,6 @@ contract ECDSABenchmark is BaseValidatorBenchmark {
         return "";
     }
 
-    /// @dev Get the initialisation data for the current validator
-    function _getInitData() internal view virtual override returns (bytes memory) {
-        return abi.encodeWithSelector(IKernel.initialize.selector, _validator, abi.encodePacked(_ecdsaOwner));
-    }
-
     /// @dev Generate the signature for the given `_userOperation`
     function _generateUserOpSignature(UserOperation memory _userOperation)
         internal
@@ -69,7 +58,8 @@ contract ECDSABenchmark is BaseValidatorBenchmark {
         override
         returns (bytes memory)
     {
-        return abi.encodePacked(_userOperation.signature);
+        // Do a regular ecdsa signature
+        return _entryPoint.signUserOpHash(vm, _ecdsaOwnerKey, _userOperation);
     }
 
     /// @dev Generate the signature for the given `_hash`
