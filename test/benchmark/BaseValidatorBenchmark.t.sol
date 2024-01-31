@@ -9,6 +9,7 @@ import {KernelFactory} from "src/factory/KernelFactory.sol";
 import {IKernel} from "src/interfaces/IKernel.sol";
 import {IKernelValidator} from "src/interfaces/IKernelValidator.sol";
 import {ValidationData} from "src/common/Types.sol";
+import {Operation} from "src/common/Enums.sol";
 import {ERC4337Utils} from "src/utils/ERC4337Utils.sol";
 
 import {IEntryPoint} from "I4337/interfaces/IEntryPoint.sol";
@@ -323,7 +324,8 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, Test {
     /// @dev Get a dummy user op
     function _getDummyUserOp() private view returns (UserOperation memory) {
         bytes memory dummyCallData = abi.encodeWithSelector(DummyContract.doDummyShit.selector);
-        return _entryPoint.fillUserOp(address(_kernel), dummyCallData);
+        bytes memory executeCallData = abi.encodeWithSelector(IKernel.execute.selector, address(_dummyContract), 0, dummyCallData, Operation.Call);
+        return _entryPoint.fillUserOp(address(_kernel), executeCallData);
     }
 
     /// @dev Get a dummy user op
