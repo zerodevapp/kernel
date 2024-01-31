@@ -2,6 +2,7 @@ pragma solidity ^0.8.0;
 
 import {IEntryPoint} from "I4337/interfaces/IEntryPoint.sol";
 import {IKernel} from "src/interfaces/IKernel.sol";
+import {Kernel} from "src/Kernel.sol";
 import {IKernelValidator} from "src/interfaces/IKernelValidator.sol";
 import {Operation} from "src/common/Enums.sol";
 import "src/validator/modularPermission/ModularPermissionValidator.sol";
@@ -119,36 +120,6 @@ contract ModularPermissionE2ETest is KernelTestBase {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey + 1, hash);
         return abi.encodePacked(getPermissionId(), r, s, v);
     }
-    //    function testValidateSignature() external {
-    //
-    //        require(address(uint160(bytes20(bytes32(ret) << 96))) == address(0));
-    //        require(success);
-    //        vm.stopPrank();
-    //        vm.startPrank(d.kernel);
-    //        (success, ret) = address(validator).call(
-    //            abi.encodePacked(
-    //                abi.encodeWithSelector(
-    //                    ModularPermissionValidator.validateSignature.selector,
-    //                    d.digest,
-    //                    abi.encodePacked(
-    //                        permissionId,
-    //                        d.eip712,
-    //                        uint256(100),
-    //                        d.domainSeparator,
-    //                        d.typeHash,
-    //                        uint32(1),
-    //                        uint256(d.encodeData) + 1
-    //                    )
-    //                ),
-    //                d.digest,
-    //                makeAddr("app")
-    //            )
-    //        );
-    //        require(address(uint160(bytes20(bytes32(ret) << 96))) == address(1));
-    //
-    //        require(success);
-    //        vm.stopPrank();
-    //    }
 
     struct MData {
         address kernel;
@@ -226,7 +197,7 @@ contract ModularPermissionE2ETest is KernelTestBase {
             )
         );
 
-        kernel.validateSignature(
+        bytes4 res = kernel.isValidSignature(
             d.digest,
             abi.encodePacked(
                 permissionId,
@@ -235,10 +206,81 @@ contract ModularPermissionE2ETest is KernelTestBase {
                 d.domainSeparator,
                 d.typeHash,
                 uint32(1),
-                uint256(d.encodeData),
+                uint256(d.encodeData), // you should put all data here
                 signHashWithoutPermissionId(wrappedDigest)
             )
         );
+        assertEq(res, Kernel.isValidSignature.selector);
+    }
+
+    function test_sessionKey_signature_greater_than() external {
+        MData memory d;
+        d.kernel = address(kernel);
+        d.until = ValidUntil.wrap(uint48(block.timestamp + 100));
+        d.sd = abi.encodePacked(owner);
+        d.eip712 = new EIP712Policy();
+        d.p = new PolicyConfig[](1);
+        d.p[0] = PolicyConfigLib.pack(d.eip712, toFlag(1)); // skip on userOp
+
+        d.domainSeparator = keccak256("DOMAIN_SEPARATOR");
+        d.typeHash = keccak256("TypeHash(bytes32 encodeData)");
+        d.encodeData = bytes32(uint256(0xdeadbeef));
+        d.digest = _hashTypedData(d.domainSeparator, keccak256(abi.encode(d.typeHash, uint256(d.encodeData) + 1)));
+        d.pd = new bytes[](1);
+        d.pd[0] = abi.encodePacked(d.domainSeparator, d.typeHash, bytes4(0), uint8(ParamRule.GreaterThan), d.encodeData);
+        bytes32 permissionId = ModularPermissionValidator(address(defaultValidator)).getPermissionId(
+            0,
+            MAX_FLAG, //flag
+            signer,
+            ValidAfter.wrap(1),
+            d.until,
+            d.p,
+            d.sd,
+            d.pd
+        );
+
+        bytes memory data = abi.encodePacked(
+            abi.encodePacked(
+                uint128(0), // nonce
+                MAX_FLAG, //flag
+                uint48(1), //`validAfter
+                d.until, // validUntil
+                address(signer)
+            ), // signer
+            abi.encode(d.p, d.sd, d.pd)
+        );
+        vm.startPrank(d.kernel);
+        defaultValidator.enable(data);
+        vm.stopPrank();
+        ModularPermissionConfig memory config;
+
+        (config.nonce, config.flag, config.signer, config.firstPolicy, config.validAfter, config.validUntil) =
+            ModularPermissionValidator(address(defaultValidator)).permissions(permissionId, d.kernel);
+        assertEq(config.nonce, uint128(0));
+        assertEq(config.flag, MAX_FLAG);
+        assertEq(ValidAfter.unwrap(config.validAfter), uint48(1));
+        assertEq(ValidUntil.unwrap(config.validUntil), ValidUntil.unwrap(d.until));
+        assertEq(address(config.signer), address(signer));
+        bytes32 wrappedDigest = keccak256(
+            abi.encodePacked(
+                "\x19\x01", ERC4337Utils._buildDomainSeparator(KERNEL_NAME, KERNEL_VERSION, address(kernel)), d.digest
+            )
+        );
+
+        bytes4 res = kernel.isValidSignature(
+            d.digest,
+            abi.encodePacked(
+                permissionId,
+                d.eip712,
+                uint256(100),
+                d.domainSeparator,
+                d.typeHash,
+                uint32(1),
+                uint256(d.encodeData) + 1, // you should put all data here
+                signHashWithoutPermissionId(wrappedDigest)
+            )
+        );
+        assertEq(res, Kernel.isValidSignature.selector);
     }
 
     function test_default_validator_enable() external override {

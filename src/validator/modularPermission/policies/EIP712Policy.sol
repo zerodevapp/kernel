@@ -95,9 +95,7 @@ contract EIP712Policy is IPolicy {
             }
             bytes32 structHash = keccak256(abi.encodePacked(typeHash, encodedData));
             bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
-            if (digest != _messageHash) {
-                return SIG_VALIDATION_FAILED;
-            }
+            require(digest == _rawHash, "digest != _rawHash");
         }
         // need to check eip712 hash equals to _rawHash
         EncodeDataRule memory encodeDataRule = allowedEIP712Params.encodeDataRule;
