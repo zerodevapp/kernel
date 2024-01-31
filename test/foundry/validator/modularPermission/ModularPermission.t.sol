@@ -8,13 +8,16 @@ import "src/validator/modularPermission/ModularPermissionValidator.sol";
 import "src/validator/modularPermission/signers/ECDSASigner.sol";
 import "src/validator/modularPermission/mock/MockPolicy.sol";
 import "src/validator/modularPermission/mock/MockSigner.sol";
+import "src/validator/modularPermission/policies/EIP712Policy.sol";
 import "forge-std/Test.sol";
 import {KernelTestBase} from "src/utils/KernelTestBase.sol";
 import {TestExecutor} from "src/mock/TestExecutor.sol";
 import {TestValidator} from "src/mock/TestValidator.sol";
 import {KernelStorage} from "src/abstract/KernelStorage.sol";
 import {ERC4337Utils} from "src/utils/ERC4337Utils.sol";
-import {SignaturePolicy} from "src/validator/modularPermission/SignaturePolicy.sol";
+import {SignaturePolicy} from "src/validator/modularPermission/policies/SignaturePolicy.sol";
+import {EIP712} from "solady/utils/EIP712.sol";
+import {KERNEL_NAME, KERNEL_VERSION} from "src/common/Constants.sol";
 
 using ERC4337Utils for IEntryPoint;
 
@@ -22,7 +25,6 @@ contract ModularPermissionE2ETest is KernelTestBase {
     ECDSASigner signer;
     MockPolicy mockPolicy;
     SignaturePolicy signaturePolicy;
-    bytes32 permissionId;
     address[] allowedCaller;
 
     function setUp() public virtual {
@@ -108,9 +110,135 @@ contract ModularPermissionE2ETest is KernelTestBase {
         return abi.encodePacked(getPermissionId(), r, s, v);
     }
 
+    function signHashWithoutPermissionId(bytes32 hash) internal view returns (bytes memory) {
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, hash);
+        return abi.encodePacked(r, s, v);
+    }
+
     function getWrongSignature(bytes32 hash) internal view override returns (bytes memory) {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey + 1, hash);
         return abi.encodePacked(getPermissionId(), r, s, v);
+    }
+    //    function testValidateSignature() external {
+    //
+    //        require(address(uint160(bytes20(bytes32(ret) << 96))) == address(0));
+    //        require(success);
+    //        vm.stopPrank();
+    //        vm.startPrank(d.kernel);
+    //        (success, ret) = address(validator).call(
+    //            abi.encodePacked(
+    //                abi.encodeWithSelector(
+    //                    ModularPermissionValidator.validateSignature.selector,
+    //                    d.digest,
+    //                    abi.encodePacked(
+    //                        permissionId,
+    //                        d.eip712,
+    //                        uint256(100),
+    //                        d.domainSeparator,
+    //                        d.typeHash,
+    //                        uint32(1),
+    //                        uint256(d.encodeData) + 1
+    //                    )
+    //                ),
+    //                d.digest,
+    //                makeAddr("app")
+    //            )
+    //        );
+    //        require(address(uint160(bytes20(bytes32(ret) << 96))) == address(1));
+    //
+    //        require(success);
+    //        vm.stopPrank();
+    //    }
+
+    struct MData {
+        address kernel;
+        ValidUntil until;
+        bytes sd;
+        EIP712Policy eip712;
+        PolicyConfig[] p;
+        bytes32 domainSeparator;
+        bytes32 typeHash;
+        bytes32 encodeData;
+        bytes32 digest;
+        bytes[] pd;
+    }
+
+    struct ModularPermissionConfig {
+        uint128 nonce;
+        bytes12 flag;
+        ISigner signer;
+        ValidAfter validAfter;
+        ValidUntil validUntil;
+        PolicyConfig firstPolicy;
+    }
+
+    function test_sessionKey_signature() external {
+        MData memory d;
+        d.kernel = address(kernel);
+        d.until = ValidUntil.wrap(uint48(block.timestamp + 100));
+        d.sd = abi.encodePacked(owner);
+        d.eip712 = new EIP712Policy();
+        d.p = new PolicyConfig[](1);
+        d.p[0] = PolicyConfigLib.pack(d.eip712, toFlag(1)); // skip on userOp
+
+        d.domainSeparator = keccak256("DOMAIN_SEPARATOR");
+        d.typeHash = keccak256("TypeHash(bytes32 encodeData)");
+        d.encodeData = bytes32(uint256(0xdeadbeef));
+        d.digest = _hashTypedData(d.domainSeparator, keccak256(abi.encode(d.typeHash, d.encodeData)));
+        d.pd = new bytes[](1);
+        d.pd[0] = abi.encodePacked(d.domainSeparator, d.typeHash, bytes4(0), uint8(ParamRule.Equal), d.encodeData);
+        bytes32 permissionId = ModularPermissionValidator(address(defaultValidator)).getPermissionId(
+            0,
+            MAX_FLAG, //flag
+            signer,
+            ValidAfter.wrap(1),
+            d.until,
+            d.p,
+            d.sd,
+            d.pd
+        );
+
+        bytes memory data = abi.encodePacked(
+            abi.encodePacked(
+                uint128(0), // nonce
+                MAX_FLAG, //flag
+                uint48(1), //`validAfter
+                d.until, // validUntil
+                address(signer)
+            ), // signer
+            abi.encode(d.p, d.sd, d.pd)
+        );
+        vm.startPrank(d.kernel);
+        defaultValidator.enable(data);
+        vm.stopPrank();
+        ModularPermissionConfig memory config;
+
+        (config.nonce, config.flag, config.signer, config.firstPolicy, config.validAfter, config.validUntil) =
+            ModularPermissionValidator(address(defaultValidator)).permissions(permissionId, d.kernel);
+        assertEq(config.nonce, uint128(0));
+        assertEq(config.flag, MAX_FLAG);
+        assertEq(ValidAfter.unwrap(config.validAfter), uint48(1));
+        assertEq(ValidUntil.unwrap(config.validUntil), ValidUntil.unwrap(d.until));
+        assertEq(address(config.signer), address(signer));
+        bytes32 wrappedDigest = keccak256(
+            abi.encodePacked(
+                "\x19\x01", ERC4337Utils._buildDomainSeparator(KERNEL_NAME, KERNEL_VERSION, address(kernel)), d.digest
+            )
+        );
+
+        kernel.validateSignature(
+            d.digest,
+            abi.encodePacked(
+                permissionId,
+                d.eip712,
+                uint256(100),
+                d.domainSeparator,
+                d.typeHash,
+                uint32(1),
+                uint256(d.encodeData),
+                signHashWithoutPermissionId(wrappedDigest)
+            )
+        );
     }
 
     function test_default_validator_enable() external override {
@@ -319,6 +447,115 @@ contract ModularPermissionUnitTest is Test {
         assertEq(skipPolicy.count(permissionId), 0);
     }
 
+    struct MData {
+        address kernel;
+        ValidUntil until;
+        bytes sd;
+        EIP712Policy eip712;
+        PolicyConfig[] p;
+        bytes32 domainSeparator;
+        bytes32 typeHash;
+        bytes32 encodeData;
+        bytes32 digest;
+        bytes[] pd;
+    }
+
+    function testValidateSignature() external {
+        MData memory d;
+        d.kernel = makeAddr("Kernel");
+        d.until = ValidUntil.wrap(uint48(block.timestamp + 100));
+        d.sd = abi.encodePacked("hello signer");
+        d.eip712 = new EIP712Policy();
+        d.p = new PolicyConfig[](1);
+        d.p[0] = PolicyConfigLib.pack(d.eip712, toFlag(1)); // skip on userOp
+
+        d.domainSeparator = keccak256("DOMAIN_SEPARATOR");
+        d.typeHash = keccak256("TypeHash(bytes32 encodeData)");
+        d.encodeData = bytes32(uint256(0xdeadbeef));
+        d.digest = _hashTypedData(d.domainSeparator, keccak256(abi.encode(d.typeHash, d.encodeData)));
+        d.pd = new bytes[](1);
+        d.pd[0] = abi.encodePacked(d.domainSeparator, d.typeHash, bytes4(0), uint8(ParamRule.Equal), d.encodeData);
+        bytes32 permissionId = validator.getPermissionId(
+            0,
+            MAX_FLAG, //flag
+            mockSigner,
+            ValidAfter.wrap(1),
+            d.until,
+            d.p,
+            d.sd,
+            d.pd
+        );
+
+        bytes memory data = abi.encodePacked(
+            abi.encodePacked(
+                uint128(0), // nonce
+                MAX_FLAG, //flag
+                uint48(1), //`validAfter
+                d.until, // validUntil
+                address(mockSigner)
+            ), // signer
+            abi.encode(d.p, d.sd, d.pd)
+        );
+        vm.startPrank(d.kernel);
+        validator.enable(data);
+        vm.stopPrank();
+
+        ModularPermissionConfig memory config;
+
+        (config.nonce, config.flag, config.signer, config.firstPolicy, config.validAfter, config.validUntil) =
+            validator.permissions(permissionId, d.kernel);
+        assertEq(config.nonce, uint128(0));
+        assertEq(config.flag, MAX_FLAG);
+        assertEq(ValidAfter.unwrap(config.validAfter), uint48(1));
+        assertEq(ValidUntil.unwrap(config.validUntil), ValidUntil.unwrap(d.until));
+        assertEq(address(config.signer), address(mockSigner));
+
+        UserOperation memory op;
+        op.sender = d.kernel;
+        op.signature = abi.encodePacked(permissionId);
+        vm.startPrank(d.kernel);
+        (bool success, bytes memory ret) = address(validator).call(
+            abi.encodePacked(
+                abi.encodeWithSelector(
+                    ModularPermissionValidator.validateSignature.selector,
+                    d.digest,
+                    abi.encodePacked(
+                        permissionId, d.eip712, uint256(100), d.domainSeparator, d.typeHash, uint32(1), d.encodeData
+                    )
+                ),
+                d.digest,
+                makeAddr("app")
+            )
+        );
+        require(address(uint160(bytes20(bytes32(ret) << 96))) == address(0));
+        require(success);
+        vm.stopPrank();
+        vm.startPrank(d.kernel);
+        (success, ret) = address(validator).call(
+            abi.encodePacked(
+                abi.encodeWithSelector(
+                    ModularPermissionValidator.validateSignature.selector,
+                    d.digest,
+                    abi.encodePacked(
+                        permissionId,
+                        d.eip712,
+                        uint256(100),
+                        d.domainSeparator,
+                        d.typeHash,
+                        uint32(1),
+                        uint256(d.encodeData) + 1
+                    )
+                ),
+                d.digest,
+                makeAddr("app")
+            )
+        );
+        require(address(uint160(bytes20(bytes32(ret) << 96))) == address(1));
+
+        require(success);
+        vm.stopPrank();
+    }
+
     function testValidateSignatureSkip() external {
         address kernel = makeAddr("Kernel");
         ValidUntil until = ValidUntil.wrap(uint48(block.timestamp + 100));
@@ -438,5 +675,18 @@ contract ModularPermissionUnitTest is Test {
 
         assertEq(mockSigner.count(permissionId), 1);
         assertEq(mockPolicy.count(permissionId), 1);
+    }
+}
+
+function _hashTypedData(bytes32 domain, bytes32 structHash) pure returns (bytes32 digest) {
+    /// @solidity memory-safe-assembly
+    assembly {
+        // Compute the digest.
+        mstore(0x00, 0x1901000000000000) // Store "\x19\x01".
+        mstore(0x1a, domain) // Store the domain separator.
+        mstore(0x3a, structHash) // Store the struct hash.
+        digest := keccak256(0x18, 0x42)
+        // Restore the part of the free memory slot that was overwritten.
+        mstore(0x3a, 0)
     }
 }

@@ -8,6 +8,7 @@ import {ISigner} from "./ISigner.sol";
 import {IPolicy} from "./IPolicy.sol";
 import {_intersectValidationData} from "src/utils/KernelHelper.sol";
 import {PolicyConfig, PolicyConfigLib, toFlag, MAX_FLAG} from "./PolicyConfig.sol";
+import "forge-std/console.sol";
 
 struct Permission {
     uint128 nonce;
@@ -207,6 +208,7 @@ contract ModularPermissionValidator is IKernelValidator {
     struct ValidationSigMemory {
         address caller;
         bytes32 permissionId;
+        bytes32 rawHash;
         uint256 cursor;
         PolicyConfig policy;
     }
@@ -238,6 +240,7 @@ contract ModularPermissionValidator is IKernelValidator {
         sigMemory.cursor = 0;
         sigMemory.policy = permission.firstPolicy;
         sigMemory.caller = address(bytes20(msg.data[msg.data.length - 20:]));
+        sigMemory.rawHash = bytes32(msg.data[msg.data.length - 52:msg.data.length - 20]);
         while (address(PolicyConfigLib.getAddress(sigMemory.policy)) != address(0)) {
             if (PolicyConfigLib.skipOnValidateSignature(sigMemory.policy)) {
                 sigMemory.policy = nextPolicy[sigMemory.permissionId][sigMemory.policy][msg.sender];
@@ -257,7 +260,7 @@ contract ModularPermissionValidator is IKernelValidator {
                 // not move cursor here
             }
             ValidationData policyValidation = PolicyConfigLib.getAddress(sigMemory.policy).validateSignature(
-                msg.sender, sigMemory.caller, sigMemory.permissionId, hash, policyData
+                msg.sender, sigMemory.caller, sigMemory.permissionId, hash, sigMemory.rawHash, policyData
             );
             validationData = _intersectValidationData(validationData, policyValidation);
             sigMemory.policy = nextPolicy[sigMemory.permissionId][sigMemory.policy][msg.sender];

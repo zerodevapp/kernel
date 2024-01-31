@@ -17,6 +17,7 @@ interface IPolicy {
         address caller,
         bytes32 permissionId,
         bytes32 messageHash,
+        bytes32 rawHash,
         bytes calldata signature
     ) external view returns (ValidationData);
 }

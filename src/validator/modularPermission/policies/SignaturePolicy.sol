@@ -1,6 +1,6 @@
 pragma solidity ^0.8.0;
 
-import "./IPolicy.sol";
+import "../IPolicy.sol";
 
 contract SignaturePolicy is IPolicy {
     mapping(bytes32 => mapping(address => mapping(address => bool))) public allowedRequestor;
@@ -31,6 +31,7 @@ contract SignaturePolicy is IPolicy {
         address caller,
         bytes32 permissionId,
         bytes32 messageHash,
+        bytes32 rawHash,
         bytes calldata signature
     ) external view override returns (ValidationData) {
         if (allowedRequestor[permissionId][caller][kernel]) {
