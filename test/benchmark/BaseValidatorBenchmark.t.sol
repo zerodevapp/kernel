@@ -18,12 +18,14 @@ import {ENTRYPOINT_0_6_ADDRESS, ENTRYPOINT_0_6_BYTECODE} from "I4337/artifacts/E
 
 import {MainnetMetering} from "gas-metering/MainnetMetering.sol";
 
+import {JsonBenchmarkerTest} from "./JsonBenchmarker.sol";
+
 using ERC4337Utils for IEntryPoint;
 using ERC4337Utils for Kernel;
 
 /// @dev Test contract used to perform benchmark of the differents validators
 /// @author KONFeature
-abstract contract BaseValidatorBenchmark is MainnetMetering, Test {
+abstract contract BaseValidatorBenchmark is MainnetMetering, JsonBenchmarkerTest {
     // @dev The different 'master' wallets
     address private _factoryOwner;
     address private _fakeKernel;
@@ -42,13 +44,6 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, Test {
     /// @dev The current validator we will benchmark
     IKernelValidator internal _validator;
 
-    /// @dev The JSON output of the benchmark
-    string private _jsonOutput;
-    string private _currentJson;
-
-    // Global benchmark config
-    bool private _isWriteEnabled;
-
     /// @dev dummy contract we will use to test user op
     DummyContract private _dummyContract;
 
@@ -60,7 +55,8 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, Test {
         // Prepare for gas mettering
         setUpMetering({verbose: false});
 
-        _isWriteEnabled = vm.envOr("WRITE_BENCHMARK_RESULT", false);
+        // Init the json write
+        _initJsonWriter();
 
         _dummyContract = new DummyContract();
 
@@ -105,6 +101,11 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, Test {
         return abi.encodePacked(bytes4(0x00000000), signature);
     }
 
+    /// @dev Get the current output file name
+    function _getOutputFileName() internal view virtual override returns (string memory) {
+        return string.concat("mainnet_", _getValidatorName());
+    }
+
     /* -------------------------------------------------------------------------- */
     /*                              Abstract methods                              */
     /* -------------------------------------------------------------------------- */
@@ -138,18 +139,15 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, Test {
 
         // Run the global methods
         console.log("Global:");
-        _currentJson = "global";
         _benchmark_fullDeployment();
         _benchmark_enable();
         _benchmark_disable();
-        _addToGlobalJson("global");
 
         // Run the user op related tests
         console.log("User op:");
         _benchmark_userOp_viaEntryPoint();
         _benchmark_userOp_viaKernel();
         _benchmark_userOp_viaValidator();
-        _addToGlobalJson("userOp");
 
         // Run the signature related test
         console.log("Signature:");
@@ -157,13 +155,6 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, Test {
         _benchmark_signature_viaKernel();
         _benchmark_signature_ko_viaValidator();
         _benchmark_signature_ko_viaKernel();
-        _addToGlobalJson("signature");
-
-        // Write the json output
-        if (_isWriteEnabled) {
-            string memory fileName = string.concat("./benchmarks/validator/", validatorName, ".json");
-            vm.writeJson(_jsonOutput, fileName);
-        }
     }
 
     /* -------------------------------------------------------------------------- */
@@ -324,7 +315,8 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, Test {
     /// @dev Get a dummy user op
     function _getDummyUserOp() private view returns (UserOperation memory) {
         bytes memory dummyCallData = abi.encodeWithSelector(DummyContract.doDummyShit.selector);
-        bytes memory executeCallData = abi.encodeWithSelector(IKernel.execute.selector, address(_dummyContract), 0, dummyCallData, Operation.Call);
+        bytes memory executeCallData =
+            abi.encodeWithSelector(IKernel.execute.selector, address(_dummyContract), 0, dummyCallData, Operation.Call);
         return _entryPoint.fillUserOp(address(_kernel), executeCallData);
     }
 
@@ -453,28 +445,6 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, Test {
 
     function _addToSignature(string memory _testCase, uint256 _gasUsed) private {
         _addResult("signature", _testCase, _gasUsed);
-    }
-
-    /// @dev Add benchmark result to the json and log it
-    function _addResult(string memory _key, string memory _testCase, uint256 _gasUsed) private {
-        // Log the output
-        console.log("- case: %s", _testCase);
-        console.log("    gas : ", _gasUsed);
-
-        // Add it to the json
-        if (_isWriteEnabled) {
-            _currentJson = vm.serializeUint(_key, _testCase, _gasUsed);
-        }
-    }
-
-    /// @dev Add the current json to the output one
-    function _addToGlobalJson(string memory _globalTest) private {
-        // Add the current json to the global one
-        if (_isWriteEnabled) {
-            _jsonOutput = vm.serializeString("final", _globalTest, _currentJson);
-        }
-        // Reset the current json
-        _currentJson = "";
     }
 
     /// @dev Revert the state after the run of the method

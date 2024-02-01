@@ -221,7 +221,7 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
                 return packValidationData(ValidAfter.wrap(0), ValidUntil.wrap(0));
             }
         } else if (proposal.status == ProposalStatus.Approved || passed) {
-            if(userOp.paymasterAndData.length == 0) {
+            if (userOp.paymasterAndData.length == 0) {
                 address signer = ECDSA.recover(ECDSA.toEthSignedMessageHash(userOpHash), userOp.signature);
                 if (guardian[signer][msg.sender].weight != 0) {
                     proposal.status = ProposalStatus.Executed;

@@ -1,0 +1,18 @@
+{
+    "global": {
+      "disable": 0,
+      "enable": 0,
+      "fullDeployment": 0
+    },
+    "signature": {
+      "ko_viaKernel": 0,
+      "ko_viaValidator": 0,
+      "viaKernel": 0,
+      "viaValidator": 0
+    },
+    "userOp": {
+      "viaEntryPoint": 0,
+      "viaKernel": 0,
+      "viaValidator": 0
+    }
+  }
