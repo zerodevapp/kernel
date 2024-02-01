@@ -165,7 +165,7 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
         proposal.status = ProposalStatus.Rejected;
     }
 
-    function validateUserOp(UserOperation calldata userOp, bytes32, uint256)
+    function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256)
         external
         payable
         returns (ValidationData validationData)
@@ -186,10 +186,10 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
             bytes calldata sig = userOp.signature;
             // parse sig with 65 bytes
             uint256 sigCount = sig.length / 65;
+            require(sigCount > 0, "No sig");
             address signer;
             VoteStorage storage vote;
-            for (uint256 i = 0; i < sigCount && !passed; i++) {
-                // last sig is for userOpHash verification
+            for (uint256 i = 0; i < sigCount - 1 && !passed; i++) {
                 signer = ECDSA.recover(
                     _hashTypedData(
                         keccak256(abi.encode(keccak256("Approve(bytes32 callDataAndNonceHash)"), callDataAndNonceHash))
@@ -206,18 +206,32 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
                     passed = true;
                 }
             }
-            if (passed) {
-                validationData = packValidationData(ValidAfter.wrap(0), ValidUntil.wrap(0));
+            // userOpHash verification for the last sig
+            signer = ECDSA.recover(ECDSA.toEthSignedMessageHash(userOpHash), sig[sig.length - 65:]);
+            vote = voteStatus[callDataAndNonceHash][signer][msg.sender];
+            if (vote.status == VoteStatus.NA) {
+                vote.status = VoteStatus.Approved;
+                totalWeight += guardian[signer][msg.sender].weight;
+                if (totalWeight >= threshold) {
+                    passed = true;
+                }
+            }
+            if (passed && guardian[signer][msg.sender].weight != 0) {
                 proposal.status = ProposalStatus.Executed;
-            } else {
-                validationData = SIG_VALIDATION_FAILED;
+                return packValidationData(ValidAfter.wrap(0), ValidUntil.wrap(0));
             }
         } else if (proposal.status == ProposalStatus.Approved || passed) {
-            validationData = packValidationData(proposal.validAfter, ValidUntil.wrap(0));
-            proposal.status = ProposalStatus.Executed;
-        } else {
-            return SIG_VALIDATION_FAILED;
+            if(userOp.paymasterAndData.length == 0) {
+                address signer = ECDSA.recover(ECDSA.toEthSignedMessageHash(userOpHash), userOp.signature);
+                if (guardian[signer][msg.sender].weight != 0) {
+                    proposal.status = ProposalStatus.Executed;
+                    return packValidationData(proposal.validAfter, ValidUntil.wrap(0));
+                }
+            } else {
+                return packValidationData(proposal.validAfter, ValidUntil.wrap(0));
+            }
         }
+        return SIG_VALIDATION_FAILED;
     }
 
     function getApproval(address kernel, bytes32 hash) public view returns (uint256 approvals, bool passed) {
