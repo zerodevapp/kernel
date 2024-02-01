@@ -11,7 +11,6 @@ import {MainnetMetering} from "gas-metering/MainnetMetering.sol";
 /// @notice Build to output a json like that: {"network": {"testCase": "gasUsed"}}
 /// @author KONFeature
 abstract contract JsonBenchmarkerTest is Test {
-
     /// @dev File path for the base json file (that will be copy pasted for new tests)
     string private constant _baseJsonFilePath = "./gas/validator/base.json";
 

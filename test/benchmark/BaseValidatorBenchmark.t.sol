@@ -47,9 +47,6 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, JsonBenchmarkerTest
     /// @dev dummy contract we will use to test user op
     DummyContract private _dummyContract;
 
-    /// @dev Snapshot used to reset the gas measurement
-    uint256 private _snapshot;
-
     /// @dev Init the base stuff required to run the benchmark
     function _init() internal {
         // Prepare for gas mettering
@@ -126,43 +123,11 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, JsonBenchmarkerTest
     function _generateHashSignature(bytes32 _hash) internal view virtual returns (bytes memory);
 
     /* -------------------------------------------------------------------------- */
-    /*                              Run the banchmark                             */
-    /* -------------------------------------------------------------------------- */
-
-    /// @dev Run the whole benchmark
-    function test_benchmark() public manuallyMetered {
-        _snapshot = vm.snapshot();
-        string memory validatorName = _getValidatorName();
-        console.log("=====================================");
-        console.log("Benchmarking: %s", validatorName);
-        console.log("=====================================");
-
-        // Run the global methods
-        console.log("Global:");
-        _benchmark_fullDeployment();
-        _benchmark_enable();
-        _benchmark_disable();
-
-        // Run the user op related tests
-        console.log("User op:");
-        _benchmark_userOp_viaEntryPoint();
-        _benchmark_userOp_viaKernel();
-        _benchmark_userOp_viaValidator();
-
-        // Run the signature related test
-        console.log("Signature:");
-        _benchmark_signature_viaValidator();
-        _benchmark_signature_viaKernel();
-        _benchmark_signature_ko_viaValidator();
-        _benchmark_signature_ko_viaKernel();
-    }
-
-    /* -------------------------------------------------------------------------- */
     /*                   Global methods (init, enable, disable)                   */
     /* -------------------------------------------------------------------------- */
 
     /// @dev Benchmark the enable of the given validator
-    function _benchmark_fullDeployment() private runInCleanState {
+    function test_fullDeployment() public manuallyMetered {
         // Don't save this in our gas measurement
         bytes memory initData = _getInitData();
 
@@ -183,7 +148,7 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, JsonBenchmarkerTest
     }
 
     /// @dev Benchmark the enable of the given validator
-    function _benchmark_enable() private runInCleanState {
+    function test_enable() public manuallyMetered {
         // Don't save this in our gas measurement
         bytes memory enableData = _getEnableData();
 
@@ -207,7 +172,7 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, JsonBenchmarkerTest
     }
 
     /// @dev Benchmark the disable of the given validator
-    function _benchmark_disable() private runInCleanState {
+    function test_disable() public manuallyMetered {
         // Don't save this in our gas measurement
         bytes memory disableData = _getDisableData();
 
@@ -237,7 +202,7 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, JsonBenchmarkerTest
     /* -------------------------------------------------------------------------- */
 
     /// @dev Benchmark the user op validation process only
-    function _benchmark_userOp_viaEntryPoint() private runInCleanState {
+    function test_userOp_viaEntryPoint() public manuallyMetered {
         // Build a dummy user op
         (UserOperation memory userOperation,) = _getSignedDummyUserOp();
 
@@ -257,11 +222,15 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, JsonBenchmarkerTest
             transaction: true,
             expectRevert: false
         });
+
+        // Ensure it has done some dummy shit
+        assertTrue(_dummyContract.hasDoneDummyShit(), "Should have done the dummy call");
+
         _addToUserOp("viaEntryPoint", gasConsumed);
     }
 
     /// @dev Benchmark the user op validation process only
-    function _benchmark_userOp_viaKernel() private runInCleanState {
+    function test_userOp_viaKernel() public manuallyMetered {
         // Build a dummy user op
         (UserOperation memory userOperation, bytes32 userOperationHash) = _getSignedDummyUserOp();
 
@@ -281,11 +250,14 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, JsonBenchmarkerTest
         // Required since when pranking meterCall don't stop the prank after, should PR there to fix that
         vm.stopPrank();
 
-        _addToUserOp("viaKernel", gasConsumed);
+        // Ensure it hasn't done some dummy shit
+        assertFalse(_dummyContract.hasDoneDummyShit(), "Shouldn't have executed the dummy call");
+
+        _addToUserOp("validationViaKernel", gasConsumed);
     }
 
     /// @dev Benchmark the user op validation process only
-    function _benchmark_userOp_viaValidator() private runInCleanState {
+    function test_userOp_viaValidator() public manuallyMetered {
         // Build a dummy user op
         (UserOperation memory userOperation, bytes32 userOperationHash) = _getSignedDummyUserOp();
 
@@ -309,7 +281,10 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, JsonBenchmarkerTest
         // Required since when pranking meterCall don't stop the prank after, should PR there to fix that
         vm.stopPrank();
 
-        _addToUserOp("viaValidator", gasConsumed);
+        // Ensure it hasn't done some dummy shit
+        assertFalse(_dummyContract.hasDoneDummyShit(), "Shouldn't have executed the dummy call");
+
+        _addToUserOp("validationViaValidator", gasConsumed);
     }
 
     /// @dev Get a dummy user op
@@ -334,7 +309,7 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, JsonBenchmarkerTest
     /* -------------------------------------------------------------------------- */
 
     /// @dev Benchmark on a direct signature validation on the validator level
-    function _benchmark_signature_viaValidator() private runInCleanState {
+    function test_signature_viaValidator() public manuallyMetered {
         bytes32 _hash = keccak256("0xacab");
         bytes memory signature = _generateHashSignature(_hash);
 
@@ -358,7 +333,7 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, JsonBenchmarkerTest
     }
 
     /// @dev Benchmark on a direct signature validation on the kernel level
-    function _benchmark_signature_viaKernel() private runInCleanState {
+    function test_signature_viaKernel() public manuallyMetered {
         bytes32 _hash = keccak256("0xacab");
         // Get a few data for the domain separator
         bytes32 domainSeparator = _kernel.getDomainSeparator();
@@ -382,7 +357,7 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, JsonBenchmarkerTest
     }
 
     /// @dev Benchmark on a direct signature validation on the validator level
-    function _benchmark_signature_ko_viaValidator() private {
+    function test_signature_ko_viaValidator() public manuallyMetered {
         bytes32 _hash = keccak256("0xacab");
         bytes memory signature = _generateHashSignature(_hash);
         _hash = keccak256("0xdeadacab");
@@ -407,7 +382,7 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, JsonBenchmarkerTest
     }
 
     /// @dev Benchmark on a direct signature validation on the kernel level
-    function _benchmark_signature_ko_viaKernel() private runInCleanState {
+    function test_signature_ko_viaKernel() public manuallyMetered {
         bytes32 _hash = keccak256("0xacab");
         // Get a few data for the domain separator
         bytes32 domainSeparator = _kernel.getDomainSeparator();
@@ -446,23 +421,21 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, JsonBenchmarkerTest
     function _addToSignature(string memory _testCase, uint256 _gasUsed) private {
         _addResult("signature", _testCase, _gasUsed);
     }
-
-    /// @dev Revert the state after the run of the method
-    modifier runInCleanState() {
-        vm.revertTo(_snapshot);
-        _;
-    }
 }
 
 /// @dev Dummy contract used to test the validator
 contract DummyContract {
-    function isDummy() public pure returns (bool) {
-        return true;
-    }
+    bool private _hasDoneDummyShit = false;
 
-    function doDummyShit() public pure {
+    function doDummyShit() public {
         bytes32 randomHash = keccak256("0xdeadbeef");
         bytes memory randomData = abi.encodePacked(randomHash);
         randomHash = keccak256(randomData);
+
+        _hasDoneDummyShit = true;
+    }
+
+    function hasDoneDummyShit() public view returns (bool) {
+        return _hasDoneDummyShit;
     }
 }

@@ -6,13 +6,13 @@
   },
   "signature": {
     "ko_viaKernel": 40973,
-    "ko_viaValidator": 28724,
+    "ko_viaValidator": 31224,
     "viaKernel": 40953,
     "viaValidator": 31214
   },
   "userOp": {
-    "viaEntryPoint": 172181,
-    "viaKernel": 43195,
-    "viaValidator": 31543
+    "viaEntryPoint": 192331,
+    "validationViaKernel": 43195,
+    "validationViaValidator": 31543
   }
 }

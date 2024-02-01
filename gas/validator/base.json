@@ -12,7 +12,7 @@
     },
     "userOp": {
       "viaEntryPoint": 0,
-      "viaKernel": 0,
-      "viaValidator": 0
+      "validationViaKernel": 0,
+      "validationViaValidator": 0
     }
   }
