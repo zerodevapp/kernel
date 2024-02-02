@@ -63,10 +63,12 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, JsonBenchmarkerTest
 
         // Init of the entry point
         vm.etch(ENTRYPOINT_0_6_ADDRESS, ENTRYPOINT_0_6_BYTECODE);
+        vm.label(ENTRYPOINT_0_6_ADDRESS, "EntryPoint");
         _entryPoint = IEntryPoint(payable(ENTRYPOINT_0_6_ADDRESS));
 
         // Deploy initial kernel implementation and factory
         _kernelImplementation = address(new Kernel(_entryPoint));
+        vm.label(_kernelImplementation, "KernelImplementation");
         _factory = new KernelFactory(_factoryOwner, _entryPoint);
 
         // Allow the factory to create new kernel
@@ -121,6 +123,11 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, JsonBenchmarkerTest
 
     /// @dev Generate the signature for the given `_hash`
     function _generateHashSignature(bytes32 _hash) internal view virtual returns (bytes memory);
+
+    /// @dev Generate the signature for the given `_hash`
+    function _generateWrongHashSignature(bytes32 _hash) internal view virtual returns (bytes memory) {
+        return _generateHashSignature(_hash | bytes32("0xdeadbeef"));
+    }
 
     /* -------------------------------------------------------------------------- */
     /*                   Global methods (init, enable, disable)                   */
@@ -359,8 +366,7 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, JsonBenchmarkerTest
     /// @dev Benchmark on a direct signature validation on the validator level
     function test_signature_ko_viaValidator() public manuallyMetered {
         bytes32 _hash = keccak256("0xacab");
-        bytes memory signature = _generateHashSignature(_hash);
-        _hash = keccak256("0xdeadacab");
+        bytes memory signature = _generateWrongHashSignature(_hash);
 
         // Prepare the call to execute
         bytes memory call = abi.encodeWithSelector(IKernelValidator.validateSignature.selector, _hash, signature);
@@ -388,8 +394,7 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, JsonBenchmarkerTest
         bytes32 domainSeparator = _kernel.getDomainSeparator();
         // Should create a digest of the hash
         bytes32 _digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, _hash));
-        bytes memory signature = _generateHashSignature(_digest);
-        _hash = keccak256("0xdeadacab");
+        bytes memory signature = _generateWrongHashSignature(_digest);
 
         // Prepare the call to execute
         bytes memory call = abi.encodeWithSelector(Kernel.isValidSignature.selector, _hash, signature);
