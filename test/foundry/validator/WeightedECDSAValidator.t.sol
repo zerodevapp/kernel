@@ -29,6 +29,19 @@ contract KernelWeightedECDSATest is KernelTestBase {
         (owners[0], ownerKeys[0]) = makeAddrAndKey("owner0");
         (owners[1], ownerKeys[1]) = makeAddrAndKey("owner1");
         (owners[2], ownerKeys[2]) = makeAddrAndKey("owner2");
+        // sort owners and keys from largest to smallest owner address
+        for (uint256 i = 0; i < owners.length; i++) {
+            for (uint256 j = i + 1; j < owners.length; j++) {
+                if (owners[i] < owners[j]) {
+                    address tempAddr = owners[i];
+                    owners[i] = owners[j];
+                    owners[j] = tempAddr;
+                    uint256 tempKey = ownerKeys[i];
+                    ownerKeys[i] = ownerKeys[j];
+                    ownerKeys[j] = tempKey;
+                }
+            }
+        }
         weights = [uint24(1), uint24(2), uint24(3)];
         threshold = 3;
         delay = 0;
@@ -84,7 +97,7 @@ contract KernelWeightedECDSATest is KernelTestBase {
             abi.encode(
                 keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
                 keccak256("WeightedECDSAValidator"),
-                keccak256("0.0.2"),
+                keccak256("0.0.3"),
                 block.chainid,
                 address(defaultValidator)
             )
@@ -142,17 +155,15 @@ contract KernelWeightedECDSATest is KernelTestBase {
     }
 
     function test_default_validator_disable() external override {
-        //UserOperation memory op = buildUserOperation(
-        //    abi.encodeWithSelector(
-        //        IKernel.execute.selector,
-        //        address(defaultValidator),
-        //        0,
-        //        abi.encodeWithSelector(ECDSAValidator.disable.selector, ""),
-        //        Operation.Call
-        //    )
-        //);
-        //performUserOperationWithSig(op);
-        //(address owner) = ECDSAValidator(address(defaultValidator)).ecdsaValidatorStorage(address(kernel));
-        //assertEq(owner, address(0), "owner should be 0");
+        UserOperation memory op = buildUserOperation(
+            abi.encodeWithSelector(
+                IKernel.execute.selector,
+                address(defaultValidator),
+                0,
+                abi.encodeWithSelector(WeightedECDSAValidator.disable.selector, ""),
+                Operation.Call
+            )
+        );
+        performUserOperationWithSig(op);
     }
 }
