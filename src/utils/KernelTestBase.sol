@@ -18,7 +18,7 @@ import {KERNEL_VERSION, KERNEL_NAME} from "../common/Constants.sol";
 
 import {ERC4337Utils} from "./ERC4337Utils.sol";
 import {Test} from "forge-std/Test.sol";
-import {console} from "forge-std/Console.sol";
+import {console} from "forge-std/console.sol";
 import {TestValidator} from "../mock/TestValidator.sol";
 import {TestExecutor} from "../mock/TestExecutor.sol";
 import {TestERC721} from "../mock/TestERC721.sol";
