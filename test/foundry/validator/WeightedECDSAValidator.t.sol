@@ -133,9 +133,9 @@ contract KernelWeightedECDSATest is KernelTestBase {
     }
 
     function getWrongSignature(bytes32 hash) internal view override returns (bytes memory) {
-        (uint8 v0, bytes32 r0, bytes32 s0) = vm.sign(ownerKeys[0], hash);
-        (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(ownerKeys[1] + 1, hash);
-        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(ownerKeys[2] + 1, hash);
+        (uint8 v0, bytes32 r0, bytes32 s0) = vm.sign(ownerKeys[1], hash);
+        (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(ownerKeys[0], hash);
+        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(ownerKeys[2], hash);
         return abi.encodePacked(r0, s0, v0, r1, s1, v1, r2, s2, v2);
     }
 

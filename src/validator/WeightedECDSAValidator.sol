@@ -272,7 +272,10 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
             if (totalWeight >= strg.threshold) {
                 return packValidationData(ValidAfter.wrap(0), ValidUntil.wrap(0));
             }
-            require(signer < prevSigner, "signature not in descending order");
+            if (signer >= prevSigner) {
+                return SIG_VALIDATION_FAILED;
+            }
+            prevSigner = signer;
         }
         return SIG_VALIDATION_FAILED;
     }
