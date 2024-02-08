@@ -43,3 +43,5 @@ jobs:
         run: NO_COLOR=1 forge snapshot >> $GITHUB_STEP_SUMMARY
         id: snapshot
 
+      - name: Run coverage
+        run: NO_COLOR=1 forge coverage >> $GITHUB_STEP_SUMMARY
