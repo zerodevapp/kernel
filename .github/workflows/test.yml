@@ -40,7 +40,7 @@ jobs:
         id: test
 
       - name: Run snapshot
-        run: NO_COLOR=1 forge snapshot >> $GITHUB_STEP_SUMMARY
+        run: NO_COLOR=1 forge snapshot --via-ir >> $GITHUB_STEP_SUMMARY
         id: snapshot
 
       - name: Run coverage
