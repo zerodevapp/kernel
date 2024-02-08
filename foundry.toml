@@ -13,8 +13,5 @@ runs = 1000000
 [profile.deploy]
 via-ir = true
 
-[profile.ci]
-via-ir = true
-
 [fuzz]
 runs = 1024
