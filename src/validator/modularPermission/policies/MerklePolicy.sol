@@ -38,7 +38,7 @@ contract MerklePolicy is IPolicy {
     ) external payable returns (ValidationData) {
         bytes calldata callData = userOp.callData;
         bytes32 root = merkleRoot[msg.sender][permissionId][kernel];
-        bytes4 sig = bytes4(userOp.signature[0:4]);
+        bytes4 sig = bytes4(callData[0:4]);
         if (sig == Kernel.execute.selector || sig == Kernel.executeDelegateCall.selector) {
             (Permission calldata permission, bytes32[] calldata merkleProof) = _getPermission(userOp.signature[85:]);
             bool verifyFailed = _verifyParam(root, callData, permission, merkleProof);
