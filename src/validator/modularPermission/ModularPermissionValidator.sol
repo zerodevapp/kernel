@@ -39,7 +39,6 @@ contract ModularPermissionValidator is IKernelValidator {
     event NonceRevoked(address kernel, uint256 nonce);
 
     function getPermissionId(
-        uint128 nonce,
         bytes12 flag,
         ISigner signer,
         ValidAfter validAfter,
@@ -50,7 +49,6 @@ contract ModularPermissionValidator is IKernelValidator {
     ) public pure returns (bytes32) {
         return keccak256(
             abi.encode(
-                nonce,
                 flag,
                 signer,
                 ValidAfter.unwrap(validAfter),
@@ -117,9 +115,9 @@ contract ModularPermissionValidator is IKernelValidator {
         bytes[] calldata policyData
     ) public payable {
         require(flag != toFlag(0), "flag should not be empty");
-        require(nonce == nonces[msg.sender].next, "nonce should be next");
+        require(nonce == nonces[msg.sender].next++, "nonce should be next");
         bytes32 permissionId =
-            getPermissionId(nonce, flag, signer, validAfter, validUntil, policy, signerData, policyData);
+            getPermissionId(flag, signer, validAfter, validUntil, policy, signerData, policyData);
         if (flag == MAX_FLAG) {
             priorityPermission[msg.sender] = permissionId;
         }
@@ -165,7 +163,7 @@ contract ModularPermissionValidator is IKernelValidator {
         bytes32 permissionId = bytes32(_userOp.signature[0:32]);
         if (
             permissions[permissionId][msg.sender].flag & toFlag(1) == toFlag(0)
-                || permissions[permissionId][msg.sender].nonce > nonces[msg.sender].revoked
+                || nonces[msg.sender].revoked > permissions[permissionId][msg.sender].nonce
         ) {
             return SIG_VALIDATION_FAILED;
         }
