@@ -22,6 +22,11 @@ struct WebAuthnFclValidatorStorage {
 /// @notice Using the awesome FreshCryptoLib: https://github.com/rdubois-crypto/FreshCryptoLib/
 /// @notice Inspired by the cometh Gnosis Safe signer: https://github.com/cometh-game/p256-signer
 contract WebAuthnFclValidator is IKernelValidator {
+    /// @dev Error throwned if someone is trying to update to the precompiled p256 verifier, but it's not yet enable on the current chain
+    error Rip7212NotavailableOnThisChain();
+    /// @dev Error throwned if the pre-compiled p256 verifier is already setup
+    error Rip7212AlreadyEnabled();
+
     /// @dev Event emitted when the public key signing the WebAuthN user operation is changed for a given `kernel`.
     event WebAuthnPublicKeyChanged(address indexed kernel, uint256 x, uint256 y);
 
@@ -30,11 +35,18 @@ contract WebAuthnFclValidator is IKernelValidator {
 
     /// @dev The address of the p256 verifier contract (should be 0x100 on the RIP-7212 compliant chains)
     /// @dev To follow up for the deployment: https://forum.polygon.technology/t/pip-27-precompiled-for-secp256r1-curve-support/13049
-    address public immutable P256_VERIFIER;
+    address private immutable P256_VERIFIER;
+
+    /// @dev The address of the pre-compiled p256 verifier
+    address constant P256_VERIFIER_PRECOMPILED = address(0x100);
+
+    /// @dev The current p256 verifier
+    address private currentP256Verifier;
 
     /// @dev Simple constructor, setting the P256 verifier address
     constructor(address _p256Verifier) {
         P256_VERIFIER = _p256Verifier;
+        currentP256Verifier = _p256Verifier;
     }
 
     /// @dev Disable this validator for a given `kernel` (msg.sender)
@@ -99,13 +111,30 @@ contract WebAuthnFclValidator is IKernelValidator {
         bytes calldata _signature
     ) private view returns (bool isValid) {
         return WebAuthnFclVerifier._verifyWebAuthNSignature(
-            P256_VERIFIER, _hash, _signature, _kernelValidatorStorage.x, _kernelValidatorStorage.y
+            currentP256Verifier, _hash, _signature, _kernelValidatorStorage.x, _kernelValidatorStorage.y
         );
     }
 
     /// @dev Check if the caller is a valid signer, this don't apply to the WebAuthN validator, since it's using a public key
     function validCaller(address, bytes calldata) external pure override returns (bool) {
         revert NotImplemented();
+    }
+
+    /// @dev Update the p256 verifier address if the pre-compiled version is available
+    function updateToRip7212() external {
+        // Early exit if already enabled
+        if (currentP256Verifier == P256_VERIFIER_PRECOMPILED) {
+            revert Rip7212AlreadyEnabled();
+        }
+
+        // Check if it's available, if not exit
+        if (!isP256PreCompiledAvailable()) {
+            currentP256Verifier = P256_VERIFIER;
+            revert Rip7212NotavailableOnThisChain();
+        }
+
+        // Update the current p256 verifier
+        currentP256Verifier = P256_VERIFIER_PRECOMPILED;
     }
 
     /* -------------------------------------------------------------------------- */
@@ -120,5 +149,29 @@ contract WebAuthnFclValidator is IKernelValidator {
         // Access it for x and y
         x = kernelValidatorStorage.x;
         y = kernelValidatorStorage.y;
+    }
+
+    /// @dev Check if the pre-compiled p256 verifier is available on this chain
+    function isP256PreCompiledAvailable() public view returns (bool) {
+        // Test signature data, from https://gist.github.com/ulerdogan/8f1714895e23a54147fc529ea30517eb
+        bytes memory testSignatureData =
+            hex"4cee90eb86eaa050036147a12d49004b6b9c72bd725d39d4785011fe190f0b4da73bd4903f0ce3b639bbbf6e8e80d16931ff4bcf5993d58468e8fb19086e8cac36dbcd03009df8c59286b162af3bd7fcc0450c9aa81be5d10d312af6c66b1d604aebd3099c618202fcfe16ae7770b0c49ab5eadf74b754204a3bb6060e44eff37618b065f9832de4ca6ca971a7a1adc826d0f7c00181a5fb2ddf79ae00b4e10e";
+
+        // Perform the static call
+        (bool success, bytes memory data) = P256_VERIFIER_PRECOMPILED.staticcall(testSignatureData);
+        if (!success) {
+            return false;
+        }
+
+        // Decode the result
+        bytes32 result = abi.decode(data, (bytes32));
+
+        // Check it's 1 (valid signature)
+        return result == bytes32(uint256(1));
+    }
+
+    /// @dev Get the current p256 verifier address
+    function getCurrentP256Verifier() public view returns (address) {
+        return currentP256Verifier;
     }
 }
