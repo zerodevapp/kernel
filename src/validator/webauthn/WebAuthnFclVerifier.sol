@@ -132,7 +132,10 @@ library WebAuthnFclVerifier {
 
         // Send the call the the p256 verifier
         (bool success, bytes memory ret) = _p256Verifier.staticcall(args);
-        assert(success); // never reverts, always returns 0 or 1
+        // If empty ret, return false
+        if (success == false || ret.length == 0) {
+            return false;
+        }
 
         // Ensure that it has returned 1
         return abi.decode(ret, (uint256)) == 1;

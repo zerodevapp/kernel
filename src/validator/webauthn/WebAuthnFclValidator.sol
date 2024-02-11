@@ -27,6 +27,9 @@ contract WebAuthnFclValidator is IKernelValidator {
     /// @dev Error throwned if the pre-compiled p256 verifier is already setup
     error Rip7212AlreadyEnabled();
 
+    /// @dev Event emitted when the p256 verifier is changed
+    event P256VerifierChanged(address newP256Verifier);
+
     /// @dev Event emitted when the public key signing the WebAuthN user operation is changed for a given `kernel`.
     event WebAuthnPublicKeyChanged(address indexed kernel, uint256 x, uint256 y);
 
@@ -121,19 +124,19 @@ contract WebAuthnFclValidator is IKernelValidator {
     }
 
     /// @dev Update the p256 verifier address if the pre-compiled version is available
-    function updateToRip7212() external {
+    function updateToPrecompiledP256() external {
         // Early exit if already enabled
         if (currentP256Verifier == P256_VERIFIER_PRECOMPILED) {
             revert Rip7212AlreadyEnabled();
         }
 
         // Check if it's available, if not exit
-        if (!isP256PreCompiledAvailable()) {
-            currentP256Verifier = P256_VERIFIER;
+        if (!isPreCompiledP256Available()) {
             revert Rip7212NotavailableOnThisChain();
         }
 
         // Update the current p256 verifier
+        emit P256VerifierChanged(P256_VERIFIER_PRECOMPILED);
         currentP256Verifier = P256_VERIFIER_PRECOMPILED;
     }
 
@@ -152,22 +155,22 @@ contract WebAuthnFclValidator is IKernelValidator {
     }
 
     /// @dev Check if the pre-compiled p256 verifier is available on this chain
-    function isP256PreCompiledAvailable() public view returns (bool) {
+    function isPreCompiledP256Available() public view returns (bool) {
         // Test signature data, from https://gist.github.com/ulerdogan/8f1714895e23a54147fc529ea30517eb
         bytes memory testSignatureData =
             hex"4cee90eb86eaa050036147a12d49004b6b9c72bd725d39d4785011fe190f0b4da73bd4903f0ce3b639bbbf6e8e80d16931ff4bcf5993d58468e8fb19086e8cac36dbcd03009df8c59286b162af3bd7fcc0450c9aa81be5d10d312af6c66b1d604aebd3099c618202fcfe16ae7770b0c49ab5eadf74b754204a3bb6060e44eff37618b065f9832de4ca6ca971a7a1adc826d0f7c00181a5fb2ddf79ae00b4e10e";
 
         // Perform the static call
         (bool success, bytes memory data) = P256_VERIFIER_PRECOMPILED.staticcall(testSignatureData);
-        if (!success) {
+        if (!success || data.length == 0) {
             return false;
         }
 
         // Decode the result
-        bytes32 result = abi.decode(data, (bytes32));
+        uint256 result = abi.decode(data, (uint256));
 
         // Check it's 1 (valid signature)
-        return result == bytes32(uint256(1));
+        return result == uint256(1);
     }
 
     /// @dev Get the current p256 verifier address
