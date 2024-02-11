@@ -172,9 +172,6 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, JsonBenchmarkerTest
             expectRevert: false
         });
 
-        // Required since when pranking meterCall don't stop the prank after, should PR there to fix that
-        vm.stopPrank();
-
         _addToGlobal("enable", gasConsumed);
     }
 
@@ -195,9 +192,6 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, JsonBenchmarkerTest
             transaction: true,
             expectRevert: false
         });
-
-        // Required since when pranking meterCall don't stop the prank after, should PR there to fix that
-        vm.stopPrank();
 
         _addToGlobal("disable", gasConsumed);
     }
@@ -254,9 +248,6 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, JsonBenchmarkerTest
             expectRevert: false
         });
 
-        // Required since when pranking meterCall don't stop the prank after, should PR there to fix that
-        vm.stopPrank();
-
         // Ensure it hasn't done some dummy shit
         assertFalse(_dummyContract.hasDoneDummyShit(), "Shouldn't have executed the dummy call");
 
@@ -284,9 +275,6 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, JsonBenchmarkerTest
             transaction: true,
             expectRevert: false
         });
-
-        // Required since when pranking meterCall don't stop the prank after, should PR there to fix that
-        vm.stopPrank();
 
         // Ensure it hasn't done some dummy shit
         assertFalse(_dummyContract.hasDoneDummyShit(), "Shouldn't have executed the dummy call");
@@ -333,9 +321,6 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, JsonBenchmarkerTest
             expectRevert: false
         });
 
-        // Required since when pranking meterCall don't stop the prank after, should PR there to fix that
-        vm.stopPrank();
-
         _addToSignature("viaValidator", gasConsumed);
     }
 
@@ -380,9 +365,6 @@ abstract contract BaseValidatorBenchmark is MainnetMetering, JsonBenchmarkerTest
             transaction: true,
             expectRevert: false
         });
-
-        // Required since when pranking meterCall don't stop the prank after, should PR there to fix that
-        vm.stopPrank();
 
         _addToSignature("ko_viaValidator", gasConsumed);
     }

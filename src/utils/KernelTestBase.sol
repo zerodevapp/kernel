@@ -202,7 +202,7 @@ abstract contract KernelTestBase is Test {
         bytes32 hash = ECDSA.toEthSignedMessageHash(bytes(message));
         bytes32 digest = keccak256(
             abi.encodePacked(
-                "\x19\x01", ERC4337Utils._buildDomainSeparator(KERNEL_NAME, KERNEL_VERSION, address(kernel)), hash
+                "\x19\x01", ERC4337Utils.getDomainSeparator(kernel), hash
             )
         );
         bytes memory sig = signHash(digest);
