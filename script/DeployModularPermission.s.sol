@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 import "src/validator/modularPermission/ModularPermissionValidator.sol";
 import "src/validator/modularPermission/signers/ECDSASigner.sol";
 import "src/validator/modularPermission/policies/GasPolicy.sol";
+import {MerklePolicy} from "src/validator/modularPermission/policies/MerklePolicy.sol";
 import "forge-std/Script.sol";
 import "forge-std/console.sol";
 
@@ -10,6 +11,7 @@ contract DeployModularPermission is Script {
     address constant EXPECTED_MODULAR_PERMISSION_ADDRESS = 0x965Bea0f8b65aABD1F5148F64654BbAAfB9d2Efa;
     address constant EXPECTED_ECDSA_SIGNER_ADDRESS = 0xF9E712F44A360ED8820aD624e41164f74a5a7456;
     address constant EXPECTED_GAS_POLICY_ADDRESS = 0x62868E950Efbb336DCFf033598Ee5E602f0a93cD;
+    address constant EXPECTED_MERKLE_POLICY_ADDRESS = 0xb808D75B5ACf6B5513eb816d3980C733ae6Be468;
 
     function run() public {
         uint256 key = vm.envUint("TESTNET_DEPLOYER_PRIVATE_KEY");
@@ -37,6 +39,14 @@ contract DeployModularPermission is Script {
             console.log("gasPolicy address: %s", address(gasPolicy));
         } else {
             console.log("gasPolicy address: %s", address(EXPECTED_GAS_POLICY_ADDRESS));
+        }
+
+        if (EXPECTED_MERKLE_POLICY_ADDRESS.code.length == 0) {
+            console.log("deploying MerklePolicy");
+            MerklePolicy merklePolicy = new MerklePolicy{salt: 0}();
+            console.log("merklePolicy address: %s", address(merklePolicy));
+        } else {
+            console.log("merklePolicy address: %s", address(EXPECTED_MERKLE_POLICY_ADDRESS));
         }
 
         vm.stopBroadcast();

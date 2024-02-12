@@ -40,15 +40,15 @@ contract MerklePolicy is IPolicy {
         bytes32 root = merkleRoot[msg.sender][permissionId][kernel];
         bytes4 sig = bytes4(callData[0:4]);
         if (sig == Kernel.execute.selector || sig == Kernel.executeDelegateCall.selector) {
-            (Permission calldata permission, bytes32[] calldata merkleProof) = _getPermission(userOp.signature[85:]);
+            (Permission calldata permission, bytes32[] calldata merkleProof) = _getPermission(proof);
             bool verifyFailed = _verifyParam(root, callData, permission, merkleProof);
             if (verifyFailed) {
                 revert MerklePolicyError(1); // merkle proof verification failed
             }
             return ValidationData.wrap(0);
         } else if (sig == Kernel.executeBatch.selector) {
-            Permission[] calldata permissions = _getPermissions(userOp.signature[85:]);
-            bytes32[][] calldata merkleProof = _getProofs(userOp.signature[85:]);
+            Permission[] calldata permissions = _getPermissions(proof);
+            bytes32[][] calldata merkleProof = _getProofs(proof);
             bool verifyFailed = _verifyParams(root, callData, permissions, merkleProof);
             if (verifyFailed) {
                 revert MerklePolicyError(1); // merkle proof verification failed
