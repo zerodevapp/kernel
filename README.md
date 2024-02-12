@@ -17,7 +17,7 @@ Kernel is supported by all major AA SDKs, including:
 
 ## Resources
 
-- [Developing plugins](https://docs.zerodev.app/extend-wallets/overview)
+- [Learn more about plugins](https://docs.zerodev.app/sdk/plugins/intro)
 - [Read the source code](https://github.com/zerodevapp/kernel)
 
 ## Build
