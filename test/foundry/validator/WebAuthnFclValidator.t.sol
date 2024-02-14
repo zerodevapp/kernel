@@ -208,7 +208,7 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
         uint256[2] memory rs = [type(uint256).max, type(uint256).max];
 
         // Encode all of that into a signature
-        bytes memory signature = abi.encode(authenticatorData, clientData, clientChallengeDataOffset, rs);
+        bytes memory signature = abi.encode(true, authenticatorData, clientData, clientChallengeDataOffset, rs);
 
         // Check the sig (and ensure we didn't revert here)
         bool isValid = webAuthNTester.verifySignature(address(p256VerifierWrapper), bytes32(0), signature, x, y);
@@ -234,7 +234,7 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
         uint256[2] memory rs = [r, s];
 
         // Encode all of that into a signature
-        bytes memory signature = abi.encode(authenticatorData, clientData, clientChallengeDataOffset, rs);
+        bytes memory signature = abi.encode(true, authenticatorData, clientData, clientChallengeDataOffset, rs);
 
         // Ensure the signature is valid
         bool isValid = webAuthNTester.verifySignature(address(p256VerifierWrapper), _hash, signature, pubX, pubY);
@@ -256,7 +256,7 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
         uint256[2] memory rs = [r, s];
 
         // Encode all of that into a signature
-        bytes memory signature = abi.encode(authenticatorData, clientData, clientChallengeDataOffset, rs);
+        bytes memory signature = abi.encode(true, authenticatorData, clientData, clientChallengeDataOffset, rs);
 
         // Ensure the signature is valid
         bool isValid = webAuthNTester.verifySignature(address(p256VerifierWrapper), _hash, signature, pubX, pubY);
@@ -281,7 +281,7 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
         uint256[2] memory rs = [r, s];
 
         // Return the signature
-        return abi.encode(authenticatorData, clientData, clientChallengeDataOffset, rs);
+        return abi.encode(true, authenticatorData, clientData, clientChallengeDataOffset, rs);
     }
 
     /// @dev Prepare all the base data needed to perform a webauthn signature o n the given `_hash`
@@ -310,6 +310,7 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
 
         // Build the signature layout
         WebAuthnFclVerifier.FclSignatureLayout memory sigLayout = WebAuthnFclVerifier.FclSignatureLayout({
+            useOnChainP256Verifier: true,
             authenticatorData: authenticatorData,
             clientData: clientData,
             challengeOffset: clientChallengeDataOffset,
@@ -330,7 +331,7 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
     uint256 constant P256_N_DIV_2 = 57896044605178124381348723474703786764998477612067880171211129530534256022184;
 
     /// @dev Generate a p256 signature, from the given `_privateKey` on the given `_hash`
-    function _getP256Signature(uint256 _privateKey, bytes32 _hash) internal view returns (uint256, uint256) {
+    function _getP256Signature(uint256 _privateKey, bytes32 _hash) internal pure returns (uint256, uint256) {
         // Generate the signature using the k value and the private key
         (bytes32 r, bytes32 s) = vm.signP256(_privateKey, _hash);
         return (uint256(r), uint256(s));
