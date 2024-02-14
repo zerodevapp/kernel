@@ -77,7 +77,7 @@ contract EIP712Policy is IPolicy {
         bytes32 _rawHash,
         bytes calldata _signature
     ) external view override returns (ValidationData) {
-        AllowedEIP712Params memory allowedEIP712Params = eip712Param[_permissionId][_caller][_kernel];
+        AllowedEIP712Params memory allowedEIP712Params = eip712Param[_permissionId][msg.sender][_kernel];
         bytes32[] memory encodedData = new bytes32[](uint32(bytes4(_signature[64:68])));
         uint256 cursor = 68;
         for (uint32 i = 0; i < encodedData.length; i++) {
@@ -97,7 +97,6 @@ contract EIP712Policy is IPolicy {
             bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
             require(digest == _rawHash, "digest != _rawHash");
         }
-        // need to check eip712 hash equals to _rawHash
         EncodeDataRule memory encodeDataRule = allowedEIP712Params.encodeDataRule;
         while (encodeDataRule.rule != ParamRule.NA) {
             if (encodeDataRule.rule == ParamRule.Equal) {

@@ -116,19 +116,25 @@ contract ModularPermissionValidator is IKernelValidator {
     ) public payable {
         require(flag != toFlag(0), "flag should not be empty");
         require(nonce == nonces[msg.sender].next++, "nonce should be next");
-        bytes32 permissionId =
-            getPermissionId(flag, signer, validAfter, validUntil, policy, signerData, policyData);
+        bytes32 permissionId = getPermissionId(flag, signer, validAfter, validUntil, policy, signerData, policyData);
         if (flag == MAX_FLAG) {
             priorityPermission[msg.sender] = permissionId;
         }
 
+        bytes12 maxFlag = flag;
         for (uint256 i = 0; i < policy.length; i++) {
             //TODO make sure address of the policy is sorted
             PolicyConfigLib.getAddress(policy[i]).registerPolicy(msg.sender, permissionId, policyData[i]);
+            // NOTE: flag for policy is inverted version of flag for permission;
+            bytes12 currentFlag = PolicyConfigLib.getFlags(policy[i]);
+            // turn off flags that are used,
+            // meaning that remaining maxFlag will indicate the permissions that are not used on this permission
+            maxFlag = currentFlag & maxFlag;
         }
         signer.registerSigner(msg.sender, permissionId, signerData);
 
         PolicyConfig firstPolicy = policy[0]; // NOTE : policy should not be empty array
+        require(maxFlag == bytes12(0), "error : permission flag exceeds policy flag");
         permissions[permissionId][msg.sender] = Permission(nonce, flag, signer, firstPolicy, validAfter, validUntil);
         for (uint256 i = 1; i < policy.length; i++) {
             nextPolicy[permissionId][policy[i - 1]][msg.sender] = policy[i];
