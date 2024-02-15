@@ -5,6 +5,7 @@ import {IKernel} from "src/interfaces/IKernel.sol";
 import {Kernel} from "src/Kernel.sol";
 import {IKernelValidator} from "src/interfaces/IKernelValidator.sol";
 import {Operation} from "src/common/Enums.sol";
+import {toPermissionFlag} from "src/validator/modularPermission/PolicyConfig.sol";
 import "src/validator/modularPermission/ModularPermissionValidator.sol";
 import "src/validator/modularPermission/signers/ECDSASigner.sol";
 import "src/validator/modularPermission/mock/MockPolicy.sol";
@@ -159,7 +160,7 @@ contract ModularPermissionE2ETest is KernelTestBase {
         d.pd = new bytes[](1);
         d.pd[0] = abi.encodePacked(d.domainSeparator, d.typeHash, bytes4(0), uint8(ParamRule.Equal), d.encodeData);
         bytes32 permissionId = ModularPermissionValidator(address(defaultValidator)).getPermissionId(
-            MAX_FLAG, //flag
+            toPermissionFlag(1), //flag
             signer,
             ValidAfter.wrap(1),
             d.until,
@@ -171,7 +172,7 @@ contract ModularPermissionE2ETest is KernelTestBase {
         bytes memory data = abi.encodePacked(
             abi.encodePacked(
                 uint128(1), // nonce
-                MAX_FLAG, //flag
+                toPermissionFlag(1), //flag
                 uint48(1), //`validAfter
                 d.until, // validUntil
                 address(signer)
@@ -186,7 +187,7 @@ contract ModularPermissionE2ETest is KernelTestBase {
         (config.nonce, config.flag, config.signer, config.firstPolicy, config.validAfter, config.validUntil) =
             ModularPermissionValidator(address(defaultValidator)).permissions(permissionId, d.kernel);
         assertEq(config.nonce, uint128(1));
-        assertEq(config.flag, MAX_FLAG);
+        assertEq(config.flag, toPermissionFlag(1));
         assertEq(ValidAfter.unwrap(config.validAfter), uint48(1));
         assertEq(ValidUntil.unwrap(config.validUntil), ValidUntil.unwrap(d.until));
         assertEq(address(config.signer), address(signer));
@@ -228,7 +229,7 @@ contract ModularPermissionE2ETest is KernelTestBase {
         d.pd = new bytes[](1);
         d.pd[0] = abi.encodePacked(d.domainSeparator, d.typeHash, bytes4(0), uint8(ParamRule.GreaterThan), d.encodeData);
         bytes32 permissionId = ModularPermissionValidator(address(defaultValidator)).getPermissionId(
-            MAX_FLAG, //flag
+            toPermissionFlag(1), //flag
             signer,
             ValidAfter.wrap(1),
             d.until,
@@ -240,7 +241,7 @@ contract ModularPermissionE2ETest is KernelTestBase {
         bytes memory data = abi.encodePacked(
             abi.encodePacked(
                 uint128(1), // nonce
-                MAX_FLAG, //flag
+                toPermissionFlag(1), //flag
                 uint48(1), //`validAfter
                 d.until, // validUntil
                 address(signer)
@@ -255,7 +256,7 @@ contract ModularPermissionE2ETest is KernelTestBase {
         (config.nonce, config.flag, config.signer, config.firstPolicy, config.validAfter, config.validUntil) =
             ModularPermissionValidator(address(defaultValidator)).permissions(permissionId, d.kernel);
         assertEq(config.nonce, uint128(1));
-        assertEq(config.flag, MAX_FLAG);
+        assertEq(config.flag, toPermissionFlag(1));
         assertEq(ValidAfter.unwrap(config.validAfter), uint48(1));
         assertEq(ValidUntil.unwrap(config.validUntil), ValidUntil.unwrap(d.until));
         assertEq(address(config.signer), address(signer));
@@ -438,7 +439,7 @@ contract ModularPermissionUnitTest is Test {
         pd[0] = abi.encodePacked("hello policy");
         pd[1] = abi.encodePacked("hello policy 2");
         bytes32 permissionId = validator.getPermissionId(
-            MAX_FLAG, //flag
+            toPermissionFlag(0), //flag
             mockSigner,
             ValidAfter.wrap(1),
             until,
@@ -450,7 +451,7 @@ contract ModularPermissionUnitTest is Test {
         bytes memory data = abi.encodePacked(
             abi.encodePacked(
                 uint128(0), // nonce
-                MAX_FLAG, //flag
+                toPermissionFlag(0), //flag
                 uint48(1), //`validAfter
                 until, // validUntil
                 address(mockSigner)
@@ -466,7 +467,7 @@ contract ModularPermissionUnitTest is Test {
         (config.nonce, config.flag, config.signer, config.firstPolicy, config.validAfter, config.validUntil) =
             validator.permissions(permissionId, kernel);
         assertEq(config.nonce, uint128(0));
-        assertEq(config.flag, MAX_FLAG);
+        assertEq(config.flag, toPermissionFlag(0));
         assertEq(ValidAfter.unwrap(config.validAfter), uint48(1));
         assertEq(ValidUntil.unwrap(config.validUntil), ValidUntil.unwrap(until));
         assertEq(address(config.signer), address(mockSigner));
@@ -515,7 +516,7 @@ contract ModularPermissionUnitTest is Test {
         d.pd = new bytes[](1);
         d.pd[0] = abi.encodePacked(d.domainSeparator, d.typeHash, bytes4(0), uint8(ParamRule.Equal), d.encodeData);
         bytes32 permissionId = validator.getPermissionId(
-            MAX_FLAG, //flag
+            toPermissionFlag(1), //flag
             mockSigner,
             ValidAfter.wrap(1),
             d.until,
@@ -527,7 +528,7 @@ contract ModularPermissionUnitTest is Test {
         bytes memory data = abi.encodePacked(
             abi.encodePacked(
                 uint128(0), // nonce
-                MAX_FLAG, //flag
+                toPermissionFlag(1), //flag
                 uint48(1), //`validAfter
                 d.until, // validUntil
                 address(mockSigner)
@@ -543,7 +544,7 @@ contract ModularPermissionUnitTest is Test {
         (config.nonce, config.flag, config.signer, config.firstPolicy, config.validAfter, config.validUntil) =
             validator.permissions(permissionId, d.kernel);
         assertEq(config.nonce, uint128(0));
-        assertEq(config.flag, MAX_FLAG);
+        assertEq(config.flag, toPermissionFlag(1));
         assertEq(ValidAfter.unwrap(config.validAfter), uint48(1));
         assertEq(ValidUntil.unwrap(config.validUntil), ValidUntil.unwrap(d.until));
         assertEq(address(config.signer), address(mockSigner));
@@ -569,6 +570,7 @@ contract ModularPermissionUnitTest is Test {
         require(success);
         vm.stopPrank();
         vm.startPrank(d.kernel);
+        d.digest = _hashTypedData(d.domainSeparator, keccak256(abi.encode(d.typeHash, uint256(d.encodeData) + 1)));
         (success, ret) = address(validator).call(
             abi.encodePacked(
                 abi.encodeWithSelector(
@@ -589,7 +591,6 @@ contract ModularPermissionUnitTest is Test {
             )
         );
         require(address(uint160(bytes20(bytes32(ret) << 96))) == address(1));
-
         require(success);
         vm.stopPrank();
     }

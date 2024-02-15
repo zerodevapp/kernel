@@ -8,6 +8,14 @@ function toFlag(uint256 x) pure returns (bytes12) {
     return bytes12(bytes32(x << 160));
 }
 
+function toPermissionFlag(uint256 x) pure returns(bytes12) {
+    bytes12 ret = bytes12(bytes32(x << 160));
+    assembly {
+        ret := not(ret)
+    }
+    return ret;
+}
+
 bytes12 constant MAX_FLAG = 0xffffffffffffffffffffffff;
 // PolicyData is a 32 bytes array that contains the address of the policy
 // [flags(12 bytes), address(20 bytes)]
