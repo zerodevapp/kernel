@@ -21,8 +21,12 @@ library WebAuthnFclVerifier {
     /// @dev Always 0x01 for user presence flag -> https://www.w3.org/TR/webauthn-2/#concept-user-present
     bytes1 private constant AUTHENTICATOR_DATA_FLAG_MASK = 0x01;
 
+    /// @dev The address of the pre-compiled p256 verifier contract (following RIP-7212)
+    address internal constant PRECOMPILED_P256_VERIFIER = address(0x100);
+
     /// @dev layout of a signature (used to extract the reauired payload from the initial calldata)
     struct FclSignatureLayout {
+        bool useOnChainP256Verifier;
         bytes authenticatorData;
         bytes clientData;
         uint256 challengeOffset;
@@ -103,7 +107,7 @@ library WebAuthnFclVerifier {
     }
 
     /// @dev Proceed to the full webauth verification
-    /// @param _p256Verifier The p256 verifier contract
+    /// @param _p256Verifier The p256 verifier contract on-chain (if user want to use this instead of the precompiled one)
     /// @param _hash The hash that has been signed via WebAuthN
     /// @param _signature The signature that has been provided with the userOp
     /// @param _x The X point of the public key
@@ -124,6 +128,11 @@ library WebAuthnFclVerifier {
             signature := _signature.offset
         }
 
+        // If the signature is using the on-chain p256 verifier, we will use it
+        if (!signature.useOnChainP256Verifier) {
+            _p256Verifier = PRECOMPILED_P256_VERIFIER;
+        }
+
         // Format the webauthn challenge into a p256 message
         bytes32 challenge = _formatWebAuthNChallenge(_hash, signature);
 
@@ -132,7 +141,10 @@ library WebAuthnFclVerifier {
 
         // Send the call the the p256 verifier
         (bool success, bytes memory ret) = _p256Verifier.staticcall(args);
-        assert(success); // never reverts, always returns 0 or 1
+        // If empty ret, return false
+        if (success == false || ret.length == 0) {
+            return false;
+        }
 
         // Ensure that it has returned 1
         return abi.decode(ret, (uint256)) == 1;
