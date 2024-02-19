@@ -1,88 +1,142 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.23;
 
-/**
- * @title ExecLib
- * To allow smart accounts to be very simple, but allow for more complex execution, A custom mode
- * encoding is used.
- *    Function Signature of execute function:
- *           function execute(ExecMode mode, bytes calldata executionCalldata) external payable;
- * This allows for a single bytes32 to be used to encode the execution mode, calltype, execType and
- * context.
- * NOTE: Simple Account implementations only have to scope for the most significant byte. Account  that
- * implement
- * more complex execution modes may use the entire bytes32.
- *
- * |--------------------------------------------------------------------|
- * | CALLTYPE  | EXECTYPE  |   UNUSED   | ModeSelector  |  ModePayload  |
- * |--------------------------------------------------------------------|
- * | 1 byte    | 1 byte    |   4 bytes  | 4 bytes       |   22 bytes    |
- * |--------------------------------------------------------------------|
- *
- * CALLTYPE: 1 byte
- * CallType is used to determine how the executeCalldata paramter of the execute function has to be
- * decoded.
- * It can be either single, batch or delegatecall. In the future different calls could be added.
- * CALLTYPE can be used by a validation module to determine how to decode <userOp.callData[36:]>.
- *
- * EXECTYPE: 1 byte
- * ExecType is used to determine how the account should handle the execution.
- * It can indicate if the execution should revert on failure or continue execution.
- * In the future more execution modes may be added.
- * Default Behavior (EXECTYPE = 0x00) is to revert on a single failed execution. If one execution in
- * a batch fails, the entire batch is reverted
- *
- * UNUSED: 4 bytes
- * Unused bytes are reserved for future use.
- *
- * ModeSelector: bytes4
- * The "optional" mode selector can be used by account vendors, to implement custom behavior in
- * their accounts.
- * the way a ModeSelector is to be calculated is bytes4(keccak256("vendorname.featurename"))
- * this is to prevent collisions between different vendors, while allowing innovation and the
- * development of new features without coordination between ERC-7579 implementing accounts
- *
- * ModePayload: 22 bytes
- * Mode payload is used to pass additional data to the smart account execution, this may be
- * interpreted depending on the ModeSelector
- *
- * ExecutionCallData: n bytes
- * single, delegatecall or batch exec abi.encoded as bytes
- */
-// Custom type for improved developer experience
-type ExecMode is bytes32;
-
-type CallType is bytes1;
-
-type ExecType is bytes1;
-
-type ModeSelector is bytes4;
-
-type ModePayload is bytes22;
-
-// Default CallTupe
-CallType constant CALLTYPE_SINGLE = CallType.wrap(0x00);
-// Batched CallType
-CallType constant CALLTYPE_BATCH = CallType.wrap(0x01);
-// @dev Implementing delegatecall is OPTIONAL!
-// implement delegatecall with extreme care.
-CallType constant CALLTYPE_DELEGATECALL = CallType.wrap(0xFF);
-
-// @dev default behavior is to revert on failure
-// To allow very simple accounts to use mode encoding, the default behavior is to revert on failure
-// Since this is value 0x00, no additional encoding is required for simple accounts
-ExecType constant EXECTYPE_DEFAULT = ExecType.wrap(0x00);
-// @dev account may elect to change execution behavior. For example "try exec" / "allow fail"
-ExecType constant EXECTYPE_TRY = ExecType.wrap(0x01);
-
-ModeSelector constant MODE_DEFAULT = ModeSelector.wrap(bytes4(0x00000000));
-// Example declaration of a custom mode selector
-ModeSelector constant MODE_OFFSET = ModeSelector.wrap(bytes4(keccak256("default.mode.offset")));
+import {ExecMode, CallType, ExecType, ModeSelector, ModePayload} from "../types/Types.sol";
+import {
+    CALLTYPE_SINGLE,
+    CALLTYPE_BATCH,
+    EXECTYPE_DEFAULT,
+    MODE_DEFAULT,
+    EXECTYPE_TRY,
+    CALLTYPE_DELEGATECALL
+} from "../types/Constants.sol";
+import {Execution} from "../types/Structs.sol";
 
 /**
- * @dev ExecLib is a helper library to encode/decode ExecModes
+ * @dev ExecLib is a helper library for execution
  */
 library ExecLib {
+    error ExecutionFailed();
+
+    event TryExecuteUnsuccessful(uint256 batchExecutionindex, bytes result);
+
+    function _execute(ExecMode execMode, bytes calldata executionCalldata)
+        internal
+        returns (bytes[] memory returnData)
+    {
+        (CallType callType, ExecType execType,,) = decode(execMode);
+
+        // check if calltype is batch or single
+        if (callType == CALLTYPE_BATCH) {
+            // destructure executionCallData according to batched exec
+            Execution[] calldata executions = decodeBatch(executionCalldata);
+            // check if execType is revert or try
+            if (execType == EXECTYPE_DEFAULT) returnData = _execute(executions);
+            else if (execType == EXECTYPE_TRY) returnData = _tryExecute(executions);
+            else revert("Unsupported");
+        } else if (callType == CALLTYPE_SINGLE) {
+            // destructure executionCallData according to single exec
+            (address target, uint256 value, bytes calldata callData) = decodeSingle(executionCalldata);
+            returnData = new bytes[](1);
+            bool success;
+            // check if execType is revert or try
+            if (execType == EXECTYPE_DEFAULT) {
+                returnData[0] = _execute(target, value, callData);
+            }
+            // TODO: implement event emission for tryExecute singleCall
+            else if (execType == EXECTYPE_TRY) {
+                (success, returnData[0]) = _tryExecute(target, value, callData);
+                if (!success) emit TryExecuteUnsuccessful(0, returnData[0]);
+            } else {
+                revert("Unsupported");
+            }
+        } else if (callType == CALLTYPE_DELEGATECALL) {
+            address delegate = address(bytes20(executionCalldata[0:20]));
+            bytes calldata callData = executionCalldata[20:];
+            _executeDelegatecall(delegate, callData);
+        } else {
+            revert("Unsupported");
+        }
+    }
+
+    function _execute(Execution[] calldata executions) internal returns (bytes[] memory result) {
+        uint256 length = executions.length;
+        result = new bytes[](length);
+
+        for (uint256 i; i < length; i++) {
+            Execution calldata _exec = executions[i];
+            result[i] = _execute(_exec.target, _exec.value, _exec.callData);
+        }
+    }
+
+    function _tryExecute(Execution[] calldata executions) internal returns (bytes[] memory result) {
+        uint256 length = executions.length;
+        result = new bytes[](length);
+
+        for (uint256 i; i < length; i++) {
+            Execution calldata _exec = executions[i];
+            bool success;
+            (success, result[i]) = _tryExecute(_exec.target, _exec.value, _exec.callData);
+            if (!success) emit TryExecuteUnsuccessful(i, result[i]);
+        }
+    }
+
+    function _execute(address target, uint256 value, bytes calldata callData) internal returns (bytes memory result) {
+        /// @solidity memory-safe-assembly
+        assembly {
+            result := mload(0x40)
+            calldatacopy(result, callData.offset, callData.length)
+            if iszero(call(gas(), target, value, result, callData.length, codesize(), 0x00)) {
+                // Bubble up the revert if the call reverts.
+                returndatacopy(result, 0x00, returndatasize())
+                revert(result, returndatasize())
+            }
+            mstore(result, returndatasize()) // Store the length.
+            let o := add(result, 0x20)
+            returndatacopy(o, 0x00, returndatasize()) // Copy the returndata.
+            mstore(0x40, add(o, returndatasize())) // Allocate the memory.
+        }
+    }
+
+    function _tryExecute(address target, uint256 value, bytes calldata callData)
+        internal
+        returns (bool success, bytes memory result)
+    {
+        /// @solidity memory-safe-assembly
+        assembly {
+            result := mload(0x40)
+            calldatacopy(result, callData.offset, callData.length)
+            if iszero(call(gas(), target, value, result, callData.length, codesize(), 0x00)) {
+                // Bubble up the revert if the call reverts.
+                returndatacopy(result, 0x00, returndatasize())
+                return(0, result)
+            }
+            mstore(result, returndatasize()) // Store the length.
+            let o := add(result, 0x20)
+            returndatacopy(o, 0x00, returndatasize()) // Copy the returndata.
+            mstore(0x40, add(o, returndatasize())) // Allocate the memory.
+        }
+    }
+
+    /// @dev Execute a delegatecall with `delegate` on this account.
+    function _executeDelegatecall(address delegate, bytes calldata callData) internal returns (bytes memory result) {
+        /// @solidity memory-safe-assembly
+        assembly {
+            result := mload(0x40)
+            calldatacopy(result, callData.offset, callData.length)
+            // Forwards the `data` to `delegate` via delegatecall.
+            if iszero(delegatecall(gas(), delegate, result, callData.length, codesize(), 0x00)) {
+                // Bubble up the revert if the call reverts.
+                returndatacopy(result, 0x00, returndatasize())
+                revert(result, returndatasize())
+            }
+            mstore(result, returndatasize()) // Store the length.
+            let o := add(result, 0x20)
+            returndatacopy(o, 0x00, returndatasize()) // Copy the returndata.
+            mstore(0x40, add(o, returndatasize())) // Allocate the memory.
+        }
+    }
+
     function decode(ExecMode mode)
         internal
         pure
@@ -118,20 +172,44 @@ library ExecLib {
             calltype := mode
         }
     }
-}
 
-using {eqModeSelector as ==} for ModeSelector global;
-using {eqCallType as ==} for CallType global;
-using {eqExecType as ==} for ExecType global;
+    function decodeBatch(bytes calldata callData) internal pure returns (Execution[] calldata executionBatch) {
+        /*
+         * Batch Call Calldata Layout
+         * Offset (in bytes)    | Length (in bytes) | Contents
+         * 0x0                  | 0x4               | bytes4 function selector
+        *  0x4                  | -                 |
+        abi.encode(IERC7579Execution.Execution[])
+         */
+        // solhint-disable-next-line no-inline-assembly
+        assembly ("memory-safe") {
+            let dataPointer := add(callData.offset, calldataload(callData.offset))
 
-function eqCallType(CallType a, CallType b) pure returns (bool) {
-    return CallType.unwrap(a) == CallType.unwrap(b);
-}
+            // Extract the ERC7579 Executions
+            executionBatch.offset := add(dataPointer, 32)
+            executionBatch.length := calldataload(dataPointer)
+        }
+    }
 
-function eqExecType(ExecType a, ExecType b) pure returns (bool) {
-    return ExecType.unwrap(a) == ExecType.unwrap(b);
-}
+    function encodeBatch(Execution[] memory executions) internal pure returns (bytes memory callData) {
+        callData = abi.encode(executions);
+    }
 
-function eqModeSelector(ModeSelector a, ModeSelector b) pure returns (bool) {
-    return ModeSelector.unwrap(a) == ModeSelector.unwrap(b);
+    function decodeSingle(bytes calldata executionCalldata)
+        internal
+        pure
+        returns (address target, uint256 value, bytes calldata callData)
+    {
+        target = address(bytes20(executionCalldata[0:20]));
+        value = uint256(bytes32(executionCalldata[20:52]));
+        callData = executionCalldata[52:];
+    }
+
+    function encodeSingle(address target, uint256 value, bytes memory callData)
+        internal
+        pure
+        returns (bytes memory userOpCalldata)
+    {
+        userOpCalldata = abi.encodePacked(target, value, callData);
+    }
 }

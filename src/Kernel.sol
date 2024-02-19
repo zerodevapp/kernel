@@ -6,9 +6,8 @@ import {IAccountExecute} from "./interfaces/IAccountExecute.sol";
 import {ModeManager, SigMode, SigData, PackedNonce, KernelNonceLib} from "./core/ModeManager.sol";
 import {IValidator, IHook, IExecutor} from "./interfaces/IERC7579Modules.sol";
 import "./utils/ExecLib.sol";
-import "./core/ExecutionHelper.sol";
 
-contract Kernel is IAccount, IAccountExecute, ModeManager, ExecutionHelper {
+contract Kernel is IAccount, IAccountExecute, ModeManager {
     error ExecutionReverted();
     error InvalidMode();
     error InvalidValidator();
@@ -27,6 +26,7 @@ contract Kernel is IAccount, IAccountExecute, ModeManager, ExecutionHelper {
         CallType callType; //1 bytes
         address target; // 20 bytes target will be fallback module, called with delegatecall or call
     }
+
     mapping(bytes4 selector => SelectorConfig) public selectorConfig;
 
     // erc7579 plugins
@@ -38,6 +38,7 @@ contract Kernel is IAccount, IAccountExecute, ModeManager, ExecutionHelper {
     mapping(IValidator validator => ValidatorConfig) public validatorConfig;
 
     struct ExecutorConfig {
+        bytes4 group;
         IHook hook; // address(1) : hook not required, address(0) : validator not installed
     }
 
@@ -70,7 +71,7 @@ contract Kernel is IAccount, IAccountExecute, ModeManager, ExecutionHelper {
         // if userOp.nonce starts with 0x0100 => permission mode
         //      **NOTE TO DEREK : i am on the way of making this 7579 native, so it's not implemented yet, planned to be changed,
         //      but leaving this note for now to make sure i implement something
-        //      data == abi.encodePacked(permissionId)
+        //      data == abi.encodePacked(permissionId) (bytes4)
         PackedNonce nonce = PackedNonce.wrap(userOp.nonce);
         _checkMode(KernelNonceLib.getMode(nonce), KernelNonceLib.getData(nonce));
         validationData = _doValidation(KernelNonceLib.getMode(nonce), KernelNonceLib.getData(nonce), userOp, userOpHash);
@@ -134,7 +135,7 @@ contract Kernel is IAccount, IAccountExecute, ModeManager, ExecutionHelper {
             context = _doPreHook(hook, userOp.callData[4:]);
         }
 
-        (bool success, bytes memory ret) = address(this).delegatecall(userOp.callData);
+        (bool success, bytes memory ret) = address(this).delegatecall(userOp.callData[4:]);
 
         if (address(hook) != address(1)) {
             _doPostHook(hook, context);
@@ -157,7 +158,7 @@ contract Kernel is IAccount, IAccountExecute, ModeManager, ExecutionHelper {
         if (address(hook) != address(1)) {
             context = _doPreHook(hook, msg.data);
         }
-        returnData = _execute(execMode, executionCalldata);
+        returnData = ExecLib._execute(execMode, executionCalldata);
         if (address(hook) != address(1)) {
             _doPostHook(hook, context);
         }
@@ -165,6 +166,6 @@ contract Kernel is IAccount, IAccountExecute, ModeManager, ExecutionHelper {
 
     function execute(ExecMode execMode, bytes calldata executionCalldata) external payable {
         // onlyEntrypointOrSelf
-        _execute(execMode, executionCalldata);
+        ExecLib._execute(execMode, executionCalldata);
     }
 }
