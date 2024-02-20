@@ -5,6 +5,7 @@ import {IEntryPoint} from "I4337/interfaces/IEntryPoint.sol";
 import {UserOperation} from "I4337/interfaces/UserOperation.sol";
 import "solady/utils/ECDSA.sol";
 import {Vm} from "forge-std/Test.sol";
+import {Kernel} from "../Kernel.sol";
 
 library ERC4337Utils {
     function test() public {}
@@ -67,5 +68,13 @@ library ERC4337Utils {
             keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
 
         return keccak256(abi.encode(typeHash, hashedName, hashedVersion, block.chainid, address(verifyingContract)));
+    }
+
+    /// @dev Returns the EIP-712 domain separator for the given kernel account.
+    function getDomainSeparator(Kernel kernel) internal view returns (bytes32 domainSeparator) {
+        // Extract a few infos from the kernel
+        (, string memory name, string memory version,,,,) = kernel.eip712Domain();
+        // Build the domain separator
+        domainSeparator = _buildDomainSeparator(name, version, address(kernel));
     }
 }

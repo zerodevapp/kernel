@@ -1,0 +1,18 @@
+{
+  "global": {
+    "disable": 2418,
+    "enable": 44714,
+    "fullDeployment": 24858
+  },
+  "signature": {
+    "ko_viaKernel": 40973,
+    "ko_viaValidator": 31224,
+    "viaKernel": 40953,
+    "viaValidator": 31214
+  },
+  "userOp": {
+    "viaEntryPoint": 192331,
+    "validationViaKernel": 43195,
+    "validationViaValidator": 31543
+  }
+}

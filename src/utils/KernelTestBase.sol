@@ -26,6 +26,7 @@ import {TestERC721} from "../mock/TestERC721.sol";
 import {TestERC1155} from "../mock/TestERC1155.sol";
 
 using ERC4337Utils for IEntryPoint;
+using ERC4337Utils for Kernel;
 
 abstract contract KernelTestBase is Test {
     // to support 0.8.19
@@ -201,7 +202,7 @@ abstract contract KernelTestBase is Test {
         bytes32 hash = ECDSA.toEthSignedMessageHash(bytes(message));
         bytes32 digest = keccak256(
             abi.encodePacked(
-                "\x19\x01", ERC4337Utils._buildDomainSeparator(KERNEL_NAME, KERNEL_VERSION, address(kernel)), hash
+                "\x19\x01", ERC4337Utils.getDomainSeparator(kernel), hash
             )
         );
         bytes memory sig = signHash(digest);
@@ -455,7 +456,7 @@ abstract contract KernelTestBase is Test {
         return keccak256(
             abi.encodePacked(
                 "\x19\x01",
-                ERC4337Utils._buildDomainSeparator(KERNEL_NAME, KERNEL_VERSION, address(kernel)),
+                kernel.getDomainSeparator(),
                 ERC4337Utils.getStructHash(sig, validUntil, validAfter, validator, executor, enableData)
             )
         );

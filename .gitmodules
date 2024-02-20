@@ -10,3 +10,6 @@
 [submodule "lib/solady"]
 	path = lib/solady
 	url = https://github.com/vectorized/solady
+[submodule "lib/forge-gas-metering"]
+	path = lib/forge-gas-metering
+	url = https://github.com/emo-eth/forge-gas-metering
