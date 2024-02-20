@@ -12,23 +12,19 @@ contract Kernel is IAccount, IAccountExecute, ModeManager {
     error InvalidMode();
     error InvalidValidator();
     error InvalidExecutor();
-    // when eip 1153 has been enabled, this can be transient storage
+    error InvalidFallback();
+    error InvalidCallType();
 
+    error OnlyExecuteUserOp();
+    error InvalidSignature();
+
+    // NOTE : when eip 1153 has been enabled, this can be transient storage
     mapping(bytes32 userOpHash => IHook) public executionHook;
 
     // root validator cannot and should not be deleted
     IValidator public rootValidator;
 
-    // selector
-    struct SelectorConfig {
-        // group of this selector action
-        bytes4 group; // 4 bytes, shows which group owns this selector, owner group can call this selector
-        CallType callType; //1 bytes
-        address target; // 20 bytes target will be fallback module, called with delegatecall or call
-    }
-
-    mapping(bytes4 selector => SelectorConfig) public selectorConfig;
-
+    // CHECK is it better to have a group config?
     // erc7579 plugins
     struct ValidatorConfig {
         bytes4 group;
@@ -37,6 +33,23 @@ contract Kernel is IAccount, IAccountExecute, ModeManager {
 
     mapping(IValidator validator => ValidatorConfig) public validatorConfig;
 
+    function _installValidator(
+        IValidator validator,
+        bytes4 group,
+        IHook hook,
+        bytes calldata data,
+        bytes calldata hookData
+    ) internal {
+        if (address(hook) == address(0)) {
+            hook = IHook(address(1));
+        }
+        validatorConfig[validator] = ValidatorConfig({group: group, hook: hook});
+        validator.onInstall(data);
+        if (address(hook) != address(1)) {
+            hook.onInstall(hookData);
+        }
+    }
+
     struct ExecutorConfig {
         bytes4 group;
         IHook hook; // address(1) : hook not required, address(0) : validator not installed
@@ -44,8 +57,49 @@ contract Kernel is IAccount, IAccountExecute, ModeManager {
 
     mapping(IExecutor executor => ExecutorConfig) public executorConfig;
 
-    // validation part
+    function _installExecutor(IExecutor executor, bytes4 group, IHook hook, bytes calldata data) internal {
+        executorConfig[executor] = ExecutorConfig({group: group, hook: hook});
+        executor.onInstall(data);
+    }
 
+    struct SelectorConfig {
+        bytes4 group; // group of this selector action
+        IHook hook; // 20 bytes for hook address
+        CallType callType; //1 bytes
+        address target; // 20 bytes target will be fallback module, called with delegatecall or call
+    }
+
+    mapping(bytes4 selector => SelectorConfig) public selectorConfig;
+
+    function _installSelector(bytes4 selector, bytes4 group, IHook hook, CallType callType, address target) internal {
+        selectorConfig[selector] = SelectorConfig({group: group, hook: hook, callType: callType, target: target});
+        // TODO : how should i "INSTALL" the delegatecall?
+    }
+
+    fallback() external payable {
+        SelectorConfig memory config = selectorConfig[msg.sig];
+        if (address(config.hook) == address(0)) {
+            revert InvalidFallback();
+        }
+        bytes memory context;
+        if (address(config.hook) != address(1)) {
+            context = _doPreHook(config.hook, msg.data);
+        }
+        // do fallback execute
+        if (config.callType == CALLTYPE_SINGLE) {
+            ExecLib._execute(config.target, msg.value, msg.data);
+        } else if (config.callType == CALLTYPE_DELEGATECALL) {
+            ExecLib._executeDelegatecall(config.target, msg.data);
+        } else {
+            revert InvalidCallType();
+        }
+
+        if (address(config.hook) != address(1)) {
+            _doPostHook(config.hook, context);
+        }
+    }
+
+    // validation part
     function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash, uint256 missingAccountFunds)
         external
         payable
@@ -68,13 +122,64 @@ contract Kernel is IAccount, IAccountExecute, ModeManager {
         //      data == abi.encodePacked(validatorAddress)
         // if userOp.nonce starts with 0x0002 => plugin enable mode (erc7579)
         //      data == abi.encodePacked(validatorAddress)
-        // if userOp.nonce starts with 0x0100 => permission mode
-        //      **NOTE TO DEREK : i am on the way of making this 7579 native, so it's not implemented yet, planned to be changed,
+        // TODO : if userOp.nonce starts with 0x0100 => permission mode
         //      but leaving this note for now to make sure i implement something
         //      data == abi.encodePacked(permissionId) (bytes4)
         PackedNonce nonce = PackedNonce.wrap(userOp.nonce);
         _checkMode(KernelNonceLib.getMode(nonce), KernelNonceLib.getData(nonce));
         validationData = _doValidation(KernelNonceLib.getMode(nonce), KernelNonceLib.getData(nonce), userOp, userOpHash);
+    }
+
+    function _parseEnableSig(bytes calldata signature)
+        internal
+        pure
+        returns (
+            bytes4 group,
+            IHook hook,
+            bytes calldata validatorData,
+            bytes calldata hookData,
+            bytes calldata enableSig,
+            bytes calldata userOpSig
+        )
+    {
+        group = bytes4(signature[0:4]);
+        hook = IHook(address(bytes20(signature[4:24])));
+        assembly {
+            validatorData.offset := add(add(signature.offset,32), calldataload(add(signature.offset,24)))
+            validatorData.length := calldataload(sub(validatorData.offset, 32))
+            hookData.offset := add(add(signature.offset,32), calldataload(add(signature.offset,56)))
+            hookData.length := calldataload(sub(hookData.offset, 32))
+            enableSig.offset := add(add(signature.offset,32), calldataload(add(signature.offset,88)))
+            enableSig.length := calldataload(sub(enableSig.offset, 32))
+            userOpSig.offset := add(add(signature.offset,32), calldataload(add(signature.offset,120)))
+            userOpSig.length := calldataload(sub(userOpSig.offset, 32))
+        }
+    }
+
+    function _checkEnableSig(
+        IValidator validator,
+        bytes4 group,
+        IHook hook,
+        bytes calldata validatorData,
+        bytes calldata hookData,
+        bytes calldata enableSig
+    ) internal {
+        // struct Enable {
+        //     address validator,
+        //     bytes4  group,
+        //     address hook,
+        //     bytes validatorData,
+        //     bytes hookData
+        // }
+        bytes32 hash;
+        _checkSignature(rootValidator, address(this), hash, enableSig);
+    }
+
+    function _checkSignature(IValidator validator, address caller, bytes32 hash, bytes calldata sig) internal {
+        bytes4 result = validator.isValidSignatureWithSender(caller, hash, sig);
+        if(result != 0x1626ba7e) {
+            revert InvalidSignature();
+        }
     }
 
     function _doValidation(SigMode sigMode, SigData sigData, PackedUserOperation calldata op, bytes32 userOpHash)
@@ -88,32 +193,48 @@ contract Kernel is IAccount, IAccountExecute, ModeManager {
             validator = IValidator(address(SigData.unwrap(sigData)));
         } else if (SigMode.unwrap(sigMode) == bytes2(uint16(2))) {
             validator = IValidator(address(SigData.unwrap(sigData)));
-            //_checkEnableSig();
-            //_addValidator();
+            (
+                bytes4 group,
+                IHook hook,
+                bytes calldata validatorData,
+                bytes calldata hookData,
+                bytes calldata enableSig,
+                bytes calldata userOpSig
+            ) = _parseEnableSig(op.signature);
+            _checkEnableSig(validator, group, hook, validatorData, hookData, enableSig);
+            _installValidator(validator, group, hook, validatorData, hookData);
         } else {
             revert InvalidMode();
         }
 
-        IHook hook = validatorConfig[validator].hook;
-        if (address(hook) == address(0)) {
+        IHook execHook = validatorConfig[validator].hook;
+        if (address(execHook) == address(0)) {
             revert InvalidValidator();
         }
-        executionHook[userOpHash] = hook;
+        executionHook[userOpHash] = execHook;
 
-        if (address(hook) == address(1)) {
+        if (address(execHook) == address(1)) {
+            // does not require hook
             if (selectorConfig[bytes4(op.callData[0:4])].group != validatorConfig[validator].group) {
                 revert InvalidValidator();
             }
         } else {
+            // requires hook
             if (selectorConfig[bytes4(op.callData[4:8])].group != validatorConfig[validator].group) {
                 revert InvalidValidator();
+            }
+            if (bytes4(op.callData[0:4]) != this.executeUserOp.selector) {
+                revert OnlyExecuteUserOp();
             }
         }
         validationData = ValidationData.wrap(validator.validateUserOp(op, userOpHash));
     }
 
-    // Hook part
-
+    // --- Hook ---
+    // Hook is activated on these scenarios
+    // - on 4337 flow, userOp.calldata starts with executeUserOp.selector && validator requires hook
+    // - executeFromExecutor() is invoked and executor requires hook
+    // - when fallback function has been invoked and fallback requires hook => native functions will not invoke hook
     function _doPreHook(IHook hook, bytes calldata callData) internal returns (bytes memory context) {
         context = hook.preCheck(msg.sender, callData);
     }
@@ -126,6 +247,7 @@ contract Kernel is IAccount, IAccountExecute, ModeManager {
         hook.postCheck(context);
     }
 
+    // --- Execution ---
     function executeUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash) external payable override {
         // onlyEntrypoint
         bytes memory context;
@@ -149,7 +271,7 @@ contract Kernel is IAccount, IAccountExecute, ModeManager {
         payable
         returns (bytes[] memory returnData)
     {
-        // no modifier needed
+        // no modifier needed, checking if msg.sender is registered executor will replace the modifier
         IHook hook = executorConfig[IExecutor(msg.sender)].hook;
         if (address(hook) == address(0)) {
             revert InvalidExecutor();
