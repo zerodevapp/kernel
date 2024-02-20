@@ -145,13 +145,13 @@ contract Kernel is IAccount, IAccountExecute, ModeManager {
         group = bytes4(signature[0:4]);
         hook = IHook(address(bytes20(signature[4:24])));
         assembly {
-            validatorData.offset := add(add(signature.offset,32), calldataload(add(signature.offset,24)))
+            validatorData.offset := add(add(signature.offset, 32), calldataload(add(signature.offset, 24)))
             validatorData.length := calldataload(sub(validatorData.offset, 32))
-            hookData.offset := add(add(signature.offset,32), calldataload(add(signature.offset,56)))
+            hookData.offset := add(add(signature.offset, 32), calldataload(add(signature.offset, 56)))
             hookData.length := calldataload(sub(hookData.offset, 32))
-            enableSig.offset := add(add(signature.offset,32), calldataload(add(signature.offset,88)))
+            enableSig.offset := add(add(signature.offset, 32), calldataload(add(signature.offset, 88)))
             enableSig.length := calldataload(sub(enableSig.offset, 32))
-            userOpSig.offset := add(add(signature.offset,32), calldataload(add(signature.offset,120)))
+            userOpSig.offset := add(add(signature.offset, 32), calldataload(add(signature.offset, 120)))
             userOpSig.length := calldataload(sub(userOpSig.offset, 32))
         }
     }
@@ -177,7 +177,7 @@ contract Kernel is IAccount, IAccountExecute, ModeManager {
 
     function _checkSignature(IValidator validator, address caller, bytes32 hash, bytes calldata sig) internal {
         bytes4 result = validator.isValidSignatureWithSender(caller, hash, sig);
-        if(result != 0x1626ba7e) {
+        if (result != 0x1626ba7e) {
             revert InvalidSignature();
         }
     }
