@@ -3,57 +3,31 @@ pragma solidity ^0.8.0;
 import {PackedUserOperation} from "./interfaces/PackedUserOperation.sol";
 import {IAccount, ValidationData} from "./interfaces/IAccount.sol";
 import {IAccountExecute} from "./interfaces/IAccountExecute.sol";
-import {ModeManager, SigMode, SigData, PackedNonce, KernelNonceLib} from "./core/ModeManager.sol";
+import {
+    ValidationManager,
+    ValidatorMode,
+    ValidatorIdentifier,
+    ValidatorLib,
+    ValidatorType
+} from "./core/PermissionManager.sol";
 import {IValidator, IHook, IExecutor} from "./interfaces/IERC7579Modules.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
 import "./utils/ExecLib.sol";
 
-contract Kernel is IAccount, IAccountExecute, ModeManager, EIP712 {
+contract Kernel is IAccount, IAccountExecute, ValidationManager {
     error ExecutionReverted();
-    error InvalidMode();
-    error InvalidValidator();
     error InvalidExecutor();
     error InvalidFallback();
     error InvalidCallType();
 
     error OnlyExecuteUserOp();
-    error InvalidSignature();
 
     // NOTE : when eip 1153 has been enabled, this can be transient storage
     mapping(bytes32 userOpHash => IHook) public executionHook;
 
-    // root validator cannot and should not be deleted
-    IValidator public rootValidator;
-
-    // CHECK is it better to have a group config?
-    // erc7579 plugins
-    struct ValidatorConfig {
-        bytes4 group;
-        IHook hook; // address(1) : hook not required, address(0) : validator not installed
-    }
-
-    mapping(IValidator validator => ValidatorConfig) public validatorConfig;
-
     function _domainNameAndVersion() internal pure override returns (string memory name, string memory version) {
         name = "Kernel";
         version = "3.0.0-beta";
-    }
-
-    function _installValidator(
-        IValidator validator,
-        bytes4 group,
-        IHook hook,
-        bytes calldata data,
-        bytes calldata hookData
-    ) internal {
-        if (address(hook) == address(0)) {
-            hook = IHook(address(1));
-        }
-        validatorConfig[validator] = ValidatorConfig({group: group, hook: hook});
-        validator.onInstall(data);
-        if (address(hook) != address(1)) {
-            hook.onInstall(hookData);
-        }
     }
 
     struct ExecutorConfig {
@@ -79,7 +53,7 @@ contract Kernel is IAccount, IAccountExecute, ModeManager, EIP712 {
 
     function _installSelector(bytes4 selector, bytes4 group, IHook hook, CallType callType, address target) internal {
         selectorConfig[selector] = SelectorConfig({group: group, hook: hook, callType: callType, target: target});
-        // TODO : how should i "INSTALL" the delegatecall?
+        // TODO : INSTALL FLOW IS NOT SUPPORTED YET
     }
 
     receive() external payable {}
@@ -133,113 +107,9 @@ contract Kernel is IAccount, IAccountExecute, ModeManager, EIP712 {
         // TODO : if userOp.nonce starts with 0x0100 => permission mode
         //      but leaving this note for now to make sure i implement something
         //      data == abi.encodePacked(permissionId) (bytes4)
-        PackedNonce nonce = PackedNonce.wrap(userOp.nonce);
-        _checkMode(KernelNonceLib.getMode(nonce), KernelNonceLib.getData(nonce));
-        validationData = _doValidation(KernelNonceLib.getMode(nonce), KernelNonceLib.getData(nonce), userOp, userOpHash);
-        assembly {
-            if missingAccountFunds {
-                pop(call(gas(), caller(), missingAccountFunds, callvalue(), callvalue(), callvalue(), callvalue()))
-                //ignore failure (its EntryPoint's job to verify, not account.)
-            }
-        }
-    }
-
-    function _parseEnableSig(bytes calldata signature)
-        internal
-        pure
-        returns (
-            bytes4 group,
-            IHook hook,
-            bytes calldata validatorData,
-            bytes calldata hookData,
-            bytes calldata enableSig,
-            bytes calldata userOpSig
-        )
-    {
-        group = bytes4(signature[0:4]);
-        hook = IHook(address(bytes20(signature[4:24])));
-        assembly {
-            validatorData.offset := add(add(signature.offset, 32), calldataload(add(signature.offset, 24)))
-            validatorData.length := calldataload(sub(validatorData.offset, 32))
-            hookData.offset := add(add(signature.offset, 32), calldataload(add(signature.offset, 56)))
-            hookData.length := calldataload(sub(hookData.offset, 32))
-            enableSig.offset := add(add(signature.offset, 32), calldataload(add(signature.offset, 88)))
-            enableSig.length := calldataload(sub(enableSig.offset, 32))
-            userOpSig.offset := add(add(signature.offset, 32), calldataload(add(signature.offset, 120)))
-            userOpSig.length := calldataload(sub(userOpSig.offset, 32))
-        }
-    }
-
-    // TODO: add nonce
-    function _checkEnableSig(
-        IValidator validator,
-        bytes4 group,
-        IHook hook,
-        bytes calldata validatorData,
-        bytes calldata hookData,
-        bytes calldata enableSig
-    ) internal view {
-        // struct Enable {
-        //     address validator,
-        //     bytes4  group,
-        //     address hook,
-        //     bytes validatorData,
-        //     bytes hookData
-        // }
-        bytes32 digest = _hashTypedData(
-            keccak256(
-                abi.encode(
-                    keccak256("Enable(address validator,bytes4 group,address hook,bytes validatorData,bytes hookData)"),
-                    validator,
-                    group,
-                    hook,
-                    keccak256(validatorData),
-                    keccak256(hookData)
-                )
-            )
-        );
-        bytes4 result = _validateSignature(rootValidator, address(this), digest, enableSig);
-        if (result != 0x1626ba7e) {
-            revert InvalidSignature();
-        }
-    }
-
-    function _validateSignature(IValidator validator, address caller, bytes32 digest, bytes calldata sig)
-        internal
-        view
-        returns (bytes4 result)
-    {
-        result = validator.isValidSignatureWithSender(caller, digest, sig);
-    }
-
-    function _doValidation(SigMode sigMode, SigData sigData, PackedUserOperation calldata op, bytes32 userOpHash)
-        internal
-        returns (ValidationData validationData)
-    {
-        IValidator validator;
-        PackedUserOperation memory userOp = op;
-        if (SigMode.unwrap(sigMode) == bytes2(0)) {
-            validator = rootValidator;
-        } else if (SigMode.unwrap(sigMode) == bytes2(uint16(1))) {
-            validator = IValidator(address(SigData.unwrap(sigData)));
-        } else if (SigMode.unwrap(sigMode) == bytes2(uint16(2))) {
-            validator = IValidator(address(SigData.unwrap(sigData)));
-            (
-                bytes4 group,
-                IHook hook,
-                bytes calldata validatorData,
-                bytes calldata hookData,
-                bytes calldata enableSig,
-                bytes calldata userOpSig
-            ) = _parseEnableSig(op.signature);
-            userOp.signature = userOpSig;
-            _checkEnableSig(validator, group, hook, validatorData, hookData, enableSig);
-            _installValidator(validator, group, hook, validatorData, hookData);
-        } else {
-            revert InvalidMode();
-        }
-
-        IHook execHook = validatorConfig[validator].hook;
+        (ValidatorMode vMode, ValidatorType vType, ValidatorIdentifier vId) = ValidatorLib.decode(userOp.nonce);
+        validationData = _doValidation(vMode, vType, vId, userOp, userOpHash);
+        IHook execHook = validatorConfig[vId].hook;
         if (address(execHook) == address(0)) {
             revert InvalidValidator();
         }
@@ -247,19 +117,25 @@ contract Kernel is IAccount, IAccountExecute, ModeManager, EIP712 {
 
         if (address(execHook) == address(1)) {
             // does not require hook
-            if (selectorConfig[bytes4(op.callData[0:4])].group != validatorConfig[validator].group) {
+            if (selectorConfig[bytes4(userOp.callData[0:4])].group != validatorConfig[vId].group) {
                 revert InvalidValidator();
             }
         } else {
             // requires hook
-            if (selectorConfig[bytes4(op.callData[4:8])].group != validatorConfig[validator].group) {
+            if (selectorConfig[bytes4(userOp.callData[4:8])].group != validatorConfig[vId].group) {
                 revert InvalidValidator();
             }
-            if (bytes4(op.callData[0:4]) != this.executeUserOp.selector) {
+            if (bytes4(userOp.callData[0:4]) != this.executeUserOp.selector) {
                 revert OnlyExecuteUserOp();
             }
         }
-        validationData = ValidationData.wrap(validator.validateUserOp(userOp, userOpHash));
+
+        assembly {
+            if missingAccountFunds {
+                pop(call(gas(), caller(), missingAccountFunds, callvalue(), callvalue(), callvalue(), callvalue()))
+                //ignore failure (its EntryPoint's job to verify, not account.)
+            }
+        }
     }
 
     // --- Hook ---
