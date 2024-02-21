@@ -20,7 +20,7 @@ struct Permission {
 }
 
 struct Nonce {
-    uint128 next;
+    uint128 lastNonce;
     uint128 revoked;
 }
 
@@ -115,7 +115,10 @@ contract ModularPermissionValidator is IKernelValidator {
         bytes[] calldata policyData
     ) public payable {
         require(flag != toFlag(0), "flag should not be empty");
-        require(nonce == nonces[msg.sender].next++, "nonce should be next");
+        require(
+            nonce == nonces[msg.sender].lastNonce || nonce == nonces[msg.sender].lastNonce + 1, "nonce should be next"
+        );
+        nonces[msg.sender].lastNonce++;
         bytes32 permissionId = getPermissionId(flag, signer, validAfter, validUntil, policy, signerData, policyData);
         if (flag == MAX_FLAG) {
             priorityPermission[msg.sender] = permissionId;

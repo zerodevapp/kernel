@@ -37,9 +37,14 @@ contract ECDSASigner is ISigner {
         override
         returns (ValidationData)
     {
-        require(signer[msg.sender][permissionId][kernel] != address(0), "ECDSASigner: kernel not registered");
-        address recovered = messageHash.recover(signature);
-        if (recovered == signer[msg.sender][permissionId][kernel]) {
+        address signerAddress = signer[msg.sender][permissionId][kernel];
+        require(signerAddress != address(0), "ECDSASigner: kernel not registered");
+        if (messageHash.recover(signature) == signerAddress) {
+            return ValidationData.wrap(0);
+        }
+        bytes32 ethHash = ECDSA.toEthSignedMessageHash(messageHash);
+        address recovered = ethHash.recover(signature);
+        if (recovered == signerAddress) {
             return ValidationData.wrap(0);
         }
         return SIG_VALIDATION_FAILED;
