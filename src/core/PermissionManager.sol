@@ -17,13 +17,23 @@ ValidatorType constant TYPE_PERMISSION = ValidatorType.wrap(0x02);
 
 using {vModeEqual as ==} for ValidatorMode global;
 using {vTypeEqual as ==} for ValidatorType global;
+using {vModeNotEqual as !=} for ValidatorMode global;
+using {vTypeNotEqual as !=} for ValidatorType global;
 
 function vModeEqual(ValidatorMode a, ValidatorMode b) pure returns (bool) {
     return ValidatorMode.unwrap(a) == ValidatorMode.unwrap(b);
 }
 
+function vModeNotEqual(ValidatorMode a, ValidatorMode b) pure returns (bool) {
+    return ValidatorMode.unwrap(a) != ValidatorMode.unwrap(b);
+}
+
 function vTypeEqual(ValidatorType a, ValidatorType b) pure returns (bool) {
     return ValidatorType.unwrap(a) == ValidatorType.unwrap(b);
+}
+
+function vTypeNotEqual(ValidatorType a, ValidatorType b) pure returns (bool) {
+    return ValidatorType.unwrap(a) != ValidatorType.unwrap(b);
 }
 
 function validatorToIdentifier(Validator validator) pure returns (ValidatorIdentifier vId) {
@@ -146,8 +156,10 @@ abstract contract ValidationManager is EIP712 {
         ValidatorType vType = getType(validator);
         if (vType == TYPE_VALIDATOR) {
             IValidator(getValidator(validator)).onInstall(data);
-        } else {
+        } else if (vType == TYPE_PERMISSION) {
             //TODO
+        } else {
+            revert InvalidValidator();
         }
         if (address(hook) != address(1)) {
             hook.onInstall(hookData);
@@ -184,16 +196,6 @@ abstract contract ValidationManager is EIP712 {
         internal
         returns (bytes calldata userOpSig)
     {
-        // (
-        //     bytes4 group,
-        //     uint48 validFrom,
-        //     uint48 validUntil,
-        //     IHook hook,
-        //     bytes calldata validatorData,
-        //     bytes calldata hookData,
-        //     bytes calldata enableSig,
-        //     bytes calldata userOpSig
-        // ) = _parseEnableSig(sig);
         if (getType(vId) == TYPE_VALIDATOR) {
             userOpSig = _doEnableValidator(vId, signature);
         } else {
@@ -227,7 +229,9 @@ abstract contract ValidationManager is EIP712 {
             enableSig.length := calldataload(sub(enableSig.offset, 32))
         }
 
-        _checkEnableSig(vId, currentNonce, group, validFrom, validUntil, hook, validatorData, hookData, enableSig);
+        _checkEnableValidatorSig(
+            vId, currentNonce, group, validFrom, validUntil, hook, validatorData, hookData, enableSig
+        );
         _installValidator(vId, currentNonce, group, validFrom, validUntil, hook, validatorData, hookData);
         assembly {
             userOpSig.offset := add(add(signature.offset, 32), calldataload(add(signature.offset, 132)))
@@ -235,38 +239,7 @@ abstract contract ValidationManager is EIP712 {
         }
     }
 
-    // function _parseEnableSig(bytes calldata signature)
-    //     internal
-    //     pure
-    //     returns (
-    //         bytes4 group,
-    //         uint48 validFrom,
-    //         uint48 validUntil,
-    //         IHook hook,
-    //         bytes calldata validatorData,
-    //         bytes calldata hookData,
-    //         bytes calldata enableSig,
-    //         bytes calldata userOpSig
-    //     )
-    // {
-    //     group = bytes4(signature[0:4]);
-    //     validFrom = uint48(bytes6(signature[4:10]));
-    //     validUntil = uint48(bytes6(signature[10:16]));
-    //     hook = IHook(address(bytes20(signature[16:36])));
-    //     assembly {
-    //         validatorData.offset := add(add(signature.offset, 32), calldataload(add(signature.offset, 36)))
-    //         validatorData.length := calldataload(sub(validatorData.offset, 32))
-    //         hookData.offset := add(add(signature.offset, 32), calldataload(add(signature.offset, 68)))
-    //         hookData.length := calldataload(sub(hookData.offset, 32))
-    //         enableSig.offset := add(add(signature.offset, 32), calldataload(add(signature.offset, 100)))
-    //         enableSig.length := calldataload(sub(enableSig.offset, 32))
-    //         userOpSig.offset := add(add(signature.offset, 32), calldataload(add(signature.offset, 132)))
-    //         userOpSig.length := calldataload(sub(userOpSig.offset, 32))
-    //     }
-    // }
-
-    // TODO: add nonce
-    function _checkEnableSig(
+    function _checkEnableValidatorSig(
         ValidatorIdentifier validator,
         uint32 nonce,
         bytes4 group,
@@ -277,16 +250,9 @@ abstract contract ValidationManager is EIP712 {
         bytes calldata hookData,
         bytes calldata enableSig
     ) internal view {
-        // struct Enable {
-        //     bytes21 validator,
-        //     bytes4  group,
-        //     uint48  validFrom,
-        //     uint48  validUntil,
-        //     uint32 nonce,
-        //     address hook,
-        //     bytes validatorData,
-        //     bytes hookData
-        // }
+        if (getType(validator) != TYPE_VALIDATOR) {
+            revert InvalidValidator();
+        }
         bytes32 digest = _hashTypedData(
             keccak256(
                 abi.encode(
