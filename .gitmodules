@@ -13,3 +13,6 @@
 [submodule "lib/solady"]
 	path = lib/solady
 	url = https://github.com/vectorized/solady
+[submodule "lib/foundry-chainlink-toolkit"]
+	path = lib/foundry-chainlink-toolkit
+	url = https://github.com/smartcontractkit/foundry-chainlink-toolkit

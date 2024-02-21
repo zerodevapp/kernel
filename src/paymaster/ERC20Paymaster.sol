@@ -9,11 +9,12 @@ import "account-abstraction/core/Helpers.sol";
 import "account-abstraction/interfaces/UserOperation.sol";
 import "account-abstraction/core/EntryPoint.sol";
 import "solady/utils/SafeTransferLib.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-/// @title PimlicoERC20Paymaster
-/// @notice An ERC-4337 Paymaster contract by Pimlico which sponsors gas fees in exchange for ERC20 tokens using Chainlink for price feeds.
-contract PimlicoERC20Paymaster is BasePaymaster {
-    using SafeTransferLib for IERC20;
+
+/// @title ERC20Paymaster
+contract ERC20Paymaster is BasePaymaster {
+    using SafeERC20 for IERC20;
 
     uint256 public constant priceDenominator = 1e6;
     uint256 public constant REFUND_POSTOP_COST = 40000; // Estimated gas cost for refunds
@@ -64,15 +65,36 @@ contract PimlicoERC20Paymaster is BasePaymaster {
         previousPrice = nativeAssetPrice * uint192(tokenDecimals) / tokenPrice;
     }
 
+
     function _validatePaymasterUserOp(UserOperation calldata userOp, bytes32, uint256 requiredPreFund)
         internal
         override
         returns (bytes memory context, uint256 validationResult)
     {
-        require(previousPrice != 0, "Price not set");
-        uint256 tokenAmount = calculateTokenAmount(requiredPreFund, userOp.maxFeePerGas);
-        SafeTransferLib.safeTransferFrom(address(token), userOp.sender, address(this), tokenAmount);
-        context = abi.encodePacked(tokenAmount, userOp.sender);
+        // Ensure the price has been updated and is not zero
+        require(previousPrice > 0, "Price not updated");
+
+
+        // Extract the maximum token amount the user agrees to spend from userOp.paymasterAndData
+        // This requires encoding the max token amount in paymasterAndData during the user operation setup
+        uint256 userMaxTokenAmount;
+        if (userOp.paymasterAndData.length > 20) {
+            userMaxTokenAmount = abi.decode(userOp.paymasterAndData[20:], (uint256));
+        } else {
+            revert("Invalid paymasterAndData length");
+        }
+
+        // Calculate the required token amount for the gas pre-funding
+        uint256 tokenAmountRequired = calculateTokenAmount(requiredPreFund, userOp.maxFeePerGas);
+
+        // Ensure the user has agreed to spend enough tokens to cover the transaction
+        require(userMaxTokenAmount >= tokenAmountRequired, "Insufficient pre-fund token amount");
+        SafeTransferLib.safeTransferFrom(address(token), userOp.sender, address(this), tokenAmountRequired);
+        // Prepare the context to be used in _postOp for refund calculations
+        context = abi.encode(tokenAmountRequired, userOp.sender);
+
+        // Return the context and the gas limit for execution
+        // `gasLimit` here can be the `requiredPreFund` or a custom value based on your contract's logic
         validationResult = 0;
     }
 
@@ -82,33 +104,51 @@ contract PimlicoERC20Paymaster is BasePaymaster {
         updatePriceIfNeeded();
         uint256 actualTokenNeeded = calculateTokenAmount(actualGasCost, tx.gasprice);
         uint256 providedTokenAmount = uint256(bytes32(context[0:32]));
-        address user = address(bytes20(context[32:52]));
+        address user = address(bytes20(context[44:]));
 
         if (providedTokenAmount > actualTokenNeeded) {
             uint256 refundAmount = providedTokenAmount - actualTokenNeeded;
-            token.safeTransfer(user, refundAmount);
+            SafeTransferLib.safeTransfer(
+                address(token),
+                user,
+                refundAmount
+            );
         }
 
         emit UserOperationSponsored(user, actualTokenNeeded, actualGasCost);
     }
 
+   
     function fetchPrice(AggregatorV3Interface _oracle) internal view returns (uint192 price) {
-        (,int256 answer,,uint256 updatedAt,) = _oracle.latestRoundData();
-        require(answer > 0 && updatedAt >= block.timestamp - 2 days, "Invalid price data");
-        price = uint192(answer);
+        (
+            uint80 roundId,
+            int256 answer,
+            ,
+            uint256 updatedAt,
+            uint80 answeredInRound
+        ) = _oracle.latestRoundData();
+        require(answer > 0, "PP-ERC20: Chainlink price <= 0");
+        require(updatedAt >= block.timestamp - 2 days, "PP-ERC20: Stale price");
+        require(answeredInRound == roundId, "PP-ERC20: Stale round");
+
+        // First, cast 'answer' to 'uint256', then cast it to 'uint192'
+        uint256 answerUnsigned = uint256(answer);
+        require(answerUnsigned <= type(uint192).max, "PP-ERC20: Price exceeds uint192 max value");
+        price = uint192(answerUnsigned);
     }
+
 
     function updatePriceIfNeeded() internal {
         uint192 tokenPrice = fetchPrice(tokenOracle);
         uint192 nativeAssetPrice = fetchPrice(nativeAssetOracle);
         uint192 currentPrice = nativeAssetPrice * uint192(tokenDecimals) / tokenPrice;
 
-        if (priceChangedSignificantly(currentPrice, previousPrice)) {
+        if (priceChangedSignificantly(currentPrice)) {
             previousPrice = currentPrice;
         }
     }
 
-    function priceChangedSignificantly(uint192 currentPrice, uint192 previousPrice) internal view returns (bool) {
+    function priceChangedSignificantly(uint192 currentPrice) internal view returns (bool) {
         uint256 changePercent = currentPrice * priceDenominator / previousPrice;
         return changePercent > priceDenominator + priceUpdateThreshold || changePercent < priceDenominator - priceUpdateThreshold;
     }

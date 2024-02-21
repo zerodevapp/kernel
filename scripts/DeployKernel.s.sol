@@ -5,10 +5,10 @@ import "account-abstraction/interfaces/IStakeManager.sol";
 import "forge-std/Script.sol";
 import "forge-std/console.sol";
 contract DeployKernel is Script {
-    address constant DEPLOYER = 0x9fD431b7703f94289Ba02034631dcC302717805B;
+    address constant DEPLOYER = 0x715F45c4Fe4F72Cb75D6de2F36D0428923a70946; //0x9fD431b7703f94289Ba02034631dcC302717805B;
     address constant ENTRYPOINT_0_6 = 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789;
     address payable constant EXPECTED_KERNEL_ADDRESS = payable(0x29C69905F09908C70da2D67a2B3d52B22E71F241); //0xf048AD83CB2dfd6037A43902a2A5Be04e53cd2Eb
-    address payable constant EXPECTED_KERNEL_FACTORY_ADDRESS = payable(0xc9683DFF173B60aCeF306525645AE6381726cC45);
+    address payable constant EXPECTED_KERNEL_FACTORY_ADDRESS = payable(0x7e3B523aDA6EC3fE6DC4e1c107Ed6DD641B6d4fc); //0xc9683DFF173B60aCeF306525645AE6381726cC45
     function run() public {
         uint256 key = vm.envUint("DEPLOYER_PRIVATE_KEY");
         vm.startBroadcast(key);
