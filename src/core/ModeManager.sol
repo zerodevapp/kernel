@@ -43,7 +43,7 @@ contract ModeManager {
 
     mapping(SigMode mode => SigModeConfig) public modeConfig;
 
-    function _checkMode(SigMode mode, SigData extraData) internal {
+    function _checkMode(SigMode mode, SigData /*extraData*/ ) internal view {
         if (uint16(SigMode.unwrap(mode)) < 3) {
             return;
         } else if (modeConfig[mode].validator == address(0)) {

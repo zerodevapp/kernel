@@ -5,9 +5,10 @@ import {IAccount, ValidationData} from "./interfaces/IAccount.sol";
 import {IAccountExecute} from "./interfaces/IAccountExecute.sol";
 import {ModeManager, SigMode, SigData, PackedNonce, KernelNonceLib} from "./core/ModeManager.sol";
 import {IValidator, IHook, IExecutor} from "./interfaces/IERC7579Modules.sol";
+import {EIP712} from "solady/utils/EIP712.sol";
 import "./utils/ExecLib.sol";
 
-contract Kernel is IAccount, IAccountExecute, ModeManager {
+contract Kernel is IAccount, IAccountExecute, ModeManager, EIP712 {
     error ExecutionReverted();
     error InvalidMode();
     error InvalidValidator();
@@ -32,6 +33,11 @@ contract Kernel is IAccount, IAccountExecute, ModeManager {
     }
 
     mapping(IValidator validator => ValidatorConfig) public validatorConfig;
+
+    function _domainNameAndVersion() internal pure override returns (string memory name, string memory version) {
+        name = "Kernel";
+        version = "3.0.0-beta";
+    }
 
     function _installValidator(
         IValidator validator,
@@ -75,6 +81,8 @@ contract Kernel is IAccount, IAccountExecute, ModeManager {
         selectorConfig[selector] = SelectorConfig({group: group, hook: hook, callType: callType, target: target});
         // TODO : how should i "INSTALL" the delegatecall?
     }
+
+    receive() external payable {}
 
     fallback() external payable {
         SelectorConfig memory config = selectorConfig[msg.sig];
@@ -128,6 +136,12 @@ contract Kernel is IAccount, IAccountExecute, ModeManager {
         PackedNonce nonce = PackedNonce.wrap(userOp.nonce);
         _checkMode(KernelNonceLib.getMode(nonce), KernelNonceLib.getData(nonce));
         validationData = _doValidation(KernelNonceLib.getMode(nonce), KernelNonceLib.getData(nonce), userOp, userOpHash);
+        assembly {
+            if missingAccountFunds {
+                pop(call(gas(), caller(), missingAccountFunds, callvalue(), callvalue(), callvalue(), callvalue()))
+                //ignore failure (its EntryPoint's job to verify, not account.)
+            }
+        }
     }
 
     function _parseEnableSig(bytes calldata signature)
@@ -156,6 +170,7 @@ contract Kernel is IAccount, IAccountExecute, ModeManager {
         }
     }
 
+    // TODO: add nonce
     function _checkEnableSig(
         IValidator validator,
         bytes4 group,
@@ -163,7 +178,7 @@ contract Kernel is IAccount, IAccountExecute, ModeManager {
         bytes calldata validatorData,
         bytes calldata hookData,
         bytes calldata enableSig
-    ) internal {
+    ) internal view {
         // struct Enable {
         //     address validator,
         //     bytes4  group,
@@ -171,15 +186,30 @@ contract Kernel is IAccount, IAccountExecute, ModeManager {
         //     bytes validatorData,
         //     bytes hookData
         // }
-        bytes32 hash;
-        _checkSignature(rootValidator, address(this), hash, enableSig);
-    }
-
-    function _checkSignature(IValidator validator, address caller, bytes32 hash, bytes calldata sig) internal {
-        bytes4 result = validator.isValidSignatureWithSender(caller, hash, sig);
+        bytes32 digest = _hashTypedData(
+            keccak256(
+                abi.encode(
+                    keccak256("Enable(address validator,bytes4 group,address hook,bytes validatorData,bytes hookData)"),
+                    validator,
+                    group,
+                    hook,
+                    keccak256(validatorData),
+                    keccak256(hookData)
+                )
+            )
+        );
+        bytes4 result = _validateSignature(rootValidator, address(this), digest, enableSig);
         if (result != 0x1626ba7e) {
             revert InvalidSignature();
         }
+    }
+
+    function _validateSignature(IValidator validator, address caller, bytes32 digest, bytes calldata sig)
+        internal
+        view
+        returns (bytes4 result)
+    {
+        result = validator.isValidSignatureWithSender(caller, digest, sig);
     }
 
     function _doValidation(SigMode sigMode, SigData sigData, PackedUserOperation calldata op, bytes32 userOpHash)
@@ -187,6 +217,7 @@ contract Kernel is IAccount, IAccountExecute, ModeManager {
         returns (ValidationData validationData)
     {
         IValidator validator;
+        PackedUserOperation memory userOp = op;
         if (SigMode.unwrap(sigMode) == bytes2(0)) {
             validator = rootValidator;
         } else if (SigMode.unwrap(sigMode) == bytes2(uint16(1))) {
@@ -201,6 +232,7 @@ contract Kernel is IAccount, IAccountExecute, ModeManager {
                 bytes calldata enableSig,
                 bytes calldata userOpSig
             ) = _parseEnableSig(op.signature);
+            userOp.signature = userOpSig;
             _checkEnableSig(validator, group, hook, validatorData, hookData, enableSig);
             _installValidator(validator, group, hook, validatorData, hookData);
         } else {
@@ -227,7 +259,7 @@ contract Kernel is IAccount, IAccountExecute, ModeManager {
                 revert OnlyExecuteUserOp();
             }
         }
-        validationData = ValidationData.wrap(validator.validateUserOp(op, userOpHash));
+        validationData = ValidationData.wrap(validator.validateUserOp(userOp, userOpHash));
     }
 
     // --- Hook ---
@@ -257,7 +289,7 @@ contract Kernel is IAccount, IAccountExecute, ModeManager {
             context = _doPreHook(hook, userOp.callData[4:]);
         }
 
-        (bool success, bytes memory ret) = address(this).delegatecall(userOp.callData[4:]);
+        (bool success,) = address(this).delegatecall(userOp.callData[4:]);
 
         if (address(hook) != address(1)) {
             _doPostHook(hook, context);

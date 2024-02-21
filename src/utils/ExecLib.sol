@@ -106,11 +106,7 @@ library ExecLib {
         assembly {
             result := mload(0x40)
             calldatacopy(result, callData.offset, callData.length)
-            if iszero(call(gas(), target, value, result, callData.length, codesize(), 0x00)) {
-                // Bubble up the revert if the call reverts.
-                returndatacopy(result, 0x00, returndatasize())
-                return(0, result)
-            }
+            success := iszero(call(gas(), target, value, result, callData.length, codesize(), 0x00))
             mstore(result, returndatasize()) // Store the length.
             let o := add(result, 0x20)
             returndatacopy(o, 0x00, returndatasize()) // Copy the returndata.
