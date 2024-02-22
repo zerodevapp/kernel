@@ -19,7 +19,7 @@ import {IValidator, IHook, IExecutor} from "./interfaces/IERC7579Modules.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
 import {ExecLib, ExecMode, CallType, CALLTYPE_SINGLE, CALLTYPE_DELEGATECALL} from "./utils/ExecLib.sol";
 
-contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, ExecutorManager, SelectorManager {
+contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, ExecutorManager {
     IEntryPoint public immutable entrypoint;
 
     constructor(IEntryPoint _entrypoint) {
@@ -44,6 +44,7 @@ contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, Ex
         bytes calldata hookData
     ) external {
         require(ValidatorIdentifier.unwrap(rootValidator) == bytes21(0), "already initialized");
+        require(ValidatorIdentifier.unwrap(_rootValidator) != bytes21(0), "invalid validator");
         rootValidator = _rootValidator;
         ValidatorConfig memory config = ValidatorConfig({
             group: bytes4(0),

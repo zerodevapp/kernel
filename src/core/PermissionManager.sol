@@ -2,6 +2,7 @@ pragma solidity ^0.8.0;
 
 import {IValidator, IHook} from "../interfaces/IERC7579Modules.sol";
 import {PackedUserOperation} from "../interfaces/PackedUserOperation.sol";
+import {SelectorManager} from "./SelectorManager.sol";
 import {ValidationData} from "../interfaces/IAccount.sol";
 import {IAccountExecute} from "../interfaces/IAccountExecute.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
@@ -107,7 +108,7 @@ library ValidatorLib {
     }
 }
 
-abstract contract ValidationManager is EIP712 {
+abstract contract ValidationManager is EIP712, SelectorManager {
     error InvalidMode();
     error InvalidValidator();
     error InvalidSignature();
@@ -210,7 +211,7 @@ abstract contract ValidationManager is EIP712 {
     {
         _checkEnableValidatorSig(vId, selector, packedData);
         assembly {
-            userOpSig.offset := add(add(packedData.offset, 32), calldataload(add(packedData.offset, 132)))
+            userOpSig.offset := add(add(packedData.offset, 32), calldataload(add(packedData.offset, 164)))
             userOpSig.length := calldataload(sub(userOpSig.offset, 32))
         }
     }
@@ -223,10 +224,25 @@ abstract contract ValidationManager is EIP712 {
                 ValidatorConfig memory config,
                 bytes calldata validatorData,
                 bytes calldata hookData,
-                bytes32 digest,
-                bytes calldata enableSig
+                bytes calldata selectorData,
+                bytes32 digest
             ) = _enableValidatorDigest(ValidatorLib.getValidator(vId), selector, packedData);
+            bytes calldata enableSig;
+            assembly {
+                enableSig.offset := add(add(packedData.offset, 32), calldataload(add(packedData.offset, 132)))
+                enableSig.length := calldataload(sub(enableSig.offset, 32))
+            }
             _installValidator(vId, config, validatorData, hookData);
+            if(selectorData.length >= 4) {
+                require(bytes4(selectorData[0:4]) == selector);
+                if(selectorData.length >= 44) {
+                    _installSelector(selector, config.group, address(bytes20(selectorData[4:24])), IHook(address(bytes20(selectorData[24:44]))), selectorData[44:]);
+                } else {
+                    _installSelector(selector, config.group, address(0), IHook(address(0)), selectorData[0:0]);
+                }
+            } else {
+                require(selectorData.length == 0);
+            }
             bytes4 result = _validateSignature(rootValidator, address(this), digest, enableSig);
             if (result != 0x1626ba7e) {
                 revert InvalidSignature();
@@ -241,8 +257,8 @@ abstract contract ValidationManager is EIP712 {
             ValidatorConfig memory config,
             bytes calldata validatorData,
             bytes calldata hookData,
-            bytes32 digest,
-            bytes calldata enableSig
+            bytes calldata selectorData,
+            bytes32 digest
         )
     {
         config.group = bytes4(packedData[0:4]);
@@ -255,14 +271,14 @@ abstract contract ValidationManager is EIP712 {
             validatorData.length := calldataload(sub(validatorData.offset, 32))
             hookData.offset := add(add(packedData.offset, 32), calldataload(add(packedData.offset, 68)))
             hookData.length := calldataload(sub(hookData.offset, 32))
-            enableSig.offset := add(add(packedData.offset, 32), calldataload(add(packedData.offset, 100)))
-            enableSig.length := calldataload(sub(enableSig.offset, 32))
+            selectorData.offset := add(add(packedData.offset, 32), calldataload(add(packedData.offset, 100)))
+            selectorData.length := calldataload(sub(selectorData.offset, 32))
         }
         digest = _hashTypedData(
             keccak256(
                 abi.encode(
                     keccak256(
-                        "Enable(address validator,uint32 nonce,bytes4 group,bytes4 selector,uint48 validFrom,uint48 validUntil,address hook,bytes validatorData,bytes hookData)"
+                        "Enable(address validator,uint32 nonce,bytes4 group,uint48 validFrom,uint48 validUntil,address hook,bytes validatorData,bytes hookData,bytes selectorData)"
                     ), // TODO: this to constant
                     validator,
                     currentNonce,
@@ -272,7 +288,8 @@ abstract contract ValidationManager is EIP712 {
                     config.validUntil,
                     config.hook,
                     keccak256(validatorData),
-                    keccak256(hookData)
+                    keccak256(hookData),
+                    keccak256(selectorData)
                 )
             )
         );
