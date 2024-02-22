@@ -24,6 +24,7 @@ import {TestValidator} from "../mock/TestValidator.sol";
 import {TestExecutor} from "../mock/TestExecutor.sol";
 import {TestERC721} from "../mock/TestERC721.sol";
 import {TestERC1155} from "../mock/TestERC1155.sol";
+import {TestCallee} from "../mock/TestCallee.sol";
 
 using ERC4337Utils for IEntryPoint;
 
@@ -135,8 +136,17 @@ abstract contract KernelTestBase is Test {
     }
 
     function test_external_call_batch_execute_success() external virtual {
-        Call[] memory calls = new Call[](1);
+        TestCallee callee = new TestCallee();
+        Call[] memory calls = new Call[](3);
         calls[0] = Call(owner, 0, "");
+        calls[1] = Call(address(callee), 0, abi.encodeWithSelector(callee.returnLong.selector));
+        calls[2] = Call(owner, 0, "");
+        vm.prank(owner);
+        kernel.executeBatch(calls);
+        calls = new Call[](3);
+        calls[0] = Call(owner, 0, "");
+        calls[1] = Call(address(callee), 0, abi.encodeWithSelector(callee.returnLongBytes.selector));
+        calls[2] = Call(owner, 0, "");
         vm.prank(owner);
         kernel.executeBatch(calls);
     }
