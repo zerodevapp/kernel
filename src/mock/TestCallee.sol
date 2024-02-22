@@ -2,6 +2,17 @@ pragma solidity ^0.8.0;
 
 contract TestCallee {
     uint256 public result;
+    address public caller;
+    uint256 public sent;
+    bytes public message;
+
+    receive() external payable{}
+
+    fallback() external payable {
+        message = msg.data;
+        sent = msg.value;
+        caller = msg.sender;
+    }
 
     function test_ignore() external {}
 
