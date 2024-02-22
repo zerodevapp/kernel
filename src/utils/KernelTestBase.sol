@@ -145,14 +145,14 @@ abstract contract KernelTestBase is Test {
         kernel.executeBatch(calls);
         assertEq(callee.caller(), address(kernel));
         assertEq(callee.sent(), 0);
-        assertEq(keccak256(callee.message()),keccak256(abi.encode("HelloWorld")));
+        assertEq(keccak256(callee.message()), keccak256(abi.encode("HelloWorld")));
         calls = new Call[](3);
         calls[0] = Call(owner, 0, "");
         calls[1] = Call(address(callee), 0, abi.encodeWithSelector(callee.returnLongBytes.selector));
         calls[2] = Call(address(callee), 0, abi.encode("HelloWorld"));
         assertEq(callee.caller(), address(kernel));
         assertEq(callee.sent(), 0);
-        assertEq(keccak256(callee.message()),keccak256(abi.encode("HelloWorld")));
+        assertEq(keccak256(callee.message()), keccak256(abi.encode("HelloWorld")));
 
         vm.prank(owner);
         kernel.executeBatch(calls);

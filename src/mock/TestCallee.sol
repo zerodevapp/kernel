@@ -6,7 +6,7 @@ contract TestCallee {
     uint256 public sent;
     bytes public message;
 
-    receive() external payable{}
+    receive() external payable {}
 
     fallback() external payable {
         message = msg.data;
@@ -30,8 +30,9 @@ contract TestCallee {
         "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Praesent nec nunc sed nisi sollicitudin suscipit at at nulla. Aenean porttitor tellus felis, dapibus lacinia elit ullamcorper id. Ut dapibus efficitur neque posuere varius. Aenean in sem ac dolor accumsan egestas ut sit amet arcu. Vestibulum nunc urna, imperdiet ut enim eu, venenatis placerat mi. Aliquam a nibh a augue sollicitudin rutrum. Donec eleifend semper elit eu facilisis.";
     }
 
-    function returnLongBytes() external payable returns(bytes memory) {
-        return hex"0000000000000000000000000000000000000000000000000de0b6b3a76400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+    function returnLongBytes() external payable returns (bytes memory) {
+        return
+        hex"0000000000000000000000000000000000000000000000000de0b6b3a76400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
     }
 
     function notThis() external {}
