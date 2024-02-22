@@ -24,17 +24,6 @@ contract DeployKernelInitial is Script {
         } else {
             factory = KernelFactory(EXPECTED_KERNEL_FACTORY_ADDRESS);
         }
-        //if(address(ECDSAVALIDATOR).code.length == 0) {
-        //    console.log("ECDSAVALIDATOR NOT DEPLOYED");
-        //} else {
-        //    KernelLiteECDSA kernellite;
-        //    kernellite = new KernelLiteECDSA{salt:0}(IEntryPoint(ENTRYPOINT_0_6), IKernelValidator(ECDSAVALIDATOR));
-        //    console.log("Kernel Lite address: %s", address(kernellite));
-        //    if(factory.isAllowedImplementation(address(kernellite)) == false) {
-        //        console.log("Registering kernellite implementation");
-        //        factory.setImplementation(address(kernellite), true);
-        //    }
-        //}
         Kernel kernel;
         kernel = new Kernel{salt: 0}(IEntryPoint(ENTRYPOINT_0_6));
         console.log("Kernel address: %s", address(kernel));

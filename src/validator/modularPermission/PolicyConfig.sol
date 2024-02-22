@@ -8,7 +8,7 @@ function toFlag(uint256 x) pure returns (bytes12) {
     return bytes12(bytes32(x << 160));
 }
 
-function toPermissionFlag(uint256 x) pure returns(bytes12) {
+function toPermissionFlag(uint256 x) pure returns (bytes12) {
     bytes12 ret = bytes12(bytes32(x << 160));
     assembly {
         ret := not(ret)

@@ -167,7 +167,7 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
         bytes memory sig = signHash(digest);
 
         // Ensure it's reverting
-        vm.expectRevert(WebAuthnFclVerifier.InvalidWebAuthNData.selector);
+        vm.expectRevert("Kernel::_validateSignature: failed to validate signature");
         kernel.isValidSignature(_wrongHash, sig);
     }
 

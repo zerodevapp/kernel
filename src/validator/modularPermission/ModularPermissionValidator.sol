@@ -208,7 +208,7 @@ contract ModularPermissionValidator is IKernelValidator {
         validationData = _intersectValidationData(validationData, signatureValidation);
     }
 
-    function validCaller(address caller, bytes calldata data) external payable override returns (bool) {
+    function validCaller(address caller, bytes calldata data) external view override returns (bool) {
         revert("not implemented");
     }
 
