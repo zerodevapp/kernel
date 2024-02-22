@@ -108,9 +108,11 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
             bytes memory data = call.data;
             assembly {
                 let success := call(gas(), to, value, add(data, 0x20), mload(data), 0, 0)
-                returndatacopy(0, 0, returndatasize())
                 switch success
-                case 0 { revert(0, returndatasize()) }
+                case 0 {
+                    returndatacopy(0, 0, returndatasize())
+                    revert(0, returndatasize())
+                }
                 default { i := add(i, 1) }
             }
         }
