@@ -49,7 +49,7 @@ contract TestValidator is IKernelValidator {
         emit TestDisable(_data);
     }
 
-    function validCaller(address _caller, bytes calldata) external view override returns (bool) {
+    function validCaller(address _caller, bytes calldata) external payable override returns (bool) {
         return _caller == caller[msg.sender];
     }
 }

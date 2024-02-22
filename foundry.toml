@@ -10,7 +10,7 @@ optimize = true
 via-ir = false
 runs = 1000000
 
-[profile.deploy]
+[profile.optimized]
 via-ir = true
 
 [fuzz]

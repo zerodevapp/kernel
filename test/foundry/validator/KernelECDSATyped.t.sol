@@ -82,8 +82,8 @@ contract KernelECDSATypedTest is KernelTestBase {
             )
         );
         performUserOperationWithSig(op);
-        address owner = ecdsaTypedValidator.getOwner(address(kernel));
-        assertEq(owner, address(0xdeadbeef), "owner should be 0xdeadbeef");
+        address owner_ = ecdsaTypedValidator.getOwner(address(kernel));
+        assertEq(owner_, address(0xdeadbeef), "owner should be 0xdeadbeef");
     }
 
     function test_default_validator_disable() external override {
@@ -97,8 +97,8 @@ contract KernelECDSATypedTest is KernelTestBase {
             )
         );
         performUserOperationWithSig(op);
-        address owner = ecdsaTypedValidator.getOwner(address(kernel));
-        assertEq(owner, address(0), "owner should be 0");
+        address owner_ = ecdsaTypedValidator.getOwner(address(kernel));
+        assertEq(owner_, address(0), "owner should be 0");
     }
 
     /* -------------------------------------------------------------------------- */
@@ -115,7 +115,7 @@ contract KernelECDSATypedTest is KernelTestBase {
         returns (bytes memory)
     {
         // Get the kernel private key owner address
-        address owner = vm.addr(_privateKey);
+        address owner_ = vm.addr(_privateKey);
 
         // Get the user op hash
         bytes32 userOpHash = _entryPoint.getUserOpHash(_op);
@@ -124,7 +124,7 @@ contract KernelECDSATypedTest is KernelTestBase {
         bytes32 domainSeparator = ecdsaTypedValidator.getDomainSeperator();
         bytes32 typedMsgHash = keccak256(
             abi.encodePacked(
-                "\x19\x01", domainSeparator, keccak256(abi.encode(USER_OP_TYPEHASH, owner, _op.sender, userOpHash))
+                "\x19\x01", domainSeparator, keccak256(abi.encode(USER_OP_TYPEHASH, owner_, _op.sender, userOpHash))
             )
         );
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(_privateKey, typedMsgHash);

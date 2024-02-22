@@ -31,7 +31,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     bytes32 internal constant EIP712_DOMAIN_TYPEHASH =
         0x8b73c3c69bb8fe3d512ecc4cf759cc79239f7b179b0ffacaa9a75d522b39400f;
 
-    /// @dev Current kernel name and version, todo: Need to expose getter for this variables?
+    /// @dev Current kernel name and version
     string public constant name = KERNEL_NAME;
     string public constant version = KERNEL_VERSION;
 
@@ -246,7 +246,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
                 )
             );
             validationData = _intersectValidationData(
-                _validateSignature(enableDigest, signature[cursor:cursor + length]),
+                _validateSignature(address(this), enableDigest, enableDigest, signature[cursor:cursor + length]),
                 ValidationData.wrap(
                     uint256(bytes32(signature[4:36]))
                         & 0xffffffffffffffffffffffff0000000000000000000000000000000000000000
@@ -271,7 +271,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     /// @param hash The hash of the data that was signed
     /// @param signature The signature to be validated
     function validateSignature(bytes32 hash, bytes calldata signature) public view returns (ValidationData) {
-        return _validateSignature(hash, signature);
+        return _validateSignature(msg.sender, hash, hash, signature);
     }
 
     /// @dev Get the current name & version of the kernel, used for the EIP-712 domain separator
@@ -306,7 +306,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         // Recreate the signed message hash with the correct domain separator
         bytes32 signedMessageHash = keccak256(abi.encodePacked("\x19\x01", domainSeparator, hash));
 
-        ValidationData validationData = validateSignature(signedMessageHash, signature);
+        ValidationData validationData = _validateSignature(msg.sender, signedMessageHash, hash, signature);
         (ValidAfter validAfter, ValidUntil validUntil, address result) = parseValidationData(validationData);
 
         // Check if the signature is valid within the specified time frame and the result is successful
@@ -324,7 +324,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
 
     /// @dev Check if the current caller is authorized or no to perform the call
     /// @return True if the caller is authorized, otherwise false
-    function _checkCaller() internal view returns (bool) {
+    function _checkCaller() internal returns (bool) {
         if (_validCaller(msg.sender, msg.data)) {
             return true;
         }
@@ -366,7 +366,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
     /// @param _hash The hash of the data that was signed
     /// @param _signature The signature to be validated
     /// @return The magic value 0x1626ba7e if the signature is valid, otherwise returns 0xffffffff.
-    function _validateSignature(bytes32 _hash, bytes calldata _signature)
+    function _validateSignature(address _requestor, bytes32 _hash, bytes32 _rawHash, bytes calldata _signature)
         internal
         view
         virtual
@@ -376,14 +376,23 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         assembly {
             validator := shr(80, sload(KERNEL_STORAGE_SLOT_1))
         }
-        return IKernelValidator(validator).validateSignature(_hash, _signature);
+        // 20 bytes added at the end of the signature to store the address of the caller
+        (bool success, bytes memory res) = validator.staticcall(
+            abi.encodePacked(
+                abi.encodeWithSelector(IKernelValidator.validateSignature.selector, _hash, _signature),
+                _rawHash,
+                _requestor
+            )
+        );
+        require(success, "Kernel::_validateSignature: failed to validate signature");
+        return abi.decode(res, (ValidationData));
     }
 
     /// @dev Check if the given caller is valid for the given data
     /// @param _caller The caller to be checked
     /// @param _data The data to be checked
     /// @return True if the caller is valid, otherwise false
-    function _validCaller(address _caller, bytes calldata _data) internal view virtual returns (bool) {
+    function _validCaller(address _caller, bytes calldata _data) internal virtual returns (bool) {
         address validator;
         assembly {
             // Load the validator from the storage slot

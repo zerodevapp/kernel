@@ -110,7 +110,7 @@ contract ECDSATypedValidator is IKernelValidator, EIP712 {
     }
 
     /// @dev Check if the caller is a valid signer for this kernel account
-    function validCaller(address _caller, bytes calldata) external view override returns (bool) {
+    function validCaller(address _caller, bytes calldata) external payable override returns (bool) {
         return ecdsaValidatorStorage[msg.sender].owner == _caller;
     }
 

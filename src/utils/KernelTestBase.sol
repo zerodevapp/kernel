@@ -205,14 +205,18 @@ abstract contract KernelTestBase is Test {
             )
         );
         bytes memory sig = signHash(digest);
+        vm.startPrank(makeAddr("app"));
         assertEq(kernel.isValidSignature(hash, sig), Kernel.isValidSignature.selector);
         assertEq(kernel2.isValidSignature(hash, sig), bytes4(0xffffffff));
+        vm.stopPrank();
     }
 
     function test_fail_validate_wrongsignature() external virtual {
         bytes32 hash = keccak256(abi.encodePacked("hello world"));
         bytes memory sig = getWrongSignature(hash);
+        vm.startPrank(makeAddr("app"));
         assertEq(kernel.isValidSignature(hash, sig), bytes4(0xffffffff));
+        vm.stopPrank();
     }
 
     function test_fail_validate_not_activate() external virtual {
@@ -225,12 +229,14 @@ abstract contract KernelTestBase is Test {
 
         vm.warp(100000);
 
+        vm.startPrank(makeAddr("app"));
         bytes32 hash = keccak256(abi.encodePacked("hello world"));
         assertEq(kernel.isValidSignature(hash, ""), bytes4(0xffffffff));
         newDefaultValidator.setData(true, uint48(block.timestamp + 1000), uint48(0));
         assertEq(kernel.isValidSignature(hash, ""), bytes4(0xffffffff));
         newDefaultValidator.setData(true, uint48(0), uint48(block.timestamp - 1000));
         assertEq(kernel.isValidSignature(hash, ""), bytes4(0xffffffff));
+        vm.stopPrank();
     }
 
     function test_should_emit_event_on_receive() external {
