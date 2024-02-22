@@ -8,18 +8,26 @@ import {
     ValidatorMode,
     ValidatorIdentifier,
     ValidatorLib,
-    ValidatorType
+    ValidatorType,
+    TYPE_SUDO
 } from "./core/PermissionManager.sol";
+import {HookManager} from "./core/HookManager.sol";
+import {ExecutorManager} from "./core/ExecutorManager.sol";
+import {SelectorManager} from "./core/SelectorManager.sol";
 import {IValidator, IHook, IExecutor} from "./interfaces/IERC7579Modules.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
-import "./utils/ExecLib.sol";
+import {ExecLib, ExecMode, CallType, CALLTYPE_SINGLE, CALLTYPE_DELEGATECALL} from "./utils/ExecLib.sol";
 
-contract Kernel is IAccount, IAccountExecute, ValidationManager {
+contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, ExecutorManager, SelectorManager {
+
+    function initialize(ValidatorIdentifier _rootValidator) internal {
+        rootValidator = _rootValidator;
+    }
+
     error ExecutionReverted();
     error InvalidExecutor();
     error InvalidFallback();
     error InvalidCallType();
-
     error OnlyExecuteUserOp();
 
     // NOTE : when eip 1153 has been enabled, this can be transient storage
@@ -28,32 +36,6 @@ contract Kernel is IAccount, IAccountExecute, ValidationManager {
     function _domainNameAndVersion() internal pure override returns (string memory name, string memory version) {
         name = "Kernel";
         version = "3.0.0-beta";
-    }
-
-    struct ExecutorConfig {
-        bytes4 group;
-        IHook hook; // address(1) : hook not required, address(0) : validator not installed
-    }
-
-    mapping(IExecutor executor => ExecutorConfig) public executorConfig;
-
-    function _installExecutor(IExecutor executor, bytes4 group, IHook hook, bytes calldata data) internal {
-        executorConfig[executor] = ExecutorConfig({group: group, hook: hook});
-        executor.onInstall(data);
-    }
-
-    struct SelectorConfig {
-        bytes4 group; // group of this selector action
-        IHook hook; // 20 bytes for hook address
-        CallType callType; //1 bytes
-        address target; // 20 bytes target will be fallback module, called with delegatecall or call
-    }
-
-    mapping(bytes4 selector => SelectorConfig) public selectorConfig;
-
-    function _installSelector(bytes4 selector, bytes4 group, IHook hook, CallType callType, address target) internal {
-        selectorConfig[selector] = SelectorConfig({group: group, hook: hook, callType: callType, target: target});
-        // TODO : INSTALL FLOW IS NOT SUPPORTED YET
     }
 
     receive() external payable {}
@@ -94,21 +76,11 @@ contract Kernel is IAccount, IAccountExecute, ValidationManager {
         // 3. In v2, only 1 plugin validator(aside from root validator) can access the selector.
         //    In v3, you can use more than 1 plugin to use the exact selector, you need to specify the validator address in userOp.nonce[2:22] to use the validator
 
-        // Examples on standard packing of nonce
-        // NOTE : we are going to have support for custom modes. In custom mode, you can use up to 22 bytes for the sigData
-        // userOp.nonce = mode selector(2bytes) + sigData(20bytes) + 2d nonce key(2bytes) + incremental nonce (8bytes)
-        // *2d nonce with 2 bytes key supports up to 65,536 parallel nonces, so i assume it's more than enough
-        // if userOp.nonce starts with 0x0000 => root mode
-        //      data == will be ignored
-        // if userOp.nonce starts with 0x0001 => plugin mode (erc7579)
-        //      data == abi.encodePacked(validatorAddress)
-        // if userOp.nonce starts with 0x0002 => plugin enable mode (erc7579)
-        //      data == abi.encodePacked(validatorAddress)
-        // TODO : if userOp.nonce starts with 0x0100 => permission mode
-        //      but leaving this note for now to make sure i implement something
-        //      data == abi.encodePacked(permissionId) (bytes4)
         (ValidatorMode vMode, ValidatorType vType, ValidatorIdentifier vId) = ValidatorLib.decode(userOp.nonce);
-        validationData = _doValidation(vMode, vType, vId, userOp, userOpHash);
+        if (vType == TYPE_SUDO) {
+            vId = rootValidator;
+        }
+        validationData = _doValidation(vMode, vId, userOp, userOpHash);
         IHook execHook = validatorConfig[vId].hook;
         if (address(execHook) == address(0)) {
             revert InvalidValidator();
@@ -136,23 +108,6 @@ contract Kernel is IAccount, IAccountExecute, ValidationManager {
                 //ignore failure (its EntryPoint's job to verify, not account.)
             }
         }
-    }
-
-    // --- Hook ---
-    // Hook is activated on these scenarios
-    // - on 4337 flow, userOp.calldata starts with executeUserOp.selector && validator requires hook
-    // - executeFromExecutor() is invoked and executor requires hook
-    // - when fallback function has been invoked and fallback requires hook => native functions will not invoke hook
-    function _doPreHook(IHook hook, bytes calldata callData) internal returns (bytes memory context) {
-        context = hook.preCheck(msg.sender, callData);
-    }
-
-    function _doPostHook(IHook hook, bytes memory context)
-        // bool success, // I would like these to be enabled in erc7579, but let's skip this for now
-        // bytes memory result
-        internal
-    {
-        hook.postCheck(context);
     }
 
     // --- Execution ---

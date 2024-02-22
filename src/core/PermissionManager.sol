@@ -9,6 +9,12 @@ type Validator is bytes22;
 
 type ValidatorMode is bytes1;
 
+type ValidatorIdentifier is bytes21;
+
+type ValidatorType is bytes1;
+
+type PermissionData is bytes22; // 2bytes for flag on skip, 20 bytes for validator address
+
 ValidatorMode constant MODE_DEFAULT = ValidatorMode.wrap(0x00);
 ValidatorMode constant MODE_ENABLE = ValidatorMode.wrap(0x01);
 ValidatorType constant TYPE_SUDO = ValidatorType.wrap(0x00);
@@ -17,9 +23,10 @@ ValidatorType constant TYPE_PERMISSION = ValidatorType.wrap(0x02);
 
 using {vModeEqual as ==} for ValidatorMode global;
 using {vTypeEqual as ==} for ValidatorType global;
+using {vIdentifierEqual as ==} for ValidatorIdentifier global;
 using {vModeNotEqual as !=} for ValidatorMode global;
 using {vTypeNotEqual as !=} for ValidatorType global;
-
+using {vIdentifierNotEqual as !=} for ValidatorIdentifier global;
 function vModeEqual(ValidatorMode a, ValidatorMode b) pure returns (bool) {
     return ValidatorMode.unwrap(a) == ValidatorMode.unwrap(b);
 }
@@ -36,38 +43,29 @@ function vTypeNotEqual(ValidatorType a, ValidatorType b) pure returns (bool) {
     return ValidatorType.unwrap(a) != ValidatorType.unwrap(b);
 }
 
-function validatorToIdentifier(Validator validator) pure returns (ValidatorIdentifier vId) {
-    // TODO: add test to check if this works properly
-    assembly {
-        vId := shr(8, validator)
-    }
+function vIdentifierEqual(ValidatorIdentifier a, ValidatorIdentifier b) pure returns (bool) {
+    return ValidatorIdentifier.unwrap(a) == ValidatorIdentifier.unwrap(b);
 }
 
-function getType(ValidatorIdentifier validator) pure returns (ValidatorType vType) {
-    assembly {
-        vType := validator
-    }
-}
-
-function getValidator(ValidatorIdentifier validator) pure returns (IValidator v) {
-    assembly {
-        v := shl(8, validator)
-    }
-}
-
-type ValidatorIdentifier is bytes21;
-
-type ValidatorType is bytes1;
-
-type PermissionData is bytes22;
-
-function getPermissionValidator(PermissionData data) pure returns (IValidator vId) {
-    assembly {
-        vId := data
-    }
+function vIdentifierNotEqual(ValidatorIdentifier a, ValidatorIdentifier b) pure returns (bool) {
+    return ValidatorIdentifier.unwrap(a) != ValidatorIdentifier.unwrap(b);
 }
 
 library ValidatorLib {
+    function encode(bytes1 mode, bytes1 vType, bytes20 validatorIdentifierWithoutType, uint16 nonceKey, uint64 nonce)
+        internal
+        pure
+        returns (uint256 res)
+    {
+        assembly {
+            res := nonce
+            res := or(res, shl(64, nonceKey))
+            res := or(res, shr(16, validatorIdentifierWithoutType))
+            res := or(res, shr(8, vType))
+            res := or(res, mode)
+        }
+    }
+
     function decode(uint256 nonce)
         internal
         pure
@@ -80,6 +78,30 @@ library ValidatorLib {
             mode := nonce
             vType := shl(8, nonce)
             identifier := shl(8, nonce) // identifier includes type
+        }
+    }
+
+    function validatorToIdentifier(Validator validator) internal pure returns (ValidatorIdentifier vId) {
+        assembly {
+            vId := shr(8, validator)
+        }
+    }
+
+    function getType(ValidatorIdentifier validator) internal pure returns (ValidatorType vType) {
+        assembly {
+            vType := validator
+        }
+    }
+
+    function getValidator(ValidatorIdentifier validator) internal pure returns (IValidator v) {
+        assembly {
+            v := shl(8, validator)
+        }
+    }
+
+    function getPermissionValidator(PermissionData data) internal pure returns (IValidator vId) {
+        assembly {
+            vId := data
         }
     }
 }
@@ -108,7 +130,7 @@ abstract contract ValidationManager is EIP712 {
     mapping(ValidatorIdentifier validator => ValidatorConfig) public validatorConfig;
 
     // TODO add permission flag to skip validation
-    mapping(ValidatorIdentifier validator => IValidator[]) public permissionConfig;
+    mapping(ValidatorIdentifier validator => PermissionData[]) public permissionConfig;
 
     function _invalidateNonce(uint32 nonce) internal {
         require(nonce > validNonceFrom, "Invalid nonce");
@@ -153,11 +175,12 @@ abstract contract ValidationManager is EIP712 {
         }
         validatorConfig[validator] =
             ValidatorConfig({nonce: nonce, validFrom: validFrom, validUntil: validUntil, group: group, hook: hook});
-        ValidatorType vType = getType(validator);
+        ValidatorType vType = ValidatorLib.getType(validator);
         if (vType == TYPE_VALIDATOR) {
-            IValidator(getValidator(validator)).onInstall(data);
+            IValidator(ValidatorLib.getValidator(validator)).onInstall(data);
         } else if (vType == TYPE_PERMISSION) {
             //TODO
+            revert("NOT_IMPLEMENTED_PERMISSION_INSTALL");
         } else {
             revert InvalidValidator();
         }
@@ -168,25 +191,21 @@ abstract contract ValidationManager is EIP712 {
 
     function _doValidation(
         ValidatorMode vMode,
-        ValidatorType vType,
         ValidatorIdentifier vId,
         PackedUserOperation calldata op,
         bytes32 userOpHash
     ) internal returns (ValidationData validationData) {
-        ValidatorIdentifier validator = vId;
         PackedUserOperation memory userOp = op;
-        if (vType == TYPE_SUDO) {
-            validator = rootValidator; // change to validator when root since root does not have any vId in userOp.signature
-        }
         if (vMode == MODE_ENABLE) {
-            bytes calldata userOpSig = _enableMode(validator, op.signature);
+            bytes calldata userOpSig = _enableMode(vId, op.signature);
             userOp.signature = userOpSig;
             currentNonce++;
         }
-        if (getType(validator) == TYPE_VALIDATOR) {
-            validationData = ValidationData.wrap(getValidator(validator).validateUserOp(userOp, userOpHash));
-        } else if (getType(validator) == TYPE_PERMISSION) {
+        if (ValidatorLib.getType(vId) == TYPE_VALIDATOR) {
+            validationData = ValidationData.wrap(ValidatorLib.getValidator(vId).validateUserOp(userOp, userOpHash));
+        } else if (ValidatorLib.getType(vId) == TYPE_PERMISSION) {
             // TODO
+            revert("NOT_IMPLEMENTED_VALIDATION_PERMISSION");
         } else {
             revert InvalidValidator();
         }
@@ -196,10 +215,13 @@ abstract contract ValidationManager is EIP712 {
         internal
         returns (bytes calldata userOpSig)
     {
-        if (getType(vId) == TYPE_VALIDATOR) {
+        if (ValidatorLib.getType(vId) == TYPE_VALIDATOR) {
             userOpSig = _doEnableValidator(vId, signature);
+        } else if (ValidatorLib.getType(vId) == TYPE_PERMISSION) {
+            // TODO
+            revert("NOT_IMPLEMENTED_ENABLE_MODE_PERMISSION");
         } else {
-            revert("");
+            revert InvalidValidator();
         }
         return userOpSig;
     }
@@ -240,7 +262,7 @@ abstract contract ValidationManager is EIP712 {
     }
 
     function _checkEnableValidatorSig(
-        ValidatorIdentifier validator,
+        ValidatorIdentifier vId,
         uint32 nonce,
         bytes4 group,
         uint48 validFrom,
@@ -250,16 +272,16 @@ abstract contract ValidationManager is EIP712 {
         bytes calldata hookData,
         bytes calldata enableSig
     ) internal view {
-        if (getType(validator) != TYPE_VALIDATOR) {
+        if (ValidatorLib.getType(vId) != TYPE_VALIDATOR) {
             revert InvalidValidator();
         }
         bytes32 digest = _hashTypedData(
             keccak256(
                 abi.encode(
                     keccak256(
-                        "Enable(bytes21 validator,uint32 nonce,bytes4 group,uint48 validFrom,uint48 validUntil,address hook,bytes validatorData,bytes hookData)"
+                        "Enable(address validator,uint32 nonce,bytes4 group,uint48 validFrom,uint48 validUntil,address hook,bytes validatorData,bytes hookData)"
                     ), // TODO: this to constant
-                    validator,
+                    ValidatorLib.getValidator(vId),
                     nonce,
                     group,
                     validFrom,
@@ -281,10 +303,10 @@ abstract contract ValidationManager is EIP712 {
         view
         returns (bytes4 result)
     {
-        if (getType(validator) == TYPE_VALIDATOR) {
-            result = getValidator(validator).isValidSignatureWithSender(caller, digest, sig);
-        } else if (getType(validator) == TYPE_PERMISSION) {
-            // TODO
+        if (ValidatorLib.getType(validator) == TYPE_VALIDATOR) {
+            result = ValidatorLib.getValidator(validator).isValidSignatureWithSender(caller, digest, sig);
+        } else if (ValidatorLib.getType(validator) == TYPE_PERMISSION) {
+            revert("NOT_IMPLEMENTED_SIGNATURE_VALIDATION");
         } else {
             revert InvalidValidator();
         }
