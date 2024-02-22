@@ -2,6 +2,7 @@ pragma solidity ^0.8.0;
 
 import {PackedUserOperation} from "./interfaces/PackedUserOperation.sol";
 import {IAccount, ValidationData} from "./interfaces/IAccount.sol";
+import {IEntryPoint} from "./interfaces/IEntryPoint.sol";
 import {IAccountExecute} from "./interfaces/IAccountExecute.sol";
 import {
     ValidationManager,
@@ -19,9 +20,39 @@ import {EIP712} from "solady/utils/EIP712.sol";
 import {ExecLib, ExecMode, CallType, CALLTYPE_SINGLE, CALLTYPE_DELEGATECALL} from "./utils/ExecLib.sol";
 
 contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, ExecutorManager, SelectorManager {
+    IEntryPoint public immutable entrypoint;
 
-    function initialize(ValidatorIdentifier _rootValidator) internal {
+    constructor(IEntryPoint _entrypoint) {
+        entrypoint = _entrypoint;
+        rootValidator = ValidatorIdentifier.wrap(bytes21(abi.encodePacked(hex"deadbeef")));
+    }
+
+    modifier onlyEntryPoint() {
+        require(msg.sender == address(entrypoint), "only entrypoint");
+        _;
+    }
+
+    modifier onlyEntryPointOrSelf() {
+        require(msg.sender == address(entrypoint) || msg.sender == address(this), "only entrypoint or self");
+        _;
+    }
+
+    function initialize(
+        ValidatorIdentifier _rootValidator,
+        IHook hook,
+        bytes calldata validatorData,
+        bytes calldata hookData
+    ) external {
+        require(ValidatorIdentifier.unwrap(rootValidator) == bytes21(0), "already initialized");
         rootValidator = _rootValidator;
+        ValidatorConfig memory config = ValidatorConfig({
+            group: bytes4(0),
+            validFrom: uint48(0),
+            validUntil: uint48(0),
+            nonce: uint32(0),
+            hook: hook
+        });
+        _installValidator(_rootValidator, config, validatorData, hookData);
     }
 
     error ExecutionReverted();
@@ -68,8 +99,10 @@ contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, Ex
         external
         payable
         override
+        onlyEntryPoint
         returns (ValidationData validationData)
     {
+        // ONLY ENTRYPOINT
         // Major change for v2 => v3
         // 1. instead of packing 4 bytes prefix to userOp.signature to determine the mode, v3 uses userOp.nonce's first 2 bytes to check the mode
         // 2. instead of packing 20 bytes in userOp.signature for enable mode to provide the validator address, v3 uses userOp.nonce[2:22]
@@ -89,12 +122,14 @@ contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, Ex
 
         if (address(execHook) == address(1)) {
             // does not require hook
-            if (selectorConfig[bytes4(userOp.callData[0:4])].group != validatorConfig[vId].group) {
+            if (vType != TYPE_SUDO && selectorConfig[bytes4(userOp.callData[0:4])].group != validatorConfig[vId].group)
+            {
                 revert InvalidValidator();
             }
         } else {
             // requires hook
-            if (selectorConfig[bytes4(userOp.callData[4:8])].group != validatorConfig[vId].group) {
+            if (vType != TYPE_SUDO && selectorConfig[bytes4(userOp.callData[4:8])].group != validatorConfig[vId].group)
+            {
                 revert InvalidValidator();
             }
             if (bytes4(userOp.callData[0:4]) != this.executeUserOp.selector) {
@@ -111,8 +146,12 @@ contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, Ex
     }
 
     // --- Execution ---
-    function executeUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash) external payable override {
-        // onlyEntrypoint
+    function executeUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash)
+        external
+        payable
+        override
+        onlyEntryPoint
+    {
         bytes memory context;
         IHook hook = executionHook[userOpHash];
         if (address(hook) != address(1)) {
@@ -149,8 +188,7 @@ contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, Ex
         }
     }
 
-    function execute(ExecMode execMode, bytes calldata executionCalldata) external payable {
-        // onlyEntrypointOrSelf
+    function execute(ExecMode execMode, bytes calldata executionCalldata) external payable onlyEntryPointOrSelf {
         ExecLib._execute(execMode, executionCalldata);
     }
 }

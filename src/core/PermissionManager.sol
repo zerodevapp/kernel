@@ -3,9 +3,8 @@ pragma solidity ^0.8.0;
 import {IValidator, IHook} from "../interfaces/IERC7579Modules.sol";
 import {PackedUserOperation} from "../interfaces/PackedUserOperation.sol";
 import {ValidationData} from "../interfaces/IAccount.sol";
+import {IAccountExecute} from "../interfaces/IAccountExecute.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
-
-type Validator is bytes22;
 
 type ValidatorMode is bytes1;
 
@@ -27,6 +26,7 @@ using {vIdentifierEqual as ==} for ValidatorIdentifier global;
 using {vModeNotEqual as !=} for ValidatorMode global;
 using {vTypeNotEqual as !=} for ValidatorType global;
 using {vIdentifierNotEqual as !=} for ValidatorIdentifier global;
+
 function vModeEqual(ValidatorMode a, ValidatorMode b) pure returns (bool) {
     return ValidatorMode.unwrap(a) == ValidatorMode.unwrap(b);
 }
@@ -81,9 +81,10 @@ library ValidatorLib {
         }
     }
 
-    function validatorToIdentifier(Validator validator) internal pure returns (ValidatorIdentifier vId) {
+    function validatorToIdentifier(IValidator validator) internal pure returns (ValidatorIdentifier vId) {
         assembly {
-            vId := shr(8, validator)
+            vId := 0x0100000000000000000000000000000000000000000000000000000000000000
+            vId := or(vId, shl(88, validator))
         }
     }
 
@@ -95,7 +96,7 @@ library ValidatorLib {
 
     function getValidator(ValidatorIdentifier validator) internal pure returns (IValidator v) {
         assembly {
-            v := shl(8, validator)
+            v := shr(88, validator)
         }
     }
 
@@ -143,38 +144,27 @@ abstract contract ValidationManager is EIP712 {
     // allow installing multiple validators with same nonce
     function _installValidators(
         ValidatorIdentifier[] calldata validators,
-        bytes4[] calldata groups,
-        IHook[] calldata hooks,
-        uint48[] calldata validFrom,
-        uint48[] calldata validUntil,
+        ValidatorConfig[] memory configs,
         bytes[] calldata validatorData,
         bytes[] calldata hookData
     ) internal {
         // onlyEntrypointOrSelf
-        uint32 nonce = currentNonce;
         for (uint256 i = 0; i < validators.length; i++) {
-            _installValidator(
-                validators[i], nonce, groups[i], validFrom[i], validUntil[i], hooks[i], validatorData[i], hookData[i]
-            );
+            _installValidator(validators[i], configs[i], validatorData[i], hookData[i]);
         }
         currentNonce++;
     }
 
     function _installValidator(
         ValidatorIdentifier validator,
-        uint32 nonce,
-        bytes4 group,
-        uint48 validFrom,
-        uint48 validUntil,
-        IHook hook,
+        ValidatorConfig memory config,
         bytes calldata data,
         bytes calldata hookData
     ) internal {
-        if (address(hook) == address(0)) {
-            hook = IHook(address(1));
+        if (address(config.hook) == address(0)) {
+            config.hook = IHook(address(1));
         }
-        validatorConfig[validator] =
-            ValidatorConfig({nonce: nonce, validFrom: validFrom, validUntil: validUntil, group: group, hook: hook});
+        validatorConfig[validator] = config;
         ValidatorType vType = ValidatorLib.getType(validator);
         if (vType == TYPE_VALIDATOR) {
             IValidator(ValidatorLib.getValidator(validator)).onInstall(data);
@@ -184,8 +174,8 @@ abstract contract ValidationManager is EIP712 {
         } else {
             revert InvalidValidator();
         }
-        if (address(hook) != address(1)) {
-            hook.onInstall(hookData);
+        if (address(config.hook) != address(1)) {
+            config.hook.onInstall(hookData);
         }
     }
 
@@ -197,7 +187,10 @@ abstract contract ValidationManager is EIP712 {
     ) internal returns (ValidationData validationData) {
         PackedUserOperation memory userOp = op;
         if (vMode == MODE_ENABLE) {
-            bytes calldata userOpSig = _enableMode(vId, op.signature);
+            bytes4 selector = bytes4(op.signature[0:4]) == IAccountExecute.executeUserOp.selector
+                ? bytes4(op.signature[4:8])
+                : bytes4(op.signature[0:4]);
+            bytes calldata userOpSig = _enableMode(vId, selector, op.signature);
             userOp.signature = userOpSig;
             currentNonce++;
         }
@@ -211,91 +204,78 @@ abstract contract ValidationManager is EIP712 {
         }
     }
 
-    function _enableMode(ValidatorIdentifier vId, bytes calldata signature)
+    function _enableMode(ValidatorIdentifier vId, bytes4 selector, bytes calldata packedData)
         internal
         returns (bytes calldata userOpSig)
     {
-        if (ValidatorLib.getType(vId) == TYPE_VALIDATOR) {
-            userOpSig = _doEnableValidator(vId, signature);
-        } else if (ValidatorLib.getType(vId) == TYPE_PERMISSION) {
-            // TODO
-            revert("NOT_IMPLEMENTED_ENABLE_MODE_PERMISSION");
-        } else {
-            revert InvalidValidator();
-        }
-        return userOpSig;
-    }
-
-    function _doEnableValidator(ValidatorIdentifier vId, bytes calldata signature)
-        internal
-        returns (bytes calldata userOpSig)
-    {
-        bytes4 group;
-        uint48 validFrom;
-        uint48 validUntil;
-        IHook hook;
-        bytes calldata validatorData;
-        bytes calldata hookData;
-        bytes calldata enableSig;
-
-        group = bytes4(signature[0:4]);
-        validFrom = uint48(bytes6(signature[4:10]));
-        validUntil = uint48(bytes6(signature[10:16]));
-        hook = IHook(address(bytes20(signature[16:36])));
+        _checkEnableValidatorSig(vId, selector, packedData);
         assembly {
-            validatorData.offset := add(add(signature.offset, 32), calldataload(add(signature.offset, 36)))
-            validatorData.length := calldataload(sub(validatorData.offset, 32))
-            hookData.offset := add(add(signature.offset, 32), calldataload(add(signature.offset, 68)))
-            hookData.length := calldataload(sub(hookData.offset, 32))
-            enableSig.offset := add(add(signature.offset, 32), calldataload(add(signature.offset, 100)))
-            enableSig.length := calldataload(sub(enableSig.offset, 32))
-        }
-
-        _checkEnableValidatorSig(
-            vId, currentNonce, group, validFrom, validUntil, hook, validatorData, hookData, enableSig
-        );
-        _installValidator(vId, currentNonce, group, validFrom, validUntil, hook, validatorData, hookData);
-        assembly {
-            userOpSig.offset := add(add(signature.offset, 32), calldataload(add(signature.offset, 132)))
+            userOpSig.offset := add(add(packedData.offset, 32), calldataload(add(packedData.offset, 132)))
             userOpSig.length := calldataload(sub(userOpSig.offset, 32))
         }
     }
 
-    function _checkEnableValidatorSig(
-        ValidatorIdentifier vId,
-        uint32 nonce,
-        bytes4 group,
-        uint48 validFrom,
-        uint48 validUntil,
-        IHook hook,
-        bytes calldata validatorData,
-        bytes calldata hookData,
-        bytes calldata enableSig
-    ) internal view {
+    function _checkEnableValidatorSig(ValidatorIdentifier vId, bytes4 selector, bytes calldata packedData) internal {
         if (ValidatorLib.getType(vId) != TYPE_VALIDATOR) {
             revert InvalidValidator();
+        } else {
+            (
+                ValidatorConfig memory config,
+                bytes calldata validatorData,
+                bytes calldata hookData,
+                bytes32 digest,
+                bytes calldata enableSig
+            ) = _enableValidatorDigest(ValidatorLib.getValidator(vId), selector, packedData);
+            _installValidator(vId, config, validatorData, hookData);
+            bytes4 result = _validateSignature(rootValidator, address(this), digest, enableSig);
+            if (result != 0x1626ba7e) {
+                revert InvalidSignature();
+            }
         }
-        bytes32 digest = _hashTypedData(
+    }
+
+    function _enableValidatorDigest(IValidator validator, bytes4 selector, bytes calldata packedData)
+        internal
+        view
+        returns (
+            ValidatorConfig memory config,
+            bytes calldata validatorData,
+            bytes calldata hookData,
+            bytes32 digest,
+            bytes calldata enableSig
+        )
+    {
+        config.group = bytes4(packedData[0:4]);
+        config.validFrom = uint48(bytes6(packedData[4:10]));
+        config.validUntil = uint48(bytes6(packedData[10:16]));
+        config.hook = IHook(address(bytes20(packedData[16:36])));
+        config.nonce = currentNonce;
+        assembly {
+            validatorData.offset := add(add(packedData.offset, 32), calldataload(add(packedData.offset, 36)))
+            validatorData.length := calldataload(sub(validatorData.offset, 32))
+            hookData.offset := add(add(packedData.offset, 32), calldataload(add(packedData.offset, 68)))
+            hookData.length := calldataload(sub(hookData.offset, 32))
+            enableSig.offset := add(add(packedData.offset, 32), calldataload(add(packedData.offset, 100)))
+            enableSig.length := calldataload(sub(enableSig.offset, 32))
+        }
+        digest = _hashTypedData(
             keccak256(
                 abi.encode(
                     keccak256(
-                        "Enable(address validator,uint32 nonce,bytes4 group,uint48 validFrom,uint48 validUntil,address hook,bytes validatorData,bytes hookData)"
+                        "Enable(address validator,uint32 nonce,bytes4 group,bytes4 selector,uint48 validFrom,uint48 validUntil,address hook,bytes validatorData,bytes hookData)"
                     ), // TODO: this to constant
-                    ValidatorLib.getValidator(vId),
-                    nonce,
-                    group,
-                    validFrom,
-                    validUntil,
-                    hook,
+                    validator,
+                    currentNonce,
+                    config.group,
+                    selector,
+                    config.validFrom,
+                    config.validUntil,
+                    config.hook,
                     keccak256(validatorData),
                     keccak256(hookData)
                 )
             )
         );
-        bytes4 result = _validateSignature(rootValidator, address(this), digest, enableSig);
-        if (result != 0x1626ba7e) {
-            revert InvalidSignature();
-        }
     }
 
     function _validateSignature(ValidatorIdentifier validator, address caller, bytes32 digest, bytes calldata sig)
