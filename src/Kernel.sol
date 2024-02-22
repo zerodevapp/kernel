@@ -28,6 +28,8 @@ import {ValidationData, ValidAfter, ValidUntil, parseValidationData, packValidat
 contract Kernel is EIP712, Compatibility, KernelStorage {
     /// @dev Selector of the `DisabledMode()` error, to be used in assembly, 'bytes4(keccak256(bytes("DisabledMode()")))', same as DisabledMode.selector()
     uint256 private constant _DISABLED_MODE_SELECTOR = 0xfc2f51c5;
+    bytes32 internal constant EIP712_DOMAIN_TYPEHASH =
+        0x8b73c3c69bb8fe3d512ecc4cf759cc79239f7b179b0ffacaa9a75d522b39400f;
 
     /// @dev Current kernel name and version
     string public constant name = KERNEL_NAME;
@@ -288,8 +290,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         address proxyAddress = address(this);
 
         // Construct the domain separator with name, version, chainId, and proxy address.
-        bytes32 typeHash =
-            keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+        bytes32 typeHash = EIP712_DOMAIN_TYPEHASH;
         return keccak256(abi.encode(typeHash, nameHash, versionHash, block.chainid, proxyAddress));
     }
 

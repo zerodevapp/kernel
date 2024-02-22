@@ -15,10 +15,11 @@ import {IKernelValidator} from "../interfaces/IKernelValidator.sol";
 import {Call, ExecutionDetail} from "../common/Structs.sol";
 import {ValidationData, ValidUntil, ValidAfter} from "../common/Types.sol";
 import {KERNEL_VERSION, KERNEL_NAME} from "../common/Constants.sol";
+import {ECDSA} from "solady/utils/ECDSA.sol";
 
 import {ERC4337Utils} from "./ERC4337Utils.sol";
 import {Test} from "forge-std/Test.sol";
-import {console} from "forge-std/Console.sol";
+import {console} from "forge-std/console.sol";
 import {TestValidator} from "../mock/TestValidator.sol";
 import {TestExecutor} from "../mock/TestExecutor.sol";
 import {TestERC721} from "../mock/TestERC721.sol";
@@ -196,7 +197,8 @@ abstract contract KernelTestBase is Test {
 
     function test_validate_signature() external virtual {
         Kernel kernel2 = Kernel(payable(factory.createAccount(address(kernelImpl), getInitializeData(), 3)));
-        bytes32 hash = keccak256(abi.encodePacked("hello world"));
+        string memory message = "hello world";
+        bytes32 hash = ECDSA.toEthSignedMessageHash(bytes(message));
         bytes32 digest = keccak256(
             abi.encodePacked(
                 "\x19\x01", ERC4337Utils._buildDomainSeparator(KERNEL_NAME, KERNEL_VERSION, address(kernel)), hash
