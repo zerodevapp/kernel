@@ -6,10 +6,10 @@ import {IEntryPoint} from "./interfaces/IEntryPoint.sol";
 import {IAccountExecute} from "./interfaces/IAccountExecute.sol";
 import {
     ValidationManager,
-    ValidatorMode,
-    ValidatorIdentifier,
+    ValidationMode,
+    ValidationId,
     ValidatorLib,
-    ValidatorType,
+    ValidationType,
     TYPE_SUDO
 } from "./core/PermissionManager.sol";
 import {HookManager} from "./core/HookManager.sol";
@@ -18,13 +18,13 @@ import {SelectorManager} from "./core/SelectorManager.sol";
 import {IValidator, IHook, IExecutor} from "./interfaces/IERC7579Modules.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
 import {ExecLib, ExecMode, CallType, CALLTYPE_SINGLE, CALLTYPE_DELEGATECALL} from "./utils/ExecLib.sol";
-
+import "forge-std/console.sol";
 contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, ExecutorManager {
     IEntryPoint public immutable entrypoint;
 
     constructor(IEntryPoint _entrypoint) {
         entrypoint = _entrypoint;
-        rootValidator = ValidatorIdentifier.wrap(bytes21(abi.encodePacked(hex"deadbeef")));
+        rootValidator = ValidationId.wrap(bytes21(abi.encodePacked(hex"deadbeef")));
     }
 
     modifier onlyEntryPoint() {
@@ -38,13 +38,13 @@ contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, Ex
     }
 
     function initialize(
-        ValidatorIdentifier _rootValidator,
+        ValidationId _rootValidator,
         IHook hook,
         bytes calldata validatorData,
         bytes calldata hookData
     ) external {
-        require(ValidatorIdentifier.unwrap(rootValidator) == bytes21(0), "already initialized");
-        require(ValidatorIdentifier.unwrap(_rootValidator) != bytes21(0), "invalid validator");
+        require(ValidationId.unwrap(rootValidator) == bytes21(0), "already initialized");
+        require(ValidationId.unwrap(_rootValidator) != bytes21(0), "invalid validator");
         rootValidator = _rootValidator;
         ValidatorConfig memory config = ValidatorConfig({
             group: bytes4(0),
@@ -110,7 +110,7 @@ contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, Ex
         // 3. In v2, only 1 plugin validator(aside from root validator) can access the selector.
         //    In v3, you can use more than 1 plugin to use the exact selector, you need to specify the validator address in userOp.nonce[2:22] to use the validator
 
-        (ValidatorMode vMode, ValidatorType vType, ValidatorIdentifier vId) = ValidatorLib.decode(userOp.nonce);
+        (ValidationMode vMode, ValidationType vType, ValidationId vId) = ValidatorLib.decode(userOp.nonce);
         if (vType == TYPE_SUDO) {
             vId = rootValidator;
         }

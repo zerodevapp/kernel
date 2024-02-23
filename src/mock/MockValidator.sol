@@ -8,16 +8,24 @@ contract MockValidator is IValidator {
     bool public success;
     uint256 public count;
 
+    mapping(address => bytes) public validatorData;
+    mapping(bytes32 => bool) public validSig;
     function sudoSetSuccess(bool _success) external {
         success = _success;
     }
 
+    function sudoSetValidSig( bytes calldata sig) external {
+        validSig[keccak256(sig)] = true;
+    }
+
     function onInstall(bytes calldata data) external {
         initialized[msg.sender] = true;
+        validatorData[msg.sender] = data;
     }
 
     function onUninstall(bytes calldata data) external {
         initialized[msg.sender] = false;
+        validatorData[msg.sender] = data;
     }
 
     function isModuleType(uint256 typeID) external view returns (bool) {
@@ -39,6 +47,7 @@ contract MockValidator is IValidator {
 
     function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash) external returns (uint256) {
         count++;
+
         if (success) {
             return 0;
         } else {
@@ -46,12 +55,12 @@ contract MockValidator is IValidator {
         }
     }
 
-    function isValidSignatureWithSender(address sender, bytes32 hash, bytes calldata data)
+    function isValidSignatureWithSender(address sender, bytes32 hash, bytes calldata sig)
         external
         view
         returns (bytes4)
     {
-        if (success) {
+        if (validSig[keccak256(sig)] == true) {
             return 0x1626ba7e;
         } else {
             return 0xffffffff;

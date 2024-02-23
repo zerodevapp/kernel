@@ -40,7 +40,7 @@ contract KernelTest is Test {
     MockCallee callee;
 
     modifier whenInitialized() {
-        ValidatorIdentifier vId = ValidatorLib.validatorToIdentifier(validator);
+        ValidationId vId = ValidatorLib.validatorToIdentifier(validator);
         kernel.initialize(vId, IHook(address(0)), hex"", hex"");
         _;
     }
@@ -54,7 +54,7 @@ contract KernelTest is Test {
     }
 
     function testInitialize() external {
-        ValidatorIdentifier vId = ValidatorLib.validatorToIdentifier(validator);
+        ValidationId vId = ValidatorLib.validatorToIdentifier(validator);
         kernel.initialize(vId, IHook(address(0)), hex"", hex"");
         assertTrue(kernel.rootValidator() == vId);
         ValidationManager.ValidatorConfig memory config;
@@ -115,5 +115,71 @@ contract KernelTest is Test {
         vm.expectRevert();
         entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
         assertEq(validator.count(), count);
+    }
+
+    function encodeEnableSignature(
+        address validatorAddr,
+        bytes4 group,
+        uint48 validFrom,
+        uint48 validUntil,
+        IHook hook,
+        bytes memory validatorData,
+        bytes memory hookData,
+        bytes memory selectorData,
+        bytes memory enableSig,
+        bytes memory userOpSig
+    ) internal view returns(bytes memory){
+        return abi.encodePacked(
+            abi.encodePacked(group, validFrom, validUntil, hook),
+            abi.encode(
+                validatorData,
+                hookData,
+                selectorData,
+                enableSig,
+                userOpSig
+            )
+        );
+    }
+
+    function testValidateUserOpSuccessValidatorEnableMode() external whenInitialized {
+        vm.deal(address(kernel), 1e18);
+        MockValidator newValidator = new MockValidator();
+        uint256 count = validator.count();
+        uint256 newCount = newValidator.count();
+        PackedUserOperation[] memory ops = new PackedUserOperation[](1);
+        uint192 encodedAsNonceKey = ValidatorLib.encodeAsNonceKey(
+            ValidationMode.unwrap(MODE_ENABLE), ValidationType.unwrap(TYPE_VALIDATOR), bytes20(address(newValidator)), 0
+        );
+        ops[0] = PackedUserOperation({
+            sender: address(kernel),
+            nonce: entrypoint.getNonce(address(kernel), encodedAsNonceKey),
+            initCode: hex"",
+            callData: abi.encodeWithSelector(
+                kernel.execute.selector,
+                ExecLib.encodeSimpleSingle(),
+                ExecLib.encodeSingle(address(callee), 0, abi.encodeWithSelector(callee.setValue.selector, 123))
+            ),
+            accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
+            preVerificationGas: 1000000,
+            gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
+            paymasterAndData: hex"",
+            signature: encodeEnableSignature(
+                address(newValidator),
+                bytes4(0xdeadbeef),
+                1,
+                100000000,
+                IHook(address(0)),
+                abi.encodePacked("hello"),
+                abi.encodePacked("world"),
+                abi.encodePacked(kernel.execute.selector),
+                abi.encodePacked("enableSig"),
+                abi.encodePacked("userOpSig")
+            )
+        });
+        validator.sudoSetValidSig(abi.encodePacked("enableSig"));
+        newValidator.sudoSetSuccess(true);
+        entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
+        assertEq(validator.count(), count);
+        assertEq(newValidator.count(), newCount + 1);
     }
 }
