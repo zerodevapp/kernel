@@ -128,16 +128,10 @@ contract KernelTest is Test {
         bytes memory selectorData,
         bytes memory enableSig,
         bytes memory userOpSig
-    ) internal view returns(bytes memory){
+    ) internal view returns (bytes memory) {
         return abi.encodePacked(
             abi.encodePacked(group, validFrom, validUntil, hook),
-            abi.encode(
-                validatorData,
-                hookData,
-                selectorData,
-                enableSig,
-                userOpSig
-            )
+            abi.encode(validatorData, hookData, selectorData, enableSig, userOpSig)
         );
     }
 
@@ -158,7 +152,7 @@ contract KernelTest is Test {
                 kernel.execute.selector,
                 ExecLib.encodeSimpleSingle(),
                 ExecLib.encodeSingle(address(callee), 0, abi.encodeWithSelector(callee.setValue.selector, 123))
-            ),
+                ),
             accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
             preVerificationGas: 1000000,
             gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
@@ -174,7 +168,7 @@ contract KernelTest is Test {
                 abi.encodePacked(kernel.execute.selector),
                 abi.encodePacked("enableSig"),
                 abi.encodePacked("userOpSig")
-            )
+                )
         });
         validator.sudoSetValidSig(abi.encodePacked("enableSig"));
         newValidator.sudoSetSuccess(true);

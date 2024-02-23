@@ -19,6 +19,7 @@ import {IValidator, IHook, IExecutor} from "./interfaces/IERC7579Modules.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
 import {ExecLib, ExecMode, CallType, CALLTYPE_SINGLE, CALLTYPE_DELEGATECALL} from "./utils/ExecLib.sol";
 import "forge-std/console.sol";
+
 contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, ExecutorManager {
     IEntryPoint public immutable entrypoint;
 
@@ -37,12 +38,9 @@ contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, Ex
         _;
     }
 
-    function initialize(
-        ValidationId _rootValidator,
-        IHook hook,
-        bytes calldata validatorData,
-        bytes calldata hookData
-    ) external {
+    function initialize(ValidationId _rootValidator, IHook hook, bytes calldata validatorData, bytes calldata hookData)
+        external
+    {
         require(ValidationId.unwrap(rootValidator) == bytes21(0), "already initialized");
         require(ValidationId.unwrap(_rootValidator) != bytes21(0), "invalid validator");
         rootValidator = _rootValidator;

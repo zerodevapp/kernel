@@ -10,11 +10,12 @@ contract MockValidator is IValidator {
 
     mapping(address => bytes) public validatorData;
     mapping(bytes32 => bool) public validSig;
+
     function sudoSetSuccess(bool _success) external {
         success = _success;
     }
 
-    function sudoSetValidSig( bytes calldata sig) external {
+    function sudoSetValidSig(bytes calldata sig) external {
         validSig[keccak256(sig)] = true;
     }
 
