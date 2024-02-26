@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.23;
 
-import {ExecMode, CallType, ExecType, ModeSelector, ModePayload} from "../types/Types.sol";
+import {ExecMode, CallType, ExecType, ExecModeSelector, ExecModePayload} from "../types/Types.sol";
 import {
     CALLTYPE_SINGLE,
     CALLTYPE_BATCH,
     EXECTYPE_DEFAULT,
-    MODE_DEFAULT,
+    EXEC_MODE_DEFAULT,
     EXECTYPE_TRY,
     CALLTYPE_DELEGATECALL
 } from "../types/Constants.sol";
@@ -136,7 +136,7 @@ library ExecLib {
     function decode(ExecMode mode)
         internal
         pure
-        returns (CallType _calltype, ExecType _execType, ModeSelector _modeSelector, ModePayload _modePayload)
+        returns (CallType _calltype, ExecType _execType, ExecModeSelector _modeSelector, ExecModePayload _modePayload)
     {
         assembly {
             _calltype := mode
@@ -146,21 +146,22 @@ library ExecLib {
         }
     }
 
-    function encode(CallType callType, ExecType execType, ModeSelector mode, ModePayload payload)
+    function encode(CallType callType, ExecType execType, ExecModeSelector mode, ExecModePayload payload)
         internal
         pure
         returns (ExecMode)
     {
-        return
-            ExecMode.wrap(bytes32(abi.encodePacked(callType, execType, bytes4(0), ModeSelector.unwrap(mode), payload)));
+        return ExecMode.wrap(
+            bytes32(abi.encodePacked(callType, execType, bytes4(0), ExecModeSelector.unwrap(mode), payload))
+        );
     }
 
     function encodeSimpleBatch() internal pure returns (ExecMode mode) {
-        mode = encode(CALLTYPE_BATCH, EXECTYPE_DEFAULT, MODE_DEFAULT, ModePayload.wrap(0x00));
+        mode = encode(CALLTYPE_BATCH, EXECTYPE_DEFAULT, EXEC_MODE_DEFAULT, ExecModePayload.wrap(0x00));
     }
 
     function encodeSimpleSingle() internal pure returns (ExecMode mode) {
-        mode = encode(CALLTYPE_SINGLE, EXECTYPE_DEFAULT, MODE_DEFAULT, ModePayload.wrap(0x00));
+        mode = encode(CALLTYPE_SINGLE, EXECTYPE_DEFAULT, EXEC_MODE_DEFAULT, ExecModePayload.wrap(0x00));
     }
 
     function getCallType(ExecMode mode) internal pure returns (CallType calltype) {

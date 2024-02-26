@@ -7,19 +7,28 @@ import "src/core/PermissionManager.sol";
 import "./erc4337Util.sol";
 
 contract SimpleProxy {
-    address immutable target;
+    bytes32 constant IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
 
     constructor(address _target) {
-        target = _target;
+        assembly {
+            sstore(IMPLEMENTATION_SLOT, _target)
+        }
+    }
+
+    function _getImplementation() internal view returns (address target) {
+        bytes32 slot = IMPLEMENTATION_SLOT;
+        assembly {
+            target := sload(slot)
+        }
     }
 
     receive() external payable {
-        (bool success,) = target.delegatecall("");
+        (bool success,) = _getImplementation().delegatecall("");
         require(success, "delegatecall failed");
     }
 
     fallback(bytes calldata) external payable returns (bytes memory) {
-        (bool success, bytes memory ret) = target.delegatecall(msg.data);
+        (bool success, bytes memory ret) = _getImplementation().delegatecall(msg.data);
         require(success, "delegatecall failed");
         return ret;
     }
@@ -55,6 +64,7 @@ contract KernelTest is Test {
 
     function testInitialize() external {
         ValidationId vId = ValidatorLib.validatorToIdentifier(validator);
+
         kernel.initialize(vId, IHook(address(0)), hex"", hex"");
         assertTrue(kernel.rootValidator() == vId);
         ValidationManager.ValidatorConfig memory config;
@@ -142,7 +152,10 @@ contract KernelTest is Test {
         uint256 newCount = newValidator.count();
         PackedUserOperation[] memory ops = new PackedUserOperation[](1);
         uint192 encodedAsNonceKey = ValidatorLib.encodeAsNonceKey(
-            ValidationMode.unwrap(MODE_ENABLE), ValidationType.unwrap(TYPE_VALIDATOR), bytes20(address(newValidator)), 0
+            ValidationMode.unwrap(VALIDATION_MODE_ENABLE),
+            ValidationType.unwrap(VALIDATION_TYPE_VALIDATOR),
+            bytes20(address(newValidator)),
+            0
         );
         ops[0] = PackedUserOperation({
             sender: address(kernel),

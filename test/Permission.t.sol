@@ -2,6 +2,7 @@ pragma solidity ^0.8.0;
 
 import "src/core/PermissionManager.sol";
 import "forge-std/Test.sol";
+import {Group, GroupId} from "src/types/Types.sol";
 
 contract MockValidatorLib {
     function parseGroup(Group group) external pure returns (GroupId groupId, PassFlag passFlag) {
@@ -34,12 +35,12 @@ contract MockValidatorLib {
         return ValidatorLib.encodeAsNonceKey(mode, vType, validatorIdentifierWithoutType, nonceKey);
     }
 
-    function decode(uint256 nonce)
+    function decodeNonce(uint256 nonce)
         external
         pure
         returns (ValidationMode mode, ValidationType vType, ValidationId identifier)
     {
-        return ValidatorLib.decode(nonce);
+        return ValidatorLib.decodeNonce(nonce);
     }
 
     function validatorToIdentifier(IValidator validator) external pure returns (ValidationId vId) {
@@ -56,6 +57,10 @@ contract MockValidatorLib {
 
     function getPermissionValidator(PermissionData data) external pure returns (IValidator vId) {
         return ValidatorLib.getPermissionValidator(data);
+    }
+
+    function getPermissionId(ValidationId validation) external pure returns (PermissionId vId) {
+        return ValidatorLib.getPermissionId(validation);
     }
 }
 
@@ -87,16 +92,19 @@ contract PermissionTest is Test {
 
     function testDecode() external {
         uint256 nonce = uint256(bytes32(0));
-        (ValidationMode vMode, ValidationType vType, ValidationId vId) = validatorLib.decode(nonce);
-        assertTrue(vMode == MODE_DEFAULT, "vMode != MODE_DEFAULT");
-        assertTrue(vType == TYPE_SUDO, "vType != TYPE_VALIDATOR");
+        (ValidationMode vMode, ValidationType vType, ValidationId vId) = validatorLib.decodeNonce(nonce);
+        assertTrue(vMode == VALIDATION_MODE_DEFAULT, "vMode != MODE_DEFAULT");
+        assertTrue(vType == VALIDATION_TYPE_SUDO, "vType != TYPE_VALIDATOR");
     }
 
     function testDecode(bytes1 mode, bytes1 vtype, bytes20 vIdWithoutType, bytes10 sequencialNonce) external {
         uint256 nonce = uint256(bytes32(abi.encodePacked(mode, vtype, vIdWithoutType, sequencialNonce)));
-        (ValidationMode vMode, ValidationType vType, ValidationId vId) = validatorLib.decode(nonce);
+        (ValidationMode vMode, ValidationType vType, ValidationId vId) = validatorLib.decodeNonce(nonce);
         assertTrue(vMode == ValidationMode.wrap(mode), "vMode != mode");
         assertTrue(vType == ValidationType.wrap(vtype), "vType != type");
+        if (ValidationType.wrap(vtype) == VALIDATION_TYPE_PERMISSION) {
+            vIdWithoutType = (vIdWithoutType >> 128) << 128;
+        }
         assertTrue(vId == ValidationId.wrap(bytes21(abi.encodePacked(vtype, vIdWithoutType))), "vId != vIdWithoutType");
     }
 
@@ -109,23 +117,44 @@ contract PermissionTest is Test {
         assertEq(nonce >> 64, encodedAsNonceKey);
     }
 
-    function testValidatorLib(bytes1 mode, bytes1 vtype, bytes20 vIdWithoutType, bytes10 sequencialNonce) external {
+    function testValidatorLibPermission() public {
+        testValidatorLib(
+            ValidationMode.unwrap(VALIDATION_MODE_DEFAULT),
+            ValidationType.unwrap(VALIDATION_TYPE_PERMISSION),
+            bytes20(makeAddr("random")),
+            bytes10(0)
+        );
+    }
+
+    function testValidatorLib(bytes1 mode, bytes1 vtype, bytes20 vIdWithoutType, bytes10 sequencialNonce) public {
+        bytes20 expected = vIdWithoutType;
+        if (ValidationType.wrap(vtype) == VALIDATION_TYPE_PERMISSION) {
+            expected = (expected >> 128) << 128;
+        }
         uint16 nonceKey = uint16(bytes2(sequencialNonce));
         uint64 seqNonce = uint64(bytes8(sequencialNonce << 16));
         uint256 encoded = validatorLib.encodeAsNonce(mode, vtype, vIdWithoutType, nonceKey, seqNonce);
 
-        (ValidationMode vMode, ValidationType vType, ValidationId vId) = validatorLib.decode(encoded);
+        (ValidationMode vMode, ValidationType vType, ValidationId vId) = validatorLib.decodeNonce(encoded);
+        console.logBytes32(bytes32(encoded));
         assertTrue(vMode == ValidationMode.wrap(mode), "vMode != mode");
         assertTrue(vType == ValidationType.wrap(vtype), "vType != type");
-        assertTrue(vId == ValidationId.wrap(bytes21(abi.encodePacked(vtype, vIdWithoutType))), "vId != vIdWithoutType");
+        console.logBytes21(ValidationId.unwrap(vId));
+        console.logBytes21(bytes21(abi.encodePacked(vtype, expected)));
+        assertTrue(vId == ValidationId.wrap(bytes21(abi.encodePacked(vtype, expected))), "vId != vIdWithoutType");
 
-        IValidator v = validatorLib.getValidator(vId);
-        assertEq(address(v), address(vIdWithoutType), "v != vIdWithoutType");
-
-        ValidationId vid = validatorLib.validatorToIdentifier(v);
-        assertTrue(
-            vid == ValidationId.wrap(bytes21(abi.encodePacked(TYPE_VALIDATOR, vIdWithoutType))), "vid != vIdWithoutType"
-        );
+        if (ValidationType.wrap(vtype) == VALIDATION_TYPE_VALIDATOR) {
+            IValidator v = validatorLib.getValidator(vId);
+            assertEq(address(v), address(vIdWithoutType), "v != vIdWithoutType");
+            ValidationId vid = validatorLib.validatorToIdentifier(v);
+            assertTrue(
+                vid == ValidationId.wrap(bytes21(abi.encodePacked(VALIDATION_TYPE_VALIDATOR, vIdWithoutType))),
+                "vid != vIdWithoutType"
+            );
+        } else if (ValidationType.wrap(vtype) == VALIDATION_TYPE_PERMISSION) {
+            PermissionId pId = validatorLib.getPermissionId(vId);
+            assertEq(bytes20(abi.encodePacked(PermissionId.unwrap(pId), bytes16(0))), expected);
+        }
 
         ValidationType vt = validatorLib.getType(vId);
         assertTrue(vt == ValidationType.wrap(vtype), "vt != vtype");

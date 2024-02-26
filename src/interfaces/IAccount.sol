@@ -2,8 +2,7 @@
 pragma solidity >=0.7.5;
 
 import "./PackedUserOperation.sol";
-
-type ValidationData is uint256;
+import "../types/Types.sol";
 
 interface IAccount {
     /**

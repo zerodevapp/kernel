@@ -4,13 +4,16 @@ import {PackedUserOperation} from "./interfaces/PackedUserOperation.sol";
 import {IAccount, ValidationData} from "./interfaces/IAccount.sol";
 import {IEntryPoint} from "./interfaces/IEntryPoint.sol";
 import {IAccountExecute} from "./interfaces/IAccountExecute.sol";
+import {IERC7579Account} from "./interfaces/IERC7579Account.sol";
 import {
     ValidationManager,
     ValidationMode,
     ValidationId,
     ValidatorLib,
     ValidationType,
-    TYPE_SUDO
+    VALIDATION_TYPE_SUDO,
+    VALIDATION_TYPE_VALIDATOR,
+    VALIDATION_TYPE_PERMISSION
 } from "./core/PermissionManager.sol";
 import {HookManager} from "./core/HookManager.sol";
 import {ExecutorManager} from "./core/ExecutorManager.sol";
@@ -21,7 +24,7 @@ import {ExecLib, ExecMode, CallType, CALLTYPE_SINGLE, CALLTYPE_DELEGATECALL} fro
 
 bytes32 constant ERC1967_IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
 
-contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, ExecutorManager {
+contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager, HookManager, ExecutorManager {
     error ExecutionReverted();
     error InvalidExecutor();
     error InvalidFallback();
@@ -59,7 +62,7 @@ contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, Ex
             nonce: uint32(0),
             hook: hook
         });
-        _installValidator(_rootValidator, config, validatorData, hookData);
+        _installValidation(_rootValidator, config, validatorData, hookData);
     }
 
     // NOTE : when eip 1153 has been enabled, this can be transient storage
@@ -111,8 +114,8 @@ contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, Ex
         // 3. In v2, only 1 plugin validator(aside from root validator) can access the selector.
         //    In v3, you can use more than 1 plugin to use the exact selector, you need to specify the validator address in userOp.nonce[2:22] to use the validator
 
-        (ValidationMode vMode, ValidationType vType, ValidationId vId) = ValidatorLib.decode(userOp.nonce);
-        if (vType == TYPE_SUDO) {
+        (ValidationMode vMode, ValidationType vType, ValidationId vId) = ValidatorLib.decodeNonce(userOp.nonce);
+        if (vType == VALIDATION_TYPE_SUDO) {
             vId = vs.rootValidator;
         }
         validationData = _doValidation(vMode, vId, userOp, userOpHash);
@@ -125,7 +128,7 @@ contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, Ex
         if (address(execHook) == address(1)) {
             // does not require hook
             if (
-                vType != TYPE_SUDO
+                vType != VALIDATION_TYPE_SUDO
                     && _selectorConfig(bytes4(userOp.callData[0:4])).group != vs.validatorConfig[vId].group
             ) {
                 revert InvalidValidator();
@@ -133,7 +136,7 @@ contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, Ex
         } else {
             // requires hook
             if (
-                vType != TYPE_SUDO
+                vType != VALIDATION_TYPE_SUDO
                     && _selectorConfig(bytes4(userOp.callData[4:8])).group != vs.validatorConfig[vId].group
             ) {
                 revert InvalidValidator();
@@ -197,4 +200,26 @@ contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, Ex
     function execute(ExecMode execMode, bytes calldata executionCalldata) external payable onlyEntryPointOrSelf {
         ExecLib._execute(execMode, executionCalldata);
     }
+
+    function isValidSignature(bytes32 hash, bytes calldata signature) external view override returns (bytes4) {
+        ValidationId vId = ValidationId.wrap(bytes21(signature[0:21]));
+        return _validateSignature(vId, msg.sender, hash, signature[21:]);
+    }
+
+    function installModule(uint256 moduleType, address module, bytes calldata initData) external payable override {}
+
+    function uninstallModule(uint256 moduleType, address module, bytes calldata deInitData) external payable override {}
+
+    function supportsAccountMode(ExecMode encodedMode) external view override returns (bool) {}
+
+    function supportsModule(uint256 moduleTypeId) external view override returns (bool) {}
+
+    function isModuleInstalled(uint256 moduleType, address module, bytes calldata additionalContext)
+        external
+        view
+        override
+        returns (bool)
+    {}
+
+    function accountId() external view override returns (string memory accountImplementationId) {}
 }

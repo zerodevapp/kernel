@@ -29,14 +29,14 @@ contract MockValidator is IValidator {
         validatorData[msg.sender] = data;
     }
 
-    function isModuleType(uint256 typeID) external view returns (bool) {
+    function isModuleType(uint256 typeID) external pure returns (bool) {
         return typeID == 1;
     }
 
-    function getModuleTypes() external view returns (EncodedModuleTypes) {
+    function getModuleTypes() external pure returns (EncodedModuleTypes) {
         ModuleType[] memory types = new ModuleType[](1);
         types[0] = ModuleType.wrap(1);
-        ModuleTypeLib.bitEncode(types);
+        return ModuleTypeLib.bitEncode(types);
     }
 
     /**
@@ -46,7 +46,7 @@ contract MockValidator is IValidator {
         return initialized[smartAccount];
     }
 
-    function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash) external returns (uint256) {
+    function validateUserOp(PackedUserOperation calldata, bytes32) external returns (uint256) {
         count++;
 
         if (success) {
@@ -56,11 +56,7 @@ contract MockValidator is IValidator {
         }
     }
 
-    function isValidSignatureWithSender(address sender, bytes32 hash, bytes calldata sig)
-        external
-        view
-        returns (bytes4)
-    {
+    function isValidSignatureWithSender(address, bytes32, bytes calldata sig) external view returns (bytes4) {
         if (validSig[keccak256(sig)] == true) {
             return 0x1626ba7e;
         } else {

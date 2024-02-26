@@ -40,9 +40,9 @@ abstract contract SelectorManager {
         ss.hook = hook;
         ss.callType = CALLTYPE_DELEGATECALL;
         ss.target = target;
+        // TODO : INSTALL FLOW FOR fallback is NOT SUPPORTED YET
         if (address(hook) != address(1)) {
-            // TODO : INSTALL FLOW IS NOT SUPPORTED YET
-            //hook.onInstall(hookData);
+            hook.onInstall(hookData);
         }
     }
 }
