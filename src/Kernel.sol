@@ -18,14 +18,21 @@ import {SelectorManager} from "./core/SelectorManager.sol";
 import {IValidator, IHook, IExecutor} from "./interfaces/IERC7579Modules.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
 import {ExecLib, ExecMode, CallType, CALLTYPE_SINGLE, CALLTYPE_DELEGATECALL} from "./utils/ExecLib.sol";
-import "forge-std/console.sol";
+
+bytes32 constant ERC1967_IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
 
 contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, ExecutorManager {
+    error ExecutionReverted();
+    error InvalidExecutor();
+    error InvalidFallback();
+    error InvalidCallType();
+    error OnlyExecuteUserOp();
+
     IEntryPoint public immutable entrypoint;
 
     constructor(IEntryPoint _entrypoint) {
         entrypoint = _entrypoint;
-        rootValidator = ValidationId.wrap(bytes21(abi.encodePacked(hex"deadbeef")));
+        _validatorStorage().rootValidator = ValidationId.wrap(bytes21(abi.encodePacked(hex"deadbeef")));
     }
 
     modifier onlyEntryPoint() {
@@ -41,9 +48,10 @@ contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, Ex
     function initialize(ValidationId _rootValidator, IHook hook, bytes calldata validatorData, bytes calldata hookData)
         external
     {
-        require(ValidationId.unwrap(rootValidator) == bytes21(0), "already initialized");
+        ValidatorStorage storage vs = _validatorStorage();
+        require(ValidationId.unwrap(vs.rootValidator) == bytes21(0), "already initialized");
         require(ValidationId.unwrap(_rootValidator) != bytes21(0), "invalid validator");
-        rootValidator = _rootValidator;
+        vs.rootValidator = _rootValidator;
         ValidatorConfig memory config = ValidatorConfig({
             group: bytes4(0),
             validFrom: uint48(0),
@@ -53,12 +61,6 @@ contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, Ex
         });
         _installValidator(_rootValidator, config, validatorData, hookData);
     }
-
-    error ExecutionReverted();
-    error InvalidExecutor();
-    error InvalidFallback();
-    error InvalidCallType();
-    error OnlyExecuteUserOp();
 
     // NOTE : when eip 1153 has been enabled, this can be transient storage
     mapping(bytes32 userOpHash => IHook) public executionHook;
@@ -71,7 +73,7 @@ contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, Ex
     receive() external payable {}
 
     fallback() external payable {
-        SelectorConfig memory config = selectorConfig[msg.sig];
+        SelectorConfig memory config = _selectorConfig(msg.sig);
         if (address(config.hook) == address(0)) {
             revert InvalidFallback();
         }
@@ -101,6 +103,7 @@ contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, Ex
         onlyEntryPoint
         returns (ValidationData validationData)
     {
+        ValidatorStorage storage vs = _validatorStorage();
         // ONLY ENTRYPOINT
         // Major change for v2 => v3
         // 1. instead of packing 4 bytes prefix to userOp.signature to determine the mode, v3 uses userOp.nonce's first 2 bytes to check the mode
@@ -110,10 +113,10 @@ contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, Ex
 
         (ValidationMode vMode, ValidationType vType, ValidationId vId) = ValidatorLib.decode(userOp.nonce);
         if (vType == TYPE_SUDO) {
-            vId = rootValidator;
+            vId = vs.rootValidator;
         }
         validationData = _doValidation(vMode, vId, userOp, userOpHash);
-        IHook execHook = validatorConfig[vId].hook;
+        IHook execHook = vs.validatorConfig[vId].hook;
         if (address(execHook) == address(0)) {
             revert InvalidValidator();
         }
@@ -121,14 +124,18 @@ contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, Ex
 
         if (address(execHook) == address(1)) {
             // does not require hook
-            if (vType != TYPE_SUDO && selectorConfig[bytes4(userOp.callData[0:4])].group != validatorConfig[vId].group)
-            {
+            if (
+                vType != TYPE_SUDO
+                    && _selectorConfig(bytes4(userOp.callData[0:4])).group != vs.validatorConfig[vId].group
+            ) {
                 revert InvalidValidator();
             }
         } else {
             // requires hook
-            if (vType != TYPE_SUDO && selectorConfig[bytes4(userOp.callData[4:8])].group != validatorConfig[vId].group)
-            {
+            if (
+                vType != TYPE_SUDO
+                    && _selectorConfig(bytes4(userOp.callData[4:8])).group != vs.validatorConfig[vId].group
+            ) {
                 revert InvalidValidator();
             }
             if (bytes4(userOp.callData[0:4]) != this.executeUserOp.selector) {
@@ -173,7 +180,7 @@ contract Kernel is IAccount, IAccountExecute, ValidationManager, HookManager, Ex
         returns (bytes[] memory returnData)
     {
         // no modifier needed, checking if msg.sender is registered executor will replace the modifier
-        IHook hook = executorConfig[IExecutor(msg.sender)].hook;
+        IHook hook = _executorConfig(IExecutor(msg.sender)).hook;
         if (address(hook) == address(0)) {
             revert InvalidExecutor();
         }

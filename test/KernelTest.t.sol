@@ -58,7 +58,7 @@ contract KernelTest is Test {
         kernel.initialize(vId, IHook(address(0)), hex"", hex"");
         assertTrue(kernel.rootValidator() == vId);
         ValidationManager.ValidatorConfig memory config;
-        (config.group, config.nonce, config.validFrom, config.validUntil, config.hook) = kernel.validatorConfig(vId);
+        config = kernel.validatorConfig(vId);
         assertEq(config.group, bytes4(0));
         assertEq(config.nonce, 0);
         assertEq(config.validFrom, 0);

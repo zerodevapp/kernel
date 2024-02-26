@@ -2,6 +2,8 @@ pragma solidity ^0.8.0;
 
 import {IHook} from "../interfaces/IERC7579Modules.sol";
 
+bytes32 constant HOOK_MANAGER_STORAGE_SLOT = 0x4605d5f70bb605094b2e761eccdc27bed9a362d8612792676bf3fb9b12832ffc;
+
 abstract contract HookManager {
     // --- Hook ---
     // Hook is activated on these scenarios

@@ -7,8 +7,6 @@ import {ValidationData} from "../interfaces/IAccount.sol";
 import {IAccountExecute} from "../interfaces/IAccountExecute.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
 
-import "forge-std/console.sol";
-
 type ValidationMode is bytes1;
 
 type ValidationId is bytes21;
@@ -38,6 +36,12 @@ using {vIdentifierEqual as ==} for ValidationId global;
 using {vModeNotEqual as !=} for ValidationMode global;
 using {vTypeNotEqual as !=} for ValidationType global;
 using {vIdentifierNotEqual as !=} for ValidationId global;
+
+// nonce = uint192(key) + nonce
+// key = mode + (vtype + validationDataWithoutType) + 2bytes parallelNonceKey
+// key = 0x00 + 0x00 + 0x000 .. 00 + 0x0000
+// key = 0x00 + 0x01 + 0x1234...ff + 0x0000
+// key = 0x00 + 0x02 + ( ) + 0x000
 
 function vModeEqual(ValidationMode a, ValidationMode b) pure returns (bool) {
     return ValidationMode.unwrap(a) == ValidationMode.unwrap(b);
@@ -164,16 +168,13 @@ library ValidatorLib {
     }
 }
 
+bytes32 constant VALIDATION_MANAGER_STORAGE_POSITION =
+    0x7bcaa2ced2a71450ed5a9a1b4848e8e5206dbc3f06011e595f7f55428cc6f84f;
+
 abstract contract ValidationManager is EIP712, SelectorManager {
     error InvalidMode();
     error InvalidValidator();
     error InvalidSignature();
-
-    // root validator cannot and should not be deleted
-    ValidationId public rootValidator;
-
-    uint32 public currentNonce;
-    uint32 public validNonceFrom;
 
     // CHECK is it better to have a group config?
     // erc7579 plugins
@@ -185,16 +186,54 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         IHook hook; // 20 bytes address(1) : hook not required, address(0) : validator not installed
     }
 
-    mapping(ValidationId validator => ValidatorConfig) public validatorConfig;
+    struct ValidatorStorage {
+        ValidationId rootValidator;
+        uint32 currentNonce;
+        uint32 validNonceFrom;
+        mapping(ValidationId => ValidatorConfig) validatorConfig;
+        mapping(ValidationId => PermissionData[]) permissionData;
+    }
+    // root validator cannot and should not be deleted
+    // ValidationId public rootValidator;
 
-    // TODO add permission flag to skip validation
-    mapping(ValidationId validator => PermissionData[]) public permissionData;
+    // uint32 public currentNonce;
+    // uint32 public validNonceFrom;
+
+    // mapping(ValidationId validator => ValidatorConfig) public validatorConfig;
+
+    // mapping(ValidationId validator => PermissionData[]) public permissionData;
+    function rootValidator() external view returns (ValidationId) {
+        return _validatorStorage().rootValidator;
+    }
+
+    function currentNonce() external view returns (uint32) {
+        return _validatorStorage().currentNonce;
+    }
+
+    function validNonceFrom() external view returns (uint32) {
+        return _validatorStorage().validNonceFrom;
+    }
+
+    function validatorConfig(ValidationId validator) external view returns (ValidatorConfig memory) {
+        return _validatorStorage().validatorConfig[validator];
+    }
+
+    function permissionData(ValidationId validator) external view returns (PermissionData[] memory) {
+        return _validatorStorage().permissionData[validator];
+    }
+
+    function _validatorStorage() internal pure returns (ValidatorStorage storage state) {
+        assembly {
+            state.slot := VALIDATION_MANAGER_STORAGE_POSITION
+        }
+    }
 
     function _invalidateNonce(uint32 nonce) internal {
-        require(nonce > validNonceFrom, "Invalid nonce");
-        validNonceFrom = nonce;
-        if (currentNonce < validNonceFrom) {
-            currentNonce = validNonceFrom;
+        ValidatorStorage storage state = _validatorStorage();
+        require(nonce > state.validNonceFrom, "Invalid nonce");
+        state.validNonceFrom = nonce;
+        if (state.currentNonce < state.validNonceFrom) {
+            state.currentNonce = state.validNonceFrom;
         }
     }
 
@@ -205,11 +244,12 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         bytes[] calldata validatorData,
         bytes[] calldata hookData
     ) internal {
-        // onlyEntrypointOrSelf
+        ValidatorStorage storage state = _validatorStorage();
+
         for (uint256 i = 0; i < validators.length; i++) {
             _installValidator(validators[i], configs[i], validatorData[i], hookData[i]);
         }
-        currentNonce++;
+        state.currentNonce++;
     }
 
     function _installValidator(
@@ -218,10 +258,11 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         bytes calldata data,
         bytes calldata hookData
     ) internal {
+        ValidatorStorage storage state = _validatorStorage();
         if (address(config.hook) == address(0)) {
             config.hook = IHook(address(1));
         }
-        validatorConfig[validator] = config;
+        state.validatorConfig[validator] = config;
         ValidationType vType = ValidatorLib.getType(validator);
         if (vType == TYPE_VALIDATOR) {
             IValidator(ValidatorLib.getValidator(validator)).onInstall(data);
@@ -233,7 +274,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
                 permissionEnableData.length := sub(calldataload(data.offset), 32)
             }
             for (uint256 i = 0; i < permissionEnableData.length; i++) {
-                permissionData[validator].push(PermissionData.wrap(bytes22(permissionEnableData[i][0:22])));
+                state.permissionData[validator].push(PermissionData.wrap(bytes22(permissionEnableData[i][0:22])));
                 IValidator(address(bytes20(permissionEnableData[i][2:22]))).onInstall(permissionEnableData[i][22:]);
             }
         } else {
@@ -248,6 +289,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         internal
         returns (ValidationData validationData)
     {
+        ValidatorStorage storage state = _validatorStorage();
         PackedUserOperation memory userOp = op;
         if (vMode == MODE_ENABLE) {
             bytes4 selector = bytes4(op.callData[0:4]) == IAccountExecute.executeUserOp.selector
@@ -255,12 +297,12 @@ abstract contract ValidationManager is EIP712, SelectorManager {
                 : bytes4(op.callData[0:4]);
             bytes calldata userOpSig = _enableMode(vId, selector, op.signature);
             userOp.signature = userOpSig;
-            currentNonce++;
+            state.currentNonce++;
         }
         if (ValidatorLib.getType(vId) == TYPE_VALIDATOR) {
             validationData = ValidationData.wrap(ValidatorLib.getValidator(vId).validateUserOp(userOp, userOpHash));
         } else if (ValidatorLib.getType(vId) == TYPE_PERMISSION) {
-            PermissionData[] storage permissions = permissionData[vId];
+            PermissionData[] storage permissions = state.permissionData[vId];
             for (uint256 i = 0; i < permissions.length; i++) {
                 (PassFlag flag, IValidator validator) = ValidatorLib.decodePermissionData(permissions[i]);
                 if (PassFlag.unwrap(flag) & PassFlag.unwrap(SKIP_USEROP) == 0) {
@@ -285,6 +327,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
     }
 
     function _checkEnableSig(ValidationId vId, bytes4 selector, bytes calldata packedData) internal {
+        ValidatorStorage storage state = _validatorStorage();
         (
             ValidatorConfig memory config,
             bytes calldata validatorData,
@@ -315,7 +358,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
                 _installSelector(selector, config.group, address(0), IHook(address(0)), selectorData[0:0]);
             }
         }
-        bytes4 result = _validateSignature(rootValidator, address(this), digest, enableSig);
+        bytes4 result = _validateSignature(state.rootValidator, address(this), digest, enableSig);
         if (result != 0x1626ba7e) {
             revert InvalidSignature();
         }
@@ -332,11 +375,12 @@ abstract contract ValidationManager is EIP712, SelectorManager {
             bytes32 digest
         )
     {
+        ValidatorStorage storage state = _validatorStorage();
         config.group = bytes4(packedData[0:4]);
         config.validFrom = uint48(bytes6(packedData[4:10]));
         config.validUntil = uint48(bytes6(packedData[10:16]));
         config.hook = IHook(address(bytes20(packedData[16:36])));
-        config.nonce = currentNonce;
+        config.nonce = state.currentNonce;
 
         assembly {
             validatorData.offset := add(add(packedData.offset, 68), calldataload(add(packedData.offset, 36)))
@@ -353,7 +397,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
                         "Enable(bytes21 validationId,uint32 nonce,bytes4 group,uint48 validFrom,uint48 validUntil,address hook,bytes validatorData,bytes hookData,bytes selectorData)"
                     ), // TODO: this to constant
                     ValidationId.unwrap(vId),
-                    currentNonce,
+                    state.currentNonce,
                     config.group,
                     config.validFrom,
                     config.validUntil,
@@ -371,10 +415,11 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         view
         returns (bytes4 result)
     {
+        ValidatorStorage storage state = _validatorStorage();
         if (ValidatorLib.getType(validator) == TYPE_VALIDATOR) {
             result = ValidatorLib.getValidator(validator).isValidSignatureWithSender(caller, digest, sig);
         } else if (ValidatorLib.getType(validator) == TYPE_PERMISSION) {
-            PermissionData[] storage permissions = permissionData[validator];
+            PermissionData[] storage permissions = state.permissionData[validator];
             for (uint256 i = 0; i < permissions.length; i++) {
                 (PassFlag flag, IValidator vId) = ValidatorLib.decodePermissionData(permissions[i]);
                 if (PassFlag.unwrap(flag) & PassFlag.unwrap(SKIP_SIGNATURE) == 0) {
