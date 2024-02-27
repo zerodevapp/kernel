@@ -102,7 +102,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
     }
 
     // allow installing multiple validators with same nonce
-    function _installValidators(
+    function _installValidations(
         ValidationId[] calldata validators,
         ValidatorConfig[] memory configs,
         bytes[] calldata validatorData,
@@ -125,8 +125,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         if (config.hook == IHook(address(0))) {
             config.hook = IHook(address(1));
         }
-        if (state.currentNonce != config.nonce) {
-            // TODO : check if config.nonce > state.validatorConfig[vId].nonce
+        if (state.currentNonce != config.nonce || state.validatorConfig[vId].nonce >= config.nonce) {
             revert InvalidNonce();
         }
         state.validatorConfig[vId] = config;
@@ -228,7 +227,6 @@ abstract contract ValidationManager is EIP712, SelectorManager {
             enableSig.length := calldataload(sub(enableSig.offset, 32))
         }
         _installValidation(vId, config, validatorData, hookData);
-        state.currentNonce++;
         if (selectorData.length >= 4) {
             require(bytes4(selectorData[0:4]) == selector, "Invalid selector");
             if (selectorData.length >= 44) {

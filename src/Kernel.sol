@@ -64,6 +64,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         });
         vs.currentNonce = 1;
         _installValidation(_rootValidator, config, validatorData, hookData);
+        vs.currentNonce++;
     }
 
     // NOTE : when eip 1153 has been enabled, this can be transient storage

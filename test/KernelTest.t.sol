@@ -75,6 +75,7 @@ contract KernelTest is Test {
         assertEq(config.validUntil, 0);
         assertEq(address(config.hook), address(1));
         assertEq(validator.isInitialized(address(kernel)), true);
+        assertEq(kernel.currentNonce(), 2);
     }
 
     // scenario
@@ -157,6 +158,7 @@ contract KernelTest is Test {
             bytes20(address(newValidator)),
             0
         );
+        assertEq(kernel.currentNonce(), 2);
         ops[0] = PackedUserOperation({
             sender: address(kernel),
             nonce: entrypoint.getNonce(address(kernel), encodedAsNonceKey),
@@ -188,5 +190,13 @@ contract KernelTest is Test {
         entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
         assertEq(validator.count(), count);
         assertEq(newValidator.count(), newCount + 1);
+        ValidationManager.ValidatorConfig memory config =
+            kernel.validatorConfig(ValidatorLib.validatorToIdentifier(newValidator));
+        assertEq(config.group, bytes4(0xdeadbeef));
+        assertEq(config.nonce, 2);
+        assertEq(config.validFrom, 1);
+        assertEq(config.validUntil, 100000000);
+        assertEq(address(config.hook), address(1));
+        assertEq(kernel.currentNonce(), 3);
     }
 }
