@@ -51,11 +51,11 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
     function initialize(ValidationId _rootValidator, IHook hook, bytes calldata validatorData, bytes calldata hookData)
         external
     {
-        ValidatorStorage storage vs = _validatorStorage();
+        ValidationStorage storage vs = _validatorStorage();
         require(ValidationId.unwrap(vs.rootValidator) == bytes21(0), "already initialized");
         require(ValidationId.unwrap(_rootValidator) != bytes21(0), "invalid validator");
         vs.rootValidator = _rootValidator;
-        ValidatorConfig memory config = ValidatorConfig({
+        ValidationConfig memory config = ValidationConfig({
             group: bytes4(0),
             validFrom: uint48(0),
             validUntil: uint48(0),
@@ -108,7 +108,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         onlyEntryPoint
         returns (ValidationData validationData)
     {
-        ValidatorStorage storage vs = _validatorStorage();
+        ValidationStorage storage vs = _validatorStorage();
         // ONLY ENTRYPOINT
         // Major change for v2 => v3
         // 1. instead of packing 4 bytes prefix to userOp.signature to determine the mode, v3 uses userOp.nonce's first 2 bytes to check the mode
@@ -212,7 +212,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
     function installModule(uint256 moduleType, address module, bytes calldata initData) external payable override {
         //if (modulTypeId == MODULE_TYPE_VALIDATOR) {
         //    ValidationId vId = ValidationLib.validatorToIdentifier(IValidator(module));
-        //    ValidatorConfig memory config = ValidatorConfig({
+        //    ValidationConfig memory config = ValidationConfig({
         //        group: bytes4(initData[0:4]),
         //        hook: IHook(bytes20(initData[4:24])),
         //        callType: CALLTYPE_SINGLE,

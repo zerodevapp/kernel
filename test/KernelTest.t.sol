@@ -67,7 +67,7 @@ contract KernelTest is Test {
 
         kernel.initialize(vId, IHook(address(0)), hex"", hex"");
         assertTrue(kernel.rootValidator() == vId);
-        ValidationManager.ValidatorConfig memory config;
+        ValidationManager.ValidationConfig memory config;
         config = kernel.validatorConfig(vId);
         assertEq(config.group, bytes4(0));
         assertEq(config.nonce, 1);
@@ -190,7 +190,7 @@ contract KernelTest is Test {
         entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
         assertEq(validator.count(), count);
         assertEq(newValidator.count(), newCount + 1);
-        ValidationManager.ValidatorConfig memory config =
+        ValidationManager.ValidationConfig memory config =
             kernel.validatorConfig(ValidatorLib.validatorToIdentifier(newValidator));
         assertEq(config.group, bytes4(0xdeadbeef));
         assertEq(config.nonce, 2);
