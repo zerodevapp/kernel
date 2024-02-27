@@ -70,7 +70,7 @@ contract KernelTest is Test {
         ValidationManager.ValidatorConfig memory config;
         config = kernel.validatorConfig(vId);
         assertEq(config.group, bytes4(0));
-        assertEq(config.nonce, 0);
+        assertEq(config.nonce, 1);
         assertEq(config.validFrom, 0);
         assertEq(config.validUntil, 0);
         assertEq(address(config.hook), address(1));

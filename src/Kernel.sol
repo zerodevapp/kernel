@@ -59,9 +59,10 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             group: bytes4(0),
             validFrom: uint48(0),
             validUntil: uint48(0),
-            nonce: uint32(0),
+            nonce: uint32(1),
             hook: hook
         });
+        vs.currentNonce = 1;
         _installValidation(_rootValidator, config, validatorData, hookData);
     }
 
@@ -203,10 +204,24 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
 
     function isValidSignature(bytes32 hash, bytes calldata signature) external view override returns (bytes4) {
         ValidationId vId = ValidationId.wrap(bytes21(signature[0:21]));
+        // TODO : add 1271 replay protection
         return _validateSignature(vId, msg.sender, hash, signature[21:]);
     }
 
-    function installModule(uint256 moduleType, address module, bytes calldata initData) external payable override {}
+    function installModule(uint256 moduleType, address module, bytes calldata initData) external payable override {
+        //if (modulTypeId == MODULE_TYPE_VALIDATOR) {
+        //    ValidationId vId = ValidationLib.validatorToIdentifier(IValidator(module));
+        //    ValidatorConfig memory config = ValidatorConfig({
+        //        group: bytes4(initData[0:4]),
+        //        hook: IHook(bytes20(initData[4:24])),
+        //        callType: CALLTYPE_SINGLE,
+        //        target: address(0)
+        //    });
+        //}
+        //else if (modulTypeId == MODULE_TYPE_EXECUTOR) return true;
+        //else if (modulTypeId == MODULE_TYPE_FALLBACK) return true;
+        //else if (modulTypeId == MODULE_TYPE_HOOK) return true;
+    }
 
     function uninstallModule(uint256 moduleType, address module, bytes calldata deInitData) external payable override {}
 
@@ -221,5 +236,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         returns (bool)
     {}
 
-    function accountId() external view override returns (string memory accountImplementationId) {}
+    function accountId() external pure override returns (string memory accountImplementationId) {
+        return "kernel.advanced.v3.0.0-beta";
+    }
 }

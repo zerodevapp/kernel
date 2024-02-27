@@ -12,7 +12,8 @@ import {
     ValidationMode,
     ValidationType,
     ValidatorLib,
-    PassFlag
+    PassFlag,
+    Group
 } from "../utils/ValidationTypeLib.sol";
 
 import {PermissionId} from "../types/Types.sol";
@@ -31,6 +32,12 @@ bytes32 constant VALIDATION_MANAGER_STORAGE_POSITION =
     0x7bcaa2ced2a71450ed5a9a1b4848e8e5206dbc3f06011e595f7f55428cc6f84f;
 
 abstract contract ValidationManager is EIP712, SelectorManager {
+    event ValidatorInstalled(IValidator validator, Group group, uint32 nonce);
+    event PermissionInstalled(PermissionId permission, Group group, uint32 nonce);
+    event NonceInvalidated(uint32 nonce);
+    event ValidatorUninstalled(IValidator validator);
+    event PermissionUninstalled(PermissionId permission);
+
     error InvalidMode();
     error InvalidValidator();
     error InvalidSignature();
@@ -118,6 +125,10 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         if (config.hook == IHook(address(0))) {
             config.hook = IHook(address(1));
         }
+        if (state.currentNonce != config.nonce) {
+            // TODO : check if config.nonce > state.validatorConfig[vId].nonce
+            revert InvalidNonce();
+        }
         state.validatorConfig[vId] = config;
         if (config.hook != IHook(address(1))) {
             config.hook.onInstall(hookData);
@@ -173,17 +184,18 @@ abstract contract ValidationManager is EIP712, SelectorManager {
                 (PassFlag flag, IValidator validator) = ValidatorLib.decodePermissionData(permissions[i]);
                 uint8 idx = uint8(bytes1(signature[0]));
                 if (idx == i) {
+                    // we are using uint64 length
                     uint256 length = uint64(bytes8(signature[1:9]));
                     userOp.signature = signature[9:9 + length];
                     signature = signature[9 + length:];
                 } else if (idx < i) {
+                    // signature is not in order
                     revert InvalidSignature();
                 }
                 if (PassFlag.unwrap(flag) & PassFlag.unwrap(SKIP_USEROP) == 0) {
                     validationData = ValidationData.wrap(validator.validateUserOp(userOp, userOpHash));
                 }
                 userOp.signature = "";
-                // skip
             }
         } else {
             revert InvalidValidationType();
@@ -216,6 +228,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
             enableSig.length := calldataload(sub(enableSig.offset, 32))
         }
         _installValidation(vId, config, validatorData, hookData);
+        state.currentNonce++;
         if (selectorData.length >= 4) {
             require(bytes4(selectorData[0:4]) == selector, "Invalid selector");
             if (selectorData.length >= 44) {
