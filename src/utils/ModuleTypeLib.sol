@@ -13,7 +13,7 @@ library ModuleTypeLib {
     function bitEncode(ModuleType[] memory moduleTypes) internal pure returns (EncodedModuleTypes) {
         uint256 result;
         for (uint256 i; i < moduleTypes.length; i++) {
-            result = result + uint256(2 ** ModuleType.unwrap(moduleTypes[i]));
+            result = result | uint256(2 ** ModuleType.unwrap(moduleTypes[i]));
         }
         return EncodedModuleTypes.wrap(result);
     }

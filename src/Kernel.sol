@@ -30,6 +30,9 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
     error InvalidFallback();
     error InvalidCallType();
     error OnlyExecuteUserOp();
+    error InvalidModuleType();
+
+    event Received(address sender, uint256 amount);
 
     IEntryPoint public immutable entrypoint;
 
@@ -45,6 +48,13 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
 
     modifier onlyEntryPointOrSelf() {
         require(msg.sender == address(entrypoint) || msg.sender == address(this), "only entrypoint or self");
+        _;
+    }
+
+    modifier onlyEntryPointOrSelfOrRoot() {
+        require(
+            msg.sender == address(entrypoint) || msg.sender == address(this) // do rootValidator hook
+        );
         _;
     }
 
@@ -75,7 +85,9 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         version = "3.0.0-beta";
     }
 
-    receive() external payable {}
+    receive() external payable {
+        emit Received(msg.sender, msg.value);
+    }
 
     fallback() external payable {
         SelectorConfig memory config = _selectorConfig(msg.sig);
@@ -199,29 +211,60 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         }
     }
 
-    function execute(ExecMode execMode, bytes calldata executionCalldata) external payable onlyEntryPointOrSelf {
+    function execute(ExecMode execMode, bytes calldata executionCalldata) external payable onlyEntryPointOrSelfOrRoot {
         ExecLib._execute(execMode, executionCalldata);
     }
 
     function isValidSignature(bytes32 hash, bytes calldata signature) external view override returns (bytes4) {
-        ValidationId vId = ValidationId.wrap(bytes21(signature[0:21]));
-        // TODO : add 1271 replay protection
-        return _validateSignature(vId, msg.sender, hash, signature[21:]);
+        (ValidationId vId, bytes calldata sig) = ValidatorLib.decodeSignature(signature);
+        return _validateSignature(vId, msg.sender, hash, sig);
     }
 
-    function installModule(uint256 moduleType, address module, bytes calldata initData) external payable override {
-        //if (modulTypeId == MODULE_TYPE_VALIDATOR) {
-        //    ValidationId vId = ValidationLib.validatorToIdentifier(IValidator(module));
-        //    ValidationConfig memory config = ValidationConfig({
-        //        group: bytes4(initData[0:4]),
-        //        hook: IHook(bytes20(initData[4:24])),
-        //        callType: CALLTYPE_SINGLE,
-        //        target: address(0)
-        //    });
-        //}
-        //else if (modulTypeId == MODULE_TYPE_EXECUTOR) return true;
-        //else if (modulTypeId == MODULE_TYPE_FALLBACK) return true;
-        //else if (modulTypeId == MODULE_TYPE_HOOK) return true;
+    function installModule(uint256 moduleType, address module, bytes calldata initData)
+        external
+        payable
+        override
+        onlyEntryPointOrSelfOrRoot
+    {
+        if (moduleType == 1) {
+            ValidationStorage storage vs = _validatorStorage();
+            ValidationId vId = ValidatorLib.validatorToIdentifier(IValidator(module));
+            ValidationConfig memory config = ValidationConfig({
+                group: bytes4(initData[0:4]),
+                nonce: vs.currentNonce++,
+                hook: IHook(address(bytes20(initData[4:24]))),
+                validFrom: uint48(bytes6(initData[24:30])),
+                validUntil: uint48(bytes6(initData[30:36]))
+            });
+            bytes calldata validatorData;
+            bytes calldata hookData;
+            assembly {
+                validatorData.offset := add(add(initData.offset, 68), calldataload(add(initData.offset, 36)))
+                validatorData.length := calldataload(sub(validatorData.offset, 32))
+                hookData.offset := add(add(initData.offset, 68), calldataload(add(initData.offset, 68)))
+                hookData.length := calldataload(sub(hookData.offset, 32))
+            }
+            _installValidation(vId, config, validatorData, hookData);
+        } else if (moduleType == 2) {
+            // executor
+            _installExecutor(
+                IExecutor(module), bytes4(initData[0:4]), IHook(address(bytes20(initData[4:24]))), initData[24:]
+            );
+        } else if (moduleType == 3) {
+            // fallback
+            _installSelector(
+                bytes4(initData[0:4]),
+                bytes4(initData[4:8]),
+                address(bytes20(initData[8:28])),
+                IHook(address(bytes20(initData[28:48]))),
+                initData[48:]
+            );
+        } else if (moduleType == 4) {
+            // hook
+            revert InvalidModuleType();
+        } else {
+            revert InvalidModuleType();
+        }
     }
 
     function uninstallModule(uint256 moduleType, address module, bytes calldata deInitData) external payable override {}

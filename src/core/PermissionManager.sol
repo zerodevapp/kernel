@@ -154,6 +154,8 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         if (permissionEnableData.length > 255) {
             revert PermissionDataTooLarge();
         }
+        PermissionData lastEnableData = PermissionData.wrap(bytes22(permissionEnableData[permissionEnableData.length -1][0:22]));
+        // require(lastEnableData);
         for (uint256 i = 0; i < permissionEnableData.length; i++) {
             state.permissionData[permission].push(PermissionData.wrap(bytes22(permissionEnableData[i][0:22])));
             IValidator(address(bytes20(permissionEnableData[i][2:22]))).onInstall(permissionEnableData[i][22:]);

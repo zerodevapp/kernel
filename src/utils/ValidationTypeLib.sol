@@ -78,6 +78,22 @@ library ValidatorLib {
         }
     }
 
+    function decodeSignature(bytes calldata signature) internal pure returns (ValidationId vId, bytes calldata sig) {
+        assembly {
+            vId := calldataload(signature.offset)
+            switch gt(vId, 0x0200000000000000000000000000000000000000000000000000000000000000)
+            case 1 {
+                vId := and(vId, 0xffffffffff000000000000000000000000000000000000000000000000000000)
+                sig.offset := add(signature.offset, 5)
+                sig.length := sub(signature.length, 5)
+            }
+            default {
+                sig.offset := add(signature.offset, 21)
+                sig.length := sub(signature.length, 21)
+            }
+        }
+    }
+
     function decodePermissionData(PermissionData data) internal pure returns (PassFlag flag, IValidator validator) {
         assembly {
             flag := data
