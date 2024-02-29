@@ -7,10 +7,10 @@ import "src/lite/KernelLiteECDSA.sol";
 // test artifacts
 // test utils
 import "forge-std/Test.sol";
-import {ERC4337Utils} from "./utils/ERC4337Utils.sol";
-import {KernelTestBase} from "./KernelTestBase.sol";
-import {TestExecutor} from "./mock/TestExecutor.sol";
-import {TestValidator} from "./mock/TestValidator.sol";
+import {ERC4337Utils} from "src/utils/ERC4337Utils.sol";
+import {KernelTestBase} from "src/utils/KernelTestBase.sol";
+import {TestExecutor} from "src/mock/TestExecutor.sol";
+import {TestValidator} from "src/mock/TestValidator.sol";
 import {ECDSAValidator} from "src/validator/ECDSAValidator.sol";
 
 using ERC4337Utils for IEntryPoint;
@@ -57,16 +57,12 @@ contract KernelECDSATest is KernelTestBase {
     function test_set_default_validator() external override {
         TestValidator newValidator = new TestValidator();
         bytes memory empty;
-        UserOperation memory op = entryPoint.fillUserOp(
-            address(kernel),
+        UserOperation memory op = buildUserOperation(
             abi.encodeWithSelector(KernelStorage.setDefaultValidator.selector, address(newValidator), empty)
         );
-        op.signature = signUserOp(op);
-        UserOperation[] memory ops = new UserOperation[](1);
-        ops[0] = op;
         vm.expectEmit(true, true, true, false, address(entryPoint));
         emit UserOperationEvent(entryPoint.getUserOpHash(op), address(kernel), address(0), op.nonce, false, 0, 0);
-        entryPoint.handleOps(ops, beneficiary);
+        performUserOperationWithSig(op);
     }
 
     function signUserOp(UserOperation memory op) internal view override returns (bytes memory) {
@@ -109,6 +105,6 @@ contract KernelECDSATest is KernelTestBase {
         ops[0] = op;
         vm.expectEmit(true, true, true, false, address(entryPoint));
         emit UserOperationEvent(entryPoint.getUserOpHash(op), address(kernel), address(0), op.nonce, false, 0, 0);
-        entryPoint.handleOps(ops, beneficiary);
+        performUserOperationWithSig(op);
     }
 }

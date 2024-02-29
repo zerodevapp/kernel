@@ -7,10 +7,10 @@ import "src/validator/ECDSAValidator.sol";
 // test artifacts
 // test utils
 import "forge-std/Test.sol";
-import {ERC4337Utils} from "./utils/ERC4337Utils.sol";
-import {KernelTestBase} from "./KernelTestBase.sol";
-import {TestExecutor} from "./mock/TestExecutor.sol";
-import {TestValidator} from "./mock/TestValidator.sol";
+import {ERC4337Utils} from "src/utils/ERC4337Utils.sol";
+import {KernelTestBase} from "src/utils/KernelTestBase.sol";
+import {TestExecutor} from "src/mock/TestExecutor.sol";
+import {TestValidator} from "src/mock/TestValidator.sol";
 import {IKernel} from "src/interfaces/IKernel.sol";
 
 using ERC4337Utils for IEntryPoint;
@@ -68,8 +68,7 @@ contract KernelECDSATest is KernelTestBase {
     }
 
     function test_default_validator_enable() external override {
-        UserOperation memory op = entryPoint.fillUserOp(
-            address(kernel),
+        UserOperation memory op = buildUserOperation(
             abi.encodeWithSelector(
                 IKernel.execute.selector,
                 address(defaultValidator),
@@ -78,17 +77,13 @@ contract KernelECDSATest is KernelTestBase {
                 Operation.Call
             )
         );
-        op.signature = signUserOp(op);
-        UserOperation[] memory ops = new UserOperation[](1);
-        ops[0] = op;
-        entryPoint.handleOps(ops, beneficiary);
-        (address owner) = ECDSAValidator(address(defaultValidator)).ecdsaValidatorStorage(address(kernel));
-        assertEq(owner, address(0xdeadbeef), "owner should be 0xdeadbeef");
+        performUserOperationWithSig(op);
+        (address owner_) = ECDSAValidator(address(defaultValidator)).ecdsaValidatorStorage(address(kernel));
+        assertEq(owner_, address(0xdeadbeef), "owner should be 0xdeadbeef");
     }
 
     function test_default_validator_disable() external override {
-        UserOperation memory op = entryPoint.fillUserOp(
-            address(kernel),
+        UserOperation memory op = buildUserOperation(
             abi.encodeWithSelector(
                 IKernel.execute.selector,
                 address(defaultValidator),
@@ -97,11 +92,8 @@ contract KernelECDSATest is KernelTestBase {
                 Operation.Call
             )
         );
-        op.signature = signUserOp(op);
-        UserOperation[] memory ops = new UserOperation[](1);
-        ops[0] = op;
-        entryPoint.handleOps(ops, beneficiary);
-        (address owner) = ECDSAValidator(address(defaultValidator)).ecdsaValidatorStorage(address(kernel));
-        assertEq(owner, address(0), "owner should be 0");
+        performUserOperationWithSig(op);
+        (address owner_) = ECDSAValidator(address(defaultValidator)).ecdsaValidatorStorage(address(kernel));
+        assertEq(owner_, address(0), "owner should be 0");
     }
 }

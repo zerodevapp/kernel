@@ -26,16 +26,17 @@ import {ValidationData, ValidAfter, ValidUntil, parseValidationData, packValidat
 /// @author taek<leekt216@gmail.com>
 /// @notice wallet kernel for extensible wallet functionality
 contract Kernel is EIP712, Compatibility, KernelStorage {
-    string public constant name = KERNEL_NAME;
+    /// @dev Selector of the `DisabledMode()` error, to be used in assembly, 'bytes4(keccak256(bytes("DisabledMode()")))', same as DisabledMode.selector()
+    uint256 private constant _DISABLED_MODE_SELECTOR = 0xfc2f51c5;
+    bytes32 internal constant EIP712_DOMAIN_TYPEHASH =
+        0x8b73c3c69bb8fe3d512ecc4cf759cc79239f7b179b0ffacaa9a75d522b39400f;
 
+    /// @dev Current kernel name and version
+    string public constant name = KERNEL_NAME;
     string public constant version = KERNEL_VERSION;
 
     /// @dev Sets up the EIP712 and KernelStorage with the provided entry point
     constructor(IEntryPoint _entryPoint) KernelStorage(_entryPoint) {}
-
-    function _domainNameAndVersion() internal pure override returns (string memory, string memory) {
-        return (name, version);
-    }
 
     /// @notice Accepts incoming Ether transactions and calls from the EntryPoint contract
     /// @dev This function will delegate any call to the appropriate executor based on the function signature.
@@ -107,9 +108,11 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
             bytes memory data = call.data;
             assembly {
                 let success := call(gas(), to, value, add(data, 0x20), mload(data), 0, 0)
-                returndatacopy(0, 0, returndatasize())
                 switch success
-                case 0 { revert(0, returndatasize()) }
+                case 0 {
+                    returndatacopy(0, 0, returndatasize())
+                    revert(0, returndatasize())
+                }
                 default { i := add(i, 1) }
             }
         }
@@ -133,7 +136,9 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         bytes calldata userOpSignature;
         uint256 userOpEndOffset;
         assembly {
+            // Store the userOpSignature offset
             userOpEndOffset := add(calldataload(0x04), 0x24)
+            // Extract the user op signature from the calldata (but keep it in the calldata, just extract offset & length)
             userOpSignature.offset := add(calldataload(add(userOpEndOffset, 0x120)), userOpEndOffset)
             userOpSignature.length := calldataload(sub(userOpSignature.offset, 0x20))
         }
@@ -141,29 +146,33 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         bytes4 mode = bytes4(userOpSignature[0:4]); // mode == 00..00 use validators
         // mode == 0x00000000 use sudo validator
         if (mode == 0x00000000) {
-            // sudo mode (use default validator)
-            if (missingAccountFunds != 0) {
-                assembly {
+            assembly {
+                if missingAccountFunds {
                     pop(call(gas(), caller(), missingAccountFunds, callvalue(), callvalue(), callvalue(), callvalue()))
+                    //ignore failure (its EntryPoint's job to verify, not account.)
                 }
-                //ignore failure (its EntryPoint's job to verify, not account.)
             }
             // short circuit here for default validator
             return _validateUserOp(_userOp, userOpHash, missingAccountFunds);
         }
 
-        UserOperation memory userOp = _userOp;
+        // Check if the kernel is disabled, if that's the case, it's only accepting userOperation with sudo mode
+        assembly ("memory-safe") {
+            // Extract the disabled mode from the storage slot
+            let isKernelDisabled := shl(224, sload(KERNEL_STORAGE_SLOT_1))
+            // If we got a non-zero disabled mode, and non zero mode, then revert
+            if and(isKernelDisabled, mode) {
+                mstore(0x00, _DISABLED_MODE_SELECTOR)
+                revert(0x1c, 0x04)
+            }
+        }
+
+        // The validator that will be used
+        IKernelValidator validator;
 
         // mode == 0x00000001 use given validator
         // mode == 0x00000002 enable validator
-        IKernelValidator validator;
-        bytes32 storage_slot_1;
-        assembly {
-            storage_slot_1 := sload(KERNEL_STORAGE_SLOT_1)
-        }
-        if (mode & (storage_slot_1 << 224) != 0x00000000) {
-            revert DisabledMode();
-        } else if (mode == 0x00000001) {
+        if (mode == 0x00000001) {
             bytes calldata userOpCallData;
             assembly {
                 userOpCallData.offset := add(calldataload(add(userOpEndOffset, 0x40)), userOpEndOffset)
@@ -188,18 +197,27 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         } else {
             return SIG_VALIDATION_FAILED;
         }
-        if (missingAccountFunds != 0) {
-            assembly {
+
+        assembly {
+            if missingAccountFunds {
                 pop(call(gas(), caller(), missingAccountFunds, callvalue(), callvalue(), callvalue(), callvalue()))
+                //ignore failure (its EntryPoint's job to verify, not account.)
             }
-            //ignore failure (its EntryPoint's job to verify, not account.)
         }
+
+        // Replicate the userOp from memory to calldata, to update it's signature (since with mode 1 & 2 the signatre can be updated)
+        UserOperation memory userOp = _userOp;
         userOp.signature = userOpSignature;
+
+        // Get the validator data from the designated signer
         validationData =
             _intersectValidationData(validationData, validator.validateUserOp(userOp, userOpHash, missingAccountFunds));
         return validationData;
     }
 
+    /// @dev This function will approve a new validator for the current kernel
+    /// @param sig The signature of the userOp asking for a validator approval
+    /// @param signature The signature of the userOp asking for a validator approval
     function _approveValidator(bytes4 sig, bytes calldata signature)
         internal
         returns (IKernelValidator validator, ValidationData validationData, bytes calldata validationSig)
@@ -230,7 +248,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
                 )
             );
             validationData = _intersectValidationData(
-                _validateSignature(enableDigest, signature[cursor:cursor + length]),
+                _validateSignature(address(this), enableDigest, enableDigest, signature[cursor:cursor + length]),
                 ValidationData.wrap(
                     uint256(bytes32(signature[4:36]))
                         & 0xffffffffffffffffffffffff0000000000000000000000000000000000000000
@@ -251,10 +269,19 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         }
     }
 
+    /// @dev Validates a signature for the given kernel
+    /// @param hash The hash of the data that was signed
+    /// @param signature The signature to be validated
     function validateSignature(bytes32 hash, bytes calldata signature) public view returns (ValidationData) {
-        return _validateSignature(hash, signature);
+        return _validateSignature(msg.sender, hash, hash, signature);
     }
 
+    /// @dev Get the current name & version of the kernel, used for the EIP-712 domain separator
+    function _domainNameAndVersion() internal pure override returns (string memory, string memory) {
+        return (name, version);
+    }
+
+    /// @dev Get an EIP-712 compliant domain separator
     function _domainSeparator() internal view override returns (bytes32) {
         // Obtain the name and version from the _domainNameAndVersion function.
         (string memory _name, string memory _version) = _domainNameAndVersion();
@@ -265,8 +292,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         address proxyAddress = address(this);
 
         // Construct the domain separator with name, version, chainId, and proxy address.
-        bytes32 typeHash =
-            keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+        bytes32 typeHash = EIP712_DOMAIN_TYPEHASH;
         return keccak256(abi.encode(typeHash, nameHash, versionHash, block.chainid, proxyAddress));
     }
 
@@ -282,7 +308,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         // Recreate the signed message hash with the correct domain separator
         bytes32 signedMessageHash = keccak256(abi.encodePacked("\x19\x01", domainSeparator, hash));
 
-        ValidationData validationData = validateSignature(signedMessageHash, signature);
+        ValidationData validationData = _validateSignature(msg.sender, signedMessageHash, hash, signature);
         (ValidAfter validAfter, ValidUntil validUntil, address result) = parseValidationData(validationData);
 
         // Check if the signature is valid within the specified time frame and the result is successful
@@ -298,7 +324,9 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         }
     }
 
-    function _checkCaller() internal view returns (bool) {
+    /// @dev Check if the current caller is authorized or no to perform the call
+    /// @return True if the caller is authorized, otherwise false
+    function _checkCaller() internal returns (bool) {
         if (_validCaller(msg.sender, msg.data)) {
             return true;
         }
@@ -315,21 +343,32 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         }
     }
 
+    /// @dev This function will validate user operation and be called by EntryPoint
+    /// @param _op The user operation to be validated
+    /// @param _opHash The hash of the user operation
+    /// @param _missingFunds The funds needed to be reimbursed
     function _validateUserOp(UserOperation calldata _op, bytes32 _opHash, uint256 _missingFunds)
         internal
         virtual
         returns (ValidationData)
     {
-        address validator;
+        // Replace the user op in memory to update the signature
         UserOperation memory op = _op;
-        op.signature = _op.signature[4:]; // since this is only called on default validator
+        // Remove the validation mode flag from the signature
+        op.signature = _op.signature[4:];
+
+        IKernelValidator validator;
         assembly {
             validator := shr(80, sload(KERNEL_STORAGE_SLOT_1))
         }
         return IKernelValidator(validator).validateUserOp(op, _opHash, _missingFunds);
     }
 
-    function _validateSignature(bytes32 _hash, bytes calldata _signature)
+    /// @dev This function will validate a signature for the given kernel
+    /// @param _hash The hash of the data that was signed
+    /// @param _signature The signature to be validated
+    /// @return The magic value 0x1626ba7e if the signature is valid, otherwise returns 0xffffffff.
+    function _validateSignature(address _requestor, bytes32 _hash, bytes32 _rawHash, bytes calldata _signature)
         internal
         view
         virtual
@@ -339,12 +378,26 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
         assembly {
             validator := shr(80, sload(KERNEL_STORAGE_SLOT_1))
         }
-        return IKernelValidator(validator).validateSignature(_hash, _signature);
+        // 20 bytes added at the end of the signature to store the address of the caller
+        (bool success, bytes memory res) = validator.staticcall(
+            abi.encodePacked(
+                abi.encodeWithSelector(IKernelValidator.validateSignature.selector, _hash, _signature),
+                _rawHash,
+                _requestor
+            )
+        );
+        require(success, "Kernel::_validateSignature: failed to validate signature");
+        return abi.decode(res, (ValidationData));
     }
 
-    function _validCaller(address _caller, bytes calldata _data) internal view virtual returns (bool) {
+    /// @dev Check if the given caller is valid for the given data
+    /// @param _caller The caller to be checked
+    /// @param _data The data to be checked
+    /// @return True if the caller is valid, otherwise false
+    function _validCaller(address _caller, bytes calldata _data) internal virtual returns (bool) {
         address validator;
         assembly {
+            // Load the validator from the storage slot
             validator := shr(80, sload(KERNEL_STORAGE_SLOT_1))
         }
         return IKernelValidator(validator).validCaller(_caller, _data);

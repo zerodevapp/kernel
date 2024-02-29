@@ -2,13 +2,16 @@
 src = 'src'
 out = 'out'
 libs = ['lib']
-solc_version = '0.8.19'
+solc_version = '0.8.21'
+evm_version = 'paris'
 bytecode_hash = "none"
 cbor_metadata = false
 optimize = true
-via-ir = true
+via-ir = false
 runs = 1000000
+
+[profile.optimized]
+via-ir = true
+
 [fuzz]
 runs = 1024
-
-# See more config options https://github.com/foundry-rs/foundry/tree/master/config

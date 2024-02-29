@@ -15,10 +15,15 @@ struct KernelLiteECDSAStorage {
     address owner;
 }
 
+/// @title KernelLiteECDSA Contract
+/// @dev A lite version of the Kernel contract which only uses ECDSA signatures for validation
 contract KernelLiteECDSA is Kernel {
     error InvalidAccess();
+    error InvalidValidator();
 
     address public immutable KERNEL_ECDSA_VALIDATOR;
+
+    /// @dev The storage slot for this contract
     bytes32 private constant KERNEL_LITE_ECDSA_STORAGE_SLOT =
         0xdea7fea882fba743201b2aeb1babf326b8944488db560784858525d123ee7e97; // keccak256(abi.encodePacked("zerodev.kernel.lite.ecdsa")) - 1
 
@@ -27,6 +32,7 @@ contract KernelLiteECDSA is Kernel {
         getKernelLiteECDSAStorage().owner = address(1); // set owner to non-zero address to prevent initialization
     }
 
+    /// @dev Transfer the ownership of this current kernel
     function transferOwnership(address _newOwner) external payable onlyFromEntryPointOrSelf {
         getKernelLiteECDSAStorage().owner = _newOwner;
     }
@@ -38,13 +44,18 @@ contract KernelLiteECDSA is Kernel {
         }
     }
 
+    /// @dev Set the initial data for this kernel (setup ecdsa signer address)
     function _setInitialData(IKernelValidator _validator, bytes calldata _data) internal override {
-        require(address(_validator) == KERNEL_ECDSA_VALIDATOR, "KernelLiteECDSA: invalid validator");
-        require(getKernelLiteECDSAStorage().owner == address(0), "KernelLiteECDSA: already initialized");
+        // Ensure the validator is valid
+        if (address(_validator) != KERNEL_ECDSA_VALIDATOR) revert InvalidValidator();
+        // Ensure the account isn't already initialized
+        if (getKernelLiteECDSAStorage().owner != address(0)) revert AlreadyInitialized();
+
         address owner = address(bytes20(_data[0:20]));
         getKernelLiteECDSAStorage().owner = owner;
     }
 
+    /// @dev Validate a user operation
     function _validateUserOp(UserOperation calldata _op, bytes32 _opHash, uint256)
         internal
         view
@@ -58,7 +69,8 @@ contract KernelLiteECDSA is Kernel {
         return ValidationData.wrap(0);
     }
 
-    function _validateSignature(bytes32 _hash, bytes calldata _signature)
+    /// @dev Validate a signature
+    function _validateSignature(address, /*_requestor*/ bytes32 _hash, bytes32, /*_rawHash*/ bytes calldata _signature)
         internal
         view
         override
@@ -71,6 +83,7 @@ contract KernelLiteECDSA is Kernel {
         return SIG_VALIDATION_FAILED;
     }
 
+    /// @dev Check if the caller is valid
     function _validCaller(address _caller, bytes calldata) internal view override returns (bool) {
         return _caller == getKernelLiteECDSAStorage().owner;
     }

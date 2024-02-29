@@ -1,9 +1,15 @@
 [submodule "lib/forge-std"]
 	path = lib/forge-std
 	url = https://github.com/foundry-rs/forge-std
-[submodule "lib/solady"]
-	path = lib/solady
-	url = https://github.com/vectorized/solady
 [submodule "lib/I4337"]
 	path = lib/I4337
 	url = https://github.com/leekt/I4337
+[submodule "lib/FreshCryptoLib"]
+	path = lib/FreshCryptoLib
+  url = https://github.com/rdubois-crypto/FreshCryptoLib
+[submodule "lib/p256-verifier"]
+  path = lib/p256-verifier
+  url = https://github.com/daimo-eth/p256-verifier
+[submodule "lib/solady"]
+	path = lib/solady
+	url = https://github.com/vectorized/solady
