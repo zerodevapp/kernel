@@ -27,4 +27,40 @@ contract KernelHelperTest is Test {
         );
         assertEq(ValidationData.unwrap(c), ValidationData.unwrap(expected));
     }
+
+    function testIntersectWithAggregator(
+        address aggregatorA,
+        ValidAfter validAfterA,
+        ValidUntil validUntilA,
+        address aggregatorB,
+        ValidAfter validAfterB,
+        ValidUntil validUntilB
+    ) external {
+        if (ValidUntil.unwrap(validUntilB) == 0) {
+            validUntilB = ValidUntil.wrap(0xffffffffffff);
+        }
+        if (ValidUntil.unwrap(validUntilA) == 0) {
+            validUntilA = ValidUntil.wrap(0xffffffffffff);
+        }
+        ValidationData a = packValidationData(aggregatorA, validAfterA, validUntilA);
+        ValidationData b = packValidationData(aggregatorB, validAfterB, validUntilB);
+        ValidationData c = _intersectValidationData(a, b);
+
+        address expectedAggregator = aggregatorA == address(0)
+            ? aggregatorB
+            : aggregatorA == aggregatorB || aggregatorB == address(0) ? aggregatorA : address(1);
+        console.log("expectedAggregator", expectedAggregator);
+        // a : b
+        // 0 : 0 => 0
+        // 0 : 1 => 1
+        // 1 : 0 => 1
+        // 1 : 1 => 1
+        // X : 0 => X
+        // X : 1 => 1
+        // 0 : X => X
+        // 1 : X => 1
+        (ValidAfter vf, ValidUntil vu, address res) = parseValidationData(c);
+        console.log("res", res);
+        assertEq(res, expectedAggregator);
+    }
 }
