@@ -316,7 +316,7 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
             ValidAfter.unwrap(validAfter) <= block.timestamp && ValidUntil.unwrap(validUntil) >= block.timestamp
                 && result == address(0)
         ) {
-            // If all checks pass, return the ERC1271 magic value for a valid signature
+            // If all checks pass, return `bytes4(keccak256("isValidSignature(bytes32,bytes)"))` specified by ERC1271
             return 0x1626ba7e;
         } else {
             // If any check fails, return the failure magic value
