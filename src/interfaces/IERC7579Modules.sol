@@ -2,7 +2,6 @@
 pragma solidity ^0.8.21;
 
 import {PackedUserOperation} from "./PackedUserOperation.sol";
-import {EncodedModuleTypes} from "../utils/ModuleTypeLib.sol";
 
 uint256 constant VALIDATION_SUCCESS = 0;
 uint256 constant VALIDATION_FAILED = 1;

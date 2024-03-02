@@ -1,5 +1,6 @@
+pragma solidity ^0.8.0;
+
 import {IValidator, IHook, MODULE_TYPE_VALIDATOR, MODULE_TYPE_HOOK} from "../interfaces/IERC7579Modules.sol";
-import {ModuleTypeLib, EncodedModuleTypes, ModuleType} from "../utils/ModuleTypeLib.sol";
 import {PackedUserOperation} from "../interfaces/PackedUserOperation.sol";
 
 contract ECDSAValidator is IValidator, IHook {
@@ -11,7 +12,7 @@ contract ECDSAValidator is IValidator, IHook {
 
     function onUninstall(bytes calldata data) external override {}
 
-    function isModuleType(uint256 typeID) external view override returns (bool) {
+    function isModuleType(uint256 typeID) external pure override returns (bool) {
         if (typeID == MODULE_TYPE_VALIDATOR) {
             return true;
         } else if (typeID == MODULE_TYPE_HOOK) {
@@ -27,6 +28,7 @@ contract ECDSAValidator is IValidator, IHook {
 
     function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash)
         external
+        view
         override
         returns (uint256)
     {
@@ -53,8 +55,9 @@ contract ECDSAValidator is IValidator, IHook {
         }
     }
 
-    function preCheck(address msgSender, bytes calldata) external view override returns (bytes memory hookData) {
+    function preCheck(address msgSender, bytes calldata) external view override returns (bytes memory) {
         require(msgSender == owner[msg.sender], "ECDSAValidator: sender is not owner");
+        return hex"";
     }
 
     function postCheck(bytes calldata hookData) external override returns (bool success) {}

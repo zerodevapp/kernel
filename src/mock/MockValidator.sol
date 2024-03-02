@@ -1,7 +1,6 @@
 pragma solidity ^0.8.0;
 
 import "../interfaces/IERC7579Modules.sol";
-import "../utils/ModuleTypeLib.sol";
 
 contract MockValidator is IValidator {
     mapping(address => bool) public initialized;
@@ -31,12 +30,6 @@ contract MockValidator is IValidator {
 
     function isModuleType(uint256 typeID) external pure returns (bool) {
         return typeID == 1;
-    }
-
-    function getModuleTypes() external pure returns (EncodedModuleTypes) {
-        ModuleType[] memory types = new ModuleType[](1);
-        types[0] = ModuleType.wrap(1);
-        return ModuleTypeLib.bitEncode(types);
     }
 
     /**
