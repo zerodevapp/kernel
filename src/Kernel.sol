@@ -269,8 +269,6 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
 
     function uninstallModule(uint256 moduleType, address module, bytes calldata deInitData) external payable override {}
 
-    function supportsAccountMode(ExecMode encodedMode) external view override returns (bool) {}
-
     function supportsModule(uint256 moduleTypeId) external view override returns (bool) {}
 
     function isModuleInstalled(uint256 moduleType, address module, bytes calldata additionalContext)
@@ -283,4 +281,6 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
     function accountId() external pure override returns (string memory accountImplementationId) {
         return "kernel.advanced.v3.0.0-beta";
     }
+
+    function supportsExecutionMode(ExecMode encodedMode) external view override returns (bool) {}
 }

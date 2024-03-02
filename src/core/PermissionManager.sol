@@ -151,10 +151,11 @@ abstract contract ValidationManager is EIP712, SelectorManager {
             permissionEnableData.offset := add(add(data.offset, 32), calldataload(data.offset))
             permissionEnableData.length := sub(calldataload(data.offset), 32)
         }
-        if (permissionEnableData.length > 255) {
+        if (permissionEnableData.length > 255 || permissionEnableData.length == 0) {
             revert PermissionDataTooLarge();
         }
-        PermissionData lastEnableData = PermissionData.wrap(bytes22(permissionEnableData[permissionEnableData.length -1][0:22]));
+        PermissionData lastEnableData =
+            PermissionData.wrap(bytes22(permissionEnableData[permissionEnableData.length - 1][0:22]));
         // require(lastEnableData);
         for (uint256 i = 0; i < permissionEnableData.length; i++) {
             state.permissionData[permission].push(PermissionData.wrap(bytes22(permissionEnableData[i][0:22])));

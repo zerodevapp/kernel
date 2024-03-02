@@ -54,28 +54,28 @@ interface IERC7579Account {
     /**
      * @dev installs a Module of a certain type on the smart account
      * @dev Implement Authorization control of your chosing
-     * @param moduleType the module type ID according the ERC-7579 spec
+     * @param moduleTypeId the module type ID according the ERC-7579 spec
      * @param module the module address
      * @param initData arbitrary data that may be required on the module during `onInstall`
      * initialization.
      */
-    function installModule(uint256 moduleType, address module, bytes calldata initData) external payable;
+    function installModule(uint256 moduleTypeId, address module, bytes calldata initData) external payable;
 
     /**
      * @dev uninstalls a Module of a certain type on the smart account
      * @dev Implement Authorization control of your chosing
-     * @param moduleType the module type ID according the ERC-7579 spec
+     * @param moduleTypeId the module type ID according the ERC-7579 spec
      * @param module the module address
      * @param deInitData arbitrary data that may be required on the module during `onUninstall`
      * de-initialization.
      */
-    function uninstallModule(uint256 moduleType, address module, bytes calldata deInitData) external payable;
+    function uninstallModule(uint256 moduleTypeId, address module, bytes calldata deInitData) external payable;
 
     /**
      * Function to check if the account supports a certain CallType or ExecType (see ModeLib.sol)
      * @param encodedMode the encoded mode
      */
-    function supportsAccountMode(ExecMode encodedMode) external view returns (bool);
+    function supportsExecutionMode(ExecMode encodedMode) external view returns (bool);
 
     /**
      * Function to check if the account supports installation of a certain module type Id
@@ -85,7 +85,7 @@ interface IERC7579Account {
 
     /**
      * Function to check if the account has a certain module installed
-     * @param moduleType the module type ID according the ERC-7579 spec
+     * @param moduleTypeId the module type ID according the ERC-7579 spec
      *      Note: keep in mind that some contracts can be multiple module types at the same time. It
      *            thus may be necessary to query multiple module types
      * @param module the module address
@@ -94,7 +94,7 @@ interface IERC7579Account {
      *                          usually this is not necessary, but for some special hooks that
      *                          are stored in mappings, this param might be needed
      */
-    function isModuleInstalled(uint256 moduleType, address module, bytes calldata additionalContext)
+    function isModuleInstalled(uint256 moduleTypeId, address module, bytes calldata additionalContext)
         external
         view
         returns (bool);

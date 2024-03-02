@@ -3,7 +3,7 @@ pragma solidity ^0.8.21;
 
 type EncodedModuleTypes is uint256;
 
-type ModuleType is uint256;
+type ModuleType is uint256; // TODO : change to uint8
 
 library ModuleTypeLib {
     function isType(EncodedModuleTypes self, ModuleType moduleType) internal pure returns (bool) {
@@ -13,6 +13,9 @@ library ModuleTypeLib {
     function bitEncode(ModuleType[] memory moduleTypes) internal pure returns (EncodedModuleTypes) {
         uint256 result;
         for (uint256 i; i < moduleTypes.length; i++) {
+            require(
+                ModuleType.unwrap(moduleTypes[i]) < 256, "ModuleTypeLib: bitEncodeCalldata: module type out of range"
+            );
             result = result | uint256(2 ** ModuleType.unwrap(moduleTypes[i]));
         }
         return EncodedModuleTypes.wrap(result);
@@ -21,7 +24,10 @@ library ModuleTypeLib {
     function bitEncodeCalldata(ModuleType[] calldata moduleTypes) internal pure returns (EncodedModuleTypes) {
         uint256 result;
         for (uint256 i; i < moduleTypes.length; i++) {
-            result = result + uint256(2 ** ModuleType.unwrap(moduleTypes[i]));
+            require(
+                ModuleType.unwrap(moduleTypes[i]) < 256, "ModuleTypeLib: bitEncodeCalldata: module type out of range"
+            );
+            result = result | uint256(2 ** ModuleType.unwrap(moduleTypes[i]));
         }
         return EncodedModuleTypes.wrap(result);
     }

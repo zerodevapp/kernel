@@ -36,18 +36,11 @@ interface IModule {
 
     /**
      * @dev Returns boolean value if module is a certain type
-     * @param typeID the module type ID according the ERC-7579 spec
+     * @param moduleTypeId the module type ID according the ERC-7579 spec
      *
      * MUST return true if the module is of the given type and false otherwise
      */
-    function isModuleType(uint256 typeID) external view returns (bool);
-
-    /**
-     * @dev Returns bit-encoded integer of the different typeIds of the module
-     *
-     * MUST return all the bit-encoded typeIds of the module
-     */
-    function getModuleTypes() external view returns (EncodedModuleTypes);
+    function isModuleType(uint256 moduleTypeId) external view returns (bool);
 
     /**
      * @dev Returns if the module was already initialized for a provided smartaccount
