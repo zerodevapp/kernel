@@ -33,3 +33,7 @@ ValidationType constant VALIDATION_TYPE_PERMISSION = ValidationType.wrap(0x02);
 // ERC4337 constants
 uint256 constant SIG_VALIDATION_FAILED_UINT = 1;
 ValidationData constant SIG_VALIDATION_FAILED = ValidationData.wrap(SIG_VALIDATION_FAILED_UINT);
+
+// ERC-1271 constants
+bytes4 constant ERC1271_MAGICVALUE = 0x1626ba7e;
+bytes4 constant ERC1271_INVALID = 0xffffffff;

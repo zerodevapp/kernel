@@ -1,0 +1,91 @@
+pragma solidity ^0.8.0;
+
+import {ECDSA} from "solady/utils/ECDSA.sol";
+import {
+    IValidator,
+    IHook,
+    VALIDATION_SUCCESS,
+    VALIDATION_FAILED,
+    MODULE_TYPE_VALIDATOR,
+    MODULE_TYPE_HOOK
+} from "../interfaces/IERC7579Modules.sol";
+import {PackedUserOperation} from "../interfaces/PackedUserOperation.sol";
+import {SIG_VALIDATION_FAILED, ERC1271_MAGICVALUE, ERC1271_INVALID} from "../types/Constants.sol";
+
+struct ECDSAValidatorStorage {
+    address owner;
+}
+
+contract ECDSAValidator is IValidator, IHook {
+    event OwnerRegistered(address indexed kernel, address indexed owner);
+
+    mapping(address => ECDSAValidatorStorage) public ecdsaValidatorStorage;
+
+    function onInstall(bytes calldata _data) external override {
+        if (_isInitialized(msg.sender)) revert AlreadyInitialized(msg.sender);
+        address owner = address(bytes20(_data[0:20]));
+        ecdsaValidatorStorage[msg.sender].owner = owner;
+        emit OwnerRegistered(msg.sender, owner);
+    }
+
+    function onUninstall(bytes calldata) external override {
+        if (!_isInitialized(msg.sender)) revert NotInitialized(msg.sender);
+        delete ecdsaValidatorStorage[msg.sender];
+    }
+
+    function isModuleType(uint256 typeID) external view override returns (bool) {
+        return typeID == MODULE_TYPE_VALIDATOR || typeID == MODULE_TYPE_HOOK;
+    }
+
+    function isInitialized(address smartAccount) external view override returns (bool) {
+        return _isInitialized(smartAccount);
+    }
+
+    function _isInitialized(address smartAccount) internal view returns (bool) {
+        return ecdsaValidatorStorage[smartAccount].owner != address(0);
+    }
+
+    function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash)
+        external
+        view
+        override
+        returns (uint256)
+    {
+        address owner = ecdsaValidatorStorage[msg.sender].owner;
+        bytes calldata sig = userOp.signature;
+        if (owner == ECDSA.recover(userOpHash, sig)) {
+            return VALIDATION_SUCCESS;
+        }
+        bytes32 ethHash = ECDSA.toEthSignedMessageHash(userOpHash);
+        address recovered = ECDSA.recover(ethHash, sig);
+        if (owner != recovered) {
+            return VALIDATION_FAILED;
+        }
+        return VALIDATION_SUCCESS;
+    }
+
+    function isValidSignatureWithSender(address sender, bytes32 hash, bytes calldata sig)
+        external
+        view
+        override
+        returns (bytes4)
+    {
+        address owner = ecdsaValidatorStorage[sender].owner;
+        if (owner == ECDSA.recover(hash, sig)) {
+            return ERC1271_MAGICVALUE;
+        }
+        bytes32 ethHash = ECDSA.toEthSignedMessageHash(hash);
+        address recovered = ECDSA.recover(ethHash, sig);
+        if (owner != recovered) {
+            return ERC1271_INVALID;
+        }
+        return ERC1271_MAGICVALUE;
+    }
+
+    function preCheck(address msgSender, bytes calldata) external view override returns (bytes memory) {
+        require(msgSender == ecdsaValidatorStorage[msg.sender].owner, "ECDSAValidator: sender is not owner");
+        return hex"";
+    }
+
+    function postCheck(bytes calldata hookData) external override returns (bool success) {}
+}
