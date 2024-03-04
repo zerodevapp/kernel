@@ -69,6 +69,10 @@ contract WebAuthnValidator is IKernelValidator {
         delete webAuthnValidatorStorage[msg.sender];
     }
 
+    function isModuleType(uint256 typeID) external view override returns (bool) {
+        return typeID == MODULE_TYPE_VALIDATOR;
+    }
+
     function isInitialized(address smartAccount) external view override returns (bool) {
         return _isInitialized(smartAccount);
     }
