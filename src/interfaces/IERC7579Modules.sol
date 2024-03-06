@@ -10,7 +10,8 @@ uint256 constant MODULE_TYPE_VALIDATOR = 1;
 uint256 constant MODULE_TYPE_EXECUTOR = 2;
 uint256 constant MODULE_TYPE_FALLBACK = 3;
 uint256 constant MODULE_TYPE_HOOK = 4;
-uint256 constant MODULE_TYPE_PREVALIDATION = 5;
+uint256 constant MODULE_TYPE_POLICY = 5;
+uint256 constant MODULE_TYPE_ACTION = 6;
 
 interface IModule {
     error AlreadyInitialized(address smartAccount);
