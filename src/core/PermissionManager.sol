@@ -162,7 +162,8 @@ abstract contract ValidationManager is EIP712, SelectorManager {
             IPolicy(address(bytes20(permissionEnableData[i][2:22]))).onInstall(permissionEnableData[i][22:]);
         }
         // install permission
-        IValidator permissionValidator = IValidator(address(bytes20(permissionEnableData[permissionEnableData.length - 1][0:20])));
+        IValidator permissionValidator =
+            IValidator(address(bytes20(permissionEnableData[permissionEnableData.length - 1][0:20])));
         state.permissionValidator[permission] = permissionValidator;
         permissionValidator.onInstall(permissionEnableData[permissionEnableData.length - 1][20:]);
     }
@@ -199,7 +200,9 @@ abstract contract ValidationManager is EIP712, SelectorManager {
                     revert InvalidSignature();
                 }
                 if (PassFlag.unwrap(flag) & PassFlag.unwrap(SKIP_USEROP) == 0) {
-                    validationData = _intersectValidationData(validationData, ValidationData.wrap(validator.checkUserOpPolicy(userOp)));
+                    validationData = _intersectValidationData(
+                        validationData, ValidationData.wrap(validator.checkUserOpPolicy(userOp))
+                    );
                 }
                 userOp.signature = "";
             }
@@ -310,6 +313,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         IPolicy validator;
         bytes permSig;
     }
+
     function _validateSignature(ValidationId validator, address caller, bytes32 digest, bytes calldata sig)
         internal
         view
@@ -325,8 +329,8 @@ abstract contract ValidationManager is EIP712, SelectorManager {
             PermissionData[] storage permissions = state.permissionData[mSig.permission];
             for (uint256 i = 0; i < permissions.length; i++) {
                 (mSig.flag, mSig.validator) = ValidatorLib.decodePermissionData(permissions[i]);
-                uint8 idx = uint8(i+1);
-                if(sig.length > 0) {
+                uint8 idx = uint8(i + 1);
+                if (sig.length > 0) {
                     idx = uint8(bytes1(sig[0]));
                 }
                 if (idx == i) {
@@ -342,7 +346,10 @@ abstract contract ValidationManager is EIP712, SelectorManager {
                 }
 
                 if (PassFlag.unwrap(mSig.flag) & PassFlag.unwrap(SKIP_SIGNATURE) == 0) {
-                    mSig.validationData = _intersectValidationData(mSig.validationData, ValidationData.wrap(mSig.validator.checkSignaturePolicy(caller, digest, mSig.permSig)));
+                    mSig.validationData = _intersectValidationData(
+                        mSig.validationData,
+                        ValidationData.wrap(mSig.validator.checkSignaturePolicy(caller, digest, mSig.permSig))
+                    );
                 }
             }
             valid = state.permissionValidator[mSig.permission];

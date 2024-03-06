@@ -56,7 +56,7 @@ contract WeightedECDSAValidator is EIP712, IValidator {
         return ("WeightedECDSAValidator", "0.0.2");
     }
 
-    function onInstall(bytes calldata _data) external override payable {
+    function onInstall(bytes calldata _data) external payable override {
         (address[] memory _guardians, uint24[] memory _weights, uint24 _threshold, uint48 _delay) =
             abi.decode(_data, (address[], uint24[], uint24, uint48));
         require(_guardians.length == _weights.length, "Length mismatch");
@@ -77,7 +77,7 @@ contract WeightedECDSAValidator is EIP712, IValidator {
         weightedStorage[msg.sender].threshold = _threshold;
     }
 
-    function onUninstall(bytes calldata) external override payable {
+    function onUninstall(bytes calldata) external payable override {
         if (!_isInitialized(msg.sender)) revert NotInitialized(msg.sender);
         address currentGuardian = weightedStorage[msg.sender].firstGuardian;
         while (currentGuardian != msg.sender) {

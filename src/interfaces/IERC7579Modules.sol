@@ -61,7 +61,10 @@ interface IValidator is IModule {
      * @param userOpHash The hash of the user operation to be validated
      * @return return value according to ERC-4337
      */
-    function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash) external payable returns (uint256);
+    function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash)
+        external
+        payable
+        returns (uint256);
 
     /**
      * Validator can be used for ERC-1271 validation
@@ -87,5 +90,4 @@ interface IPolicy is IModule {
     function checkExternalPolicy(address caller, bytes calldata data) external view returns (uint256);
 }
 
-interface IAction is IModule {
-}
+interface IAction is IModule {}
