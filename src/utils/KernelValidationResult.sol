@@ -5,12 +5,6 @@ import {SIG_VALIDATION_FAILED_UINT} from "../types/Constants.sol";
 import {ValidationData, getValidationResult} from "../types/Types.sol";
 
 function _intersectValidationData(ValidationData a, ValidationData b) pure returns (ValidationData validationData) {
-    // a == 2 , b == 0 => 0
-    // a == 2 , b == 2 => 2
-    // a == 0 , b == 2 => 0
-    // a != 0 , b != 0 => 1
-    // a != 0 , b == 0 => a
-    // a == 0 , b != 0 => b
     assembly {
         // xor(a,b) == shows only matching bits
         // and(xor(a,b), 0x000000000000000000000000ffffffffffffffffffffffffffffffffffffffff) == filters out the validAfter and validUntil bits

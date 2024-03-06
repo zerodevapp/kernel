@@ -217,7 +217,8 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
 
     function isValidSignature(bytes32 hash, bytes calldata signature) external view override returns (bytes4) {
         (ValidationId vId, bytes calldata sig) = ValidatorLib.decodeSignature(signature);
-        return _validateSignature(vId, msg.sender, hash, sig);
+        (bytes4 res) = _validateSignature(vId, msg.sender, hash, sig);
+        return res;
     }
 
     function installModule(uint256 moduleType, address module, bytes calldata initData)

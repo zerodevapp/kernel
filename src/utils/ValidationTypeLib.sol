@@ -1,6 +1,6 @@
 pragma solidity ^0.8.0;
 
-import {IValidator} from "../interfaces/IERC7579Modules.sol";
+import {IValidator, IPolicy} from "../interfaces/IERC7579Modules.sol";
 import {
     Group,
     GroupId,
@@ -94,10 +94,10 @@ library ValidatorLib {
         }
     }
 
-    function decodePermissionData(PermissionData data) internal pure returns (PassFlag flag, IValidator validator) {
+    function decodePermissionData(PermissionData data) internal pure returns (PassFlag flag, IPolicy policy) {
         assembly {
             flag := data
-            validator := shr(80, data)
+            policy := shr(80, data)
         }
     }
 

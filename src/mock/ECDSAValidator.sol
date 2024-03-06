@@ -60,5 +60,5 @@ contract ECDSAValidator is IValidator, IHook {
         return hex"";
     }
 
-    function postCheck(bytes calldata hookData) external override returns (bool success) {}
+    function postCheck(bytes calldata) external override returns (bool) {}
 }
