@@ -56,7 +56,7 @@ contract WeightedECDSAValidator is EIP712, IValidator {
         return ("WeightedECDSAValidator", "0.0.2");
     }
 
-    function onInstall(bytes calldata _data) external override {
+    function onInstall(bytes calldata _data) external override payable {
         (address[] memory _guardians, uint24[] memory _weights, uint24 _threshold, uint48 _delay) =
             abi.decode(_data, (address[], uint24[], uint24, uint48));
         require(_guardians.length == _weights.length, "Length mismatch");
@@ -77,7 +77,7 @@ contract WeightedECDSAValidator is EIP712, IValidator {
         weightedStorage[msg.sender].threshold = _threshold;
     }
 
-    function onUninstall(bytes calldata) external override {
+    function onUninstall(bytes calldata) external override payable {
         if (!_isInitialized(msg.sender)) revert NotInitialized(msg.sender);
         address currentGuardian = weightedStorage[msg.sender].firstGuardian;
         while (currentGuardian != msg.sender) {
@@ -131,7 +131,7 @@ contract WeightedECDSAValidator is EIP712, IValidator {
         weightedStorage[msg.sender].threshold = _threshold;
     }
 
-    function approve(bytes32 _callDataAndNonceHash, address _kernel) external {
+    function approve(bytes32 _callDataAndNonceHash, address _kernel) external payable {
         require(guardian[msg.sender][_kernel].weight != 0, "Guardian not enabled");
         require(weightedStorage[_kernel].threshold != 0, "Kernel not enabled");
         ProposalStorage storage proposal = proposalStatus[_callDataAndNonceHash][_kernel];
@@ -146,7 +146,7 @@ contract WeightedECDSAValidator is EIP712, IValidator {
         }
     }
 
-    function approveWithSig(bytes32 _callDataAndNonceHash, address _kernel, bytes calldata sigs) external {
+    function approveWithSig(bytes32 _callDataAndNonceHash, address _kernel, bytes calldata sigs) external payable {
         uint256 sigCount = sigs.length / 65;
         require(weightedStorage[_kernel].threshold != 0, "Kernel not enabled");
         ProposalStorage storage proposal = proposalStatus[_callDataAndNonceHash][_kernel];
@@ -170,7 +170,7 @@ contract WeightedECDSAValidator is EIP712, IValidator {
         }
     }
 
-    function veto(bytes32 _callDataAndNonceHash) external {
+    function veto(bytes32 _callDataAndNonceHash) external payable {
         ProposalStorage storage proposal = proposalStatus[_callDataAndNonceHash][msg.sender];
         require(
             proposal.status == ProposalStatus.Ongoing || proposal.status == ProposalStatus.Approved,
@@ -181,6 +181,7 @@ contract WeightedECDSAValidator is EIP712, IValidator {
 
     function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash)
         external
+        payable
         override
         returns (uint256)
     {

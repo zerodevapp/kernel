@@ -21,14 +21,14 @@ contract ECDSAValidator is IValidator, IHook {
 
     mapping(address => ECDSAValidatorStorage) public ecdsaValidatorStorage;
 
-    function onInstall(bytes calldata _data) external override {
+    function onInstall(bytes calldata _data) external override payable {
         if (_isInitialized(msg.sender)) revert AlreadyInitialized(msg.sender);
         address owner = address(bytes20(_data[0:20]));
         ecdsaValidatorStorage[msg.sender].owner = owner;
         emit OwnerRegistered(msg.sender, owner);
     }
 
-    function onUninstall(bytes calldata) external override {
+    function onUninstall(bytes calldata) external override payable {
         if (!_isInitialized(msg.sender)) revert NotInitialized(msg.sender);
         delete ecdsaValidatorStorage[msg.sender];
     }
@@ -47,7 +47,7 @@ contract ECDSAValidator is IValidator, IHook {
 
     function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash)
         external
-        view
+        payable
         override
         returns (uint256)
     {
@@ -82,10 +82,10 @@ contract ECDSAValidator is IValidator, IHook {
         return ERC1271_MAGICVALUE;
     }
 
-    function preCheck(address msgSender, bytes calldata) external view override returns (bytes memory) {
+    function preCheck(address msgSender, bytes calldata) external payable override returns (bytes memory) {
         require(msgSender == ecdsaValidatorStorage[msg.sender].owner, "ECDSAValidator: sender is not owner");
         return hex"";
     }
 
-    function postCheck(bytes calldata hookData) external override returns (bool success) {}
+    function postCheck(bytes calldata hookData) external payable override returns (bool success) {}
 }

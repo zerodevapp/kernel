@@ -6,11 +6,11 @@ import {PackedUserOperation} from "../interfaces/PackedUserOperation.sol";
 contract ECDSAValidator is IValidator, IHook {
     mapping(address => address) public owner;
 
-    function onInstall(bytes calldata data) external override {
+    function onInstall(bytes calldata data) external payable override {
         owner[msg.sender] = address(bytes20(data[0:20]));
     }
 
-    function onUninstall(bytes calldata data) external override {}
+    function onUninstall(bytes calldata data) external payable override {}
 
     function isModuleType(uint256 typeID) external pure override returns (bool) {
         if (typeID == MODULE_TYPE_VALIDATOR) {
@@ -28,7 +28,7 @@ contract ECDSAValidator is IValidator, IHook {
 
     function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash)
         external
-        view
+        payable
         override
         returns (uint256)
     {
@@ -55,10 +55,10 @@ contract ECDSAValidator is IValidator, IHook {
         }
     }
 
-    function preCheck(address msgSender, bytes calldata) external view override returns (bytes memory) {
+    function preCheck(address msgSender, bytes calldata) external payable override returns (bytes memory) {
         require(msgSender == owner[msg.sender], "ECDSAValidator: sender is not owner");
         return hex"";
     }
 
-    function postCheck(bytes calldata) external override returns (bool) {}
+    function postCheck(bytes calldata) external payable override returns (bool) {}
 }

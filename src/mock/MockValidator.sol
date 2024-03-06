@@ -18,12 +18,12 @@ contract MockValidator is IValidator {
         validSig[keccak256(sig)] = true;
     }
 
-    function onInstall(bytes calldata data) external {
+    function onInstall(bytes calldata data) external payable {
         initialized[msg.sender] = true;
         validatorData[msg.sender] = data;
     }
 
-    function onUninstall(bytes calldata data) external {
+    function onUninstall(bytes calldata data) external payable {
         initialized[msg.sender] = false;
         validatorData[msg.sender] = data;
     }
@@ -39,7 +39,7 @@ contract MockValidator is IValidator {
         return initialized[smartAccount];
     }
 
-    function validateUserOp(PackedUserOperation calldata, bytes32) external returns (uint256) {
+    function validateUserOp(PackedUserOperation calldata, bytes32) external payable returns (uint256) {
         count++;
 
         if (success) {

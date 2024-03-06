@@ -23,7 +23,7 @@ interface IModule {
      *
      * MUST revert on error (i.e. if module is already enabled)
      */
-    function onInstall(bytes calldata data) external;
+    function onInstall(bytes calldata data) external payable;
 
     /**
      * @dev This function is called by the smart account during uninstallation of the module
@@ -32,7 +32,7 @@ interface IModule {
      *
      * MUST revert on error
      */
-    function onUninstall(bytes calldata data) external;
+    function onUninstall(bytes calldata data) external payable;
 
     /**
      * @dev Returns boolean value if module is a certain type
@@ -61,7 +61,7 @@ interface IValidator is IModule {
      * @param userOpHash The hash of the user operation to be validated
      * @return return value according to ERC-4337
      */
-    function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash) external returns (uint256);
+    function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash) external payable returns (uint256);
 
     /**
      * Validator can be used for ERC-1271 validation
@@ -75,14 +75,14 @@ interface IValidator is IModule {
 interface IExecutor is IModule {}
 
 interface IHook is IModule {
-    function preCheck(address msgSender, bytes calldata msgData) external returns (bytes memory hookData);
-    function postCheck(bytes calldata hookData) external returns (bool success);
+    function preCheck(address msgSender, bytes calldata msgData) external payable returns (bytes memory hookData);
+    function postCheck(bytes calldata hookData) external payable returns (bool success);
 }
 
 interface IFallback is IModule {}
 
 interface IPolicy is IModule {
-    function checkUserOpPolicy(PackedUserOperation calldata userOp) external returns (uint256);
+    function checkUserOpPolicy(PackedUserOperation calldata userOp) external payable returns (uint256);
     function checkSignaturePolicy(address sender, bytes32 hash, bytes calldata data) external view returns (uint256);
     function checkExternalPolicy(address caller, bytes calldata data) external view returns (uint256);
 }

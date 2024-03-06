@@ -24,7 +24,7 @@ struct WebAuthnValidatorData {
  * @title WebAuthnValidator
  * @notice This validator uses the P256 curve to validate signatures.
  */
-contract WebAuthnValidator is IKernelValidator {
+contract WebAuthnValidator is IValidator {
     // The location of the challenge in the clientDataJSON
     uint256 constant CHALLENGE_LOCATION = 23;
 
@@ -45,7 +45,7 @@ contract WebAuthnValidator is IKernelValidator {
      * @dev The public key is encoded as `abi.encode(WebAuthnValidatorData)` inside the data, so (uint256,uint256).
      * @dev The authenticatorIdHash is the hash of the authenticatorId. It enables to find public keys on-chain via event logs.
      */
-    function onInstall(bytes calldata _data) external override {
+    function onInstall(bytes calldata _data) external payable override {
         // check if the webauthn validator is already initialized
         if (_isInitialized(msg.sender)) revert AlreadyInitialized(msg.sender);
         // check validity of the public key
@@ -64,7 +64,7 @@ contract WebAuthnValidator is IKernelValidator {
      * @notice Uninstall WebAuthn validator for a kernel account.
      * @dev The kernel account need to be the `msg.sender`.
      */
-    function onUninstall(bytes calldata) external override {
+    function onUninstall(bytes calldata) external payable override {
         if (!_isInitialized(msg.sender)) revert NotInitialized(msg.sender);
         delete webAuthnValidatorStorage[msg.sender];
     }
@@ -84,25 +84,13 @@ contract WebAuthnValidator is IKernelValidator {
     /**
      * @notice Validate a user operation.
      */
-    function validateUserOp(UserOperation calldata _userOp, bytes32 _userOpHash, uint256)
+    function validateUserOp(PackedUserOperation calldata _userOp, bytes32 _userOpHash)
         external
         payable
         override
         returns (uint256)
     {
         return _verifySignature(_userOp.sender, _userOpHash, _userOp.signature);
-    }
-
-    /**
-     * @notice Validate a signature.
-     */
-    function validateSignature(bytes32 hash, bytes calldata signature)
-        external
-        view
-        override
-        returns (ValidationData)
-    {
-        return _verifySignature(msg.sender, hash, signature);
     }
 
     /**
