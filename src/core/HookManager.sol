@@ -14,11 +14,9 @@ abstract contract HookManager {
         context = hook.preCheck(msg.sender, callData);
     }
 
-    function _doPostHook(IHook hook, bytes memory context)
+    function _doPostHook(IHook hook, bytes memory context, bool success, bytes memory result) internal {
         // bool success, // I would like these to be enabled in erc7579, but let's skip this for now
         // bytes memory result
-        internal
-    {
         hook.postCheck(context);
     }
 }

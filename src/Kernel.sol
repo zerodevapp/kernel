@@ -18,7 +18,7 @@ import {
 import {HookManager} from "./core/HookManager.sol";
 import {ExecutorManager} from "./core/ExecutorManager.sol";
 import {SelectorManager} from "./core/SelectorManager.sol";
-import {IValidator, IHook, IExecutor} from "./interfaces/IERC7579Modules.sol";
+import {IValidator, IHook, IExecutor, IFallback} from "./interfaces/IERC7579Modules.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
 import {ExecLib, ExecMode, CallType, CALLTYPE_SINGLE, CALLTYPE_DELEGATECALL} from "./utils/ExecLib.sol";
 
@@ -85,6 +85,29 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         version = "3.0.0-beta";
     }
 
+    function _doFallback2771(IFallback fallbackHandler) internal returns (bool success, bytes memory result) {
+        assembly {
+            function allocate(length) -> pos {
+                pos := mload(0x40)
+                mstore(0x40, add(pos, length))
+            }
+
+            let calldataPtr := allocate(calldatasize())
+            calldatacopy(calldataPtr, 0, calldatasize())
+
+            // The msg.sender address is shifted to the left by 12 bytes to remove the padding
+            // Then the address without padding is stored right after the calldata
+            let senderPtr := allocate(20)
+            mstore(senderPtr, shl(96, caller()))
+
+            // Add 20 bytes for the address appended add the end
+            success := call(gas(), fallbackHandler, 0, calldataPtr, add(calldatasize(), 20), 0, 0)
+
+            result := allocate(returndatasize())
+            returndatacopy(result, 0, returndatasize())
+        }
+    }
+
     receive() external payable {
         emit Received(msg.sender, msg.value);
     }
@@ -92,23 +115,37 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
     fallback() external payable {
         SelectorConfig memory config = _selectorConfig(msg.sig);
         if (address(config.hook) == address(0)) {
-            revert InvalidFallback();
-        }
-        bytes memory context;
-        if (address(config.hook) != address(1)) {
-            context = _doPreHook(config.hook, msg.data);
-        }
-        // do fallback execute
-        if (config.callType == CALLTYPE_SINGLE) {
-            ExecLib._execute(config.target, msg.value, msg.data);
-        } else if (config.callType == CALLTYPE_DELEGATECALL) {
-            ExecLib._executeDelegatecall(config.target, msg.data);
+            (IFallback fallbackHandler, IHook hook) = _fallbackConfig();
+            if (address(fallbackHandler) == address(0)) {
+                revert InvalidFallback();
+            }
+            if (address(hook) != address(1)) {
+                bytes memory context = _doPreHook(hook, msg.data);
+                (bool success, bytes memory result) = _doFallback2771(fallbackHandler);
+                _doPostHook(hook, context, success, result);
+            } else {
+                (bool success, bytes memory result) = _doFallback2771(fallbackHandler);
+                if (!success) {
+                    assembly {
+                        revert(add(result, 0x20), mload(result))
+                    }
+                } else {
+                    assembly {
+                        return(add(result, 0x20), mload(result))
+                    }
+                }
+            }
         } else {
-            revert InvalidCallType();
-        }
-
-        if (address(config.hook) != address(1)) {
-            _doPostHook(config.hook, context);
+            // action installed
+            bytes memory context;
+            if (address(config.hook) != address(1)) {
+                context = _doPreHook(config.hook, msg.data);
+            }
+            // execute action
+            (bool success, bytes memory ret) = ExecLib._executeDelegatecall(config.target, msg.data);
+            if (address(config.hook) != address(1)) {
+                _doPostHook(config.hook, context, success, ret);
+            }
         }
     }
 
@@ -181,11 +218,9 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             // removed 4bytes selector
             context = _doPreHook(hook, userOp.callData[4:]);
         }
-
-        (bool success,) = address(this).delegatecall(userOp.callData[4:]);
-
+        (bool success, bytes memory ret) = ExecLib._executeDelegatecall(address(this), userOp.callData[4:]);
         if (address(hook) != address(1)) {
-            _doPostHook(hook, context);
+            _doPostHook(hook, context, success, ret);
         } else if (!success) {
             revert ExecutionReverted();
         }
@@ -207,7 +242,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         }
         returnData = ExecLib._execute(execMode, executionCalldata);
         if (address(hook) != address(1)) {
-            _doPostHook(hook, context);
+            _doPostHook(hook, context, true, abi.encode(returnData));
         }
     }
 
@@ -217,8 +252,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
 
     function isValidSignature(bytes32 hash, bytes calldata signature) external view override returns (bytes4) {
         (ValidationId vId, bytes calldata sig) = ValidatorLib.decodeSignature(signature);
-        (bytes4 res) = _validateSignature(vId, msg.sender, hash, sig);
-        return res;
+        return _validateSignature(vId, msg.sender, hash, sig);
     }
 
     function installModule(uint256 moduleType, address module, bytes calldata initData)
@@ -270,7 +304,13 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
 
     function uninstallModule(uint256 moduleType, address module, bytes calldata deInitData) external payable override {}
 
-    function supportsModule(uint256 moduleTypeId) external view override returns (bool) {}
+    function supportsModule(uint256 moduleTypeId) external pure override returns (bool) {
+        if (moduleTypeId < 7) {
+            return true;
+        } else {
+            return false;
+        }
+    }
 
     function isModuleInstalled(uint256 moduleType, address module, bytes calldata additionalContext)
         external
@@ -283,5 +323,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         return "kernel.advanced.v3.0.0-beta";
     }
 
-    function supportsExecutionMode(ExecMode encodedMode) external view override returns (bool) {}
+    function supportsExecutionMode(ExecMode) external pure override returns (bool) {
+        return true;
+    }
 }

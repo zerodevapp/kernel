@@ -1,6 +1,6 @@
 pragma solidity ^0.8.0;
 
-import {IHook} from "../interfaces/IERC7579Modules.sol";
+import {IHook, IFallback} from "../interfaces/IERC7579Modules.sol";
 import {CallType} from "../utils/ExecLib.sol";
 import {CALLTYPE_DELEGATECALL} from "../types/Constants.sol";
 
@@ -11,12 +11,23 @@ abstract contract SelectorManager {
     struct SelectorConfig {
         bytes4 group; // group of this selector action
         IHook hook; // 20 bytes for hook address
-        CallType callType; //1 bytes
         address target; // 20 bytes target will be fallback module, called with delegatecall or call
     }
 
     struct SelectorStorage {
+        IFallback fallbackHandler;
+        IHook hook;
         mapping(bytes4 => SelectorConfig) selectorConfig;
+    }
+
+    function _fallbackConfig() internal view returns (IFallback fallbackHandler, IHook hook) {
+        SelectorStorage storage ss;
+        bytes32 slot = SELECTOR_MANAGER_STORAGE_SLOT;
+        assembly {
+            ss.slot := slot
+        }
+        fallbackHandler = ss.fallbackHandler;
+        hook = ss.hook;
     }
 
     function _selectorConfig(bytes4 selector) internal view returns (SelectorConfig storage config) {
@@ -38,9 +49,27 @@ abstract contract SelectorManager {
         // we are going to install only through delegatecall
         ss.group = group;
         ss.hook = hook;
-        ss.callType = CALLTYPE_DELEGATECALL;
         ss.target = target;
         // TODO : INSTALL FLOW FOR fallback is NOT SUPPORTED YET
+        if (address(hook) != address(1)) {
+            hook.onInstall(hookData);
+        }
+    }
+
+    function _installFallback(
+        IFallback fallbackHandler,
+        IHook hook,
+        bytes calldata fallbackData,
+        bytes calldata hookData
+    ) internal {
+        SelectorStorage storage ss;
+        bytes32 slot = SELECTOR_MANAGER_STORAGE_SLOT;
+        assembly {
+            ss.slot := slot
+        }
+        ss.fallbackHandler = fallbackHandler;
+        fallbackHandler.onInstall(fallbackData);
+        ss.hook = hook;
         if (address(hook) != address(1)) {
             hook.onInstall(hookData);
         }
