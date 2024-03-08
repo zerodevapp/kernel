@@ -174,56 +174,49 @@ abstract contract ValidationManager is EIP712, SelectorManager {
     {
         ValidationStorage storage state = _validatorStorage();
         PackedUserOperation memory userOp = op;
+        bytes calldata userOpSig = op.signature;
+
         if (vMode == VALIDATION_MODE_ENABLE) {
             bytes4 selector = bytes4(op.callData[0:4]) == IAccountExecute.executeUserOp.selector
                 ? bytes4(op.callData[4:8])
                 : bytes4(op.callData[0:4]);
-            bytes calldata userOpSig = _enableMode(vId, selector, op.signature);
+            (validationData, userOpSig) = _enableMode(vId, selector, op.signature);
             userOp.signature = userOpSig;
             state.currentNonce++;
         }
-        if (ValidatorLib.getType(vId) == VALIDATION_TYPE_VALIDATOR) {
-            validationData = ValidationData.wrap(ValidatorLib.getValidator(vId).validateUserOp(userOp, userOpHash));
-        } else if (ValidatorLib.getType(vId) == VALIDATION_TYPE_PERMISSION) {
-            PermissionData[] storage permissions = state.permissionData[ValidatorLib.getPermissionId(vId)];
-            bytes calldata signature = op.signature;
-            for (uint256 i = 0; i < permissions.length; i++) {
-                (PassFlag flag, IPolicy validator) = ValidatorLib.decodePermissionData(permissions[i]);
-                uint8 idx = uint8(bytes1(signature[0]));
-                if (idx == i) {
-                    // we are using uint64 length
-                    uint256 length = uint64(bytes8(signature[1:9]));
-                    userOp.signature = signature[9:9 + length];
-                    signature = signature[9 + length:];
-                } else if (idx < i) {
-                    // signature is not in order
-                    revert InvalidSignature();
-                }
-                if (PassFlag.unwrap(flag) & PassFlag.unwrap(SKIP_USEROP) == 0) {
-                    validationData = _intersectValidationData(
-                        validationData, ValidationData.wrap(validator.checkUserOpPolicy(userOp))
-                    );
-                }
-                userOp.signature = "";
-            }
-        } else {
-            revert InvalidValidationType();
-        }
+
+        (ValidationData policyCheck, IValidator validator) = _checkUserOpPolicy(vId, userOp, userOpSig);
+        validationData = _intersectValidationData(validationData, policyCheck);
+        validationData =
+            _intersectValidationData(validationData, ValidationData.wrap(validator.validateUserOp(userOp, userOpHash)));
     }
 
     function _enableMode(ValidationId vId, bytes4 selector, bytes calldata packedData)
         internal
-        returns (bytes calldata userOpSig)
+        returns (ValidationData, bytes calldata userOpSig)
     {
-        _checkEnableSig(vId, selector, packedData);
+        ValidationStorage storage state = _validatorStorage();
+        (bytes32 digest, bytes calldata enableSig) = _checkEnableSig(vId, selector, packedData);
+        (IValidator validator, ValidationData validationData, bytes calldata sig) =
+            _checkSignaturePolicy(state.rootValidator, address(this), digest, enableSig);
+
+        bytes4 result = validator.isValidSignatureWithSender(address(this), digest, sig);
+        if (result != 0x1626ba7e) {
+            revert InvalidSignature();
+        }
+
         assembly {
             userOpSig.offset := add(add(packedData.offset, 68), calldataload(add(packedData.offset, 164)))
             userOpSig.length := calldataload(sub(userOpSig.offset, 32))
         }
+
+        return (validationData, userOpSig);
     }
 
-    function _checkEnableSig(ValidationId vId, bytes4 selector, bytes calldata packedData) internal {
-        ValidationStorage storage state = _validatorStorage();
+    function _checkEnableSig(ValidationId vId, bytes4 selector, bytes calldata packedData)
+        internal
+        returns (bytes32, bytes calldata enableSig)
+    {
         (
             ValidationConfig memory config,
             bytes calldata validatorData,
@@ -231,7 +224,6 @@ abstract contract ValidationManager is EIP712, SelectorManager {
             bytes calldata selectorData,
             bytes32 digest
         ) = _enableDigest(vId, packedData);
-        bytes calldata enableSig;
         assembly {
             enableSig.offset := add(add(packedData.offset, 68), calldataload(add(packedData.offset, 132)))
             enableSig.length := calldataload(sub(enableSig.offset, 32))
@@ -254,10 +246,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
                 _installSelector(selector, config.group, address(0), IHook(address(0)), selectorData[0:0]);
             }
         }
-        bytes4 result = _validateSignature(state.rootValidator, address(this), digest, enableSig);
-        if (result != 0x1626ba7e) {
-            revert InvalidSignature();
-        }
+        return (digest, enableSig);
     }
 
     function _enableDigest(ValidationId vId, bytes calldata packedData)
@@ -307,6 +296,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
     }
 
     struct PermissionSigMemory {
+        uint8 idx;
         ValidationData validationData;
         PermissionId permission;
         PassFlag flag;
@@ -314,31 +304,61 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         bytes permSig;
     }
 
-    function _validateSignature(ValidationId validator, address caller, bytes32 digest, bytes calldata sig)
+    function _checkUserOpPolicy(
+        ValidationId vId,
+        PackedUserOperation memory userOp,
+        bytes calldata userOpSig
+    ) internal returns (ValidationData validationData, IValidator validator) {
+        ValidationStorage storage state = _validatorStorage();
+        if (ValidatorLib.getType(vId) == VALIDATION_TYPE_VALIDATOR) {
+            return (ValidationData.wrap(0), ValidatorLib.getValidator(vId));
+        } else if (ValidatorLib.getType(vId) == VALIDATION_TYPE_PERMISSION) {
+            PermissionData[] storage permissions = state.permissionData[ValidatorLib.getPermissionId(vId)];
+            for (uint256 i = 0; i < permissions.length; i++) {
+                (PassFlag flag, IPolicy policy) = ValidatorLib.decodePermissionData(permissions[i]);
+                uint8 idx = uint8(bytes1(userOpSig[0]));
+                if (idx == i) {
+                    // we are using uint64 length
+                    uint256 length = uint64(bytes8(userOpSig[1:9]));
+                    userOp.signature = userOpSig[9:9 + length];
+                    userOpSig = userOpSig[9 + length:];
+                } else if (idx < i) {
+                    // signature is not in order
+                    revert InvalidSignature();
+                }
+                if (PassFlag.unwrap(flag) & PassFlag.unwrap(SKIP_USEROP) == 0) {
+                    validationData =
+                        _intersectValidationData(validationData, ValidationData.wrap(policy.checkUserOpPolicy(userOp)));
+                }
+                userOp.signature = "";
+            }
+            return (validationData, state.permissionValidator[ValidatorLib.getPermissionId(vId)]);
+        } else {
+            revert InvalidValidationType();
+        }
+    }
+
+    function _checkSignaturePolicy(ValidationId vId, address caller, bytes32 digest, bytes calldata sig)
         internal
         view
-        returns (bytes4 res)
+        returns (IValidator validator, ValidationData validationData, bytes calldata)
     {
         ValidationStorage storage state = _validatorStorage();
-        IValidator valid = ValidatorLib.getValidator(validator);
-        if (ValidatorLib.getType(validator) == VALIDATION_TYPE_VALIDATOR) {
-            valid = ValidatorLib.getValidator(validator);
-        } else if (ValidatorLib.getType(validator) == VALIDATION_TYPE_PERMISSION) {
+        if (ValidatorLib.getType(vId) == VALIDATION_TYPE_VALIDATOR) {
+            return (ValidatorLib.getValidator(vId), ValidationData.wrap(0), sig);
+        } else if (ValidatorLib.getType(vId) == VALIDATION_TYPE_PERMISSION) {
             PermissionSigMemory memory mSig;
-            mSig.permission = ValidatorLib.getPermissionId(validator);
+            mSig.permission = ValidatorLib.getPermissionId(vId);
             PermissionData[] storage permissions = state.permissionData[mSig.permission];
             for (uint256 i = 0; i < permissions.length; i++) {
                 (mSig.flag, mSig.validator) = ValidatorLib.decodePermissionData(permissions[i]);
-                uint8 idx = uint8(i + 1);
-                if (sig.length > 0) {
-                    idx = uint8(bytes1(sig[0]));
-                }
-                if (idx == i) {
+                mSig.idx = uint8(bytes1(sig[0]));
+                if (mSig.idx == i) {
                     // we are using uint64 length
                     uint256 length = uint64(bytes8(sig[1:9]));
                     mSig.permSig = sig[9:9 + length];
                     sig = sig[9 + length:];
-                } else if (idx < i) {
+                } else if (mSig.idx < i) {
                     // signature is not in order
                     revert InvalidSignature();
                 } else {
@@ -352,10 +372,14 @@ abstract contract ValidationManager is EIP712, SelectorManager {
                     );
                 }
             }
-            valid = state.permissionValidator[mSig.permission];
+            return (state.permissionValidator[mSig.permission], mSig.validationData, sig);
         } else {
             revert InvalidValidationType();
         }
-        return (valid.isValidSignatureWithSender(caller, digest, sig));
+    }
+
+    function _toWrappedHash(bytes32 hash) internal view returns (bytes32) {
+        // TODO;
+        return hash;
     }
 }

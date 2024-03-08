@@ -199,4 +199,24 @@ contract KernelTest is Test {
         assertEq(address(config.hook), address(1));
         assertEq(kernel.currentNonce(), 3);
     }
+
+    // install action
+    // - with hook
+    // - without hook
+    // install fallback
+    // - with hook
+    // - without hook
+    // install executor
+    // - with hook
+    // - without hook
+    // install Validator
+    // #1 signature
+    // eip 1271 replay issue
+    // - validator
+    // - permission
+    // #2 permission standard
+    // - root : validator, enable : permission
+    // - root : validator, enable : permission
+    // - root : permission, enable : permission
+    // - root : permission, enable : validator
 }

@@ -31,6 +31,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
     error InvalidCallType();
     error OnlyExecuteUserOp();
     error InvalidModuleType();
+    error InvalidCaller();
 
     event Received(address sender, uint256 amount);
 
@@ -42,20 +43,34 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
     }
 
     modifier onlyEntryPoint() {
-        require(msg.sender == address(entrypoint), "only entrypoint");
+        if (msg.sender != address(entrypoint)) {
+            revert InvalidCaller();
+        }
         _;
     }
 
     modifier onlyEntryPointOrSelf() {
-        require(msg.sender == address(entrypoint) || msg.sender == address(this), "only entrypoint or self");
+        if (msg.sender != address(entrypoint) && msg.sender != address(this)) {
+            revert InvalidCaller();
+        }
         _;
     }
 
     modifier onlyEntryPointOrSelfOrRoot() {
-        require(
-            msg.sender == address(entrypoint) || msg.sender == address(this) // do rootValidator hook
-        );
-        _;
+        IValidator validator = ValidatorLib.getValidator(_validatorStorage().rootValidator);
+        if (
+            msg.sender != address(entrypoint) && msg.sender != address(this) // do rootValidator hook
+        ) {
+            if (validator.isModuleType(4)) {
+                bytes memory ret = IHook(address(validator)).preCheck(msg.sender, msg.data);
+                _;
+                IHook(address(validator)).postCheck(ret);
+            } else {
+                revert InvalidCaller();
+            }
+        } else {
+            _;
+        }
     }
 
     function initialize(ValidationId _rootValidator, IHook hook, bytes calldata validatorData, bytes calldata hookData)
@@ -252,7 +267,10 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
 
     function isValidSignature(bytes32 hash, bytes calldata signature) external view override returns (bytes4) {
         (ValidationId vId, bytes calldata sig) = ValidatorLib.decodeSignature(signature);
-        return _validateSignature(vId, msg.sender, hash, sig);
+        (IValidator validator, ValidationData valdiationData, bytes calldata validatorSig) =
+            _checkSignaturePolicy(vId, msg.sender, hash, sig);
+        bytes32 wrappedHash = _toWrappedHash(hash);
+        return validator.isValidSignatureWithSender(msg.sender, wrappedHash, validatorSig);
     }
 
     function installModule(uint256 moduleType, address module, bytes calldata initData)
@@ -286,7 +304,14 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
                 IExecutor(module), bytes4(initData[0:4]), IHook(address(bytes20(initData[4:24]))), initData[24:]
             );
         } else if (moduleType == 3) {
-            // fallback
+            _installFallback(
+                IFallback(module),
+                IHook(address(bytes20(initData[0:20]))),
+                initData[20:20], // TODO : fallbackData
+                initData[20:]
+            );
+        } else if (moduleType == 6) {
+            // action
             _installSelector(
                 bytes4(initData[0:4]),
                 bytes4(initData[4:8]),
@@ -294,15 +319,14 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
                 IHook(address(bytes20(initData[28:48]))),
                 initData[48:]
             );
-        } else if (moduleType == 4) {
-            // hook
-            revert InvalidModuleType();
         } else {
             revert InvalidModuleType();
         }
     }
 
-    function uninstallModule(uint256 moduleType, address module, bytes calldata deInitData) external payable override {}
+    function uninstallModule(uint256 moduleType, address module, bytes calldata deInitData) external payable override {
+        // TODO
+    }
 
     function supportsModule(uint256 moduleTypeId) external pure override returns (bool) {
         if (moduleTypeId < 7) {
@@ -317,7 +341,21 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         view
         override
         returns (bool)
-    {}
+    {
+        if (moduleType == 1) {
+            return
+                _validatorStorage().validatorConfig[ValidatorLib.validatorToIdentifier(IValidator(module))].nonce != 0;
+        } else if (moduleType == 2) {
+            return address(_executorConfig(IExecutor(module)).hook) != address(0);
+        } else if (moduleType == 3) {
+            (IFallback fallbackHandler,) = _fallbackConfig();
+            return fallbackHandler == IFallback(module);
+        } else if (moduleType == 6) {
+            return _selectorConfig(bytes4(additionalContext[0:4])).target == module;
+        } else {
+            return false;
+        }
+    }
 
     function accountId() external pure override returns (string memory accountImplementationId) {
         return "kernel.advanced.v3.0.0-beta";

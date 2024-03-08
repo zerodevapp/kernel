@@ -33,7 +33,7 @@ contract ECDSAValidator is IValidator, IHook {
         delete ecdsaValidatorStorage[msg.sender];
     }
 
-    function isModuleType(uint256 typeID) external view override returns (bool) {
+    function isModuleType(uint256 typeID) external pure override returns (bool) {
         return typeID == MODULE_TYPE_VALIDATOR || typeID == MODULE_TYPE_HOOK;
     }
 
@@ -64,13 +64,13 @@ contract ECDSAValidator is IValidator, IHook {
         return VALIDATION_SUCCESS;
     }
 
-    function isValidSignatureWithSender(address sender, bytes32 hash, bytes calldata sig)
+    function isValidSignatureWithSender(address, bytes32 hash, bytes calldata sig)
         external
         view
         override
         returns (bytes4)
     {
-        address owner = ecdsaValidatorStorage[sender].owner;
+        address owner = ecdsaValidatorStorage[msg.sender].owner;
         if (owner == ECDSA.recover(hash, sig)) {
             return ERC1271_MAGICVALUE;
         }
