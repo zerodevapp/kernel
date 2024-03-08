@@ -327,7 +327,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
                 }
                 if (PassFlag.unwrap(flag) & PassFlag.unwrap(SKIP_USEROP) == 0) {
                     validationData =
-                        _intersectValidationData(validationData, ValidationData.wrap(policy.checkUserOpPolicy(userOp)));
+                        _intersectValidationData(validationData, ValidationData.wrap(policy.checkUserOpPolicy(userOp, hex"")));
                 }
                 userOp.signature = "";
             }
