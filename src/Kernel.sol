@@ -80,13 +80,8 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         require(ValidationId.unwrap(vs.rootValidator) == bytes21(0), "already initialized");
         require(ValidationId.unwrap(_rootValidator) != bytes21(0), "invalid validator");
         vs.rootValidator = _rootValidator;
-        ValidationConfig memory config = ValidationConfig({
-            group: bytes4(0),
-            validFrom: uint48(0),
-            validUntil: uint48(0),
-            nonce: uint32(1),
-            hook: hook
-        });
+        ValidationConfig memory config =
+            ValidationConfig({validFrom: uint48(0), validUntil: uint48(0), nonce: uint32(1), hook: hook});
         vs.currentNonce = 1;
         _installValidation(_rootValidator, config, validatorData, hookData);
         vs.currentNonce++;
@@ -193,18 +188,12 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
 
         if (address(execHook) == address(1)) {
             // does not require hook
-            if (
-                vType != VALIDATION_TYPE_SUDO
-                    && _selectorConfig(bytes4(userOp.callData[0:4])).group != vs.validatorConfig[vId].group
-            ) {
+            if (vType != VALIDATION_TYPE_SUDO && !vs.allowedSelectors[vId][bytes4(userOp.callData[0:4])]) {
                 revert InvalidValidator();
             }
         } else {
             // requires hook
-            if (
-                vType != VALIDATION_TYPE_SUDO
-                    && _selectorConfig(bytes4(userOp.callData[4:8])).group != vs.validatorConfig[vId].group
-            ) {
+            if (vType != VALIDATION_TYPE_SUDO && !vs.allowedSelectors[vId][bytes4(userOp.callData[4:8])]) {
                 revert InvalidValidator();
             }
             if (bytes4(userOp.callData[0:4]) != this.executeUserOp.selector) {
@@ -287,26 +276,23 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             ValidationStorage storage vs = _validatorStorage();
             ValidationId vId = ValidatorLib.validatorToIdentifier(IValidator(module));
             ValidationConfig memory config = ValidationConfig({
-                group: bytes4(initData[0:4]),
                 nonce: vs.currentNonce++,
-                hook: IHook(address(bytes20(initData[4:24]))),
-                validFrom: uint48(bytes6(initData[24:30])),
-                validUntil: uint48(bytes6(initData[30:36]))
+                hook: IHook(address(bytes20(initData[0:20]))),
+                validFrom: uint48(bytes6(initData[20:26])),
+                validUntil: uint48(bytes6(initData[26:32]))
             });
             bytes calldata validatorData;
             bytes calldata hookData;
             assembly {
-                validatorData.offset := add(add(initData.offset, 68), calldataload(add(initData.offset, 36)))
+                validatorData.offset := add(add(initData.offset, 64), calldataload(add(initData.offset, 36)))
                 validatorData.length := calldataload(sub(validatorData.offset, 32))
-                hookData.offset := add(add(initData.offset, 68), calldataload(add(initData.offset, 68)))
+                hookData.offset := add(add(initData.offset, 64), calldataload(add(initData.offset, 68)))
                 hookData.length := calldataload(sub(hookData.offset, 32))
             }
             _installValidation(vId, config, validatorData, hookData);
         } else if (moduleType == 2) {
             // executor
-            _installExecutor(
-                IExecutor(module), bytes4(initData[0:4]), IHook(address(bytes20(initData[4:24]))), initData[24:]
-            );
+            _installExecutor(IExecutor(module), IHook(address(bytes20(initData[0:20]))), initData[20:]);
         } else if (moduleType == 3) {
             _installFallback(
                 IFallback(module),
@@ -318,10 +304,9 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             // action
             _installSelector(
                 bytes4(initData[0:4]),
-                bytes4(initData[4:8]),
-                address(bytes20(initData[8:28])),
-                IHook(address(bytes20(initData[28:48]))),
-                initData[48:]
+                address(bytes20(initData[4:24])),
+                IHook(address(bytes20(initData[24:44]))),
+                initData[44:]
             );
         } else {
             revert InvalidModuleType();

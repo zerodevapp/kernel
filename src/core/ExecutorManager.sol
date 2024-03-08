@@ -6,7 +6,6 @@ bytes32 constant EXECUTOR_MANAGER_STORAGE_SLOT = 0x1bbee3173dbdc223633258c9f337a
 
 abstract contract ExecutorManager {
     struct ExecutorConfig {
-        bytes4 group;
         IHook hook; // address(1) : hook not required, address(0) : validator not installed
     }
 
@@ -27,12 +26,11 @@ abstract contract ExecutorManager {
         config = es.executorConfig[executor];
     }
 
-    function _installExecutor(IExecutor executor, bytes4 group, IHook hook, bytes calldata data) internal {
+    function _installExecutor(IExecutor executor, IHook hook, bytes calldata data) internal {
         if (address(hook) == address(0)) {
             hook = IHook(address(1));
         }
         ExecutorConfig storage config = _executorConfig(executor);
-        config.group = group;
         config.hook = hook;
         executor.onInstall(data);
         if (address(hook) != address(1)) {

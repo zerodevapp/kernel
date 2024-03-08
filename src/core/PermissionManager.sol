@@ -28,6 +28,7 @@ import {
     SKIP_USEROP,
     SKIP_SIGNATURE
 } from "../types/Constants.sol";
+import "forge-std/console.sol";
 
 bytes32 constant VALIDATION_MANAGER_STORAGE_POSITION =
     0x7bcaa2ced2a71450ed5a9a1b4848e8e5206dbc3f06011e595f7f55428cc6f84f;
@@ -49,7 +50,6 @@ abstract contract ValidationManager is EIP712, SelectorManager {
     // CHECK is it better to have a group config?
     // erc7579 plugins
     struct ValidationConfig {
-        bytes4 group; // 4 bytes = 2bytes for groupid, 2byte for skip flag
         uint32 nonce; // 4 bytes
         uint48 validFrom;
         uint48 validUntil;
@@ -61,6 +61,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         uint32 currentNonce;
         uint32 validNonceFrom;
         mapping(ValidationId => ValidationConfig) validatorConfig;
+        mapping(ValidationId => mapping(bytes4 => bool)) allowedSelectors;
         mapping(PermissionId => PermissionData[]) permissionData;
         mapping(PermissionId => IValidator) permissionValidator;
     }
@@ -115,6 +116,11 @@ abstract contract ValidationManager is EIP712, SelectorManager {
             _installValidation(validators[i], configs[i], validatorData[i], hookData[i]);
         }
         state.currentNonce++;
+    }
+
+    function _setSelector(ValidationId vId, bytes4 selector, bool allowed) internal {
+        ValidationStorage storage state = _validatorStorage();
+        state.allowedSelectors[vId][selector] = allowed;
     }
 
     function _installValidation(
@@ -206,7 +212,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         }
 
         assembly {
-            userOpSig.offset := add(add(packedData.offset, 68), calldataload(add(packedData.offset, 164)))
+            userOpSig.offset := add(add(packedData.offset, 64), calldataload(add(packedData.offset, 160)))
             userOpSig.length := calldataload(sub(userOpSig.offset, 32))
         }
 
@@ -225,7 +231,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
             bytes32 digest
         ) = _enableDigest(vId, packedData);
         assembly {
-            enableSig.offset := add(add(packedData.offset, 68), calldataload(add(packedData.offset, 132)))
+            enableSig.offset := add(add(packedData.offset, 64), calldataload(add(packedData.offset, 128)))
             enableSig.length := calldataload(sub(enableSig.offset, 32))
         }
         _installValidation(vId, config, validatorData, hookData);
@@ -235,15 +241,15 @@ abstract contract ValidationManager is EIP712, SelectorManager {
                 // install selector with hook and target contract
                 _installSelector(
                     selector,
-                    config.group,
                     address(bytes20(selectorData[4:24])),
                     IHook(address(bytes20(selectorData[24:44]))),
                     selectorData[44:]
                 );
+                _setSelector(vId, selector, true);
             } else {
+                // set without install
                 require(selectorData.length == 4, "Invalid selectorData");
-                // install selector without hook and target contract, only change group of selector
-                _installSelector(selector, config.group, address(0), IHook(address(0)), selectorData[0:0]);
+                _setSelector(vId, selector, true);
             }
         }
         return (digest, enableSig);
@@ -261,29 +267,27 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         )
     {
         ValidationStorage storage state = _validatorStorage();
-        config.group = bytes4(packedData[0:4]);
-        config.validFrom = uint48(bytes6(packedData[4:10]));
-        config.validUntil = uint48(bytes6(packedData[10:16]));
-        config.hook = IHook(address(bytes20(packedData[16:36])));
+        config.validFrom = uint48(bytes6(packedData[0:6]));
+        config.validUntil = uint48(bytes6(packedData[6:12]));
+        config.hook = IHook(address(bytes20(packedData[12:32])));
         config.nonce = state.currentNonce;
 
         assembly {
-            validatorData.offset := add(add(packedData.offset, 68), calldataload(add(packedData.offset, 36)))
+            validatorData.offset := add(add(packedData.offset, 64), calldataload(add(packedData.offset, 32)))
             validatorData.length := calldataload(sub(validatorData.offset, 32))
-            hookData.offset := add(add(packedData.offset, 68), calldataload(add(packedData.offset, 68)))
+            hookData.offset := add(add(packedData.offset, 64), calldataload(add(packedData.offset, 64)))
             hookData.length := calldataload(sub(hookData.offset, 32))
-            selectorData.offset := add(add(packedData.offset, 68), calldataload(add(packedData.offset, 100)))
+            selectorData.offset := add(add(packedData.offset, 64), calldataload(add(packedData.offset, 96)))
             selectorData.length := calldataload(sub(selectorData.offset, 32))
         }
         digest = _hashTypedData(
             keccak256(
                 abi.encode(
                     keccak256(
-                        "Enable(bytes21 validationId,uint32 nonce,bytes4 group,uint48 validFrom,uint48 validUntil,address hook,bytes validatorData,bytes hookData,bytes selectorData)"
+                        "Enable(bytes21 validationId,uint32 nonce,uint48 validFrom,uint48 validUntil,address hook,bytes validatorData,bytes hookData,bytes selectorData)"
                     ), // TODO: this to constant
                     ValidationId.unwrap(vId),
                     state.currentNonce,
-                    config.group,
                     config.validFrom,
                     config.validUntil,
                     config.hook,
@@ -312,7 +316,8 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         if (ValidatorLib.getType(vId) == VALIDATION_TYPE_VALIDATOR) {
             return (ValidationData.wrap(0), ValidatorLib.getValidator(vId));
         } else if (ValidatorLib.getType(vId) == VALIDATION_TYPE_PERMISSION) {
-            PermissionData[] storage permissions = state.permissionData[ValidatorLib.getPermissionId(vId)];
+            PermissionId pId = ValidatorLib.getPermissionId(vId);
+            PermissionData[] storage permissions = state.permissionData[pId];
             for (uint256 i = 0; i < permissions.length; i++) {
                 (PassFlag flag, IPolicy policy) = ValidatorLib.decodePermissionData(permissions[i]);
                 uint8 idx = uint8(bytes1(userOpSig[0]));
@@ -326,8 +331,10 @@ abstract contract ValidationManager is EIP712, SelectorManager {
                     revert InvalidSignature();
                 }
                 if (PassFlag.unwrap(flag) & PassFlag.unwrap(SKIP_USEROP) == 0) {
-                    validationData =
-                        _intersectValidationData(validationData, ValidationData.wrap(policy.checkUserOpPolicy(userOp, bytes32(PermissionId.unwrap(ValidatorLib.getPermissionId(vId))))));
+                    validationData = _intersectValidationData(
+                        validationData,
+                        ValidationData.wrap(policy.checkUserOpPolicy(userOp, bytes32(PermissionId.unwrap(pId))))
+                    );
                 }
                 userOp.signature = "";
             }
@@ -367,7 +374,11 @@ abstract contract ValidationManager is EIP712, SelectorManager {
                 if (PassFlag.unwrap(mSig.flag) & PassFlag.unwrap(SKIP_SIGNATURE) == 0) {
                     mSig.validationData = _intersectValidationData(
                         mSig.validationData,
-                        ValidationData.wrap(mSig.validator.checkSignaturePolicy(caller, digest, mSig.permSig, bytes32(PermissionId.unwrap(mSig.permission))))
+                        ValidationData.wrap(
+                            mSig.validator.checkSignaturePolicy(
+                                caller, digest, mSig.permSig, bytes32(PermissionId.unwrap(mSig.permission))
+                            )
+                        )
                     );
                 }
             }

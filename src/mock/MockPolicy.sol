@@ -22,12 +22,17 @@ contract MockPolicy is IPolicy {
         return installData[smartAccount].length > 0;
     }
 
-    function checkUserOpPolicy(PackedUserOperation calldata userOp, bytes calldata data) external payable override returns (uint256) {
+    function checkUserOpPolicy(PackedUserOperation calldata userOp, bytes32 id)
+        external
+        payable
+        override
+        returns (uint256)
+    {
         signature[msg.sender] = userOp.signature;
         return pass[msg.sender] ? 0 : 1;
     }
 
-    function checkSignaturePolicy(address sender, bytes32 hash, bytes calldata data)
+    function checkSignaturePolicy(address sender, bytes32 hash, bytes calldata data, bytes32 id)
         external
         view
         override
@@ -35,5 +40,4 @@ contract MockPolicy is IPolicy {
     {
         return pass[msg.sender] ? 0 : 1;
     }
-
 }

@@ -87,7 +87,10 @@ interface IFallback is IModule {}
 
 interface IPolicy is IModule {
     function checkUserOpPolicy(PackedUserOperation calldata userOp, bytes32 id) external payable returns (uint256);
-    function checkSignaturePolicy(address sender, bytes32 hash, bytes calldata sig, bytes32 id) external view returns (uint256);
+    function checkSignaturePolicy(address sender, bytes32 hash, bytes calldata sig, bytes32 id)
+        external
+        view
+        returns (uint256);
 }
 
 interface IAction is IModule {}

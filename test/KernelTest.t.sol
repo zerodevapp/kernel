@@ -69,7 +69,6 @@ contract KernelTest is Test {
         assertTrue(kernel.rootValidator() == vId);
         ValidationManager.ValidationConfig memory config;
         config = kernel.validatorConfig(vId);
-        assertEq(config.group, bytes4(0));
         assertEq(config.nonce, 1);
         assertEq(config.validFrom, 0);
         assertEq(config.validUntil, 0);
@@ -130,7 +129,6 @@ contract KernelTest is Test {
 
     function encodeEnableSignature(
         address validatorAddr,
-        bytes4 group,
         uint48 validFrom,
         uint48 validUntil,
         IHook hook,
@@ -140,8 +138,27 @@ contract KernelTest is Test {
         bytes memory enableSig,
         bytes memory userOpSig
     ) internal view returns (bytes memory) {
+        ///0x
+        ///000000000001
+        ///000005f5e100
+        ///0000000000000000000000000000000000000000
+        ///00000000000000000000000000000000000000000000000000000000000000a0
+        ///00000000000000000000000000000000000000000000000000000000000000e0
+        ///0000000000000000000000000000000000000000000000000000000000000120
+        ///0000000000000000000000000000000000000000000000000000000000000160
+        ///00000000000000000000000000000000000000000000000000000000000001a0
+        ///0000000000000000000000000000000000000000000000000000000000000005
+        ///68656c6c6f000000000000000000000000000000000000000000000000000000
+        ///0000000000000000000000000000000000000000000000000000000000000005
+        ///776f726c64000000000000000000000000000000000000000000000000000000
+        ///0000000000000000000000000000000000000000000000000000000000000004
+        ///e9ae5c5300000000000000000000000000000000000000000000000000000000
+        ///0000000000000000000000000000000000000000000000000000000000000009
+        ///656e61626c655369670000000000000000000000000000000000000000000000
+        ///0000000000000000000000000000000000000000000000000000000000000009
+        ///757365724f705369670000000000000000000000000000000000000000000000
         return abi.encodePacked(
-            abi.encodePacked(group, validFrom, validUntil, hook),
+            abi.encodePacked(validFrom, validUntil, hook),
             abi.encode(validatorData, hookData, selectorData, enableSig, userOpSig)
         );
     }
@@ -174,7 +191,6 @@ contract KernelTest is Test {
             paymasterAndData: hex"",
             signature: encodeEnableSignature(
                 address(newValidator),
-                bytes4(0xdeadbeef),
                 1,
                 100000000,
                 IHook(address(0)),
@@ -192,7 +208,6 @@ contract KernelTest is Test {
         assertEq(newValidator.count(), newCount + 1);
         ValidationManager.ValidationConfig memory config =
             kernel.validatorConfig(ValidatorLib.validatorToIdentifier(newValidator));
-        assertEq(config.group, bytes4(0xdeadbeef));
         assertEq(config.nonce, 2);
         assertEq(config.validFrom, 1);
         assertEq(config.validUntil, 100000000);
