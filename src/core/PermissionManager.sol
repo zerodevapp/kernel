@@ -304,11 +304,10 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         bytes permSig;
     }
 
-    function _checkUserOpPolicy(
-        ValidationId vId,
-        PackedUserOperation memory userOp,
-        bytes calldata userOpSig
-    ) internal returns (ValidationData validationData, IValidator validator) {
+    function _checkUserOpPolicy(ValidationId vId, PackedUserOperation memory userOp, bytes calldata userOpSig)
+        internal
+        returns (ValidationData validationData, IValidator validator)
+    {
         ValidationStorage storage state = _validatorStorage();
         if (ValidatorLib.getType(vId) == VALIDATION_TYPE_VALIDATOR) {
             return (ValidationData.wrap(0), ValidatorLib.getValidator(vId));
@@ -379,7 +378,11 @@ abstract contract ValidationManager is EIP712, SelectorManager {
     }
 
     function _toWrappedHash(bytes32 hash) internal view returns (bytes32) {
-        // TODO;
-        return hash;
+        ///     bytes32 digest = _hashTypedData(keccak256(abi.encode(
+        ///         keccak256("Mail(address to,string contents)"),
+        ///         mailTo,
+        ///         keccak256(bytes(mailContents))
+        ///     )));
+        return _hashTypedData(keccak256(abi.encode(keccak256("Kernel(bytes32 hash)"), hash)));
     }
 }

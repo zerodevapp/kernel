@@ -1,7 +1,7 @@
 pragma solidity ^0.8.0;
 
 import {PackedUserOperation} from "./interfaces/PackedUserOperation.sol";
-import {IAccount, ValidationData} from "./interfaces/IAccount.sol";
+import {IAccount, ValidationData, ValidAfter, ValidUntil, parseValidationData} from "./interfaces/IAccount.sol";
 import {IEntryPoint} from "./interfaces/IEntryPoint.sol";
 import {IAccountExecute} from "./interfaces/IAccountExecute.sol";
 import {IERC7579Account} from "./interfaces/IERC7579Account.sol";
@@ -270,6 +270,10 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         (IValidator validator, ValidationData valdiationData, bytes calldata validatorSig) =
             _checkSignaturePolicy(vId, msg.sender, hash, sig);
         bytes32 wrappedHash = _toWrappedHash(hash);
+        (ValidAfter validAfter, ValidUntil validUntil,) = parseValidationData(ValidationData.unwrap(valdiationData));
+        if (block.timestamp < ValidAfter.unwrap(validAfter) || block.timestamp > ValidUntil.unwrap(validUntil)) {
+            return 0xffffffff;
+        }
         return validator.isValidSignatureWithSender(msg.sender, wrappedHash, validatorSig);
     }
 
