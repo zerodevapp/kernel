@@ -2,17 +2,8 @@ pragma solidity ^0.8.0;
 
 import "src/core/PermissionManager.sol";
 import "forge-std/Test.sol";
-import {Group, GroupId} from "src/types/Types.sol";
 
 contract MockValidatorLib {
-    function parseGroup(Group group) external pure returns (GroupId groupId, PassFlag passFlag) {
-        return ValidatorLib.parseGroup(group);
-    }
-
-    function encodeGroup(GroupId groupId, PassFlag passFlag) external pure returns (Group group) {
-        return ValidatorLib.encodeGroup(groupId, passFlag);
-    }
-
     function encodeFlag(bool skipUserOp, bool skipSignature) external pure returns (PassFlag flag) {
         return ValidatorLib.encodeFlag(skipUserOp, skipSignature);
     }
@@ -80,14 +71,6 @@ contract PermissionTest is Test {
         assertEq(PassFlag.unwrap(flag), bytes2(0x0002));
         flag = validatorLib.encodeFlag(false, false);
         assertEq(PassFlag.unwrap(flag), bytes2(0x0000));
-    }
-
-    function testGroupEncode(GroupId groupId, bool skipUserOp, bool skipSignature) external {
-        PassFlag flag = validatorLib.encodeFlag(skipUserOp, skipSignature);
-        Group group = validatorLib.encodeGroup(groupId, flag);
-        (GroupId gId, PassFlag pFlag) = validatorLib.parseGroup(group);
-        assertEq(GroupId.unwrap(gId), GroupId.unwrap(groupId), "gId != groupId");
-        assertEq(PassFlag.unwrap(pFlag), PassFlag.unwrap(flag), "pFlag != flag");
     }
 
     function testDecode() external {

@@ -2,8 +2,6 @@ pragma solidity ^0.8.0;
 
 import {IValidator, IPolicy} from "../interfaces/IERC7579Modules.sol";
 import {
-    Group,
-    GroupId,
     PassFlag,
     ValidationType,
     ValidationId,
@@ -13,19 +11,6 @@ import {
 } from "../types/Types.sol";
 
 library ValidatorLib {
-    function parseGroup(Group group) internal pure returns (GroupId groupId, PassFlag passFlag) {
-        assembly {
-            groupId := group
-            passFlag := shl(16, group)
-        }
-    }
-
-    function encodeGroup(GroupId groupId, PassFlag passFlag) internal pure returns (Group group) {
-        assembly {
-            group := or(groupId, shr(16, passFlag))
-        }
-    }
-
     function encodeFlag(bool skipUserOp, bool skipSignature) internal pure returns (PassFlag flag) {
         assembly {
             if skipUserOp { flag := 0x0001000000000000000000000000000000000000000000000000000000000000 }

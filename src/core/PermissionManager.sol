@@ -12,8 +12,7 @@ import {
     ValidationMode,
     ValidationType,
     ValidatorLib,
-    PassFlag,
-    Group
+    PassFlag
 } from "../utils/ValidationTypeLib.sol";
 
 import {PermissionId} from "../types/Types.sol";
@@ -34,8 +33,8 @@ bytes32 constant VALIDATION_MANAGER_STORAGE_POSITION =
     0x7bcaa2ced2a71450ed5a9a1b4848e8e5206dbc3f06011e595f7f55428cc6f84f;
 
 abstract contract ValidationManager is EIP712, SelectorManager {
-    event ValidatorInstalled(IValidator validator, Group group, uint32 nonce);
-    event PermissionInstalled(PermissionId permission, Group group, uint32 nonce);
+    event ValidatorInstalled(IValidator validator, uint32 nonce);
+    event PermissionInstalled(PermissionId permission, uint32 nonce);
     event NonceInvalidated(uint32 nonce);
     event ValidatorUninstalled(IValidator validator);
     event PermissionUninstalled(PermissionId permission);

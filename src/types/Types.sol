@@ -37,10 +37,6 @@ type PermissionId is bytes4;
 
 type PermissionData is bytes22; // 2bytes for flag on skip, 20 bytes for validator address
 
-type Group is bytes4;
-
-type GroupId is bytes2;
-
 type PassFlag is bytes2;
 
 using {vModeEqual as ==} for ValidationMode global;
