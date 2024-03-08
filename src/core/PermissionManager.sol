@@ -327,7 +327,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
                 }
                 if (PassFlag.unwrap(flag) & PassFlag.unwrap(SKIP_USEROP) == 0) {
                     validationData =
-                        _intersectValidationData(validationData, ValidationData.wrap(policy.checkUserOpPolicy(userOp, hex"")));
+                        _intersectValidationData(validationData, ValidationData.wrap(policy.checkUserOpPolicy(userOp, bytes32(PermissionId.unwrap(ValidatorLib.getPermissionId(vId))))));
                 }
                 userOp.signature = "";
             }
@@ -367,7 +367,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
                 if (PassFlag.unwrap(mSig.flag) & PassFlag.unwrap(SKIP_SIGNATURE) == 0) {
                     mSig.validationData = _intersectValidationData(
                         mSig.validationData,
-                        ValidationData.wrap(mSig.validator.checkSignaturePolicy(caller, digest, mSig.permSig))
+                        ValidationData.wrap(mSig.validator.checkSignaturePolicy(caller, digest, mSig.permSig, bytes32(PermissionId.unwrap(mSig.permission))))
                     );
                 }
             }
