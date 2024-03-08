@@ -2,13 +2,9 @@ pragma solidity ^0.8.0;
 
 import {IValidator, IPolicy} from "../interfaces/IERC7579Modules.sol";
 import {
-    PassFlag,
-    ValidationType,
-    ValidationId,
-    ValidationMode,
-    PermissionData,
-    PermissionId
+    PassFlag, ValidationType, ValidationId, ValidationMode, PermissionData, PermissionId
 } from "../types/Types.sol";
+import {VALIDATION_TYPE_PERMISSION} from "../types/Constants.sol";
 
 library ValidatorLib {
     function encodeFlag(bool skipUserOp, bool skipSignature) internal pure returns (PassFlag flag) {
@@ -16,6 +12,16 @@ library ValidatorLib {
             if skipUserOp { flag := 0x0001000000000000000000000000000000000000000000000000000000000000 }
             if skipSignature { flag := or(flag, 0x0002000000000000000000000000000000000000000000000000000000000000) }
         }
+    }
+
+    function encodePermissionAsNonce(bytes1 mode, bytes4 permissionId, uint16 nonceKey, uint64 nonce)
+        internal
+        pure
+        returns (uint256 res)
+    {
+        return encodeAsNonce(
+            mode, ValidationType.unwrap(VALIDATION_TYPE_PERMISSION), bytes20(permissionId), nonceKey, nonce
+        );
     }
 
     function encodeAsNonce(bytes1 mode, bytes1 vType, bytes20 ValidationIdWithoutType, uint16 nonceKey, uint64 nonce)

@@ -332,7 +332,9 @@ abstract contract ValidationManager is EIP712, SelectorManager {
                 if (PassFlag.unwrap(flag) & PassFlag.unwrap(SKIP_USEROP) == 0) {
                     validationData = _intersectValidationData(
                         validationData,
-                        ValidationData.wrap(policy.checkUserOpPolicy(userOp, bytes32(PermissionId.unwrap(pId))))
+                        ValidationData.wrap(
+                            policy.checkUserOpPolicy(userOp, abi.encodePacked(PermissionId.unwrap(pId)))
+                        )
                     );
                 }
                 userOp.signature = "";
@@ -375,7 +377,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
                         mSig.validationData,
                         ValidationData.wrap(
                             mSig.validator.checkSignaturePolicy(
-                                caller, digest, mSig.permSig, bytes32(PermissionId.unwrap(mSig.permission))
+                                caller, digest, mSig.permSig, abi.encodePacked(PermissionId.unwrap(mSig.permission))
                             )
                         )
                     );

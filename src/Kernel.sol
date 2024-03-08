@@ -284,9 +284,9 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             bytes calldata validatorData;
             bytes calldata hookData;
             assembly {
-                validatorData.offset := add(add(initData.offset, 64), calldataload(add(initData.offset, 36)))
+                validatorData.offset := add(add(initData.offset, 64), calldataload(add(initData.offset, 32)))
                 validatorData.length := calldataload(sub(validatorData.offset, 32))
-                hookData.offset := add(add(initData.offset, 64), calldataload(add(initData.offset, 68)))
+                hookData.offset := add(add(initData.offset, 64), calldataload(add(initData.offset, 64)))
                 hookData.length := calldataload(sub(hookData.offset, 32))
             }
             _installValidation(vId, config, validatorData, hookData);

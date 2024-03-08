@@ -215,6 +215,58 @@ contract KernelTest is Test {
         assertEq(kernel.currentNonce(), 3);
     }
 
+    function testValidateUserOpSuccessPermissionEnableMode() external whenInitialized {
+        vm.deal(address(kernel), 1e18);
+        MockValidator newValidator = new MockValidator();
+        uint256 count = validator.count();
+        uint256 newCount = newValidator.count();
+        PackedUserOperation[] memory ops = new PackedUserOperation[](1);
+        uint192 encodedAsNonceKey = ValidatorLib.encodeAsNonceKey(
+            ValidationMode.unwrap(VALIDATION_MODE_ENABLE),
+            ValidationType.unwrap(VALIDATION_TYPE_PERMISSION),
+            bytes20(bytes4(0xdeadbeef)),
+            0
+        );
+        assertEq(kernel.currentNonce(), 2);
+        ops[0] = PackedUserOperation({
+            sender: address(kernel),
+            nonce: entrypoint.getNonce(address(kernel), encodedAsNonceKey),
+            initCode: hex"",
+            callData: abi.encodeWithSelector(
+                kernel.execute.selector,
+                ExecLib.encodeSimpleSingle(),
+                ExecLib.encodeSingle(address(callee), 0, abi.encodeWithSelector(callee.setValue.selector, 123))
+                ),
+            accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
+            preVerificationGas: 1000000,
+            gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
+            paymasterAndData: hex"",
+            signature: encodeEnableSignature(
+                address(newValidator),
+                1,
+                100000000,
+                IHook(address(0)),
+                abi.encodePacked("hello"),
+                abi.encodePacked("world"),
+                abi.encodePacked(kernel.execute.selector),
+                abi.encodePacked("enableSig"),
+                abi.encodePacked("userOpSig")
+                )
+        });
+        validator.sudoSetValidSig(abi.encodePacked("enableSig"));
+        newValidator.sudoSetSuccess(true);
+        entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
+        assertEq(validator.count(), count);
+        assertEq(newValidator.count(), newCount + 1);
+        ValidationManager.ValidationConfig memory config =
+            kernel.validatorConfig(ValidatorLib.validatorToIdentifier(newValidator));
+        assertEq(config.nonce, 2);
+        assertEq(config.validFrom, 1);
+        assertEq(config.validUntil, 100000000);
+        assertEq(address(config.hook), address(1));
+        assertEq(kernel.currentNonce(), 3);
+    }
+
     // install action
     // - with hook
     // - without hook
