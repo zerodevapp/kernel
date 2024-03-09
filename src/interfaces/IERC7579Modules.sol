@@ -11,7 +11,8 @@ uint256 constant MODULE_TYPE_EXECUTOR = 2;
 uint256 constant MODULE_TYPE_FALLBACK = 3;
 uint256 constant MODULE_TYPE_HOOK = 4;
 uint256 constant MODULE_TYPE_POLICY = 5;
-uint256 constant MODULE_TYPE_ACTION = 6;
+uint256 constant MODULE_TYPE_SIGNER = 6;
+uint256 constant MODULE_TYPE_ACTION = 7;
 
 interface IModule {
     error AlreadyInitialized(address smartAccount);
@@ -86,14 +87,21 @@ interface IHook is IModule {
 interface IFallback is IModule {}
 
 interface IPolicy is IModule {
-    function checkUserOpPolicy(PackedUserOperation calldata userOp, bytes calldata data)
-        external
-        payable
-        returns (uint256);
-    function checkSignaturePolicy(address sender, bytes32 hash, bytes calldata sig, bytes calldata data)
+    function checkUserOpPolicy(bytes32 id, PackedUserOperation calldata userOp) external payable returns (uint256);
+    function checkSignaturePolicy(bytes32 id, address sender, bytes32 hash, bytes calldata sig)
         external
         view
         returns (uint256);
+}
+
+interface ISigner is IModule {
+    function checkUserOpSignature(bytes32 id, PackedUserOperation calldata userOp, bytes32 userOpHash)
+        external
+        returns (uint256);
+    function checkSignature(bytes32 id, address sender, bytes32 hash, bytes calldata sig)
+        external
+        view
+        returns (bytes4);
 }
 
 interface IAction is IModule {}

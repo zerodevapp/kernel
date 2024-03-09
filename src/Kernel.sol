@@ -11,6 +11,7 @@ import {
     ValidationId,
     ValidatorLib,
     ValidationType,
+    PermissionId,
     VALIDATION_TYPE_SUDO,
     VALIDATION_TYPE_VALIDATOR,
     VALIDATION_TYPE_PERMISSION
@@ -18,7 +19,7 @@ import {
 import {HookManager} from "./core/HookManager.sol";
 import {ExecutorManager} from "./core/ExecutorManager.sol";
 import {SelectorManager} from "./core/SelectorManager.sol";
-import {IValidator, IHook, IExecutor, IFallback} from "./interfaces/IERC7579Modules.sol";
+import {IValidator, IHook, IExecutor, IFallback, ISigner} from "./interfaces/IERC7579Modules.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
 import {ExecLib, ExecMode, CallType, CALLTYPE_SINGLE, CALLTYPE_DELEGATECALL} from "./utils/ExecLib.sol";
 
@@ -92,7 +93,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
 
     function _domainNameAndVersion() internal pure override returns (string memory name, string memory version) {
         name = "Kernel";
-        version = "3.0.0-beta";
+        version = "0.3.0-beta";
     }
 
     function _doFallback2771(IFallback fallbackHandler) internal returns (bool success, bytes memory result) {
@@ -256,14 +257,23 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
 
     function isValidSignature(bytes32 hash, bytes calldata signature) external view override returns (bytes4) {
         (ValidationId vId, bytes calldata sig) = ValidatorLib.decodeSignature(signature);
-        (IValidator validator, ValidationData valdiationData, bytes calldata validatorSig) =
-            _checkSignaturePolicy(vId, msg.sender, hash, sig);
-        bytes32 wrappedHash = _toWrappedHash(hash);
-        (ValidAfter validAfter, ValidUntil validUntil,) = parseValidationData(ValidationData.unwrap(valdiationData));
-        if (block.timestamp < ValidAfter.unwrap(validAfter) || block.timestamp > ValidUntil.unwrap(validUntil)) {
-            return 0xffffffff;
+        ValidationType vType = ValidatorLib.getType(vId);
+        // TODO: deal with sudo mode
+        if(vType == VALIDATION_TYPE_VALIDATOR) {
+            IValidator validator = ValidatorLib.getValidator(vId);
+            bytes32 wrappedHash = _toWrappedHash(hash);
+            return validator.isValidSignatureWithSender(msg.sender, wrappedHash, sig);
+        } else {
+            PermissionId pId = ValidatorLib.getPermissionId(vId);
+            (ISigner signer, ValidationData valdiationData, bytes calldata validatorSig) =
+                _checkSignaturePolicy(pId, msg.sender, hash, sig);
+            bytes32 wrappedHash = _toWrappedHash(hash);
+            (ValidAfter validAfter, ValidUntil validUntil,) = parseValidationData(ValidationData.unwrap(valdiationData));
+            if (block.timestamp < ValidAfter.unwrap(validAfter) || block.timestamp > ValidUntil.unwrap(validUntil)) {
+                return 0xffffffff;
+            }
+            return signer.checkSignature(bytes32(PermissionId.unwrap(pId)), msg.sender, wrappedHash, validatorSig);
         }
-        return validator.isValidSignatureWithSender(msg.sender, wrappedHash, validatorSig);
     }
 
     function installModule(uint256 moduleType, address module, bytes calldata initData)
@@ -347,7 +357,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
     }
 
     function accountId() external pure override returns (string memory accountImplementationId) {
-        return "kernel.advanced.v3.0.0-beta";
+        return "kernel.advanced.v0.3.0-beta";
     }
 
     function supportsExecutionMode(ExecMode) external pure override returns (bool) {

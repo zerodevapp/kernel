@@ -3,6 +3,8 @@ pragma solidity ^0.8.0;
 import "src/Kernel.sol";
 import "forge-std/Test.sol";
 import "src/mock/MockValidator.sol";
+import "src/mock/MockPolicy.sol";
+import "src/mock/MockSigner.sol";
 import "src/core/PermissionManager.sol";
 import "./erc4337Util.sol";
 
@@ -128,7 +130,6 @@ contract KernelTest is Test {
     }
 
     function encodeEnableSignature(
-        address validatorAddr,
         uint48 validFrom,
         uint48 validUntil,
         IHook hook,
@@ -190,7 +191,6 @@ contract KernelTest is Test {
             gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
             paymasterAndData: hex"",
             signature: encodeEnableSignature(
-                address(newValidator),
                 1,
                 100000000,
                 IHook(address(0)),
@@ -217,17 +217,21 @@ contract KernelTest is Test {
 
     function testValidateUserOpSuccessPermissionEnableMode() external whenInitialized {
         vm.deal(address(kernel), 1e18);
-        MockValidator newValidator = new MockValidator();
-        uint256 count = validator.count();
-        uint256 newCount = newValidator.count();
         PackedUserOperation[] memory ops = new PackedUserOperation[](1);
         uint192 encodedAsNonceKey = ValidatorLib.encodeAsNonceKey(
             ValidationMode.unwrap(VALIDATION_MODE_ENABLE),
             ValidationType.unwrap(VALIDATION_TYPE_PERMISSION),
-            bytes20(bytes4(0xdeadbeef)),
+            bytes20(bytes4(0xdeadbeef)), // permission id
             0
         );
         assertEq(kernel.currentNonce(), 2);
+        bytes[] memory permissions = new bytes[](3);
+        MockPolicy mockPolicy = new MockPolicy();
+        MockPolicy mockPolicy2 = new MockPolicy();
+        MockSigner mockSigner = new MockSigner();
+        permissions[0] = abi.encodePacked(PermissionData.unwrap(ValidatorLib.encodePermissionData(false, false, address(mockPolicy))), hex"eeeeee");
+        permissions[1] = abi.encodePacked(PermissionData.unwrap(ValidatorLib.encodePermissionData(false, false, address(mockPolicy2))), hex"cafecafe");
+        permissions[2] = abi.encodePacked(PermissionData.unwrap(ValidatorLib.encodePermissionData(false, false, address(mockSigner))), hex"beefbeef");
         ops[0] = PackedUserOperation({
             sender: address(kernel),
             nonce: entrypoint.getNonce(address(kernel), encodedAsNonceKey),
@@ -242,28 +246,20 @@ contract KernelTest is Test {
             gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
             paymasterAndData: hex"",
             signature: encodeEnableSignature(
-                address(newValidator),
                 1,
                 100000000,
                 IHook(address(0)),
-                abi.encodePacked("hello"),
+                abi.encode(permissions),
                 abi.encodePacked("world"),
                 abi.encodePacked(kernel.execute.selector),
                 abi.encodePacked("enableSig"),
                 abi.encodePacked("userOpSig")
                 )
         });
-        validator.sudoSetValidSig(abi.encodePacked("enableSig"));
-        newValidator.sudoSetSuccess(true);
+
+        mockPolicy.sudoSetPass(address(kernel), bytes32(bytes4(0xdeadbeef)), true);
+        mockPolicy2.sudoSetPass(address(kernel), bytes32(bytes4(0xdeadbeef)), true);
         entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
-        assertEq(validator.count(), count);
-        assertEq(newValidator.count(), newCount + 1);
-        ValidationManager.ValidationConfig memory config =
-            kernel.validatorConfig(ValidatorLib.validatorToIdentifier(newValidator));
-        assertEq(config.nonce, 2);
-        assertEq(config.validFrom, 1);
-        assertEq(config.validUntil, 100000000);
-        assertEq(address(config.hook), address(1));
         assertEq(kernel.currentNonce(), 3);
     }
 
