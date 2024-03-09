@@ -28,7 +28,7 @@ contract VerifyingPaymaster is BasePaymaster, ReentrancyGuard {
     uint256 private constant POSTOP_OVERHEAD_PERCENTAGE = 5; //  5% overhead
 
     mapping(bytes32 => uint256) private balances;
-    mapping(address => bytes32) public userToPaymasterId;
+    mapping(bytes32 => mapping(address => uint256)) public paymasterIdToUserToBalance;
 
     event Withdrawal(address indexed user, bytes32 indexed paymasterId, uint256 amount);
     event Deposit(address indexed user, bytes32 indexed paymasterId, uint256 amount);
@@ -150,7 +150,7 @@ contract VerifyingPaymaster is BasePaymaster, ReentrancyGuard {
 
     function depositTo(bytes32 paymasterId) public payable nonReentrant{
         require(msg.value > 0, "Deposit amount must be greater than 0");
-        userToPaymasterId[msg.sender] = paymasterId;
+        paymasterIdToUserToBalance[paymasterId][msg.sender] += msg.value;
         balances[paymasterId] += msg.value;
         entryPoint.depositTo{value: msg.value}(address(this));
         emit Deposit(msg.sender, paymasterId, msg.value);
@@ -160,12 +160,12 @@ contract VerifyingPaymaster is BasePaymaster, ReentrancyGuard {
         revert("use depositTo");
     }
 
-    function withdraw(address payable withdrawAddress, uint256 amount) public nonReentrant {
+    function withdraw(bytes32 paymasterId, address payable withdrawAddress, uint256 amount) public nonReentrant {
         require(withdrawAddress != address(0), "invalid address");
-        bytes32 paymasterId = userToPaymasterId[msg.sender];
-        require(paymasterId != bytes32(0), "User not registered");
         require(balances[paymasterId] >= amount, "Insufficient balance");
+        require(paymasterIdToUserToBalance[paymasterId][msg.sender] >= amount, "Insufficient user balance");
 
+        paymasterIdToUserToBalance[paymasterId][msg.sender] -= amount;
         balances[paymasterId] -= amount;
         entryPoint.withdrawTo(payable(withdrawAddress), amount);
         emit Withdrawal(msg.sender, paymasterId, amount);
@@ -173,6 +173,10 @@ contract VerifyingPaymaster is BasePaymaster, ReentrancyGuard {
 
     function getBalance(bytes32 paymasterId) public view returns (uint256) {
         return balances[paymasterId];
+    }
+
+    function getBalanceByUser(bytes32 paymasterId, address user) public view returns (uint256) {
+        return paymasterIdToUserToBalance[paymasterId][user];
     }
 
 
