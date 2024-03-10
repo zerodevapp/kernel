@@ -191,7 +191,9 @@ abstract contract ValidationManager is EIP712, SelectorManager {
             revert PermissionDataTooLarge();
         }
         for (uint256 i = 0; i < permissionEnableData.length - 1; i++) {
-            state.permissionConfig[permission].permissionData.push(PermissionData.wrap(bytes22(permissionEnableData[i][0:22])));
+            state.permissionConfig[permission].permissionData.push(
+                PermissionData.wrap(bytes22(permissionEnableData[i][0:22]))
+            );
             IPolicy(address(bytes20(permissionEnableData[i][2:22]))).onInstall(permissionEnableData[i][22:]);
         }
         // last permission data will be signer
