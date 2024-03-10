@@ -27,7 +27,6 @@ import {
     SKIP_USEROP,
     SKIP_SIGNATURE
 } from "../types/Constants.sol";
-import "forge-std/console.sol";
 
 bytes32 constant VALIDATION_MANAGER_STORAGE_POSITION =
     0x7bcaa2ced2a71450ed5a9a1b4848e8e5206dbc3f06011e595f7f55428cc6f84f;
@@ -52,8 +51,6 @@ abstract contract ValidationManager is EIP712, SelectorManager {
     // erc7579 plugins
     struct ValidationConfig {
         uint32 nonce; // 4 bytes
-        uint48 validFrom;
-        uint48 validUntil;
         IHook hook; // 20 bytes address(1) : hook not required, address(0) : validator not installed
     }
 
@@ -158,17 +155,6 @@ abstract contract ValidationManager is EIP712, SelectorManager {
     }
 
     function _installPermission(PermissionId permission, bytes calldata data) internal {
-        console.log("DATA");
-        //0x
-        //0000000000000000000000000000000000000000000000000000000000000020
-        //0000000000000000000000000000000000000000000000000000000000000002
-        //0000000000000000000000000000000000000000000000000000000000000040
-        //0000000000000000000000000000000000000000000000000000000000000080
-        //0000000000000000000000000000000000000000000000000000000000000019
-        //000000000000000000000000000000000000deadbeefeeeeee00000000000000
-        //000000000000000000000000000000000000000000000000000000000000001a
-        //000000000000000000000000000000000000deadbeefcafecafe000000000000
-        console.logBytes(data);
         ValidationStorage storage state = _validatorStorage();
         bytes[] calldata permissionEnableData;
         bytes32 aa;
@@ -177,25 +163,18 @@ abstract contract ValidationManager is EIP712, SelectorManager {
             permissionEnableData.length := calldataload(sub(permissionEnableData.offset, 32))
             aa := permissionEnableData.length
         }
-        console.logBytes32(aa);
         if (permissionEnableData.length > 255 || permissionEnableData.length == 0) {
-            console.log("permissionEnableData.length", permissionEnableData.length);
             revert PermissionDataTooLarge();
         }
-        console.log("ok length");
         for (uint256 i = 0; i < permissionEnableData.length - 1; i++) {
-            console.logBytes(permissionEnableData[i]);
             state.permissionData[permission].push(PermissionData.wrap(bytes22(permissionEnableData[i][0:22])));
-            console.logBytes20(bytes20(permissionEnableData[i][2:22]));
             IPolicy(address(bytes20(permissionEnableData[i][2:22]))).onInstall(permissionEnableData[i][22:]);
-            console.log("install done");
         }
         // last permission data will be signer
         ISigner permissionSigner =
             ISigner(address(bytes20(permissionEnableData[permissionEnableData.length - 1][2:22])));
         state.permissionSigner[permission] = permissionSigner;
         permissionSigner.onInstall(permissionEnableData[permissionEnableData.length - 1][22:]);
-        console.log("ok install");
     }
 
     function _doValidation(ValidationMode vMode, ValidationId vId, PackedUserOperation calldata op, bytes32 userOpHash)
@@ -253,7 +232,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         }
 
         assembly {
-            userOpSig.offset := add(add(packedData.offset, 64), calldataload(add(packedData.offset, 160)))
+            userOpSig.offset := add(add(packedData.offset, 52), calldataload(add(packedData.offset, 148)))
             userOpSig.length := calldataload(sub(userOpSig.offset, 32))
         }
 
@@ -272,7 +251,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
             bytes32 digest
         ) = _enableDigest(vId, packedData);
         assembly {
-            enableSig.offset := add(add(packedData.offset, 64), calldataload(add(packedData.offset, 128)))
+            enableSig.offset := add(add(packedData.offset, 52), calldataload(add(packedData.offset, 116)))
             enableSig.length := calldataload(sub(enableSig.offset, 32))
         }
         _installValidation(vId, config, validatorData, hookData);
@@ -308,29 +287,25 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         )
     {
         ValidationStorage storage state = _validatorStorage();
-        config.validFrom = uint48(bytes6(packedData[0:6]));
-        config.validUntil = uint48(bytes6(packedData[6:12]));
-        config.hook = IHook(address(bytes20(packedData[12:32])));
+        config.hook = IHook(address(bytes20(packedData[0:20])));
         config.nonce = state.currentNonce;
 
         assembly {
-            validatorData.offset := add(add(packedData.offset, 64), calldataload(add(packedData.offset, 32)))
+            validatorData.offset := add(add(packedData.offset, 52), calldataload(add(packedData.offset, 20)))
             validatorData.length := calldataload(sub(validatorData.offset, 32))
-            hookData.offset := add(add(packedData.offset, 64), calldataload(add(packedData.offset, 64)))
+            hookData.offset := add(add(packedData.offset, 52), calldataload(add(packedData.offset, 52)))
             hookData.length := calldataload(sub(hookData.offset, 32))
-            selectorData.offset := add(add(packedData.offset, 64), calldataload(add(packedData.offset, 96)))
+            selectorData.offset := add(add(packedData.offset, 52), calldataload(add(packedData.offset, 84)))
             selectorData.length := calldataload(sub(selectorData.offset, 32))
         }
         digest = _hashTypedData(
             keccak256(
                 abi.encode(
                     keccak256(
-                        "Enable(bytes21 validationId,uint32 nonce,uint48 validFrom,uint48 validUntil,address hook,bytes validatorData,bytes hookData,bytes selectorData)"
+                        "Enable(bytes21 validationId,uint32 nonce,address hook,bytes validatorData,bytes hookData,bytes selectorData)"
                     ), // TODO: this to constant
                     ValidationId.unwrap(vId),
                     state.currentNonce,
-                    config.validFrom,
-                    config.validUntil,
                     config.hook,
                     keccak256(validatorData),
                     keccak256(hookData),
@@ -361,7 +336,6 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         for (uint256 i = 0; i < permissions.length; i++) {
             (PassFlag flag, IPolicy policy) = ValidatorLib.decodePermissionData(permissions[i]);
             uint8 idx = uint8(bytes1(userOpSig[0]));
-            console.log("Hello");
             if (idx == i) {
                 // we are using uint64 length
                 uint256 length = uint64(bytes8(userOpSig[1:9]));

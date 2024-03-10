@@ -72,8 +72,6 @@ contract KernelTest is Test {
         ValidationManager.ValidationConfig memory config;
         config = kernel.validatorConfig(vId);
         assertEq(config.nonce, 1);
-        assertEq(config.validFrom, 0);
-        assertEq(config.validUntil, 0);
         assertEq(address(config.hook), address(1));
         assertEq(validator.isInitialized(address(kernel)), true);
         assertEq(kernel.currentNonce(), 2);
@@ -130,8 +128,6 @@ contract KernelTest is Test {
     }
 
     function encodeEnableSignature(
-        uint48 validFrom,
-        uint48 validUntil,
         IHook hook,
         bytes memory validatorData,
         bytes memory hookData,
@@ -159,7 +155,7 @@ contract KernelTest is Test {
         ///0000000000000000000000000000000000000000000000000000000000000009
         ///757365724f705369670000000000000000000000000000000000000000000000
         return abi.encodePacked(
-            abi.encodePacked(validFrom, validUntil, hook),
+            abi.encodePacked(hook),
             abi.encode(validatorData, hookData, selectorData, enableSig, userOpSig)
         );
     }
@@ -191,8 +187,6 @@ contract KernelTest is Test {
             gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
             paymasterAndData: hex"",
             signature: encodeEnableSignature(
-                1,
-                100000000,
                 IHook(address(0)),
                 abi.encodePacked("hello"),
                 abi.encodePacked("world"),
@@ -209,8 +203,6 @@ contract KernelTest is Test {
         ValidationManager.ValidationConfig memory config =
             kernel.validatorConfig(ValidatorLib.validatorToIdentifier(newValidator));
         assertEq(config.nonce, 2);
-        assertEq(config.validFrom, 1);
-        assertEq(config.validUntil, 100000000);
         assertEq(address(config.hook), address(1));
         assertEq(kernel.currentNonce(), 3);
     }
@@ -252,8 +244,6 @@ contract KernelTest is Test {
             gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
             paymasterAndData: hex"",
             signature: encodeEnableSignature(
-                1,
-                100000000,
                 IHook(address(0)),
                 abi.encode(permissions),
                 abi.encodePacked("world"),

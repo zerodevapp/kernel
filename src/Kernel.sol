@@ -82,7 +82,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         require(ValidationId.unwrap(_rootValidator) != bytes21(0), "invalid validator");
         vs.rootValidator = _rootValidator;
         ValidationConfig memory config =
-            ValidationConfig({validFrom: uint48(0), validUntil: uint48(0), nonce: uint32(1), hook: hook});
+            ValidationConfig({nonce: uint32(1), hook: hook});
         vs.currentNonce = 1;
         _installValidation(_rootValidator, config, validatorData, hookData);
         vs.currentNonce++;
@@ -181,7 +181,12 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             vId = vs.rootValidator;
         }
         validationData = _doValidation(vMode, vId, userOp, userOpHash);
-        IHook execHook = vs.validatorConfig[vId].hook;
+        ValidationConfig memory vc = vs.validatorConfig[vId];
+        // allow when nonce is not revoked or vType is sudo
+        if(vType != VALIDATION_TYPE_SUDO && vc.nonce < vs.validNonceFrom) {
+            revert InvalidNonce();
+        }
+        IHook execHook = vc.hook;
         if (address(execHook) == address(0)) {
             revert InvalidValidator();
         }
@@ -287,9 +292,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             ValidationId vId = ValidatorLib.validatorToIdentifier(IValidator(module));
             ValidationConfig memory config = ValidationConfig({
                 nonce: vs.currentNonce++,
-                hook: IHook(address(bytes20(initData[0:20]))),
-                validFrom: uint48(bytes6(initData[20:26])),
-                validUntil: uint48(bytes6(initData[26:32]))
+                hook: IHook(address(bytes20(initData[0:20])))
             });
             bytes calldata validatorData;
             bytes calldata hookData;
