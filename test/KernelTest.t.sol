@@ -155,8 +155,7 @@ contract KernelTest is Test {
         ///0000000000000000000000000000000000000000000000000000000000000009
         ///757365724f705369670000000000000000000000000000000000000000000000
         return abi.encodePacked(
-            abi.encodePacked(hook),
-            abi.encode(validatorData, hookData, selectorData, enableSig, userOpSig)
+            abi.encodePacked(hook), abi.encode(validatorData, hookData, selectorData, enableSig, userOpSig)
         );
     }
 
