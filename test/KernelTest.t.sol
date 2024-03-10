@@ -221,13 +221,13 @@ contract KernelTest is Test {
         MockPolicy mockPolicy2 = new MockPolicy();
         MockSigner mockSigner = new MockSigner();
         permissions[0] = abi.encodePacked(
-            PermissionData.unwrap(ValidatorLib.encodePermissionData(false, false, address(mockPolicy))), hex"eeeeee"
+            PolicyData.unwrap(ValidatorLib.encodePolicyData(false, false, address(mockPolicy))), hex"eeeeee"
         );
         permissions[1] = abi.encodePacked(
-            PermissionData.unwrap(ValidatorLib.encodePermissionData(false, false, address(mockPolicy2))), hex"cafecafe"
+            PolicyData.unwrap(ValidatorLib.encodePolicyData(false, false, address(mockPolicy2))), hex"cafecafe"
         );
         permissions[2] = abi.encodePacked(
-            PermissionData.unwrap(ValidatorLib.encodePermissionData(false, false, address(mockSigner))), hex"beefbeef"
+            PolicyData.unwrap(ValidatorLib.encodePolicyData(false, false, address(mockSigner))), hex"beefbeef"
         );
         ops[0] = PackedUserOperation({
             sender: address(kernel),

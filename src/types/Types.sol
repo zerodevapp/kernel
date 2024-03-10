@@ -35,7 +35,7 @@ type ValidationType is bytes1;
 
 type PermissionId is bytes4;
 
-type PermissionData is bytes22; // 2bytes for flag on skip, 20 bytes for validator address
+type PolicyData is bytes22; // 2bytes for flag on skip, 20 bytes for validator address
 
 type PassFlag is bytes2;
 

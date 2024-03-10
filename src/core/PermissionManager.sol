@@ -8,7 +8,7 @@ import {IAccountExecute} from "../interfaces/IAccountExecute.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
 import {
     ValidationId,
-    PermissionData,
+    PolicyData,
     ValidationMode,
     ValidationType,
     ValidatorLib,
@@ -42,7 +42,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
     error InvalidMode();
     error InvalidValidator();
     error InvalidSignature();
-    error PermissionDataTooLarge();
+    error PolicyDataTooLarge();
     error InvalidValidationType();
     error InvalidNonce();
     error PolicyFailed(uint256 i);
@@ -57,7 +57,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
     struct PermissionConfig {
         PassFlag passFlag;
         ISigner signer;
-        PermissionData[] policyData;
+        PolicyData[] policyData;
     }
 
     struct ValidationStorage {
@@ -188,17 +188,17 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         }
         // allow up to 0xfe, 0xff is dedicated for signer
         if (permissionEnableData.length > 254 || permissionEnableData.length == 0) {
-            revert PermissionDataTooLarge();
+            revert PolicyDataTooLarge();
         }
         for (uint256 i = 0; i < permissionEnableData.length - 1; i++) {
-            state.permissionConfig[permission].policyData.push(
-                PermissionData.wrap(bytes22(permissionEnableData[i][0:22]))
-            );
+            state.permissionConfig[permission].policyData.push(PolicyData.wrap(bytes22(permissionEnableData[i][0:22])));
             IPolicy(address(bytes20(permissionEnableData[i][2:22]))).onInstall(permissionEnableData[i][22:]);
         }
         // last permission data will be signer
         ISigner signer = ISigner(address(bytes20(permissionEnableData[permissionEnableData.length - 1][2:22])));
         state.permissionConfig[permission].signer = signer;
+        state.permissionConfig[permission].passFlag =
+            PassFlag.wrap(bytes2(permissionEnableData[permissionEnableData.length - 1][0:2]));
         signer.onInstall(permissionEnableData[permissionEnableData.length - 1][22:]);
     }
 
@@ -346,7 +346,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         ValidationData validationData;
         PermissionId permission;
         PassFlag flag;
-        IPolicy validator;
+        IPolicy policy;
         bytes permSig;
         address caller;
         bytes32 digest;
@@ -357,9 +357,9 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         returns (ValidationData validationData, ISigner signer)
     {
         ValidationStorage storage state = _validatorStorage();
-        PermissionData[] storage permissions = state.permissionConfig[pId].policyData;
-        for (uint256 i = 0; i < permissions.length; i++) {
-            (PassFlag flag, IPolicy policy) = ValidatorLib.decodePermissionData(permissions[i]);
+        PolicyData[] storage policyData = state.permissionConfig[pId].policyData;
+        for (uint256 i = 0; i < policyData.length; i++) {
+            (PassFlag flag, IPolicy policy) = ValidatorLib.decodePolicyData(policyData[i]);
             uint8 idx = uint8(bytes1(userOpSig[0]));
             if (idx == i) {
                 // we are using uint64 length
@@ -412,9 +412,9 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         ValidationStorage storage state,
         bytes calldata sig
     ) internal view {
-        PermissionData[] storage permissions = state.permissionConfig[mSig.permission].policyData;
-        for (uint256 i = 0; i < permissions.length; i++) {
-            (mSig.flag, mSig.validator) = ValidatorLib.decodePermissionData(permissions[i]);
+        PolicyData[] storage policyData = state.permissionConfig[mSig.permission].policyData;
+        for (uint256 i = 0; i < policyData.length; i++) {
+            (mSig.flag, mSig.policy) = ValidatorLib.decodePolicyData(policyData[i]);
             mSig.idx = uint8(bytes1(sig[0]));
             if (mSig.idx == i) {
                 // we are using uint64 length
@@ -430,7 +430,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
 
             if (PassFlag.unwrap(mSig.flag) & PassFlag.unwrap(SKIP_SIGNATURE) == 0) {
                 ValidationData vd = ValidationData.wrap(
-                    mSig.validator.checkSignaturePolicy(
+                    mSig.policy.checkSignaturePolicy(
                         bytes32(PermissionId.unwrap(mSig.permission)), mSig.caller, mSig.digest, mSig.permSig
                     )
                 );

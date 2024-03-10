@@ -1,9 +1,7 @@
 pragma solidity ^0.8.0;
 
 import {IValidator, IPolicy} from "../interfaces/IERC7579Modules.sol";
-import {
-    PassFlag, ValidationType, ValidationId, ValidationMode, PermissionData, PermissionId
-} from "../types/Types.sol";
+import {PassFlag, ValidationType, ValidationId, ValidationMode, PolicyData, PermissionId} from "../types/Types.sol";
 import {VALIDATION_TYPE_PERMISSION} from "../types/Constants.sol";
 
 library ValidatorLib {
@@ -14,11 +12,7 @@ library ValidatorLib {
         }
     }
 
-    function encodePermissionData(bool skipUserOp, bool skipSig, address policy)
-        internal
-        pure
-        returns (PermissionData data)
-    {
+    function encodePolicyData(bool skipUserOp, bool skipSig, address policy) internal pure returns (PolicyData data) {
         assembly {
             if skipUserOp { data := 0x0001000000000000000000000000000000000000000000000000000000000000 }
             if skipSig { data := or(data, 0x0002000000000000000000000000000000000000000000000000000000000000) }
@@ -97,7 +91,7 @@ library ValidatorLib {
         }
     }
 
-    function decodePermissionData(PermissionData data) internal pure returns (PassFlag flag, IPolicy policy) {
+    function decodePolicyData(PolicyData data) internal pure returns (PassFlag flag, IPolicy policy) {
         assembly {
             flag := data
             policy := shr(80, data)
@@ -129,13 +123,13 @@ library ValidatorLib {
         }
     }
 
-    function getPermissionValidator(PermissionData data) internal pure returns (IValidator vId) {
+    function getPolicy(PolicyData data) internal pure returns (IPolicy vId) {
         assembly {
             vId := shr(80, data)
         }
     }
 
-    function getPermissionSkip(PermissionData data) internal pure returns (PassFlag flag) {
+    function getPermissionSkip(PolicyData data) internal pure returns (PassFlag flag) {
         assembly {
             flag := data
         }
