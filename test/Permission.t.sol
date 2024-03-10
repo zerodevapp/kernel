@@ -46,8 +46,8 @@ contract MockValidatorLib {
         return ValidatorLib.getValidator(validator);
     }
 
-    function getPermissionValidator(PermissionData data) external pure returns (IValidator vId) {
-        return ValidatorLib.getPermissionValidator(data);
+    function getPolicy(PolicyData data) external pure returns (IPolicy vId) {
+        return ValidatorLib.getPolicy(data);
     }
 
     function getPermissionId(ValidationId validation) external pure returns (PermissionId vId) {
