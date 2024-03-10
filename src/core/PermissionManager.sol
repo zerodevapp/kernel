@@ -56,7 +56,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
 
     struct PermissionConfig {
         PassFlag passFlag;
-        ISigner permissionSigner;
+        ISigner signer;
         PermissionData[] permissionData;
     }
 
@@ -197,10 +197,9 @@ abstract contract ValidationManager is EIP712, SelectorManager {
             IPolicy(address(bytes20(permissionEnableData[i][2:22]))).onInstall(permissionEnableData[i][22:]);
         }
         // last permission data will be signer
-        ISigner permissionSigner =
-            ISigner(address(bytes20(permissionEnableData[permissionEnableData.length - 1][2:22])));
-        state.permissionConfig[permission].permissionSigner = permissionSigner;
-        permissionSigner.onInstall(permissionEnableData[permissionEnableData.length - 1][22:]);
+        ISigner signer = ISigner(address(bytes20(permissionEnableData[permissionEnableData.length - 1][2:22])));
+        state.permissionConfig[permission].signer = signer;
+        signer.onInstall(permissionEnableData[permissionEnableData.length - 1][22:]);
     }
 
     function _doValidation(ValidationMode vMode, ValidationId vId, PackedUserOperation calldata op, bytes32 userOpHash)
@@ -387,7 +386,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
             revert InvalidSignature();
         }
         userOp.signature = userOpSig[1:];
-        return (validationData, state.permissionConfig[pId].permissionSigner);
+        return (validationData, state.permissionConfig[pId].signer);
     }
 
     function _checkSignaturePolicy(PermissionId pId, address caller, bytes32 digest, bytes calldata sig)
@@ -405,7 +404,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
             revert InvalidSignature();
         }
         sig = sig[1:];
-        return (state.permissionConfig[mSig.permission].permissionSigner, mSig.validationData, sig);
+        return (state.permissionConfig[mSig.permission].signer, mSig.validationData, sig);
     }
 
     function _checkPermissionPolicy(
