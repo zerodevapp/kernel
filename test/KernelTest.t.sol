@@ -229,9 +229,15 @@ contract KernelTest is Test {
         MockPolicy mockPolicy = new MockPolicy();
         MockPolicy mockPolicy2 = new MockPolicy();
         MockSigner mockSigner = new MockSigner();
-        permissions[0] = abi.encodePacked(PermissionData.unwrap(ValidatorLib.encodePermissionData(false, false, address(mockPolicy))), hex"eeeeee");
-        permissions[1] = abi.encodePacked(PermissionData.unwrap(ValidatorLib.encodePermissionData(false, false, address(mockPolicy2))), hex"cafecafe");
-        permissions[2] = abi.encodePacked(PermissionData.unwrap(ValidatorLib.encodePermissionData(false, false, address(mockSigner))), hex"beefbeef");
+        permissions[0] = abi.encodePacked(
+            PermissionData.unwrap(ValidatorLib.encodePermissionData(false, false, address(mockPolicy))), hex"eeeeee"
+        );
+        permissions[1] = abi.encodePacked(
+            PermissionData.unwrap(ValidatorLib.encodePermissionData(false, false, address(mockPolicy2))), hex"cafecafe"
+        );
+        permissions[2] = abi.encodePacked(
+            PermissionData.unwrap(ValidatorLib.encodePermissionData(false, false, address(mockSigner))), hex"beefbeef"
+        );
         ops[0] = PackedUserOperation({
             sender: address(kernel),
             nonce: entrypoint.getNonce(address(kernel), encodedAsNonceKey),
@@ -253,12 +259,16 @@ contract KernelTest is Test {
                 abi.encodePacked("world"),
                 abi.encodePacked(kernel.execute.selector),
                 abi.encodePacked("enableSig"),
-                abi.encodePacked("userOpSig")
+                abi.encodePacked(
+                    bytes1(0), bytes8(uint64(7)), "policy1", bytes1(uint8(1)), bytes8(uint64(7)), "policy2", "userOpSig"
+                )
                 )
         });
 
-        mockPolicy.sudoSetPass(address(kernel), bytes32(bytes4(0xdeadbeef)), true);
-        mockPolicy2.sudoSetPass(address(kernel), bytes32(bytes4(0xdeadbeef)), true);
+        mockPolicy.sudoSetValidSig(address(kernel), bytes32(bytes4(0xdeadbeef)), "policy1");
+        mockPolicy2.sudoSetValidSig(address(kernel), bytes32(bytes4(0xdeadbeef)), "policy2");
+        validator.sudoSetValidSig(abi.encodePacked("enableSig"));
+        mockSigner.sudoSetValidSig(address(kernel), bytes32(bytes4(0xdeadbeef)), abi.encodePacked("userOpSig"));
         entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
         assertEq(kernel.currentNonce(), 3);
     }

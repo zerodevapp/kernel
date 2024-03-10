@@ -14,14 +14,17 @@ library ValidatorLib {
         }
     }
 
-    function encodePermissionData(bool skipUserOp, bool skipSig, address policy) internal pure returns (PermissionData data) {
+    function encodePermissionData(bool skipUserOp, bool skipSig, address policy)
+        internal
+        pure
+        returns (PermissionData data)
+    {
         assembly {
-            if skipUserOp { data :=       0x0001000000000000000000000000000000000000000000000000000000000000 }
+            if skipUserOp { data := 0x0001000000000000000000000000000000000000000000000000000000000000 }
             if skipSig { data := or(data, 0x0002000000000000000000000000000000000000000000000000000000000000) }
             data := or(data, shl(80, policy))
         }
     }
-
 
     function encodePermissionAsNonce(bytes1 mode, bytes4 permissionId, uint16 nonceKey, uint64 nonce)
         internal

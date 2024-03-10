@@ -259,7 +259,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         (ValidationId vId, bytes calldata sig) = ValidatorLib.decodeSignature(signature);
         ValidationType vType = ValidatorLib.getType(vId);
         // TODO: deal with sudo mode
-        if(vType == VALIDATION_TYPE_VALIDATOR) {
+        if (vType == VALIDATION_TYPE_VALIDATOR) {
             IValidator validator = ValidatorLib.getValidator(vId);
             bytes32 wrappedHash = _toWrappedHash(hash);
             return validator.isValidSignatureWithSender(msg.sender, wrappedHash, sig);

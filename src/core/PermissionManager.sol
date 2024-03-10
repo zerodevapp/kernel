@@ -159,7 +159,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
 
     function _installPermission(PermissionId permission, bytes calldata data) internal {
         console.log("DATA");
-        //0x        
+        //0x
         //0000000000000000000000000000000000000000000000000000000000000020
         //0000000000000000000000000000000000000000000000000000000000000002
         //0000000000000000000000000000000000000000000000000000000000000040
@@ -173,8 +173,8 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         bytes[] calldata permissionEnableData;
         bytes32 aa;
         assembly {
-            permissionEnableData.offset := add(add(data.offset,32), calldataload(data.offset))
-            permissionEnableData.length := calldataload(sub(permissionEnableData.offset,32))
+            permissionEnableData.offset := add(add(data.offset, 32), calldataload(data.offset))
+            permissionEnableData.length := calldataload(sub(permissionEnableData.offset, 32))
             aa := permissionEnableData.length
         }
         console.logBytes32(aa);
@@ -216,14 +216,18 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         }
 
         ValidationType vType = ValidatorLib.getType(vId);
-        if(vType == VALIDATION_TYPE_VALIDATOR) {
-            validationData = _intersectValidationData(validationData,
-                ValidationData.wrap(ValidatorLib.getValidator(vId).validateUserOp(userOp, userOpHash)));
+        if (vType == VALIDATION_TYPE_VALIDATOR) {
+            validationData = _intersectValidationData(
+                validationData, ValidationData.wrap(ValidatorLib.getValidator(vId).validateUserOp(userOp, userOpHash))
+            );
         } else {
             PermissionId pId = ValidatorLib.getPermissionId(vId);
             (ValidationData policyCheck, ISigner signer) = _checkUserOpPolicy(pId, userOp, userOpSig);
             validationData = _intersectValidationData(validationData, policyCheck);
-            validationData = _intersectValidationData(validationData, ValidationData.wrap(signer.checkUserOpSignature(bytes32(PermissionId.unwrap(pId)), userOp, userOpHash)));
+            validationData = _intersectValidationData(
+                validationData,
+                ValidationData.wrap(signer.checkUserOpSignature(bytes32(PermissionId.unwrap(pId)), userOp, userOpHash))
+            );
         }
     }
 
@@ -235,14 +239,13 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         (bytes32 digest, bytes calldata enableSig) = _checkEnableSig(vId, selector, packedData);
         ValidationType vType = ValidatorLib.getType(state.rootValidator);
         bytes4 result;
-        if(vType == VALIDATION_TYPE_VALIDATOR) {
+        if (vType == VALIDATION_TYPE_VALIDATOR) {
             IValidator validator = ValidatorLib.getValidator(state.rootValidator);
             result = validator.isValidSignatureWithSender(address(this), digest, enableSig);
         } else {
             PermissionId pId = ValidatorLib.getPermissionId(state.rootValidator);
             ISigner signer;
-            (signer, validationData, enableSig) =
-                _checkSignaturePolicy(pId, address(this), digest, enableSig);
+            (signer, validationData, enableSig) = _checkSignaturePolicy(pId, address(this), digest, enableSig);
             result = signer.checkSignature(bytes32(PermissionId.unwrap(pId)), address(this), digest, enableSig);
         }
         if (result != 0x1626ba7e) {
@@ -358,6 +361,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         for (uint256 i = 0; i < permissions.length; i++) {
             (PassFlag flag, IPolicy policy) = ValidatorLib.decodePermissionData(permissions[i]);
             uint8 idx = uint8(bytes1(userOpSig[0]));
+            console.log("Hello");
             if (idx == i) {
                 // we are using uint64 length
                 uint256 length = uint64(bytes8(userOpSig[1:9]));
@@ -366,6 +370,8 @@ abstract contract ValidationManager is EIP712, SelectorManager {
             } else if (idx < i) {
                 // signature is not in order
                 revert InvalidSignature();
+            } else {
+                userOp.signature = "";
             }
             if (PassFlag.unwrap(flag) & PassFlag.unwrap(SKIP_USEROP) == 0) {
                 ValidationData vd =
@@ -376,8 +382,8 @@ abstract contract ValidationManager is EIP712, SelectorManager {
                 }
                 validationData = _intersectValidationData(validationData, vd);
             }
-            userOp.signature = "";
         }
+        userOp.signature = userOpSig;
         return (validationData, state.permissionSigner[pId]);
     }
 

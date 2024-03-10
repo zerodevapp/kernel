@@ -5,6 +5,10 @@ contract MockSigner is ISigner {
     mapping(address => mapping(bytes32 => bytes)) public sig;
     mapping(address => mapping(bytes32 => bool)) public pass;
 
+    function sudoSetValidSig(address _wallet, bytes32 _id, bytes calldata _sig) external payable {
+        sig[_wallet][_id] = _sig;
+    }
+
     function sudoSetPass(address _wallet, bytes32 _id, bool _flag) external payable {
         pass[_wallet][_id] = _flag;
     }
@@ -16,7 +20,7 @@ contract MockSigner is ISigner {
     function onUninstall(bytes calldata) external payable override {}
 
     function isModuleType(uint256 moduleTypeId) external view override returns (bool) {
-        if(moduleTypeId == 7) {
+        if (moduleTypeId == 7) {
             return true;
         } else {
             return false;
@@ -30,16 +34,17 @@ contract MockSigner is ISigner {
     function checkUserOpSignature(bytes32 id, PackedUserOperation calldata userOp, bytes32 userOpHash)
         external
         override
-        returns (uint256) {
-        sig[msg.sender][id] = userOp.signature;
-        return pass[msg.sender][id] ? 0 : 1;
+        returns (uint256)
+    {
+        return keccak256(userOp.signature) == keccak256(sig[msg.sender][id]) ? 0 : 1;
     }
 
     function checkSignature(bytes32 id, address sender, bytes32 hash, bytes calldata)
         external
         view
         override
-        returns (bytes4) {
+        returns (bytes4)
+    {
         if (pass[msg.sender][id] == true) {
             return 0x1626ba7e;
         } else {
