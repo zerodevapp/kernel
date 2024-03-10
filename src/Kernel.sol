@@ -19,7 +19,7 @@ import {
 import {HookManager} from "./core/HookManager.sol";
 import {ExecutorManager} from "./core/ExecutorManager.sol";
 import {SelectorManager} from "./core/SelectorManager.sol";
-import {IValidator, IHook, IExecutor, IFallback, ISigner} from "./interfaces/IERC7579Modules.sol";
+import {IModule, IValidator, IHook, IExecutor, IFallback, ISigner} from "./interfaces/IERC7579Modules.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
 import {ExecLib, ExecMode, CallType, CALLTYPE_SINGLE, CALLTYPE_DELEGATECALL} from "./utils/ExecLib.sol";
 
@@ -323,12 +323,30 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         }
     }
 
-    function uninstallModule(uint256 moduleType, address module, bytes calldata deInitData) external payable override {
-        // TODO
+    function uninstallValidation(ValidationId vId, bytes calldata deinitData)
+        external
+        payable
+        onlyEntryPointOrSelfOrRoot
+    {
+        _uninstallValidation(vId, deinitData);
+    }
+
+    function invalidateNonce(uint32 nonce) external payable onlyEntryPointOrSelfOrRoot {
+        _invalidateNonce(nonce);
+    }
+
+    function uninstallModule(uint256 moduleType, address module, bytes calldata deInitData)
+        external
+        payable
+        override
+        onlyEntryPointOrSelfOrRoot
+    {
+        // is it ok?
+        IModule(module).onUninstall(deInitData);
     }
 
     function supportsModule(uint256 moduleTypeId) external pure override returns (bool) {
-        if (moduleTypeId < 7) {
+        if (moduleTypeId < 8) {
             return true;
         } else {
             return false;
@@ -361,6 +379,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
     }
 
     function supportsExecutionMode(ExecMode) external pure override returns (bool) {
+        // is it ok?
         return true;
     }
 }

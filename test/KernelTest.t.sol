@@ -249,7 +249,14 @@ contract KernelTest is Test {
                 abi.encodePacked(kernel.execute.selector),
                 abi.encodePacked("enableSig"),
                 abi.encodePacked(
-                    bytes1(0), bytes8(uint64(7)), "policy1", bytes1(uint8(1)), bytes8(uint64(7)), "policy2", "userOpSig"
+                    bytes1(0),
+                    bytes8(uint64(7)),
+                    "policy1",
+                    bytes1(uint8(1)),
+                    bytes8(uint64(7)),
+                    "policy2",
+                    bytes1(0xff),
+                    "userOpSig"
                 )
                 )
         });

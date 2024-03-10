@@ -79,13 +79,17 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         return _validatorStorage().validNonceFrom;
     }
 
-    function validatorConfig(ValidationId validator) external view returns (ValidationConfig memory) {
-        return _validatorStorage().validatorConfig[validator];
+    function isAllowedSelector(ValidationId vId, bytes4 selector) external view returns (bool) {
+        return _validatorStorage().allowedSelectors[vId][selector];
     }
 
-    function permissionData(ValidationId validator) external view returns (PermissionData[] memory) {
-        PermissionId pId = ValidatorLib.getPermissionId(validator);
-        return _validatorStorage().permissionData[pId];
+    function validatorConfig(ValidationId vId) external view returns (ValidationConfig memory) {
+        return _validatorStorage().validatorConfig[vId];
+    }
+
+    function permissionData(ValidationId vId) external view returns (PermissionData[] memory, ISigner) {
+        PermissionId pId = ValidatorLib.getPermissionId(vId);
+        return (_validatorStorage().permissionData[pId], _validatorStorage().permissionSigner[pId]);
     }
 
     function _validatorStorage() internal pure returns (ValidationStorage storage state) {
@@ -123,6 +127,20 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         ValidationStorage storage state = _validatorStorage();
         state.allowedSelectors[vId][selector] = allowed;
         emit SelectorSet(selector, vId, allowed);
+    }
+
+    // for uninstall, we support uninstall for validator mode by calling onUninstall
+    // but for permission mode, we do it naively by setting hook to address(0).
+    // it is more recommended to use a nonce revoke to make sure the validator has been revoked
+    // also, we are not calling hook.onInstall here
+    function _uninstallValidation(ValidationId vId, bytes calldata validatorData) internal {
+        ValidationStorage storage state = _validatorStorage();
+        state.validatorConfig[vId].hook = IHook(address(0));
+        ValidationType vType = ValidatorLib.getType(vId);
+        if (vType == VALIDATION_TYPE_VALIDATOR) {
+            IValidator validator = ValidatorLib.getValidator(vId);
+            validator.onUninstall(validatorData);
+        }
     }
 
     function _installValidation(
@@ -163,7 +181,8 @@ abstract contract ValidationManager is EIP712, SelectorManager {
             permissionEnableData.length := calldataload(sub(permissionEnableData.offset, 32))
             aa := permissionEnableData.length
         }
-        if (permissionEnableData.length > 255 || permissionEnableData.length == 0) {
+        // allow up to 0xfe, 0xff is dedicated for signer
+        if (permissionEnableData.length > 254 || permissionEnableData.length == 0) {
             revert PermissionDataTooLarge();
         }
         for (uint256 i = 0; i < permissionEnableData.length - 1; i++) {
@@ -357,7 +376,10 @@ abstract contract ValidationManager is EIP712, SelectorManager {
                 validationData = _intersectValidationData(validationData, vd);
             }
         }
-        userOp.signature = userOpSig;
+        if (uint8(bytes1(userOpSig[0])) != 255) {
+            revert InvalidSignature();
+        }
+        userOp.signature = userOpSig[1:];
         return (validationData, state.permissionSigner[pId]);
     }
 
@@ -372,6 +394,10 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         mSig.caller = caller;
         mSig.digest = digest;
         _checkPermissionPolicy(mSig, state, sig);
+        if (uint8(bytes1(sig[0])) != 255) {
+            revert InvalidSignature();
+        }
+        sig = sig[1:];
         return (state.permissionSigner[mSig.permission], mSig.validationData, sig);
     }
 
