@@ -57,7 +57,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
     struct PermissionConfig {
         PassFlag passFlag;
         ISigner signer;
-        PermissionData[] permissionData;
+        PermissionData[] policyData;
     }
 
     struct ValidationStorage {
@@ -191,7 +191,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
             revert PermissionDataTooLarge();
         }
         for (uint256 i = 0; i < permissionEnableData.length - 1; i++) {
-            state.permissionConfig[permission].permissionData.push(
+            state.permissionConfig[permission].policyData.push(
                 PermissionData.wrap(bytes22(permissionEnableData[i][0:22]))
             );
             IPolicy(address(bytes20(permissionEnableData[i][2:22]))).onInstall(permissionEnableData[i][22:]);
@@ -357,7 +357,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         returns (ValidationData validationData, ISigner signer)
     {
         ValidationStorage storage state = _validatorStorage();
-        PermissionData[] storage permissions = state.permissionConfig[pId].permissionData;
+        PermissionData[] storage permissions = state.permissionConfig[pId].policyData;
         for (uint256 i = 0; i < permissions.length; i++) {
             (PassFlag flag, IPolicy policy) = ValidatorLib.decodePermissionData(permissions[i]);
             uint8 idx = uint8(bytes1(userOpSig[0]));
@@ -412,7 +412,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         ValidationStorage storage state,
         bytes calldata sig
     ) internal view {
-        PermissionData[] storage permissions = state.permissionConfig[mSig.permission].permissionData;
+        PermissionData[] storage permissions = state.permissionConfig[mSig.permission].policyData;
         for (uint256 i = 0; i < permissions.length; i++) {
             (mSig.flag, mSig.validator) = ValidatorLib.decodePermissionData(permissions[i]);
             mSig.idx = uint8(bytes1(sig[0]));
