@@ -63,11 +63,7 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
             require(_guardians[i] != address(0), "Guardian cannot be 0");
             require(_weights[i] != 0, "Weight cannot be 0");
             require(guardian[_guardians[i]][_kernel].weight == 0, "Guardian already enabled");
-            // when index is 0 meaning that adding the first guardian, since prevGuardian is type(uint160).max, we skip the check
-            if (i != 0) {
-                // check if guardians are sorted
-                require(uint160(_guardians[i]) < prevGuardian, "Guardians not sorted");
-            }
+            require(uint160(_guardians[i]) < prevGuardian, "Guardians not sorted");
             guardian[_guardians[i]][_kernel] =
                 GuardianStorage({weight: _weights[i], nextGuardian: weightedStorage[_kernel].firstGuardian});
             weightedStorage[_kernel].firstGuardian = _guardians[i];
@@ -116,7 +112,7 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
         }
         delete weightedStorage[msg.sender];
         require(_guardians.length == _weights.length, "Length mismatch");
-        weightedStorage[msg.sender].firstGuardian = _guardians[0];
+        weightedStorage[msg.sender].firstGuardian = address(uint160(type(uint160).max));
         _addGuardians(_guardians, _weights, msg.sender);
         weightedStorage[msg.sender].delay = _delay;
         weightedStorage[msg.sender].threshold = _threshold;
