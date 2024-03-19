@@ -18,7 +18,7 @@ abstract contract SignerBase is ISigner {
     }
 
     function isModuleType(uint256 id) external pure returns (bool) {
-        return id == 5;
+        return id == 6;
     }
 
     function isInitialized(address) external view virtual returns (bool); // TODO : not sure if this is the right way to do it
