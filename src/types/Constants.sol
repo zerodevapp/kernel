@@ -24,8 +24,12 @@ ExecModeSelector constant EXEC_MODE_DEFAULT = ExecModeSelector.wrap(bytes4(0x000
 PassFlag constant SKIP_USEROP = PassFlag.wrap(0x0001);
 PassFlag constant SKIP_SIGNATURE = PassFlag.wrap(0x0002);
 
+// FLAG
 ValidationMode constant VALIDATION_MODE_DEFAULT = ValidationMode.wrap(0x00);
 ValidationMode constant VALIDATION_MODE_ENABLE = ValidationMode.wrap(0x01);
+ValidationMode constant VALIDATION_MODE_INSTALL = ValidationMode.wrap(0x02);
+
+// TYPES, ENUM
 ValidationType constant VALIDATION_TYPE_SUDO = ValidationType.wrap(0x00);
 ValidationType constant VALIDATION_TYPE_VALIDATOR = ValidationType.wrap(0x01);
 ValidationType constant VALIDATION_TYPE_PERMISSION = ValidationType.wrap(0x02);

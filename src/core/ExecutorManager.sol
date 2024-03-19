@@ -26,15 +26,17 @@ abstract contract ExecutorManager {
         config = es.executorConfig[executor];
     }
 
-    function _installExecutor(IExecutor executor, IHook hook, bytes calldata data) internal {
+    function _installExecutor(IExecutor executor, IHook hook, bytes calldata executorData, bytes calldata hookData)
+        internal
+    {
         if (address(hook) == address(0)) {
             hook = IHook(address(1));
         }
         ExecutorConfig storage config = _executorConfig(executor);
         config.hook = hook;
-        executor.onInstall(data);
+        executor.onInstall(executorData);
         if (address(hook) != address(1)) {
-            hook.onInstall(data);
+            hook.onInstall(hookData);
         }
     }
 }

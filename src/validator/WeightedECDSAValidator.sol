@@ -89,7 +89,7 @@ contract WeightedECDSAValidator is EIP712, IValidator {
         delete weightedStorage[msg.sender];
     }
 
-    function isModuleType(uint256 moduleTypeId) external view returns (bool) {
+    function isModuleType(uint256 moduleTypeId) external pure returns (bool) {
         return moduleTypeId == MODULE_TYPE_VALIDATOR;
     }
 

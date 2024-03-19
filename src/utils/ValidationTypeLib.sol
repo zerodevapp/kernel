@@ -78,15 +78,26 @@ library ValidatorLib {
     function decodeSignature(bytes calldata signature) internal pure returns (ValidationId vId, bytes calldata sig) {
         assembly {
             vId := calldataload(signature.offset)
-            switch gt(vId, 0x0200000000000000000000000000000000000000000000000000000000000000)
+            switch shr(248, vId)
+            case 0 {
+                // sudo mode
+                vId := 0x00
+                sig.offset := add(signature.offset, 1)
+                sig.length := sub(signature.offset, 1)
+            }
             case 1 {
+                // validator mode
+                sig.offset := add(signature.offset, 21)
+                sig.length := sub(signature.length, 21)
+            }
+            case 2 {
                 vId := and(vId, 0xffffffffff000000000000000000000000000000000000000000000000000000)
                 sig.offset := add(signature.offset, 5)
                 sig.length := sub(signature.length, 5)
             }
             default {
-                sig.offset := add(signature.offset, 21)
-                sig.length := sub(signature.length, 21)
+                // TODO add revert message
+                revert(0x00, 0x20)
             }
         }
     }

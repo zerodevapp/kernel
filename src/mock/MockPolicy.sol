@@ -23,7 +23,7 @@ contract MockPolicy is IPolicy {
         pass[_wallet][_id] = _pass;
     }
 
-    function isModuleType(uint256 moduleTypeId) external view override returns (bool) {
+    function isModuleType(uint256 moduleTypeId) external pure override returns (bool) {
         return moduleTypeId == 5;
     }
 
@@ -40,7 +40,7 @@ contract MockPolicy is IPolicy {
         return keccak256(userOp.signature) == keccak256(sig[msg.sender][id]) ? 0 : 1;
     }
 
-    function checkSignaturePolicy(bytes32 id, address sender, bytes32 hash, bytes calldata data)
+    function checkSignaturePolicy(bytes32 id, address, bytes32, bytes calldata)
         external
         view
         override

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
 import {PackedUserOperation} from "./interfaces/PackedUserOperation.sol";
@@ -14,7 +15,9 @@ import {
     PermissionId,
     VALIDATION_TYPE_SUDO,
     VALIDATION_TYPE_VALIDATOR,
-    VALIDATION_TYPE_PERMISSION
+    VALIDATION_TYPE_PERMISSION,
+    PassFlag,
+    SKIP_SIGNATURE
 } from "./core/PermissionManager.sol";
 import {HookManager} from "./core/HookManager.sol";
 import {ExecutorManager} from "./core/ExecutorManager.sol";
@@ -88,14 +91,14 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
     }
 
     // NOTE : when eip 1153 has been enabled, this can be transient storage
-    mapping(bytes32 userOpHash => IHook) public executionHook;
+    mapping(bytes32 userOpHash => IHook) internal executionHook;
 
     function _domainNameAndVersion() internal pure override returns (string memory name, string memory version) {
         name = "Kernel";
         version = "0.3.0-beta";
     }
 
-    function _doFallback2771(IFallback fallbackHandler) internal returns (bool success, bytes memory result) {
+    function _doFallback2771(IFallback fallbackHandler) internal view returns (bool success, bytes memory result) {
         assembly {
             function allocate(length) -> pos {
                 pos := mload(0x40)
@@ -111,10 +114,14 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             mstore(senderPtr, shl(96, caller()))
 
             // Add 20 bytes for the address appended add the end
-            success := call(gas(), fallbackHandler, 0, calldataPtr, add(calldatasize(), 20), 0, 0)
+            // NOTE: we are only allowing static call for fallback
+            success := staticcall(gas(), fallbackHandler, calldataPtr, add(calldatasize(), 20), 0, 0)
 
-            result := allocate(returndatasize())
-            returndatacopy(result, 0, returndatasize())
+            result := mload(0x40)
+            mstore(result, returndatasize()) // Store the length.
+            let o := add(result, 0x20)
+            returndatacopy(o, 0x00, returndatasize()) // Copy the returndata.
+            mstore(0x40, add(o, returndatasize())) // Allocate the memory.
         }
     }
 
@@ -124,26 +131,20 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
 
     fallback() external payable {
         SelectorConfig memory config = _selectorConfig(msg.sig);
+        bool success;
+        bytes memory result;
         if (address(config.hook) == address(0)) {
+            // action not installed, use fallback
             (IFallback fallbackHandler, IHook hook) = _fallbackConfig();
             if (address(fallbackHandler) == address(0)) {
                 revert InvalidFallback();
             }
             if (address(hook) != address(1)) {
                 bytes memory context = _doPreHook(hook, msg.data);
-                (bool success, bytes memory result) = _doFallback2771(fallbackHandler);
+                (success, result) = _doFallback2771(fallbackHandler);
                 _doPostHook(hook, context, success, result);
             } else {
-                (bool success, bytes memory result) = _doFallback2771(fallbackHandler);
-                if (!success) {
-                    assembly {
-                        revert(add(result, 0x20), mload(result))
-                    }
-                } else {
-                    assembly {
-                        return(add(result, 0x20), mload(result))
-                    }
-                }
+                (success, result) = _doFallback2771(fallbackHandler);
             }
         } else {
             // action installed
@@ -152,9 +153,18 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
                 context = _doPreHook(config.hook, msg.data);
             }
             // execute action
-            (bool success, bytes memory ret) = ExecLib._executeDelegatecall(config.target, msg.data);
+            (success, result) = ExecLib._executeDelegatecall(config.target, msg.data);
             if (address(config.hook) != address(1)) {
-                _doPostHook(config.hook, context, success, ret);
+                _doPostHook(config.hook, context, success, result);
+            }
+        }
+        if (!success) {
+            assembly {
+                revert(add(result, 0x20), mload(result))
+            }
+        } else {
+            assembly {
+                return(add(result, 0x20), mload(result))
             }
         }
     }
@@ -260,23 +270,24 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
     }
 
     function isValidSignature(bytes32 hash, bytes calldata signature) external view override returns (bytes4) {
+        ValidationStorage storage vs = _validatorStorage();
         (ValidationId vId, bytes calldata sig) = ValidatorLib.decodeSignature(signature);
-        ValidationType vType = ValidatorLib.getType(vId);
-        // TODO: deal with sudo mode
-        if (vType == VALIDATION_TYPE_VALIDATOR) {
+        if (ValidatorLib.getType(vId) == VALIDATION_TYPE_SUDO) {
+            vId = vs.rootValidator;
+        }
+        if (address(vs.validatorConfig[vId].hook) == address(0)) {
+            revert InvalidValidator();
+        }
+        if (ValidatorLib.getType(vId) == VALIDATION_TYPE_VALIDATOR) {
             IValidator validator = ValidatorLib.getValidator(vId);
-            bytes32 wrappedHash = _toWrappedHash(hash);
-            return validator.isValidSignatureWithSender(msg.sender, wrappedHash, sig);
+            return validator.isValidSignatureWithSender(msg.sender, _toWrappedHash(hash), sig);
         } else {
             PermissionId pId = ValidatorLib.getPermissionId(vId);
-            (ISigner signer, ValidationData valdiationData, bytes calldata validatorSig) =
-                _checkSignaturePolicy(pId, msg.sender, hash, sig);
-            bytes32 wrappedHash = _toWrappedHash(hash);
-            (ValidAfter validAfter, ValidUntil validUntil,) = parseValidationData(ValidationData.unwrap(valdiationData));
-            if (block.timestamp < ValidAfter.unwrap(validAfter) || block.timestamp > ValidUntil.unwrap(validUntil)) {
-                return 0xffffffff;
+            PassFlag permissionFlag = vs.permissionConfig[pId].permissionFlag;
+            if (PassFlag.unwrap(permissionFlag) & PassFlag.unwrap(SKIP_SIGNATURE) != 0) {
+                revert PermissionNotAlllowedForSignature();
             }
-            return signer.checkSignature(bytes32(PermissionId.unwrap(pId)), msg.sender, wrappedHash, validatorSig);
+            return _checkPermissionSignature(pId, msg.sender, hash, sig);
         }
     }
 
@@ -290,34 +301,39 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             ValidationStorage storage vs = _validatorStorage();
             ValidationId vId = ValidatorLib.validatorToIdentifier(IValidator(module));
             ValidationConfig memory config =
-                ValidationConfig({nonce: vs.currentNonce++, hook: IHook(address(bytes20(initData[0:20])))});
+                ValidationConfig({nonce: vs.currentNonce, hook: IHook(address(bytes20(initData[0:20])))});
             bytes calldata validatorData;
             bytes calldata hookData;
             assembly {
-                validatorData.offset := add(add(initData.offset, 64), calldataload(add(initData.offset, 32)))
+                validatorData.offset := add(add(initData.offset, 52), calldataload(add(initData.offset, 20)))
                 validatorData.length := calldataload(sub(validatorData.offset, 32))
-                hookData.offset := add(add(initData.offset, 64), calldataload(add(initData.offset, 64)))
+                hookData.offset := add(add(initData.offset, 52), calldataload(add(initData.offset, 52)))
                 hookData.length := calldataload(sub(hookData.offset, 32))
             }
             _installValidation(vId, config, validatorData, hookData);
+            vs.currentNonce++;
         } else if (moduleType == 2) {
-            // executor
-            _installExecutor(IExecutor(module), IHook(address(bytes20(initData[0:20]))), initData[20:]);
+            bytes calldata executorData;
+            bytes calldata hookData;
+            assembly {
+                executorData.offset := add(add(initData.offset, 52), calldataload(add(initData.offset, 20)))
+                executorData.length := calldataload(sub(executorData.offset, 32))
+                hookData.offset := add(add(initData.offset, 52), calldataload(add(initData.offset, 52)))
+                hookData.length := calldataload(sub(hookData.offset, 32))
+            }
+            _installExecutor(IExecutor(module), IHook(address(bytes20(initData[0:20]))), executorData, hookData);
         } else if (moduleType == 3) {
-            _installFallback(
-                IFallback(module),
-                IHook(address(bytes20(initData[0:20]))),
-                initData[20:20], // TODO : fallbackData
-                initData[20:]
-            );
+            bytes calldata fallbackData;
+            bytes calldata hookData;
+            assembly {
+                fallbackData.offset := add(add(initData.offset, 52), calldataload(add(initData.offset, 20)))
+                fallbackData.length := calldataload(sub(fallbackData.offset, 32))
+                hookData.offset := add(add(initData.offset, 52), calldataload(add(initData.offset, 52)))
+                hookData.length := calldataload(sub(hookData.offset, 32))
+            }
+            _installFallback(IFallback(module), IHook(address(bytes20(initData[0:20]))), fallbackData, hookData);
         } else if (moduleType == 6) {
-            // action
-            _installSelector(
-                bytes4(initData[0:4]),
-                address(bytes20(initData[4:24])),
-                IHook(address(bytes20(initData[24:44]))),
-                initData[44:]
-            );
+            _installSelector(bytes4(initData[0:4]), module, IHook(address(bytes20(initData[4:24]))), initData[24:]);
         } else {
             revert InvalidModuleType();
         }
@@ -335,7 +351,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         _invalidateNonce(nonce);
     }
 
-    function uninstallModule(uint256 moduleType, address module, bytes calldata deInitData)
+    function uninstallModule(uint256, address module, bytes calldata deInitData)
         external
         payable
         override

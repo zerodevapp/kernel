@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
 import "src/core/PermissionManager.sol";
@@ -75,7 +76,7 @@ contract PermissionTest is Test {
 
     function testDecode() external {
         uint256 nonce = uint256(bytes32(0));
-        (ValidationMode vMode, ValidationType vType, ValidationId vId) = validatorLib.decodeNonce(nonce);
+        (ValidationMode vMode, ValidationType vType,) = validatorLib.decodeNonce(nonce);
         assertTrue(vMode == VALIDATION_MODE_DEFAULT, "vMode != MODE_DEFAULT");
         assertTrue(vType == VALIDATION_TYPE_SUDO, "vType != TYPE_VALIDATOR");
     }
@@ -119,11 +120,8 @@ contract PermissionTest is Test {
         uint256 encoded = validatorLib.encodeAsNonce(mode, vtype, vIdWithoutType, nonceKey, seqNonce);
 
         (ValidationMode vMode, ValidationType vType, ValidationId vId) = validatorLib.decodeNonce(encoded);
-        console.logBytes32(bytes32(encoded));
         assertTrue(vMode == ValidationMode.wrap(mode), "vMode != mode");
         assertTrue(vType == ValidationType.wrap(vtype), "vType != type");
-        console.logBytes21(ValidationId.unwrap(vId));
-        console.logBytes21(bytes21(abi.encodePacked(vtype, expected)));
         assertTrue(vId == ValidationId.wrap(bytes21(abi.encodePacked(vtype, expected))), "vId != vIdWithoutType");
 
         if (ValidationType.wrap(vtype) == VALIDATION_TYPE_VALIDATOR) {

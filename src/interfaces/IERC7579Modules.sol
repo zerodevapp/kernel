@@ -97,6 +97,7 @@ interface IPolicy is IModule {
 interface ISigner is IModule {
     function checkUserOpSignature(bytes32 id, PackedUserOperation calldata userOp, bytes32 userOpHash)
         external
+        payable
         returns (uint256);
     function checkSignature(bytes32 id, address sender, bytes32 hash, bytes calldata sig)
         external
