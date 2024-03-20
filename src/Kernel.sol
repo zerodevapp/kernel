@@ -82,11 +82,11 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
     {
         ValidationStorage storage vs = _validatorStorage();
         require(ValidationId.unwrap(vs.rootValidator) == bytes21(0), "already initialized");
-        if(ValidationId.unwrap(_rootValidator) == bytes21(0)) {
+        if (ValidationId.unwrap(_rootValidator) == bytes21(0)) {
             revert InvalidValidator();
         }
         ValidationType vType = ValidatorLib.getType(_rootValidator);
-        if(vType != VALIDATION_TYPE_VALIDATOR && vType != VALIDATION_TYPE_PERMISSION) {
+        if (vType != VALIDATION_TYPE_VALIDATOR && vType != VALIDATION_TYPE_PERMISSION) {
             revert InvalidValidationType();
         }
         vs.rootValidator = _rootValidator;

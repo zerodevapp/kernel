@@ -206,7 +206,11 @@ abstract contract ValidationManager is EIP712, SelectorManager {
         state.permissionConfig[permission].signer = signer;
         state.permissionConfig[permission].permissionFlag =
             PassFlag.wrap(bytes2(permissionEnableData[permissionEnableData.length - 1][0:2]));
-        signer.onInstall(permissionEnableData[permissionEnableData.length - 1][22:]);
+        signer.onInstall(
+            abi.encodePacked(
+                bytes32(PermissionId.unwrap(permission)), permissionEnableData[permissionEnableData.length - 1][22:]
+            )
+        );
     }
 
     function _doValidation(ValidationMode vMode, ValidationId vId, PackedUserOperation calldata op, bytes32 userOpHash)

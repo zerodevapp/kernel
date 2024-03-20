@@ -381,6 +381,10 @@ abstract contract KernelTestBase is Test {
         );
         entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
         assertEq(kernel.currentNonce(), 3);
+        assertEq(
+            MockSigner(address(permissionConfig.signer)).data(address(kernel)),
+            abi.encodePacked(bytes32(bytes4(0xdeadbeef)), "signer")
+        );
     }
 
     function testActionInstall() external whenInitialized {
