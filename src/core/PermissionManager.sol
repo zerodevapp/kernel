@@ -5,7 +5,7 @@ import {PackedUserOperation} from "../interfaces/PackedUserOperation.sol";
 import {SelectorManager} from "./SelectorManager.sol";
 import {ValidationData, ValidAfter, ValidUntil, parseValidationData} from "../interfaces/IAccount.sol";
 import {IAccountExecute} from "../interfaces/IAccountExecute.sol";
-import {EIP712} from "solady/utils/EIP712.sol";
+import {EIP712} from "solady/src/utils/EIP712.sol";
 import {
     ValidationId,
     PolicyData,

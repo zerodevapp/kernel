@@ -1,1 +1,1 @@
-solady/=lib/solady/src/
+solady/=lib/solady/

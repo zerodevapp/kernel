@@ -23,7 +23,7 @@ import {HookManager} from "./core/HookManager.sol";
 import {ExecutorManager} from "./core/ExecutorManager.sol";
 import {SelectorManager} from "./core/SelectorManager.sol";
 import {IModule, IValidator, IHook, IExecutor, IFallback, ISigner} from "./interfaces/IERC7579Modules.sol";
-import {EIP712} from "solady/utils/EIP712.sol";
+import {EIP712} from "solady/src/utils/EIP712.sol";
 import {ExecLib, ExecMode, CallType, CALLTYPE_SINGLE, CALLTYPE_DELEGATECALL} from "./utils/ExecLib.sol";
 
 bytes32 constant ERC1967_IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;

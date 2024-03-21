@@ -1,8 +1,8 @@
 pragma solidity ^0.8.0;
 
 import "src/types/Types.sol";
-import {ECDSA} from "solady/utils/ECDSA.sol";
-import {EIP712} from "solady/utils/EIP712.sol";
+import {ECDSA} from "solady/src/utils/ECDSA.sol";
+import {EIP712} from "solady/src/utils/EIP712.sol";
 import {PackedUserOperation} from "../interfaces/PackedUserOperation.sol";
 import {
     IValidator, VALIDATION_FAILED, MODULE_TYPE_VALIDATOR, MODULE_TYPE_HOOK
