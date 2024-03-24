@@ -256,7 +256,12 @@ contract WeightedECDSAValidator is EIP712, IValidator {
                 approvals += guardian[currentGuardian][kernel].weight;
             }
         }
-        passed = approvals >= strg.threshold;
+        ProposalStorage storage proposal = proposalStatus[hash][kernel];
+        if(proposal.status == ProposalStatus.Rejected) {
+            passed = false;
+        } else {
+            passed = approvals >= strg.threshold;
+        }
     }
 
     function isValidSignatureWithSender(address sender, bytes32 hash, bytes calldata data)
