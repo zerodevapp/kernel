@@ -30,6 +30,7 @@ import {
 
 bytes32 constant VALIDATION_MANAGER_STORAGE_POSITION =
     0x7bcaa2ced2a71450ed5a9a1b4848e8e5206dbc3f06011e595f7f55428cc6f84f;
+uint32 constant MAX_NONCE_INCREMENT_SIZE = 10;
 
 abstract contract ValidationManager is EIP712, SelectorManager {
     event ValidatorInstalled(IValidator validator, uint32 nonce);
@@ -51,6 +52,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
     error PolicyFailed(uint256 i);
     error PermissionNotAlllowedForUserOp();
     error PermissionNotAlllowedForSignature();
+    error NonceInvalidationError();
 
     // CHECK is it better to have a group config?
     // erc7579 plugins
@@ -110,6 +112,9 @@ abstract contract ValidationManager is EIP712, SelectorManager {
 
     function _invalidateNonce(uint32 nonce) internal {
         ValidationStorage storage state = _validatorStorage();
+        if(state.currentNonce + MAX_NONCE_INCREMENT_SIZE < nonce) {
+            revert NonceInvalidationError();
+        }
         if (nonce <= state.validNonceFrom) {
             revert InvalidNonce();
         }
