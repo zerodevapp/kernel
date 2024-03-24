@@ -22,17 +22,32 @@ abstract contract HookManager {
         hook.postCheck(context);
     }
 
+    // @notice if hook is not initialized before, kernel will call hook.onInstall no matter what flag it shows, with hookData[1:]
+    // @param hookData is encoded into (1bytes flag + actual hookdata) flag is for identifying if the hook has to be initialized or not
     function _installHook(IHook hook, bytes calldata hookData) internal {
         if (address(hook) == address(0) || address(hook) == address(1)) {
             return;
         }
-        hook.onInstall(hookData);
+        if (!hook.isInitialized(address(this))) {
+            // if hook is not installed, it should call onInstall
+            hook.onInstall(hookData[1:]);
+        }
+        if (bytes1(hookData[0]) == bytes1(0xff)) {
+            // 0xff means you want to explicitly call install hook
+            hook.onInstall(hookData[1:]);
+            return;
+        }
     }
 
+    // @param hookData encoded as (1bytes flag + actual hookdata) flag is for identifying if the hook has to be initialized or not
     function _uninstallHook(IHook hook, bytes calldata hookData) internal {
         if (address(hook) == address(0) || address(hook) == address(1)) {
             return;
         }
-        hook.onUninstall(hookData);
+        if (bytes1(hookData[0]) == bytes1(0xff)) {
+            // 0xff means you want to call uninstall hook
+            hook.onUninstall(hookData[1:]);
+            return;
+        }
     }
 }

@@ -382,7 +382,8 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         payable
         onlyEntryPointOrSelfOrRoot
     {
-        _uninstallValidation(vId, deinitData, hookDeinitData);
+        IHook hook = _uninstallValidation(vId, deinitData);
+        _uninstallHook(hook, hookDeinitData);
     }
 
     function invalidateNonce(uint32 nonce) external payable onlyEntryPointOrSelfOrRoot {
@@ -395,12 +396,6 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         override
         onlyEntryPointOrSelfOrRoot
     {
-        if (bytes1(deInitData[0]) == bytes1(0xff)) {
-            // this means it's force uninstall
-            IModule(module).onUninstall(deInitData[1:]);
-            return;
-        }
-        deInitData = deInitData[1:];
         if (moduleType == 1) {
             ValidationStorage storage vs = _validationStorage();
             ValidationId vId = ValidatorLib.validatorToIdentifier(IValidator(module));
@@ -412,8 +407,8 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
                 hookData.offset := add(add(deInitData.offset, 32), calldataload(add(deInitData.offset, 32)))
                 hookData.length := calldataload(sub(hookData.offset, 32))
             }
-            _uninstallValidation(vId, validatorData, hookData);
-            //_uninstallHook this is handled on uninstallValidation
+            IHook hook = _uninstallValidation(vId, validatorData);
+            _uninstallHook(hook, hookData);
         } else if (moduleType == 2) {
             bytes calldata executorData;
             bytes calldata hookData;
@@ -457,7 +452,8 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             ISigner(module).onUninstall(deInitData);
         } else if (moduleType == 7) {
             IHook hook = _uninstallSelector(bytes4(deInitData[0:4]));
-            _uninstallHook(hook, deInitData[4:]);
+            bytes calldata hookData = deInitData[4:];
+            _uninstallHook(hook, hookData);
         } else {
             revert InvalidModuleType();
         }

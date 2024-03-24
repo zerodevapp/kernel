@@ -300,7 +300,7 @@ abstract contract KernelTestBase is Test {
             signature: encodeEnableSignature(
                 validationConfig.hook,
                 validationConfig.validatorData,
-                validationConfig.hookData,
+                abi.encodePacked(bytes1(0xff), validationConfig.hookData),
                 abi.encodePacked(kernel.execute.selector),
                 getEnableSig(bytes32(0), true),
                 getValidatorSig(op, true)
@@ -330,7 +330,7 @@ abstract contract KernelTestBase is Test {
             signature: encodeEnableSignature(
                 permissionConfig.hook,
                 encodePermissionsEnableData(),
-                permissionConfig.hookData,
+                abi.encodePacked(bytes1(0xff), permissionConfig.hookData), // to force call the hook.onInstall()
                 abi.encodePacked(kernel.execute.selector),
                 getEnableSig(bytes32(0), true),
                 getPermissionSig(op, true)
@@ -418,7 +418,9 @@ abstract contract KernelTestBase is Test {
                 kernel.installModule.selector,
                 7,
                 address(mockAction),
-                abi.encodePacked(MockAction.doSomething.selector, address(mockHook), abi.encodePacked("hookData"))
+                abi.encodePacked(
+                    MockAction.doSomething.selector, address(mockHook), abi.encodePacked(bytes1(0xff), "hookData")
+                )
             ),
             true
         );
@@ -476,7 +478,8 @@ abstract contract KernelTestBase is Test {
                 3,
                 address(mockFallback),
                 abi.encodePacked(
-                    address(mockHook), abi.encode(abi.encodePacked("fallbackData"), abi.encodePacked("hookData"))
+                    address(mockHook),
+                    abi.encode(abi.encodePacked("fallbackData"), abi.encodePacked(bytes1(0xff), "hookData"))
                 )
             ),
             true
@@ -539,7 +542,8 @@ abstract contract KernelTestBase is Test {
                 2,
                 address(mockExecutor),
                 abi.encodePacked(
-                    address(mockHook), abi.encode(abi.encodePacked("executorData"), abi.encodePacked("hookData"))
+                    address(mockHook),
+                    abi.encode(abi.encodePacked("executorData"), abi.encodePacked(bytes1(0xff), "hookData"))
                 )
             ),
             true
