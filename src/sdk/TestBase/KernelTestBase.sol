@@ -10,7 +10,7 @@ import "src/mock/MockAction.sol";
 import "src/mock/MockHook.sol";
 import "src/mock/MockExecutor.sol";
 import "src/mock/MockFallback.sol";
-import "src/core/PermissionManager.sol";
+import "src/core/ValidationManager.sol";
 import "./erc4337Util.sol";
 
 contract SimpleProxy {
@@ -66,7 +66,7 @@ abstract contract KernelTestBase is Test {
     MockHook mockHook;
 
     IValidator enabledValidator;
-    EnableValidatorConfig validatorConfig;
+    EnableValidatorConfig validationConfig;
 
     struct EnableValidatorConfig {
         IHook hook;
@@ -140,7 +140,7 @@ abstract contract KernelTestBase is Test {
         kernel.initialize(vId, IHook(address(0)), hex"", hex"");
         assertTrue(kernel.rootValidator() == vId);
         ValidationManager.ValidationConfig memory config;
-        config = kernel.validatorConfig(vId);
+        config = kernel.validationConfig(vId);
         assertEq(config.nonce, 1);
         assertEq(address(config.hook), address(1));
         assertEq(mockValidator.isInitialized(address(kernel)), true);
@@ -298,9 +298,9 @@ abstract contract KernelTestBase is Test {
             gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
             paymasterAndData: hex"",
             signature: encodeEnableSignature(
-                validatorConfig.hook,
-                validatorConfig.validatorData,
-                validatorConfig.hookData,
+                validationConfig.hook,
+                validationConfig.validatorData,
+                validationConfig.hookData,
                 abi.encodePacked(kernel.execute.selector),
                 getEnableSig(bytes32(0), true),
                 getValidatorSig(op, true)
@@ -352,7 +352,7 @@ abstract contract KernelTestBase is Test {
         );
         entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
         ValidationManager.ValidationConfig memory config =
-            kernel.validatorConfig(ValidatorLib.validatorToIdentifier(enabledValidator));
+            kernel.validationConfig(ValidatorLib.validatorToIdentifier(enabledValidator));
         assertEq(config.nonce, 2);
         assertEq(address(config.hook), address(1));
         assertEq(kernel.currentNonce(), 3);
@@ -394,7 +394,7 @@ abstract contract KernelTestBase is Test {
         ops[0] = _prepareRootUserOp(
             abi.encodeWithSelector(
                 kernel.installModule.selector,
-                6,
+                7,
                 address(mockAction),
                 abi.encodePacked(MockAction.doSomething.selector, address(0))
             ),
@@ -416,7 +416,7 @@ abstract contract KernelTestBase is Test {
         ops[0] = _prepareRootUserOp(
             abi.encodeWithSelector(
                 kernel.installModule.selector,
-                6,
+                7,
                 address(mockAction),
                 abi.encodePacked(MockAction.doSomething.selector, address(mockHook), abi.encodePacked("hookData"))
             ),

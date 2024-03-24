@@ -28,25 +28,22 @@ abstract contract SelectorManager {
     }
 
     function _fallbackConfig() internal view returns (IFallback fallbackHandler, IHook hook) {
-        SelectorStorage storage ss;
-        bytes32 slot = SELECTOR_MANAGER_STORAGE_SLOT;
-        assembly {
-            ss.slot := slot
-        }
-        fallbackHandler = ss.fallbackHandler;
-        hook = ss.hook;
+        fallbackHandler = _selectorStorage().fallbackHandler;
+        hook = _selectorStorage().hook;
     }
 
     function _selectorConfig(bytes4 selector) internal view returns (SelectorConfig storage config) {
-        SelectorStorage storage ss;
+        config = _selectorStorage().selectorConfig[selector];
+    }
+
+    function _selectorStorage() internal view returns (SelectorStorage storage ss) {
         bytes32 slot = SELECTOR_MANAGER_STORAGE_SLOT;
         assembly {
             ss.slot := slot
         }
-        config = ss.selectorConfig[selector];
     }
 
-    function _installSelector(bytes4 selector, address target, IHook hook, bytes calldata hookData) internal {
+    function _installSelector(bytes4 selector, address target, IHook hook) internal {
         if (address(hook) == address(0)) {
             hook = IHook(address(1));
         }
@@ -54,31 +51,28 @@ abstract contract SelectorManager {
         // we are going to install only through delegatecall
         ss.hook = hook;
         ss.target = target;
-        // TODO : INSTALL FLOW FOR fallback is NOT SUPPORTED YET
-        if (address(hook) != address(1)) {
-            hook.onInstall(hookData);
-        }
     }
 
-    function _installFallback(
-        IFallback fallbackHandler,
-        IHook hook,
-        bytes calldata fallbackData,
-        bytes calldata hookData
-    ) internal {
+    function _uninstallSelector(bytes4 selector) internal returns (IHook hook) {
+        SelectorConfig storage ss = _selectorConfig(selector);
+        hook = ss.hook;
+        ss.hook = IHook(address(0));
+        ss.target = address(0);
+    }
+
+    function _installFallback(IFallback fallbackHandler, bytes calldata fallbackData, IHook hook) internal {
         if (address(hook) == address(0)) {
             hook = IHook(address(1));
         }
-        SelectorStorage storage ss;
-        bytes32 slot = SELECTOR_MANAGER_STORAGE_SLOT;
-        assembly {
-            ss.slot := slot
-        }
-        ss.fallbackHandler = fallbackHandler;
+        _selectorStorage().fallbackHandler = fallbackHandler;
         fallbackHandler.onInstall(fallbackData);
-        ss.hook = hook;
-        if (address(hook) != address(1)) {
-            hook.onInstall(hookData);
-        }
+        _selectorStorage().hook = hook;
+    }
+
+    function _uninstallFallback(bytes calldata fallbackDeinitData) internal returns (IHook hook) {
+        SelectorStorage storage ss = _selectorStorage();
+        hook = ss.hook;
+        ss.hook = IHook(address(0));
+        ss.fallbackHandler = IFallback(address(0));
     }
 }

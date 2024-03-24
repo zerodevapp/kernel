@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "src/core/PermissionManager.sol";
+import "src/core/ValidationManager.sol";
 import "forge-std/Test.sol";
 
 contract MockValidatorLib {

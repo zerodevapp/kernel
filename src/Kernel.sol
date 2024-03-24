@@ -18,17 +18,17 @@ import {
     VALIDATION_TYPE_PERMISSION,
     PassFlag,
     SKIP_SIGNATURE
-} from "./core/PermissionManager.sol";
+} from "./core/ValidationManager.sol";
 import {HookManager} from "./core/HookManager.sol";
 import {ExecutorManager} from "./core/ExecutorManager.sol";
 import {SelectorManager} from "./core/SelectorManager.sol";
-import {IModule, IValidator, IHook, IExecutor, IFallback, ISigner} from "./interfaces/IERC7579Modules.sol";
+import {IModule, IValidator, IHook, IExecutor, IFallback, IPolicy, ISigner} from "./interfaces/IERC7579Modules.sol";
 import {EIP712} from "solady/src/utils/EIP712.sol";
 import {ExecLib, ExecMode, CallType, CALLTYPE_SINGLE, CALLTYPE_DELEGATECALL} from "./utils/ExecLib.sol";
 
 bytes32 constant ERC1967_IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
 
-contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager, HookManager, ExecutorManager {
+contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager, ExecutorManager {
     error ExecutionReverted();
     error InvalidExecutor();
     error InvalidFallback();
@@ -43,7 +43,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
 
     constructor(IEntryPoint _entrypoint) {
         entrypoint = _entrypoint;
-        _validatorStorage().rootValidator = ValidationId.wrap(bytes21(abi.encodePacked(hex"deadbeef")));
+        _validationStorage().rootValidator = ValidationId.wrap(bytes21(abi.encodePacked(hex"deadbeef")));
     }
 
     modifier onlyEntryPoint() {
@@ -61,7 +61,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
     }
 
     modifier onlyEntryPointOrSelfOrRoot() {
-        IValidator validator = ValidatorLib.getValidator(_validatorStorage().rootValidator);
+        IValidator validator = ValidatorLib.getValidator(_validationStorage().rootValidator);
         if (
             msg.sender != address(entrypoint) && msg.sender != address(this) // do rootValidator hook
         ) {
@@ -80,7 +80,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
     function initialize(ValidationId _rootValidator, IHook hook, bytes calldata validatorData, bytes calldata hookData)
         external
     {
-        ValidationStorage storage vs = _validatorStorage();
+        ValidationStorage storage vs = _validationStorage();
         require(ValidationId.unwrap(vs.rootValidator) == bytes21(0), "already initialized");
         if (ValidationId.unwrap(_rootValidator) == bytes21(0)) {
             revert InvalidValidator();
@@ -183,7 +183,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         onlyEntryPoint
         returns (ValidationData validationData)
     {
-        ValidationStorage storage vs = _validatorStorage();
+        ValidationStorage storage vs = _validationStorage();
         // ONLY ENTRYPOINT
         // Major change for v2 => v3
         // 1. instead of packing 4 bytes prefix to userOp.signature to determine the mode, v3 uses userOp.nonce's first 2 bytes to check the mode
@@ -196,7 +196,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             vId = vs.rootValidator;
         }
         validationData = _doValidation(vMode, vId, userOp, userOpHash);
-        ValidationConfig memory vc = vs.validatorConfig[vId];
+        ValidationConfig memory vc = vs.validationConfig[vId];
         // allow when nonce is not revoked or vType is sudo
         if (vType != VALIDATION_TYPE_SUDO && vc.nonce < vs.validNonceFrom) {
             revert InvalidNonce();
@@ -276,12 +276,12 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
     }
 
     function isValidSignature(bytes32 hash, bytes calldata signature) external view override returns (bytes4) {
-        ValidationStorage storage vs = _validatorStorage();
+        ValidationStorage storage vs = _validationStorage();
         (ValidationId vId, bytes calldata sig) = ValidatorLib.decodeSignature(signature);
         if (ValidatorLib.getType(vId) == VALIDATION_TYPE_SUDO) {
             vId = vs.rootValidator;
         }
-        if (address(vs.validatorConfig[vId].hook) == address(0)) {
+        if (address(vs.validationConfig[vId].hook) == address(0)) {
             revert InvalidValidator();
         }
         if (ValidatorLib.getType(vId) == VALIDATION_TYPE_VALIDATOR) {
@@ -304,7 +304,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         onlyEntryPointOrSelfOrRoot
     {
         if (moduleType == 1) {
-            ValidationStorage storage vs = _validatorStorage();
+            ValidationStorage storage vs = _validationStorage();
             ValidationId vId = ValidatorLib.validatorToIdentifier(IValidator(module));
             ValidationConfig memory config =
                 ValidationConfig({nonce: vs.currentNonce, hook: IHook(address(bytes20(initData[0:20])))});
@@ -317,6 +317,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
                 hookData.length := calldataload(sub(hookData.offset, 32))
             }
             _installValidation(vId, config, validatorData, hookData);
+            //_installHook(config.hook, hookData); hook install is handled inside installvalidation
             vs.currentNonce++;
         } else if (moduleType == 2) {
             bytes calldata executorData;
@@ -327,7 +328,9 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
                 hookData.offset := add(add(initData.offset, 52), calldataload(add(initData.offset, 52)))
                 hookData.length := calldataload(sub(hookData.offset, 32))
             }
-            _installExecutor(IExecutor(module), IHook(address(bytes20(initData[0:20]))), executorData, hookData);
+            IHook hook = IHook(address(bytes20(initData[0:20])));
+            _installExecutor(IExecutor(module), executorData, hook);
+            _installHook(hook, hookData);
         } else if (moduleType == 3) {
             bytes calldata fallbackData;
             bytes calldata hookData;
@@ -337,9 +340,29 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
                 hookData.offset := add(add(initData.offset, 52), calldataload(add(initData.offset, 52)))
                 hookData.length := calldataload(sub(hookData.offset, 32))
             }
-            _installFallback(IFallback(module), IHook(address(bytes20(initData[0:20]))), fallbackData, hookData);
+            IHook hook = IHook(address(bytes20(initData[0:20])));
+            _installFallback(IFallback(module), fallbackData, hook);
+            _installHook(hook, hookData);
+        } else if (moduleType == 4) {
+            // force call onInstall for hook
+            // NOTE: for hook, kernel does not support independant hook install,
+            // hook is expected to be paired with proper validator/executor/selector
+            IHook(module).onInstall(initData);
+        } else if (moduleType == 5) {
+            // force call onInstall for policy
+            // NOTE: for policy, kernel does not support independant policy install,
+            // policy is expected to be paired with proper permissionId
+            // to "ADD" permission, use "installValidations()" function
+            IPolicy(module).onInstall(initData);
         } else if (moduleType == 6) {
-            _installSelector(bytes4(initData[0:4]), module, IHook(address(bytes20(initData[4:24]))), initData[24:]);
+            // force call onInstall for signer
+            // NOTE: for signer, kernel does not support independant signer install,
+            // signer is expected to be paired with proper permissionId
+            // to "ADD" permission, use "installValidations()" function
+            ISigner(module).onInstall(initData);
+        } else if (moduleType == 7) {
+            _installSelector(bytes4(initData[0:4]), module, IHook(address(bytes20(initData[4:24]))));
+            _installHook(IHook(address(bytes20(initData[4:24]))), initData[24:]);
         } else {
             revert InvalidModuleType();
         }
@@ -354,26 +377,90 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         _installValidations(vIds, configs, validationData, hookData);
     }
 
-    function uninstallValidation(ValidationId vId, bytes calldata deinitData)
+    function uninstallValidation(ValidationId vId, bytes calldata deinitData, bytes calldata hookDeinitData)
         external
         payable
         onlyEntryPointOrSelfOrRoot
     {
-        _uninstallValidation(vId, deinitData);
+        _uninstallValidation(vId, deinitData, hookDeinitData);
     }
 
     function invalidateNonce(uint32 nonce) external payable onlyEntryPointOrSelfOrRoot {
         _invalidateNonce(nonce);
     }
 
-    function uninstallModule(uint256, address module, bytes calldata deInitData)
+    function uninstallModule(uint256 moduleType, address module, bytes calldata deInitData)
         external
         payable
         override
         onlyEntryPointOrSelfOrRoot
     {
-        // is it ok?
-        IModule(module).onUninstall(deInitData);
+        if (bytes1(deInitData[0]) == bytes1(0xff)) {
+            // this means it's force uninstall
+            IModule(module).onUninstall(deInitData[1:]);
+            return;
+        }
+        deInitData = deInitData[1:];
+        if (moduleType == 1) {
+            ValidationStorage storage vs = _validationStorage();
+            ValidationId vId = ValidatorLib.validatorToIdentifier(IValidator(module));
+            bytes calldata validatorData;
+            bytes calldata hookData;
+            assembly {
+                validatorData.offset := add(add(deInitData.offset, 32), calldataload(deInitData.offset))
+                validatorData.length := calldataload(sub(validatorData.offset, 32))
+                hookData.offset := add(add(deInitData.offset, 32), calldataload(add(deInitData.offset, 32)))
+                hookData.length := calldataload(sub(hookData.offset, 32))
+            }
+            _uninstallValidation(vId, validatorData, hookData);
+            //_uninstallHook this is handled on uninstallValidation
+        } else if (moduleType == 2) {
+            bytes calldata executorData;
+            bytes calldata hookData;
+            assembly {
+                executorData.offset := add(add(deInitData.offset, 32), calldataload(deInitData.offset))
+                executorData.length := calldataload(sub(executorData.offset, 32))
+                hookData.offset := add(add(deInitData.offset, 32), calldataload(add(deInitData.offset, 32)))
+                hookData.length := calldataload(sub(hookData.offset, 32))
+            }
+            IHook hook = _uninstallExecutor(IExecutor(module), executorData);
+            _uninstallHook(hook, hookData);
+        } else if (moduleType == 3) {
+            bytes calldata fallbackData;
+            bytes calldata hookData;
+            assembly {
+                fallbackData.offset := add(add(deInitData.offset, 32), calldataload(deInitData.offset))
+                fallbackData.length := calldataload(sub(fallbackData.offset, 32))
+                hookData.offset := add(add(deInitData.offset, 32), calldataload(add(deInitData.offset, 32)))
+                hookData.length := calldataload(sub(hookData.offset, 32))
+            }
+            (IFallback fallbackHandler,) = _fallbackConfig();
+            require(fallbackHandler == IFallback(module), "module address mismatch");
+            IHook hook = _uninstallFallback(fallbackData);
+            _uninstallHook(hook, hookData);
+        } else if (moduleType == 4) {
+            // force call onInstall for hook
+            // NOTE: for hook, kernel does not support independant hook install,
+            // hook is expected to be paired with proper validator/executor/selector
+            IHook(module).onUninstall(deInitData);
+        } else if (moduleType == 5) {
+            // force call onInstall for policy
+            // NOTE: for policy, kernel does not support independant policy install,
+            // policy is expected to be paired with proper permissionId
+            // to "ADD" permission, use "installValidations()" function
+            IPolicy(module).onUninstall(deInitData);
+        } else if (moduleType == 6) {
+            // force call onInstall for signer
+            // NOTE: for signer, kernel does not support independant signer install,
+            // signer is expected to be paired with proper permissionId
+            // to "ADD" permission, use "installValidations()" function
+            ISigner(module).onUninstall(deInitData);
+        } else if (moduleType == 7) {
+            IHook hook = _uninstallSelector(bytes4(deInitData[0:4]));
+            _uninstallHook(hook, deInitData[4:]);
+        } else {
+            revert InvalidModuleType();
+        }
     }
 
     function supportsModule(uint256 moduleTypeId) external pure override returns (bool) {
@@ -392,7 +479,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
     {
         if (moduleType == 1) {
             return
-                _validatorStorage().validatorConfig[ValidatorLib.validatorToIdentifier(IValidator(module))].nonce != 0;
+                _validationStorage().validationConfig[ValidatorLib.validatorToIdentifier(IValidator(module))].nonce != 0;
         } else if (moduleType == 2) {
             return address(_executorConfig(IExecutor(module)).hook) != address(0);
         } else if (moduleType == 3) {
