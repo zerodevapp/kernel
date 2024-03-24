@@ -91,7 +91,7 @@ abstract contract KernelTestBase is Test {
         kernel.initialize(
             rootValidation, rootValidationConfig.hook, rootValidationConfig.validatorData, rootValidationConfig.hookData
         );
-        assertEq(kernel.currentNonce(), 2);
+        assertEq(kernel.currentNonce(), 1);
         _;
     }
 
@@ -144,7 +144,7 @@ abstract contract KernelTestBase is Test {
         assertEq(config.nonce, 1);
         assertEq(address(config.hook), address(1));
         assertEq(mockValidator.isInitialized(address(kernel)), true);
-        assertEq(kernel.currentNonce(), 2);
+        assertEq(kernel.currentNonce(), 1);
     }
 
     // root validator cases
@@ -315,7 +315,7 @@ abstract contract KernelTestBase is Test {
             bytes20(bytes4(0xdeadbeef)), // permission id
             0
         );
-        assertEq(kernel.currentNonce(), 2);
+        assertEq(kernel.currentNonce(), 1);
         _rootValidatorSuccessPreCondition();
         _enablePermissionSuccessPreCondition();
         op = PackedUserOperation({
@@ -353,9 +353,9 @@ abstract contract KernelTestBase is Test {
         entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
         ValidationManager.ValidationConfig memory config =
             kernel.validationConfig(ValidatorLib.validatorToIdentifier(enabledValidator));
-        assertEq(config.nonce, 2);
+        assertEq(config.nonce, 1);
         assertEq(address(config.hook), address(1));
-        assertEq(kernel.currentNonce(), 3);
+        assertEq(kernel.currentNonce(), 1);
     }
 
     function encodePermissionsEnableData() internal returns (bytes memory) {
@@ -380,7 +380,7 @@ abstract contract KernelTestBase is Test {
             encodeExecute(address(callee), 0, abi.encodeWithSelector(callee.setValue.selector, 123))
         );
         entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
-        assertEq(kernel.currentNonce(), 3);
+        assertEq(kernel.currentNonce(), 1);
         assertEq(
             MockSigner(address(permissionConfig.signer)).data(address(kernel)),
             abi.encodePacked(bytes32(bytes4(0xdeadbeef)), "signer")

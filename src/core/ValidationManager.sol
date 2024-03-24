@@ -135,7 +135,7 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
     ) internal {
         ValidationStorage storage state = _validationStorage();
         for (uint256 i = 0; i < validators.length; i++) {
-            _installValidation(validators[i], configs[i], validatorData[i], hookData[i]);
+            _installValidationWithoutNonceIncremental(validators[i], configs[i], validatorData[i], hookData[i]);
         }
         state.currentNonce++;
     }
@@ -191,6 +191,22 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
     }
 
     function _installValidation(
+        ValidationId vId,
+        ValidationConfig memory config,
+        bytes calldata validatorData,
+        bytes calldata hookData
+    ) internal {
+        ValidationStorage storage state = _validationStorage();
+        if (state.validationConfig[vId].nonce == state.currentNonce) {
+            // only increase currentNonce when vId's currentNonce is same
+            state.currentNonce++;
+        }
+        _installValidationWithoutNonceIncremental(vId, config, validatorData, hookData);
+    }
+
+    // this function will prevent signature replay of enableSig
+    // by not allowing same config.nonce usage
+    function _installValidationWithoutNonceIncremental(
         ValidationId vId,
         ValidationConfig memory config,
         bytes calldata validatorData,
@@ -266,7 +282,6 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
                     : bytes4(op.callData[0:4]);
                 (validationData, userOpSig) = _enableMode(vId, selector, op.signature);
                 userOp.signature = userOpSig;
-                state.currentNonce++;
             }
 
             ValidationType vType = ValidatorLib.getType(vId);
@@ -338,7 +353,7 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
             enableSig.offset := add(add(packedData.offset, 52), calldataload(add(packedData.offset, 116)))
             enableSig.length := calldataload(sub(enableSig.offset, 32))
         }
-        _installValidation(vId, config, validatorData, hookData);
+        _installValidation(vId, config, validatorData, hookData); // NOTE: for enable mode, nonce does not increase
         if (selectorData.length >= 4) {
             require(bytes4(selectorData[0:4]) == selector, "Invalid selector");
             if (selectorData.length >= 44) {

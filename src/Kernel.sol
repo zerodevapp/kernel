@@ -92,8 +92,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         vs.rootValidator = _rootValidator;
         ValidationConfig memory config = ValidationConfig({nonce: uint32(1), hook: hook});
         vs.currentNonce = 1;
-        _installValidation(_rootValidator, config, validatorData, hookData);
-        vs.currentNonce++;
+        _installValidationWithoutNonceIncremental(_rootValidator, config, validatorData, hookData);
     }
 
     // NOTE : when eip 1153 has been enabled, this can be transient storage
@@ -318,7 +317,6 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             }
             _installValidation(vId, config, validatorData, hookData);
             //_installHook(config.hook, hookData); hook install is handled inside installvalidation
-            vs.currentNonce++;
         } else if (moduleType == 2) {
             bytes calldata executorData;
             bytes calldata hookData;
@@ -396,6 +394,10 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         override
         onlyEntryPointOrSelfOrRoot
     {
+        if (moduleType == type(uint256).max) {
+            // force uninstall option
+            IModule(module).onUninstall(deInitData);
+        }
         if (moduleType == 1) {
             ValidationStorage storage vs = _validationStorage();
             ValidationId vId = ValidatorLib.validatorToIdentifier(IValidator(module));
@@ -474,8 +476,8 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         returns (bool)
     {
         if (moduleType == 1) {
-            return
-                _validationStorage().validationConfig[ValidatorLib.validatorToIdentifier(IValidator(module))].nonce != 0;
+            return _validationStorage().validationConfig[ValidatorLib.validatorToIdentifier(IValidator(module))].hook
+                != IHook(address(0));
         } else if (moduleType == 2) {
             return address(_executorConfig(IExecutor(module)).hook) != address(0);
         } else if (moduleType == 3) {
