@@ -112,7 +112,7 @@ abstract contract ValidationManager is EIP712, SelectorManager {
 
     function _invalidateNonce(uint32 nonce) internal {
         ValidationStorage storage state = _validatorStorage();
-        if(state.currentNonce + MAX_NONCE_INCREMENT_SIZE < nonce) {
+        if (state.currentNonce + MAX_NONCE_INCREMENT_SIZE < nonce) {
             revert NonceInvalidationError();
         }
         if (nonce <= state.validNonceFrom) {

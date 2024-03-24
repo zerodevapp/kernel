@@ -345,6 +345,15 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         }
     }
 
+    function installValidations(
+        ValidationId[] calldata vIds,
+        ValidationConfig[] memory configs,
+        bytes[] calldata validationData,
+        bytes[] calldata hookData
+    ) external onlyEntryPointOrSelfOrRoot {
+        _installValidations(vIds, configs, validationData, hookData);
+    }
+
     function uninstallValidation(ValidationId vId, bytes calldata deinitData)
         external
         payable

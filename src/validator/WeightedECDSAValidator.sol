@@ -257,7 +257,7 @@ contract WeightedECDSAValidator is EIP712, IValidator {
             }
         }
         ProposalStorage storage proposal = proposalStatus[hash][kernel];
-        if(proposal.status == ProposalStatus.Rejected) {
+        if (proposal.status == ProposalStatus.Rejected) {
             passed = false;
         } else {
             passed = approvals >= strg.threshold;
