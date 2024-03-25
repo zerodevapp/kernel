@@ -269,7 +269,7 @@ contract WeightedECDSAValidator is EIP712, IValidator {
         view
         returns (bytes4)
     {
-        WeightedECDSAValidatorStorage storage strg = weightedStorage[sender];
+        WeightedECDSAValidatorStorage storage strg = weightedStorage[msg.sender];
         if (strg.threshold == 0) {
             return ERC1271_INVALID;
         }
