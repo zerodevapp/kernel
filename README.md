@@ -37,6 +37,19 @@ MIT
 ## Addresses
 
 <details>
+<summary>v TBD</summary>
+
+| Name                 | Address                                    |
+| -------------------- | ------------------------------------------ |
+| Kernel               | 0xd3082872F8B06073A021b4602e022d5A070d7cfC |
+| KernelFactory        | 0x5de4839a76cf55d0c90e2061ef4386d962E15ae3 |
+| SessionKeyValidator  | 0xB8E3c4bEaACAd06f6092793012DA4a8cB23D6123 |
+| ECDSA Validator      | 0xd9AB5096a832b9ce79914329DAEE236f8Eea0390 |
+| FclWebAuthnValidator | 0x42085b533b27B9AfDAF3864a38c72eF853943DAB |
+| P256VerifierWrapper  | 0x738e3257EE928637fE62c37F91D3e722C45Dcc7C |
+</details>
+
+<details>
 <summary>v2.4</summary>
 
 | Name                 | Address                                    |

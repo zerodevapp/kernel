@@ -23,7 +23,8 @@ struct WebAuthnFclValidatorStorage {
 /// @notice Inspired by the cometh Gnosis Safe signer: https://github.com/cometh-game/p256-signer
 contract WebAuthnFclValidator is IKernelValidator {
     /// @dev Event emitted when the public key signing the WebAuthN user operation is changed for a given `kernel`.
-    event WebAuthnPublicKeyChanged(address indexed kernel, uint256 x, uint256 y);
+    /// @dev The `b64AuthenticatorId` param represent the webauthn authenticator id used to create this public key
+    event WebAuthnPublicKeyChanged(address indexed kernel, string indexed b64AuthenticatorId, uint256 x, uint256 y);
 
     /// @dev Mapping of kernel address to each webAuthn specific storage
     mapping(address kernel => WebAuthnFclValidatorStorage webAuthnStorage) private webAuthnValidatorStorage;
@@ -44,13 +45,13 @@ contract WebAuthnFclValidator is IKernelValidator {
     /// @dev Enable this validator for a given `kernel` (msg.sender)
     function enable(bytes calldata _data) external payable override {
         // Extract the x & y coordinates of the public key from the `_data` bytes
-        (uint256 x, uint256 y) = abi.decode(_data, (uint256, uint256));
+        (string memory authenticatorId, uint256 x, uint256 y) = abi.decode(_data, (string, uint256, uint256));
         // Update the pub key data
         WebAuthnFclValidatorStorage storage kernelValidatorStorage = webAuthnValidatorStorage[msg.sender];
         kernelValidatorStorage.x = x;
         kernelValidatorStorage.y = y;
         // Emit the update event
-        emit WebAuthnPublicKeyChanged(msg.sender, x, y);
+        emit WebAuthnPublicKeyChanged(msg.sender, authenticatorId, x, y);
     }
 
     /// @dev Validate a `_userOp` using a WebAuthn Signature for the kernel account who is the `_userOp` sender
