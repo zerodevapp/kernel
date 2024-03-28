@@ -1,12 +1,13 @@
 pragma solidity ^0.8.0;
 
-import {IValidator, IHook, IPolicy, ISigner} from "../interfaces/IERC7579Modules.sol";
+import {IValidator, IHook, IPolicy, ISigner, IFallback} from "../interfaces/IERC7579Modules.sol";
 import {PackedUserOperation} from "../interfaces/PackedUserOperation.sol";
 import {SelectorManager} from "./SelectorManager.sol";
 import {HookManager} from "./HookManager.sol";
 import {ValidationData, ValidAfter, ValidUntil, parseValidationData} from "../interfaces/IAccount.sol";
 import {IAccountExecute} from "../interfaces/IAccountExecute.sol";
-import {EIP712} from "solady/src/utils/EIP712.sol";
+import {EIP712} from "solady/utils/EIP712.sol";
+import {ModuleLib} from "../utils/ModuleLib.sol";
 import {
     ValidationId,
     PolicyData,
@@ -158,7 +159,7 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
         ValidationType vType = ValidatorLib.getType(vId);
         if (vType == VALIDATION_TYPE_VALIDATOR) {
             IValidator validator = ValidatorLib.getValidator(vId);
-            validator.onUninstall(validatorData);
+            ModuleLib.uninstallModule(address(validator), validatorData);
         } else if (vType == VALIDATION_TYPE_PERMISSION) {
             PermissionId permission = ValidatorLib.getPermissionId(vId);
             _uninstallPermission(permission, validatorData);
@@ -180,10 +181,13 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
         PolicyData[] storage policyData = config.policyData;
         for (uint256 i = 0; i < policyData.length; i++) {
             (PassFlag flag, IPolicy policy) = ValidatorLib.decodePolicyData(policyData[i]);
-            policy.onUninstall(abi.encodePacked(bytes32(PermissionId.unwrap(pId)), permissionDisableData[i]));
+            ModuleLib.uninstallModule(
+                address(policy), abi.encodePacked(bytes32(PermissionId.unwrap(pId)), permissionDisableData[i])
+            );
             policyData[i] = PolicyData.wrap(bytes22(0));
         }
-        config.signer.onUninstall(
+        ModuleLib.uninstallModule(
+            address(config.signer),
             abi.encodePacked(bytes32(PermissionId.unwrap(pId)), permissionDisableData[permissionDisableData.length - 1])
         );
         config.signer = ISigner(address(0));
@@ -248,7 +252,7 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
         }
 
         // clean up the policyData
-        if(state.permissionConfig[permission].policyData.length > 0) {
+        if (state.permissionConfig[permission].policyData.length > 0) {
             delete state.permissionConfig[permission].policyData;
         }
         unchecked {
@@ -364,7 +368,9 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
             if (selectorData.length >= 44) {
                 // install selector with hook and target contract
                 _installSelector(
-                    selector, address(bytes20(selectorData[4:24])), IHook(address(bytes20(selectorData[24:44])))
+                    selector,
+                    address(bytes20(selectorData[4:24])),
+                    IHook(address(bytes20(selectorData[24:44])))
                 );
                 _installHook(IHook(address(bytes20(selectorData[24:44]))), selectorData[44:]);
                 _setSelector(vId, selector, true);

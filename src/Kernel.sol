@@ -6,6 +6,7 @@ import {IAccount, ValidationData, ValidAfter, ValidUntil, parseValidationData} f
 import {IEntryPoint} from "./interfaces/IEntryPoint.sol";
 import {IAccountExecute} from "./interfaces/IAccountExecute.sol";
 import {IERC7579Account} from "./interfaces/IERC7579Account.sol";
+import {ModuleLib} from "./utils/ModuleLib.sol";
 import {
     ValidationManager,
     ValidationMode,
@@ -23,7 +24,7 @@ import {HookManager} from "./core/HookManager.sol";
 import {ExecutorManager} from "./core/ExecutorManager.sol";
 import {SelectorManager} from "./core/SelectorManager.sol";
 import {IModule, IValidator, IHook, IExecutor, IFallback, IPolicy, ISigner} from "./interfaces/IERC7579Modules.sol";
-import {EIP712} from "solady/src/utils/EIP712.sol";
+import {EIP712} from "solady/utils/EIP712.sol";
 import {ExecLib, ExecMode, CallType, CALLTYPE_SINGLE, CALLTYPE_DELEGATECALL} from "./utils/ExecLib.sol";
 
 bytes32 constant ERC1967_IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
@@ -119,7 +120,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             mstore(senderPtr, shl(96, caller()))
 
             // Add 20 bytes for the address appended add the end
-            // NOTE: we are only allowing static call for fallback
+            // NOTE: we are only allowing call for fallback
             success := staticcall(gas(), fallbackHandler, calldataPtr, add(calldatasize(), 20), 0, 0)
 
             result := mload(0x40)
@@ -330,6 +331,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             _installExecutor(IExecutor(module), executorData, hook);
             _installHook(hook, hookData);
         } else if (moduleType == 3) {
+            //TODO : update this to use _installSelector
             bytes calldata fallbackData;
             bytes calldata hookData;
             assembly {
@@ -396,7 +398,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
     {
         if (moduleType == type(uint256).max) {
             // force uninstall option
-            IModule(module).onUninstall(deInitData);
+            ModuleLib.uninstallModule(module, deInitData);
         }
         if (moduleType == 1) {
             ValidationStorage storage vs = _validationStorage();
@@ -439,19 +441,19 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             // force call onInstall for hook
             // NOTE: for hook, kernel does not support independant hook install,
             // hook is expected to be paired with proper validator/executor/selector
-            IHook(module).onUninstall(deInitData);
+            ModuleLib.uninstallModule(module, deInitData);
         } else if (moduleType == 5) {
             // force call onInstall for policy
             // NOTE: for policy, kernel does not support independant policy install,
             // policy is expected to be paired with proper permissionId
-            // to "ADD" permission, use "installValidations()" function
-            IPolicy(module).onUninstall(deInitData);
+            // to "REMOVE" permission, use "uninstallValidation()" function
+            ModuleLib.uninstallModule(module, deInitData);
         } else if (moduleType == 6) {
             // force call onInstall for signer
             // NOTE: for signer, kernel does not support independant signer install,
             // signer is expected to be paired with proper permissionId
-            // to "ADD" permission, use "installValidations()" function
-            ISigner(module).onUninstall(deInitData);
+            // to "REMOVE" permission, use "installValidation()" function
+            ModuleLib.uninstallModule(module, deInitData);
         } else if (moduleType == 7) {
             IHook hook = _uninstallSelector(bytes4(deInitData[0:4]));
             bytes calldata hookData = deInitData[4:];
@@ -483,7 +485,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         } else if (moduleType == 3) {
             (IFallback fallbackHandler,) = _fallbackConfig();
             return fallbackHandler == IFallback(module);
-        } else if (moduleType == 6) {
+        } else if (moduleType == 7) {
             return _selectorConfig(bytes4(additionalContext[0:4])).target == module;
         } else {
             return false;

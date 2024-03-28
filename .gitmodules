@@ -4,3 +4,6 @@
 [submodule "lib/solady"]
 	path = lib/solady
 	url = https://github.com/vectorized/solady
+[submodule "lib/ExcessivelySafeCall"]
+	path = lib/ExcessivelySafeCall
+	url = https://github.com/nomad-xyz/ExcessivelySafeCall

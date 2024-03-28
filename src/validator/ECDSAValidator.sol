@@ -1,6 +1,6 @@
 pragma solidity ^0.8.0;
 
-import {ECDSA} from "solady/src/utils/ECDSA.sol";
+import {ECDSA} from "solady/utils/ECDSA.sol";
 import {
     IValidator,
     IHook,

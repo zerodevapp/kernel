@@ -1,6 +1,7 @@
 pragma solidity ^0.8.0;
 
 import {IHook} from "../interfaces/IERC7579Modules.sol";
+import {ModuleLib} from "../utils/ModuleLib.sol";
 
 bytes32 constant HOOK_MANAGER_STORAGE_SLOT = 0x4605d5f70bb605094b2e761eccdc27bed9a362d8612792676bf3fb9b12832ffc;
 
@@ -46,7 +47,7 @@ abstract contract HookManager {
         }
         if (bytes1(hookData[0]) == bytes1(0xff)) {
             // 0xff means you want to call uninstall hook
-            hook.onUninstall(hookData[1:]);
+            ModuleLib.uninstallModule(address(hook), hookData[1:]);
             return;
         }
     }

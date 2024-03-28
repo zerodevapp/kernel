@@ -10,7 +10,7 @@ bytes32 constant SELECTOR_MANAGER_STORAGE_SLOT = 0x7c341349a4360fdd5d5bc07e69f32
 abstract contract SelectorManager {
     struct SelectorConfig {
         IHook hook; // 20 bytes for hook address
-        address target; // 20 bytes target will be fallback module, called with delegatecall or call
+        address target; // 20 bytes target will be fallback module, called with call
     }
 
     struct SelectorStorage {
