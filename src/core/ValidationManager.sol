@@ -246,6 +246,11 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
         if (permissionEnableData.length > 254 || permissionEnableData.length == 0) {
             revert PolicyDataTooLarge();
         }
+
+        // clean up the policyData
+        if(state.permissionConfig[permission].policyData.length > 0) {
+            delete state.permissionConfig[permission].policyData;
+        }
         unchecked {
             for (uint256 i = 0; i < permissionEnableData.length - 1; i++) {
                 state.permissionConfig[permission].policyData.push(
