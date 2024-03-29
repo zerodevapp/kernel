@@ -2,15 +2,18 @@ pragma solidity ^0.8.0;
 
 import {IHook, IFallback} from "../interfaces/IERC7579Modules.sol";
 import {CallType} from "../utils/ExecLib.sol";
-import {CALLTYPE_DELEGATECALL} from "../types/Constants.sol";
+import {CALLTYPE_DELEGATECALL, CALLTYPE_SINGLE} from "../types/Constants.sol";
 
 // bytes32(uint256(keccak256('kernel.v3.selector')) - 1)
 bytes32 constant SELECTOR_MANAGER_STORAGE_SLOT = 0x7c341349a4360fdd5d5bc07e69f325dc6aaea3eb018b3e0ea7e53cc0bb0d6f3b;
 
 abstract contract SelectorManager {
+    error NotSupportedCallType();
+
     struct SelectorConfig {
         IHook hook; // 20 bytes for hook address
         address target; // 20 bytes target will be fallback module, called with call
+        CallType callType;
     }
 
     struct SelectorStorage {
@@ -43,14 +46,22 @@ abstract contract SelectorManager {
         }
     }
 
-    function _installSelector(bytes4 selector, address target, IHook hook) internal {
+    function _installSelector(bytes4 selector, address target, IHook hook, bytes calldata selectorData) internal {
         if (address(hook) == address(0)) {
             hook = IHook(address(1));
         }
         SelectorConfig storage ss = _selectorConfig(selector);
         // we are going to install only through delegatecall
+        // TODO set calltype and call onInstall for fallback if needed
+        CallType callType = CallType.wrap(bytes1(selectorData[0]));
+        if (callType == CALLTYPE_SINGLE) {
+            IFallback(target).onInstall(selectorData[1:]);
+        } else if (callType != CALLTYPE_DELEGATECALL) {
+            revert NotSupportedCallType();
+        }
         ss.hook = hook;
         ss.target = target;
+        ss.callType = callType;
     }
 
     function _uninstallSelector(bytes4 selector) internal returns (IHook hook) {
@@ -58,6 +69,7 @@ abstract contract SelectorManager {
         hook = ss.hook;
         ss.hook = IHook(address(0));
         ss.target = address(0);
+        ss.callType = CallType.wrap(bytes1(0xff));
     }
 
     function _installFallback(IFallback fallbackHandler, bytes calldata fallbackData, IHook hook) internal {

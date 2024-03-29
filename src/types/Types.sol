@@ -13,10 +13,15 @@ type ExecModePayload is bytes22;
 
 using {eqModeSelector as ==} for ExecModeSelector global;
 using {eqCallType as ==} for CallType global;
+using {notEqCallType as !=} for CallType global;
 using {eqExecType as ==} for ExecType global;
 
 function eqCallType(CallType a, CallType b) pure returns (bool) {
     return CallType.unwrap(a) == CallType.unwrap(b);
+}
+
+function notEqCallType(CallType a, CallType b) pure returns (bool) {
+    return CallType.unwrap(a) != CallType.unwrap(b);
 }
 
 function eqExecType(ExecType a, ExecType b) pure returns (bool) {

@@ -206,4 +206,56 @@ library ExecLib {
     {
         userOpCalldata = abi.encodePacked(target, value, callData);
     }
+
+    function doFallback2771Static(address fallbackHandler) internal view returns (bool success, bytes memory result) {
+        assembly {
+            function allocate(length) -> pos {
+                pos := mload(0x40)
+                mstore(0x40, add(pos, length))
+            }
+
+            let calldataPtr := allocate(calldatasize())
+            calldatacopy(calldataPtr, 0, calldatasize())
+
+            // The msg.sender address is shifted to the left by 12 bytes to remove the padding
+            // Then the address without padding is stored right after the calldata
+            let senderPtr := allocate(20)
+            mstore(senderPtr, shl(96, caller()))
+
+            // Add 20 bytes for the address appended add the end
+            success := staticcall(gas(), fallbackHandler, calldataPtr, add(calldatasize(), 20), 0, 0)
+
+            result := mload(0x40)
+            mstore(result, returndatasize()) // Store the length.
+            let o := add(result, 0x20)
+            returndatacopy(o, 0x00, returndatasize()) // Copy the returndata.
+            mstore(0x40, add(o, returndatasize())) // Allocate the memory.
+        }
+    }
+
+    function doFallback2771Call(address target) internal returns (bool success, bytes memory result) {
+        assembly {
+            function allocate(length) -> pos {
+                pos := mload(0x40)
+                mstore(0x40, add(pos, length))
+            }
+
+            let calldataPtr := allocate(calldatasize())
+            calldatacopy(calldataPtr, 0, calldatasize())
+
+            // The msg.sender address is shifted to the left by 12 bytes to remove the padding
+            // Then the address without padding is stored right after the calldata
+            let senderPtr := allocate(20)
+            mstore(senderPtr, shl(96, caller()))
+
+            // Add 20 bytes for the address appended add the end
+            success := call(gas(), target, 0, calldataPtr, add(calldatasize(), 20), 0, 0)
+
+            result := mload(0x40)
+            mstore(result, returndatasize()) // Store the length.
+            let o := add(result, 0x20)
+            returndatacopy(o, 0x00, returndatasize()) // Copy the returndata.
+            mstore(0x40, add(o, returndatasize())) // Allocate the memory.
+        }
+    }
 }

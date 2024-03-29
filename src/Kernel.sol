@@ -104,33 +104,6 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         version = "0.3.0-beta";
     }
 
-    function _doFallback2771(IFallback fallbackHandler) internal view returns (bool success, bytes memory result) {
-        assembly {
-            function allocate(length) -> pos {
-                pos := mload(0x40)
-                mstore(0x40, add(pos, length))
-            }
-
-            let calldataPtr := allocate(calldatasize())
-            calldatacopy(calldataPtr, 0, calldatasize())
-
-            // The msg.sender address is shifted to the left by 12 bytes to remove the padding
-            // Then the address without padding is stored right after the calldata
-            let senderPtr := allocate(20)
-            mstore(senderPtr, shl(96, caller()))
-
-            // Add 20 bytes for the address appended add the end
-            // NOTE: we are only allowing call for fallback
-            success := staticcall(gas(), fallbackHandler, calldataPtr, add(calldatasize(), 20), 0, 0)
-
-            result := mload(0x40)
-            mstore(result, returndatasize()) // Store the length.
-            let o := add(result, 0x20)
-            returndatacopy(o, 0x00, returndatasize()) // Copy the returndata.
-            mstore(0x40, add(o, returndatasize())) // Allocate the memory.
-        }
-    }
-
     receive() external payable {
         emit Received(msg.sender, msg.value);
     }
@@ -147,10 +120,10 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             }
             if (address(hook) != address(1)) {
                 bytes memory context = _doPreHook(hook, msg.data);
-                (success, result) = _doFallback2771(fallbackHandler);
+                (success, result) = ExecLib.doFallback2771Static(address(fallbackHandler));
                 _doPostHook(hook, context, success, result);
             } else {
-                (success, result) = _doFallback2771(fallbackHandler);
+                (success, result) = ExecLib.doFallback2771Static(address(fallbackHandler));
             }
         } else {
             // action installed
@@ -159,7 +132,13 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
                 context = _doPreHook(config.hook, msg.data);
             }
             // execute action
-            (success, result) = ExecLib._executeDelegatecall(config.target, msg.data);
+            if (config.callType == CALLTYPE_SINGLE) {
+                (success, result) = ExecLib.doFallback2771Call(config.target);
+            } else if (config.callType == CALLTYPE_DELEGATECALL) {
+                (success, result) = ExecLib._executeDelegatecall(config.target, msg.data);
+            } else {
+                revert NotSupportedCallType();
+            }
             if (address(config.hook) != address(1)) {
                 _doPostHook(config.hook, context, success, result);
             }
@@ -361,8 +340,16 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             // to "ADD" permission, use "installValidations()" function
             ISigner(module).onInstall(initData);
         } else if (moduleType == 7) {
-            _installSelector(bytes4(initData[0:4]), module, IHook(address(bytes20(initData[4:24]))));
-            _installHook(IHook(address(bytes20(initData[4:24]))), initData[24:]);
+            bytes calldata selectorData;
+            bytes calldata hookData;
+            assembly {
+                selectorData.offset := add(add(initData.offset, 56), calldataload(add(initData.offset, 24)))
+                selectorData.length := calldataload(sub(selectorData.offset, 32))
+                hookData.offset := add(add(initData.offset, 56), calldataload(add(initData.offset, 56)))
+                hookData.length := calldataload(sub(hookData.offset, 32))
+            }
+            _installSelector(bytes4(initData[0:4]), module, IHook(address(bytes20(initData[4:24]))), selectorData);
+            _installHook(IHook(address(bytes20(initData[4:24]))), hookData);
         } else {
             revert InvalidModuleType();
         }

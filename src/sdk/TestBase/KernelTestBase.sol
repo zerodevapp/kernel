@@ -396,7 +396,7 @@ abstract contract KernelTestBase is Test {
                 kernel.installModule.selector,
                 7,
                 address(mockAction),
-                abi.encodePacked(MockAction.doSomething.selector, address(0))
+                abi.encodePacked(MockAction.doSomething.selector, address(0), abi.encode(hex"ff", hex""))
             ),
             true
         );
@@ -419,7 +419,9 @@ abstract contract KernelTestBase is Test {
                 7,
                 address(mockAction),
                 abi.encodePacked(
-                    MockAction.doSomething.selector, address(mockHook), abi.encodePacked(bytes1(0xff), "hookData")
+                    MockAction.doSomething.selector,
+                    address(mockHook),
+                    abi.encode(hex"ff", abi.encodePacked(bytes1(0xff), "hookData"))
                 )
             ),
             true
