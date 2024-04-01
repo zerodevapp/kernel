@@ -39,8 +39,12 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
     error InvalidCaller();
 
     event Received(address sender, uint256 amount);
+    event Upgraded(address indexed implementation);
 
     IEntryPoint public immutable entrypoint;
+
+    // NOTE : when eip 1153 has been enabled, this can be transient storage
+    mapping(bytes32 userOpHash => IHook) internal executionHook;
 
     constructor(IEntryPoint _entrypoint) {
         entrypoint = _entrypoint;
@@ -96,8 +100,13 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         _installValidationWithoutNonceIncremental(_rootValidator, config, validatorData, hookData);
     }
 
-    // NOTE : when eip 1153 has been enabled, this can be transient storage
-    mapping(bytes32 userOpHash => IHook) internal executionHook;
+    function upgradeTo(address _newImplementation) external payable onlyEntryPointOrSelfOrRoot {
+        assembly {
+            sstore(ERC1967_IMPLEMENTATION_SLOT, _newImplementation)
+        }
+        emit Upgraded(_newImplementation);
+    }
+
 
     function _domainNameAndVersion() internal pure override returns (string memory name, string memory version) {
         name = "Kernel";
