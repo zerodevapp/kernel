@@ -239,7 +239,7 @@ contract WeightedECDSAValidator is EIP712, IValidator {
             address signer = ECDSA.recover(ECDSA.toEthSignedMessageHash(userOpHash), userOp.signature);
             if (guardian[signer][msg.sender].weight != 0) {
                 proposal.status = ProposalStatus.Executed;
-                return packValidationData(ValidAfter.wrap(0), ValidUntil.wrap(0));
+                return packValidationData(proposal.validAfter, ValidUntil.wrap(0));
             }
         }
         return VALIDATION_FAILED;
