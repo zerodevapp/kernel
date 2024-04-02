@@ -107,7 +107,6 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         emit Upgraded(_newImplementation);
     }
 
-
     function _domainNameAndVersion() internal pure override returns (string memory name, string memory version) {
         name = "Kernel";
         version = "0.3.0-beta";
