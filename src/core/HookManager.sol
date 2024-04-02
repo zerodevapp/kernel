@@ -32,11 +32,11 @@ abstract contract HookManager {
         if (!hook.isInitialized(address(this))) {
             // if hook is not installed, it should call onInstall
             hook.onInstall(hookData[1:]);
+            return;
         }
         if (bytes1(hookData[0]) == bytes1(0xff)) {
             // 0xff means you want to explicitly call install hook
             hook.onInstall(hookData[1:]);
-            return;
         }
     }
 
@@ -48,7 +48,6 @@ abstract contract HookManager {
         if (bytes1(hookData[0]) == bytes1(0xff)) {
             // 0xff means you want to call uninstall hook
             ModuleLib.uninstallModule(address(hook), hookData[1:]);
-            return;
         }
     }
 }

@@ -335,17 +335,6 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             // signer is expected to be paired with proper permissionId
             // to "ADD" permission, use "installValidations()" function
             ISigner(module).onInstall(initData);
-        } else if (moduleType == 7) {
-            bytes calldata selectorData;
-            bytes calldata hookData;
-            assembly {
-                selectorData.offset := add(add(initData.offset, 56), calldataload(add(initData.offset, 24)))
-                selectorData.length := calldataload(sub(selectorData.offset, 32))
-                hookData.offset := add(add(initData.offset, 56), calldataload(add(initData.offset, 56)))
-                hookData.length := calldataload(sub(hookData.offset, 32))
-            }
-            _installSelector(bytes4(initData[0:4]), module, IHook(address(bytes20(initData[4:24]))), selectorData);
-            _installHook(IHook(address(bytes20(initData[4:24]))), hookData);
         } else {
             revert InvalidModuleType();
         }

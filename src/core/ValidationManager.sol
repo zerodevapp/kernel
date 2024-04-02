@@ -34,6 +34,9 @@ bytes32 constant VALIDATION_MANAGER_STORAGE_POSITION =
     0x7bcaa2ced2a71450ed5a9a1b4848e8e5206dbc3f06011e595f7f55428cc6f84f;
 uint32 constant MAX_NONCE_INCREMENT_SIZE = 10;
 
+bytes32 constant ENABLE_TYPE_HASH = 0xb17ab1224aca0d4255ef8161acaf2ac121b8faa32a4b2258c912cc5f8308c505;
+bytes32 constant KERNEL_WRAPPER_TYPE_HASH = 0x1547321c374afde8a591d972a084b071c594c275e36724931ff96c25f2999c83;
+
 abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
     event ValidatorInstalled(IValidator validator, uint32 nonce);
     event PermissionInstalled(PermissionId permission, uint32 nonce);
@@ -180,12 +183,12 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
         }
         PolicyData[] storage policyData = config.policyData;
         for (uint256 i = 0; i < policyData.length; i++) {
-            (PassFlag flag, IPolicy policy) = ValidatorLib.decodePolicyData(policyData[i]);
+            (, IPolicy policy) = ValidatorLib.decodePolicyData(policyData[i]);
             ModuleLib.uninstallModule(
                 address(policy), abi.encodePacked(bytes32(PermissionId.unwrap(pId)), permissionDisableData[i])
             );
-            policyData[i] = PolicyData.wrap(bytes22(0));
         }
+        delete _validationStorage().permissionConfig[pId].policyData;
         ModuleLib.uninstallModule(
             address(config.signer),
             abi.encodePacked(bytes32(PermissionId.unwrap(pId)), permissionDisableData[permissionDisableData.length - 1])
@@ -419,9 +422,7 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
         digest = _hashTypedData(
             keccak256(
                 abi.encode(
-                    keccak256(
-                        "Enable(bytes21 validationId,uint32 nonce,address hook,bytes validatorData,bytes hookData,bytes selectorData)"
-                    ), // TODO: this to constant
+                    ENABLE_TYPE_HASH,
                     ValidationId.unwrap(vId),
                     state.currentNonce,
                     config.hook,
@@ -556,6 +557,6 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
     }
 
     function _toWrappedHash(bytes32 hash) internal view returns (bytes32) {
-        return _hashTypedData(keccak256(abi.encode(keccak256("Kernel(bytes32 hash)"), hash)));
+        return _hashTypedData(keccak256(abi.encode(KERNEL_WRAPPER_TYPE_HASH, hash)));
     }
 }
