@@ -20,7 +20,7 @@ library ExecLib {
 
     event TryExecuteUnsuccessful(uint256 batchExecutionindex, bytes result);
 
-    function _execute(ExecMode execMode, bytes calldata executionCalldata)
+    function execute(ExecMode execMode, bytes calldata executionCalldata)
         internal
         returns (bytes[] memory returnData)
     {
@@ -31,8 +31,8 @@ library ExecLib {
             // destructure executionCallData according to batched exec
             Execution[] calldata executions = decodeBatch(executionCalldata);
             // check if execType is revert or try
-            if (execType == EXECTYPE_DEFAULT) returnData = _execute(executions);
-            else if (execType == EXECTYPE_TRY) returnData = _tryExecute(executions);
+            if (execType == EXECTYPE_DEFAULT) returnData = execute(executions);
+            else if (execType == EXECTYPE_TRY) returnData = tryExecute(executions);
             else revert("Unsupported");
         } else if (callType == CALLTYPE_SINGLE) {
             // destructure executionCallData according to single exec
@@ -41,9 +41,9 @@ library ExecLib {
             bool success;
             // check if execType is revert or try
             if (execType == EXECTYPE_DEFAULT) {
-                returnData[0] = _execute(target, value, callData);
+                returnData[0] = execute(target, value, callData);
             } else if (execType == EXECTYPE_TRY) {
-                (success, returnData[0]) = _tryExecute(target, value, callData);
+                (success, returnData[0]) = tryExecute(target, value, callData);
                 if (!success) emit TryExecuteUnsuccessful(0, returnData[0]);
             } else {
                 revert("Unsupported");
@@ -51,35 +51,35 @@ library ExecLib {
         } else if (callType == CALLTYPE_DELEGATECALL) {
             address delegate = address(bytes20(executionCalldata[0:20]));
             bytes calldata callData = executionCalldata[20:];
-            _executeDelegatecall(delegate, callData);
+            executeDelegatecall(delegate, callData);
         } else {
             revert("Unsupported");
         }
     }
 
-    function _execute(Execution[] calldata executions) internal returns (bytes[] memory result) {
+    function execute(Execution[] calldata executions) internal returns (bytes[] memory result) {
         uint256 length = executions.length;
         result = new bytes[](length);
 
         for (uint256 i; i < length; i++) {
             Execution calldata _exec = executions[i];
-            result[i] = _execute(_exec.target, _exec.value, _exec.callData);
+            result[i] = execute(_exec.target, _exec.value, _exec.callData);
         }
     }
 
-    function _tryExecute(Execution[] calldata executions) internal returns (bytes[] memory result) {
+    function tryExecute(Execution[] calldata executions) internal returns (bytes[] memory result) {
         uint256 length = executions.length;
         result = new bytes[](length);
 
         for (uint256 i; i < length; i++) {
             Execution calldata _exec = executions[i];
             bool success;
-            (success, result[i]) = _tryExecute(_exec.target, _exec.value, _exec.callData);
+            (success, result[i]) = tryExecute(_exec.target, _exec.value, _exec.callData);
             if (!success) emit TryExecuteUnsuccessful(i, result[i]);
         }
     }
 
-    function _execute(address target, uint256 value, bytes calldata callData) internal returns (bytes memory result) {
+    function execute(address target, uint256 value, bytes calldata callData) internal returns (bytes memory result) {
         /// @solidity memory-safe-assembly
         assembly {
             result := mload(0x40)
@@ -96,7 +96,7 @@ library ExecLib {
         }
     }
 
-    function _tryExecute(address target, uint256 value, bytes calldata callData)
+    function tryExecute(address target, uint256 value, bytes calldata callData)
         internal
         returns (bool success, bytes memory result)
     {
@@ -113,7 +113,7 @@ library ExecLib {
     }
 
     /// @dev Execute a delegatecall with `delegate` on this account.
-    function _executeDelegatecall(address delegate, bytes calldata callData)
+    function executeDelegatecall(address delegate, bytes calldata callData)
         internal
         returns (bool success, bytes memory result)
     {

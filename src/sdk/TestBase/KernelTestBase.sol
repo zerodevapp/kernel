@@ -394,7 +394,7 @@ abstract contract KernelTestBase is Test {
         ops[0] = _prepareRootUserOp(
             abi.encodeWithSelector(
                 kernel.installModule.selector,
-                7,
+                3,
                 address(mockAction),
                 abi.encodePacked(MockAction.doSomething.selector, address(0), abi.encode(hex"ff", hex""))
             ),
@@ -416,7 +416,7 @@ abstract contract KernelTestBase is Test {
         ops[0] = _prepareRootUserOp(
             abi.encodeWithSelector(
                 kernel.installModule.selector,
-                7,
+                3,
                 address(mockAction),
                 abi.encodePacked(
                     MockAction.doSomething.selector,
@@ -451,7 +451,11 @@ abstract contract KernelTestBase is Test {
                 kernel.installModule.selector,
                 3,
                 address(mockFallback),
-                abi.encodePacked(address(0), abi.encode(abi.encodePacked("fallbackData"), abi.encodePacked("")))
+                abi.encodePacked(
+                    MockFallback.fallbackFunction.selector,
+                    address(0),
+                    abi.encode(abi.encodePacked(hex"00", "fallbackData"), abi.encodePacked(""))
+                )
             ),
             true
         );
@@ -459,9 +463,9 @@ abstract contract KernelTestBase is Test {
 
         assertEq(mockFallback.data(address(kernel)), abi.encodePacked("fallbackData"));
 
-        (IFallback fallbackHandler, IHook fallbackHook) = kernel.fallbackConfig();
-        assertEq(address(fallbackHook), address(1));
-        assertEq(address(fallbackHandler), address(mockFallback));
+        SelectorManager.SelectorConfig memory config = kernel.selectorConfig(MockFallback.fallbackFunction.selector);
+        assertEq(address(config.hook), address(1));
+        assertEq(address(config.target), address(mockFallback));
 
         (bool success, bytes memory result) =
             address(kernel).call(abi.encodeWithSelector(MockFallback.fallbackFunction.selector, uint256(10)));
@@ -480,8 +484,9 @@ abstract contract KernelTestBase is Test {
                 3,
                 address(mockFallback),
                 abi.encodePacked(
+                    MockFallback.fallbackFunction.selector,
                     address(mockHook),
-                    abi.encode(abi.encodePacked("fallbackData"), abi.encodePacked(bytes1(0xff), "hookData"))
+                    abi.encode(abi.encodePacked(hex"00", "fallbackData"), abi.encodePacked(bytes1(0xff), "hookData"))
                 )
             ),
             true
@@ -492,9 +497,9 @@ abstract contract KernelTestBase is Test {
 
         assertEq(mockHook.data(address(kernel)), abi.encodePacked("hookData"));
 
-        (IFallback fallbackHandler, IHook fallbackHook) = kernel.fallbackConfig();
-        assertEq(address(fallbackHook), address(mockHook));
-        assertEq(address(fallbackHandler), address(mockFallback));
+        SelectorManager.SelectorConfig memory config = kernel.selectorConfig(MockFallback.fallbackFunction.selector);
+        assertEq(address(config.hook), address(mockHook));
+        assertEq(address(config.target), address(mockFallback));
 
         (bool success, bytes memory result) =
             address(kernel).call(abi.encodeWithSelector(MockFallback.fallbackFunction.selector, uint256(10)));

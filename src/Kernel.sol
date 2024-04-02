@@ -37,6 +37,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
     error OnlyExecuteUserOp();
     error InvalidModuleType();
     error InvalidCaller();
+    error InvalidSelector();
 
     event Received(address sender, uint256 amount);
     event Upgraded(address indexed implementation);
@@ -121,18 +122,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         bool success;
         bytes memory result;
         if (address(config.hook) == address(0)) {
-            // action not installed, use fallback
-            (IFallback fallbackHandler, IHook hook) = _fallbackConfig();
-            if (address(fallbackHandler) == address(0)) {
-                revert InvalidFallback();
-            }
-            if (address(hook) != address(1)) {
-                bytes memory context = _doPreHook(hook, msg.data);
-                (success, result) = ExecLib.doFallback2771Static(address(fallbackHandler));
-                _doPostHook(hook, context, success, result);
-            } else {
-                (success, result) = ExecLib.doFallback2771Static(address(fallbackHandler));
-            }
+            revert InvalidSelector();
         } else {
             // action installed
             bytes memory context;
@@ -143,7 +133,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             if (config.callType == CALLTYPE_SINGLE) {
                 (success, result) = ExecLib.doFallback2771Call(config.target);
             } else if (config.callType == CALLTYPE_DELEGATECALL) {
-                (success, result) = ExecLib._executeDelegatecall(config.target, msg.data);
+                (success, result) = ExecLib.executeDelegatecall(config.target, msg.data);
             } else {
                 revert NotSupportedCallType();
             }
@@ -230,7 +220,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             // removed 4bytes selector
             context = _doPreHook(hook, userOp.callData[4:]);
         }
-        (bool success, bytes memory ret) = ExecLib._executeDelegatecall(address(this), userOp.callData[4:]);
+        (bool success, bytes memory ret) = ExecLib.executeDelegatecall(address(this), userOp.callData[4:]);
         if (address(hook) != address(1)) {
             _doPostHook(hook, context, success, ret);
         } else if (!success) {
@@ -252,14 +242,14 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         if (address(hook) != address(1)) {
             context = _doPreHook(hook, msg.data);
         }
-        returnData = ExecLib._execute(execMode, executionCalldata);
+        returnData = ExecLib.execute(execMode, executionCalldata);
         if (address(hook) != address(1)) {
             _doPostHook(hook, context, true, abi.encode(returnData));
         }
     }
 
     function execute(ExecMode execMode, bytes calldata executionCalldata) external payable onlyEntryPointOrSelfOrRoot {
-        ExecLib._execute(execMode, executionCalldata);
+        ExecLib.execute(execMode, executionCalldata);
     }
 
     function isValidSignature(bytes32 hash, bytes calldata signature) external view override returns (bytes4) {
@@ -318,18 +308,16 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             _installExecutor(IExecutor(module), executorData, hook);
             _installHook(hook, hookData);
         } else if (moduleType == 3) {
-            //TODO : update this to use _installSelector
-            bytes calldata fallbackData;
+            bytes calldata selectorData;
             bytes calldata hookData;
             assembly {
-                fallbackData.offset := add(add(initData.offset, 52), calldataload(add(initData.offset, 20)))
-                fallbackData.length := calldataload(sub(fallbackData.offset, 32))
-                hookData.offset := add(add(initData.offset, 52), calldataload(add(initData.offset, 52)))
+                selectorData.offset := add(add(initData.offset, 56), calldataload(add(initData.offset, 24)))
+                selectorData.length := calldataload(sub(selectorData.offset, 32))
+                hookData.offset := add(add(initData.offset, 56), calldataload(add(initData.offset, 56)))
                 hookData.length := calldataload(sub(hookData.offset, 32))
             }
-            IHook hook = IHook(address(bytes20(initData[0:20])));
-            _installFallback(IFallback(module), fallbackData, hook);
-            _installHook(hook, hookData);
+            _installSelector(bytes4(initData[0:4]), module, IHook(address(bytes20(initData[4:24]))), selectorData);
+            _installHook(IHook(address(bytes20(initData[4:24]))), hookData);
         } else if (moduleType == 4) {
             // force call onInstall for hook
             // NOTE: for hook, kernel does not support independant hook install,
@@ -398,40 +386,12 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         if (moduleType == 1) {
             ValidationStorage storage vs = _validationStorage();
             ValidationId vId = ValidatorLib.validatorToIdentifier(IValidator(module));
-            bytes calldata validatorData;
-            bytes calldata hookData;
-            assembly {
-                validatorData.offset := add(add(deInitData.offset, 32), calldataload(deInitData.offset))
-                validatorData.length := calldataload(sub(validatorData.offset, 32))
-                hookData.offset := add(add(deInitData.offset, 32), calldataload(add(deInitData.offset, 32)))
-                hookData.length := calldataload(sub(hookData.offset, 32))
-            }
-            IHook hook = _uninstallValidation(vId, validatorData);
-            _uninstallHook(hook, hookData);
+            _uninstallValidation(vId, deInitData);
         } else if (moduleType == 2) {
-            bytes calldata executorData;
-            bytes calldata hookData;
-            assembly {
-                executorData.offset := add(add(deInitData.offset, 32), calldataload(deInitData.offset))
-                executorData.length := calldataload(sub(executorData.offset, 32))
-                hookData.offset := add(add(deInitData.offset, 32), calldataload(add(deInitData.offset, 32)))
-                hookData.length := calldataload(sub(hookData.offset, 32))
-            }
-            IHook hook = _uninstallExecutor(IExecutor(module), executorData);
-            _uninstallHook(hook, hookData);
+            _uninstallExecutor(IExecutor(module), deInitData);
         } else if (moduleType == 3) {
-            bytes calldata fallbackData;
-            bytes calldata hookData;
-            assembly {
-                fallbackData.offset := add(add(deInitData.offset, 32), calldataload(deInitData.offset))
-                fallbackData.length := calldataload(sub(fallbackData.offset, 32))
-                hookData.offset := add(add(deInitData.offset, 32), calldataload(add(deInitData.offset, 32)))
-                hookData.length := calldataload(sub(hookData.offset, 32))
-            }
-            (IFallback fallbackHandler,) = _fallbackConfig();
-            require(fallbackHandler == IFallback(module), "module address mismatch");
-            IHook hook = _uninstallFallback(fallbackData);
-            _uninstallHook(hook, hookData);
+            bytes4 selector = bytes4(deInitData[0:4]);
+            _uninstallSelector(selector, deInitData[4:]);
         } else if (moduleType == 4) {
             // force call onInstall for hook
             // NOTE: for hook, kernel does not support independant hook install,
@@ -447,12 +407,8 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             // force call onInstall for signer
             // NOTE: for signer, kernel does not support independant signer install,
             // signer is expected to be paired with proper permissionId
-            // to "REMOVE" permission, use "installValidation()" function
+            // to "REMOVE" permission, use "uninstallValidation()" function
             ModuleLib.uninstallModule(module, deInitData);
-        } else if (moduleType == 7) {
-            IHook hook = _uninstallSelector(bytes4(deInitData[0:4]));
-            bytes calldata hookData = deInitData[4:];
-            _uninstallHook(hook, hookData);
         } else {
             revert InvalidModuleType();
         }
@@ -478,9 +434,6 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         } else if (moduleType == 2) {
             return address(_executorConfig(IExecutor(module)).hook) != address(0);
         } else if (moduleType == 3) {
-            (IFallback fallbackHandler,) = _fallbackConfig();
-            return fallbackHandler == IFallback(module);
-        } else if (moduleType == 7) {
             return _selectorConfig(bytes4(additionalContext[0:4])).target == module;
         } else {
             return false;
@@ -492,7 +445,6 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
     }
 
     function supportsExecutionMode(ExecMode) external pure override returns (bool) {
-        // is it ok?
         return true;
     }
 }
