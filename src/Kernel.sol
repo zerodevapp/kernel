@@ -26,6 +26,7 @@ import {SelectorManager} from "./core/SelectorManager.sol";
 import {IModule, IValidator, IHook, IExecutor, IFallback, IPolicy, ISigner} from "./interfaces/IERC7579Modules.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
 import {ExecLib, ExecMode, CallType, CALLTYPE_SINGLE, CALLTYPE_DELEGATECALL} from "./utils/ExecLib.sol";
+import "forge-std/console.sol";
 
 bytes32 constant ERC1967_IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
 
@@ -255,6 +256,10 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
     function isValidSignature(bytes32 hash, bytes calldata signature) external view override returns (bytes4) {
         ValidationStorage storage vs = _validationStorage();
         (ValidationId vId, bytes calldata sig) = ValidatorLib.decodeSignature(signature);
+        console.logBytes(signature);
+        console.log("signatureLength : ", signature.length);
+        console.logBytes(sig);
+        console.log("sigLength : ", sig.length);
         if (ValidatorLib.getType(vId) == VALIDATION_TYPE_SUDO) {
             vId = vs.rootValidator;
         }
@@ -404,7 +409,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
     }
 
     function supportsModule(uint256 moduleTypeId) external pure override returns (bool) {
-        if (moduleTypeId < 8) {
+        if (moduleTypeId < 7) {
             return true;
         } else {
             return false;

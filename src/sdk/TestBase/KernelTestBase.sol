@@ -173,6 +173,10 @@ abstract contract KernelTestBase is Test {
         assertEq(0, callee.value());
     }
 
+    function getRootSignature(bytes32 hash) internal returns(bytes memory) {
+        return abi.encodePacked("rootSig", hash);
+    }
+
     function _prepareRootUserOp(bytes memory callData, bool success) internal returns (PackedUserOperation memory op) {
         if (success) {
             _rootValidatorSuccessPreCondition();
@@ -581,7 +585,13 @@ abstract contract KernelTestBase is Test {
 
     function testSignaturePermission() external {}
 
-    function testSignatureRoot() external {}
+    function testSignatureRoot(bytes32 hash) external whenInitialized {
+        bytes memory sig = getRootSignature(hash);
+        mockValidator.sudoSetValidSig(sig);
+        sig = abi.encodePacked(hex"00", sig);
+        bytes4 res = kernel.isValidSignature(hash, sig);
+        assertEq(res, bytes4(0x1626ba7e));
+    }
 
     function testEnablePermission() external {}
 

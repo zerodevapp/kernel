@@ -83,7 +83,7 @@ library ValidatorLib {
                 // sudo mode
                 vId := 0x00
                 sig.offset := add(signature.offset, 1)
-                sig.length := sub(signature.offset, 1)
+                sig.length := sub(signature.length, 1)
             }
             case 1 {
                 // validator mode
