@@ -1,4 +1,3 @@
-
 pragma solidity ^0.8.0;
 
 import "forge-std/Script.sol";
@@ -11,9 +10,8 @@ contract DeployDeterministic is Script {
 
     function run() external {
         vm.startBroadcast(DEPLOYER);
-        Kernel kernel = new Kernel{salt:0}(IEntryPoint(payable(ENTRYPOINT_0_7_ADDR)));
+        Kernel kernel = new Kernel{salt: 0}(IEntryPoint(payable(ENTRYPOINT_0_7_ADDR)));
         console.log("Kernel :", address(kernel));
         vm.stopBroadcast();
     }
 }
-

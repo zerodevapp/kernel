@@ -256,10 +256,6 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
     function isValidSignature(bytes32 hash, bytes calldata signature) external view override returns (bytes4) {
         ValidationStorage storage vs = _validationStorage();
         (ValidationId vId, bytes calldata sig) = ValidatorLib.decodeSignature(signature);
-        console.logBytes(signature);
-        console.log("signatureLength : ", signature.length);
-        console.logBytes(sig);
-        console.log("sigLength : ", sig.length);
         if (ValidatorLib.getType(vId) == VALIDATION_TYPE_SUDO) {
             vId = vs.rootValidator;
         }

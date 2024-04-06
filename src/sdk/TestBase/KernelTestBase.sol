@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "src/Kernel.sol";
+import "src/factory/KernelFactory.sol";
 import "forge-std/Test.sol";
 import "src/mock/MockValidator.sol";
 import "src/mock/MockPolicy.sol";
@@ -13,34 +14,6 @@ import "src/mock/MockFallback.sol";
 import "src/core/ValidationManager.sol";
 import "./erc4337Util.sol";
 
-contract SimpleProxy {
-    bytes32 constant IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
-
-    constructor(address _target) {
-        assembly {
-            sstore(IMPLEMENTATION_SLOT, _target)
-        }
-    }
-
-    function _getImplementation() internal view returns (address target) {
-        bytes32 slot = IMPLEMENTATION_SLOT;
-        assembly {
-            target := sload(slot)
-        }
-    }
-
-    receive() external payable {
-        (bool success,) = _getImplementation().delegatecall("");
-        require(success, "delegatecall failed");
-    }
-
-    fallback(bytes calldata) external payable returns (bytes memory) {
-        (bool success, bytes memory ret) = _getImplementation().delegatecall(msg.data);
-        require(success, "delegatecall failed");
-        return ret;
-    }
-}
-
 contract MockCallee {
     uint256 public value;
 
@@ -51,6 +24,7 @@ contract MockCallee {
 
 abstract contract KernelTestBase is Test {
     Kernel kernel;
+    KernelFactory factory;
     IEntryPoint entrypoint;
     ValidationId rootValidation;
 
@@ -88,9 +62,15 @@ abstract contract KernelTestBase is Test {
     // todo selectorData
 
     modifier whenInitialized() {
-        kernel.initialize(
-            rootValidation, rootValidationConfig.hook, rootValidationConfig.validatorData, rootValidationConfig.hookData
+        bytes memory initData = abi.encodeWithSelector(
+            Kernel.initialize.selector,
+            rootValidation,
+            rootValidationConfig.hook,
+            rootValidationConfig.validatorData,
+            rootValidationConfig.hookData
         );
+        address deployed = factory.createAccount(initData, bytes32(0));
+        assertEq(deployed, address(kernel));
         assertEq(kernel.currentNonce(), 1);
         _;
     }
@@ -98,12 +78,20 @@ abstract contract KernelTestBase is Test {
     function setUp() public {
         entrypoint = IEntryPoint(EntryPointLib.deploy());
         Kernel impl = new Kernel(entrypoint);
+        factory = new KernelFactory(address(impl));
         callee = new MockCallee();
-        kernel = Kernel(payable(address(new SimpleProxy(address(impl)))));
         mockHook = new MockHook();
         _setRootValidationConfig();
         _setEnableValidatorConfig();
         _setEnablePermissionConfig();
+        bytes memory initData = abi.encodeWithSelector(
+            Kernel.initialize.selector,
+            rootValidation,
+            rootValidationConfig.hook,
+            rootValidationConfig.validatorData,
+            rootValidationConfig.hookData
+        );
+        kernel = Kernel(payable(factory.getAddress(initData, bytes32(0))));
     }
 
     // things to override on test
@@ -133,20 +121,6 @@ abstract contract KernelTestBase is Test {
         permissionConfig.signerData = "signer";
     }
 
-    // kernel initialize scenario
-    function testInitialize() external {
-        ValidationId vId = ValidatorLib.validatorToIdentifier(mockValidator);
-
-        kernel.initialize(vId, IHook(address(0)), hex"", hex"");
-        assertTrue(kernel.rootValidator() == vId);
-        ValidationManager.ValidationConfig memory config;
-        config = kernel.validationConfig(vId);
-        assertEq(config.nonce, 1);
-        assertEq(address(config.hook), address(1));
-        assertEq(mockValidator.isInitialized(address(kernel)), true);
-        assertEq(kernel.currentNonce(), 1);
-    }
-
     // root validator cases
     function _rootValidatorFailurePreCondition() internal virtual {
         mockValidator.sudoSetSuccess(false);
@@ -173,7 +147,7 @@ abstract contract KernelTestBase is Test {
         assertEq(0, callee.value());
     }
 
-    function getRootSignature(bytes32 hash) internal returns(bytes memory) {
+    function getRootSignature(bytes32 hash) internal returns (bytes memory) {
         return abi.encodePacked("rootSig", hash);
     }
 
@@ -308,7 +282,7 @@ abstract contract KernelTestBase is Test {
                 abi.encodePacked(kernel.execute.selector),
                 getEnableSig(bytes32(0), true),
                 getValidatorSig(op, true)
-                )
+            )
         });
     }
 
@@ -338,7 +312,7 @@ abstract contract KernelTestBase is Test {
                 abi.encodePacked(kernel.execute.selector),
                 getEnableSig(bytes32(0), true),
                 getPermissionSig(op, true)
-                )
+            )
         });
     }
 
