@@ -1,16 +1,18 @@
+// SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.0;
 
 import {ECDSA} from "solady/utils/ECDSA.sol";
-import {
-    IValidator,
-    IHook,
-    VALIDATION_SUCCESS,
-    VALIDATION_FAILED,
-    MODULE_TYPE_VALIDATOR,
-    MODULE_TYPE_HOOK
-} from "../interfaces/IERC7579Modules.sol";
+import {IValidator, IHook} from "../interfaces/IERC7579Modules.sol";
 import {PackedUserOperation} from "../interfaces/PackedUserOperation.sol";
-import {SIG_VALIDATION_FAILED, ERC1271_MAGICVALUE, ERC1271_INVALID} from "../types/Constants.sol";
+import {
+    SIG_VALIDATION_SUCCESS_UINT,
+    SIG_VALIDATION_FAILED_UINT,
+    MODULE_TYPE_VALIDATOR,
+    MODULE_TYPE_HOOK,
+    ERC1271_MAGICVALUE,
+    ERC1271_INVALID
+} from "../types/Constants.sol";
 
 struct ECDSAValidatorStorage {
     address owner;
@@ -54,14 +56,14 @@ contract ECDSAValidator is IValidator, IHook {
         address owner = ecdsaValidatorStorage[msg.sender].owner;
         bytes calldata sig = userOp.signature;
         if (owner == ECDSA.recover(userOpHash, sig)) {
-            return VALIDATION_SUCCESS;
+            return SIG_VALIDATION_SUCCESS_UINT;
         }
         bytes32 ethHash = ECDSA.toEthSignedMessageHash(userOpHash);
         address recovered = ECDSA.recover(ethHash, sig);
         if (owner != recovered) {
-            return VALIDATION_FAILED;
+            return SIG_VALIDATION_FAILED_UINT;
         }
-        return VALIDATION_SUCCESS;
+        return SIG_VALIDATION_SUCCESS_UINT;
     }
 
     function isValidSignatureWithSender(address, bytes32 hash, bytes calldata sig)

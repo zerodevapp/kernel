@@ -14,9 +14,6 @@ import {
     ValidatorLib,
     ValidationType,
     PermissionId,
-    VALIDATION_TYPE_SUDO,
-    VALIDATION_TYPE_VALIDATOR,
-    VALIDATION_TYPE_PERMISSION,
     PassFlag,
     SKIP_SIGNATURE
 } from "./core/ValidationManager.sol";
@@ -25,10 +22,15 @@ import {ExecutorManager} from "./core/ExecutorManager.sol";
 import {SelectorManager} from "./core/SelectorManager.sol";
 import {IModule, IValidator, IHook, IExecutor, IFallback, IPolicy, ISigner} from "./interfaces/IERC7579Modules.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
-import {ExecLib, ExecMode, CallType, CALLTYPE_SINGLE, CALLTYPE_DELEGATECALL} from "./utils/ExecLib.sol";
-import "forge-std/console.sol";
-
-bytes32 constant ERC1967_IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+import {ExecLib, ExecMode, CallType} from "./utils/ExecLib.sol";
+import {
+    CALLTYPE_SINGLE,
+    CALLTYPE_DELEGATECALL,
+    ERC1967_IMPLEMENTATION_SLOT,
+    VALIDATION_TYPE_SUDO,
+    VALIDATION_TYPE_VALIDATOR,
+    VALIDATION_TYPE_PERMISSION
+} from "./types/Constants.sol";
 
 contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager, ExecutorManager {
     error ExecutionReverted();
@@ -374,7 +376,6 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             ModuleLib.uninstallModule(module, deInitData);
         }
         if (moduleType == 1) {
-            ValidationStorage storage vs = _validationStorage();
             ValidationId vId = ValidatorLib.validatorToIdentifier(IValidator(module));
             _uninstallValidation(vId, deInitData);
         } else if (moduleType == 2) {

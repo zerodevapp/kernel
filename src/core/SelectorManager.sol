@@ -1,12 +1,11 @@
+// SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.0;
 
 import {IHook, IFallback, IModule} from "../interfaces/IERC7579Modules.sol";
 import {CallType} from "../utils/ExecLib.sol";
-import {CALLTYPE_DELEGATECALL, CALLTYPE_SINGLE} from "../types/Constants.sol";
+import {SELECTOR_MANAGER_STORAGE_SLOT, CALLTYPE_DELEGATECALL, CALLTYPE_SINGLE} from "../types/Constants.sol";
 import {ModuleLib} from "../utils/ModuleLib.sol";
-
-// bytes32(uint256(keccak256('kernel.v3.selector')) - 1)
-bytes32 constant SELECTOR_MANAGER_STORAGE_SLOT = 0x7c341349a4360fdd5d5bc07e69f325dc6aaea3eb018b3e0ea7e53cc0bb0d6f3b;
 
 abstract contract SelectorManager {
     error NotSupportedCallType();
@@ -29,7 +28,7 @@ abstract contract SelectorManager {
         config = _selectorStorage().selectorConfig[selector];
     }
 
-    function _selectorStorage() internal view returns (SelectorStorage storage ss) {
+    function _selectorStorage() internal pure returns (SelectorStorage storage ss) {
         bytes32 slot = SELECTOR_MANAGER_STORAGE_SLOT;
         assembly {
             ss.slot := slot

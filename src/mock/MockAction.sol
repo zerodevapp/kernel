@@ -1,8 +1,8 @@
+// SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.0;
 
-import {IAction} from "../interfaces/IERC7579Modules.sol";
-
-contract MockAction is IAction {
+contract MockAction {
     event MockActionEvent(address here);
 
     function onInstall(bytes calldata data) external payable {}

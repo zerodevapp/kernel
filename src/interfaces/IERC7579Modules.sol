@@ -3,17 +3,6 @@ pragma solidity ^0.8.21;
 
 import {PackedUserOperation} from "./PackedUserOperation.sol";
 
-uint256 constant VALIDATION_SUCCESS = 0;
-uint256 constant VALIDATION_FAILED = 1;
-
-uint256 constant MODULE_TYPE_VALIDATOR = 1;
-uint256 constant MODULE_TYPE_EXECUTOR = 2;
-uint256 constant MODULE_TYPE_FALLBACK = 3;
-uint256 constant MODULE_TYPE_HOOK = 4;
-uint256 constant MODULE_TYPE_POLICY = 5;
-uint256 constant MODULE_TYPE_SIGNER = 6;
-uint256 constant MODULE_TYPE_ACTION = 7;
-
 interface IModule {
     error AlreadyInitialized(address smartAccount);
     error NotInitialized(address smartAccount);
@@ -104,5 +93,3 @@ interface ISigner is IModule {
         view
         returns (bytes4);
 }
-
-interface IAction is IModule {}

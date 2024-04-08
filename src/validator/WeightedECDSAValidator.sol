@@ -1,13 +1,19 @@
+// SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.0;
 
 import "src/types/Types.sol";
 import {ECDSA} from "solady/utils/ECDSA.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
 import {PackedUserOperation} from "../interfaces/PackedUserOperation.sol";
+import {IValidator} from "../interfaces/IERC7579Modules.sol";
 import {
-    IValidator, VALIDATION_FAILED, MODULE_TYPE_VALIDATOR, MODULE_TYPE_HOOK
-} from "../interfaces/IERC7579Modules.sol";
-import {ERC1271_MAGICVALUE, ERC1271_INVALID} from "../types/Constants.sol";
+    ERC1271_MAGICVALUE,
+    ERC1271_INVALID,
+    SIG_VALIDATION_FAILED_UINT,
+    MODULE_TYPE_VALIDATOR,
+    MODULE_TYPE_HOOK
+} from "../types/Constants.sol";
 
 struct WeightedECDSAValidatorStorage {
     uint24 totalWeight;
@@ -189,14 +195,14 @@ contract WeightedECDSAValidator is EIP712, IValidator {
         ProposalStorage storage proposal = proposalStatus[callDataAndNonceHash][msg.sender];
         WeightedECDSAValidatorStorage storage strg = weightedStorage[msg.sender];
         if (strg.threshold == 0) {
-            return VALIDATION_FAILED;
+            return SIG_VALIDATION_FAILED_UINT;
         }
         (uint256 totalWeight, bool passed) = getApproval(msg.sender, callDataAndNonceHash);
         uint256 threshold = strg.threshold;
         if (proposal.status == ProposalStatus.Ongoing && !passed) {
             if (strg.delay != 0) {
                 // if delay > 0, only allow proposal to be approved before execution
-                return VALIDATION_FAILED;
+                return SIG_VALIDATION_FAILED_UINT;
             }
             bytes calldata sig = userOp.signature;
             // parse sig with 65 bytes
@@ -242,7 +248,7 @@ contract WeightedECDSAValidator is EIP712, IValidator {
                 return packValidationData(proposal.validAfter, ValidUntil.wrap(0));
             }
         }
-        return VALIDATION_FAILED;
+        return SIG_VALIDATION_FAILED_UINT;
     }
 
     function getApproval(address kernel, bytes32 hash) public view returns (uint256 approvals, bool passed) {
@@ -264,11 +270,7 @@ contract WeightedECDSAValidator is EIP712, IValidator {
         }
     }
 
-    function isValidSignatureWithSender(address sender, bytes32 hash, bytes calldata data)
-        external
-        view
-        returns (bytes4)
-    {
+    function isValidSignatureWithSender(address, bytes32 hash, bytes calldata data) external view returns (bytes4) {
         WeightedECDSAValidatorStorage storage strg = weightedStorage[msg.sender];
         if (strg.threshold == 0) {
             return ERC1271_INVALID;

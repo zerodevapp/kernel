@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
 import {IValidator, IHook, IPolicy, ISigner, IFallback} from "../interfaces/IERC7579Modules.sol";
@@ -27,15 +28,12 @@ import {
     VALIDATION_TYPE_VALIDATOR,
     VALIDATION_TYPE_PERMISSION,
     SKIP_USEROP,
-    SKIP_SIGNATURE
+    SKIP_SIGNATURE,
+    VALIDATION_MANAGER_STORAGE_SLOT,
+    MAX_NONCE_INCREMENT_SIZE,
+    ENABLE_TYPE_HASH,
+    KERNEL_WRAPPER_TYPE_HASH
 } from "../types/Constants.sol";
-
-bytes32 constant VALIDATION_MANAGER_STORAGE_POSITION =
-    0x7bcaa2ced2a71450ed5a9a1b4848e8e5206dbc3f06011e595f7f55428cc6f84f;
-uint32 constant MAX_NONCE_INCREMENT_SIZE = 10;
-
-bytes32 constant ENABLE_TYPE_HASH = 0xb17ab1224aca0d4255ef8161acaf2ac121b8faa32a4b2258c912cc5f8308c505;
-bytes32 constant KERNEL_WRAPPER_TYPE_HASH = 0x1547321c374afde8a591d972a084b071c594c275e36724931ff96c25f2999c83;
 
 abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
     event ValidatorInstalled(IValidator validator, uint32 nonce);
@@ -68,7 +66,7 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
     }
 
     struct PermissionConfig {
-        PassFlag permissionFlag; // TODO: use this to show what is capable for permission
+        PassFlag permissionFlag;
         ISigner signer;
         PolicyData[] policyData;
     }
@@ -112,7 +110,7 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
 
     function _validationStorage() internal pure returns (ValidationStorage storage state) {
         assembly {
-            state.slot := VALIDATION_MANAGER_STORAGE_POSITION
+            state.slot := VALIDATION_MANAGER_STORAGE_SLOT
         }
     }
 

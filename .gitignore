@@ -15,3 +15,11 @@ docs/
 
 lcov.info
 coverage/
+
+# node
+node_modules/
+
+# hardhat
+artifacts/
+cache_hardhat/
+typechain-types/

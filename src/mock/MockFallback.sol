@@ -30,7 +30,7 @@ contract MockFallback is IFallback {
         return data[msg.sender];
     }
 
-    function getCaller() external view returns (address) {
+    function getCaller() external pure returns (address) {
         return address(bytes20(msg.data[msg.data.length - 20:]));
     }
 }

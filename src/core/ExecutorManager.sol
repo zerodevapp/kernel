@@ -1,9 +1,10 @@
+// SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.0;
 
 import {IHook, IExecutor} from "../interfaces/IERC7579Modules.sol";
 import {ModuleLib} from "../utils/ModuleLib.sol";
-
-bytes32 constant EXECUTOR_MANAGER_STORAGE_SLOT = 0x1bbee3173dbdc223633258c9f337a0fff8115f206d302bea0ed3eac003b68b86;
+import {EXECUTOR_MANAGER_STORAGE_SLOT} from "../types/Constants.sol";
 
 abstract contract ExecutorManager {
     struct ExecutorConfig {

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.0;
 
 import {IValidator, IPolicy} from "../interfaces/IERC7579Modules.sol";
@@ -131,6 +133,13 @@ library ValidatorLib {
     function getPermissionId(ValidationId validator) internal pure returns (PermissionId id) {
         assembly {
             id := shl(8, validator)
+        }
+    }
+
+    function permissionToIdentifier(PermissionId permissionId) internal pure returns (ValidationId vId) {
+        assembly {
+            vId := 0x0200000000000000000000000000000000000000000000000000000000000000
+            vId := or(vId, shr(8, permissionId))
         }
     }
 
