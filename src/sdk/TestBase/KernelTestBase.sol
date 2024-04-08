@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 import "src/Kernel.sol";
 import "src/factory/KernelFactory.sol";
+import "src/factory/FactoryStaker.sol";
 import "forge-std/Test.sol";
 import "src/mock/MockValidator.sol";
 import "src/mock/MockPolicy.sol";
@@ -23,8 +24,10 @@ contract MockCallee {
 }
 
 abstract contract KernelTestBase is Test {
+    address stakerOwner;
     Kernel kernel;
     KernelFactory factory;
+    FactoryStaker staker;
     IEntryPoint entrypoint;
     ValidationId rootValidation;
 
@@ -61,14 +64,7 @@ abstract contract KernelTestBase is Test {
     }
 
     modifier whenInitialized() {
-        bytes memory initData = abi.encodeWithSelector(
-            Kernel.initialize.selector,
-            rootValidation,
-            rootValidationConfig.hook,
-            rootValidationConfig.validatorData,
-            rootValidationConfig.hookData
-        );
-        address deployed = factory.createAccount(initData, bytes32(0));
+        address deployed = factory.createAccount(initData(), bytes32(0));
         assertEq(deployed, address(kernel));
         assertEq(kernel.currentNonce(), 1);
         _;
@@ -84,14 +80,31 @@ abstract contract KernelTestBase is Test {
         _setRootValidationConfig();
         _setEnableValidatorConfig();
         _setEnablePermissionConfig();
-        bytes memory initData = abi.encodeWithSelector(
+        kernel = Kernel(payable(factory.getAddress(initData(), bytes32(0))));
+        stakerOwner = makeAddr("StakerOwner");
+        staker = new FactoryStaker(stakerOwner);
+        vm.startPrank(stakerOwner);
+        staker.approveFactory(factory, true);
+        vm.stopPrank();
+    }
+
+    function testDeployWithFactory() external {
+        vm.deal(address(kernel), 1e18);
+        PackedUserOperation[] memory ops = new PackedUserOperation[](1);
+        ops[0] = _prepareRootUserOp(
+            hex"", true
+        );
+        entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
+    }
+
+    function initData() internal view returns(bytes memory) {
+        return abi.encodeWithSelector(
             Kernel.initialize.selector,
             rootValidation,
             rootValidationConfig.hook,
             rootValidationConfig.validatorData,
             rootValidationConfig.hookData
         );
-        kernel = Kernel(payable(factory.getAddress(initData, bytes32(0))));
     }
 
     // things to override on test
@@ -134,7 +147,7 @@ abstract contract KernelTestBase is Test {
         op = PackedUserOperation({
             sender: address(kernel),
             nonce: entrypoint.getNonce(address(kernel), 0),
-            initCode: hex"",
+            initCode: address(kernel).code.length == 0 ? abi.encodePacked(address(staker), abi.encodeWithSelector(staker.deployWithFactory.selector, factory, initData(), bytes32(0))) : abi.encodePacked(hex""),
             callData: callData,
             accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
             preVerificationGas: 1000000,
