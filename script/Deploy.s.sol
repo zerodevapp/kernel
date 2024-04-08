@@ -13,6 +13,7 @@ contract DeployDeterministic is Script {
 
     address constant EXPECTED_STAKER = 0xd703aaE79538628d27099B8c4f621bE4CCd142d5;
     address constant EXPECTED_KERNEL = 0xe59cffb45AFFB215e3823F7D1a207a71C1aa09c3;
+    address constant EXPECTED_FACTORY = 0x17B6697d81844518365484323e810Be08EaA3A6a;
 
     function run() external {
         vm.startBroadcast(DEPLOYER);
@@ -29,11 +30,21 @@ contract DeployDeterministic is Script {
             require(address(kernel) == EXPECTED_KERNEL, "kernel mismatch");
         }
 
-        KernelFactory factory = new KernelFactory{salt:0}(address(kernel));
-        console.log("Factory :", address(factory));
-
-        staker.approveFactory(factory, true);
-        console.log("Approved");
+        KernelFactory factory = KernelFactory(EXPECTED_FACTORY);
+        if(EXPECTED_FACTORY.code.length == 0) {
+            factory = new KernelFactory{salt:0}(address(kernel));
+            console.log("Factory :", address(factory));
+            require(address(factory) == EXPECTED_FACTORY, "factory mismatch");
+        }
+        if(!staker.approved(factory)){
+            staker.approveFactory(factory, true);
+            console.log("Approved");
+        }
+        IEntryPoint entryPoint = IEntryPoint(ENTRYPOINT_0_7_ADDR);
+        IStakeManager.DepositInfo memory info = entryPoint.getDepositInfo(address(staker));
+        if(info.stake < 1e17) {
+            staker.stake{value: 1e17-info.stake}(IEntryPoint(ENTRYPOINT_0_7_ADDR), 86400);
+        }
         vm.stopBroadcast();
     }
 }
