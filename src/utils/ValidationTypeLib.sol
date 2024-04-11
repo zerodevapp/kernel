@@ -98,8 +98,7 @@ library ValidatorLib {
                 sig.length := sub(signature.length, 5)
             }
             default {
-                // TODO add revert message
-                revert(0x00, 0x20)
+                revert(0x00, 0x00)
             }
         }
     }

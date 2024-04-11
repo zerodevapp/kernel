@@ -5,12 +5,12 @@ libs = ["lib"]
 bytecode_hash = "none"
 cbor_metadata = false
 optimize = true
-via-ir = false
-runs = 1000000
+via-ir = true
+runs = 1000
 
 [profile.deploy]
 via-ir = true
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
 [fuzz]
-runs = 4096
+runs = 256

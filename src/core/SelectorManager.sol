@@ -45,7 +45,7 @@ abstract contract SelectorManager {
         if (callType == CALLTYPE_SINGLE) {
             IModule(target).onInstall(selectorData[1:]);
         } else if (callType != CALLTYPE_DELEGATECALL) {
-            // NOTE : we are not going to call onInstall for delegatecall
+            // NOTE : we are not going to call onInstall for delegatecall, and we support only CALL & DELEGATECALL
             revert NotSupportedCallType();
         }
         ss.hook = hook;

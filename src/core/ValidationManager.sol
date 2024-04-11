@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {IValidator, IHook, IPolicy, ISigner, IFallback} from "../interfaces/IERC7579Modules.sol";
+import {IValidator, IModule, IExecutor, IHook, IPolicy, ISigner, IFallback} from "../interfaces/IERC7579Modules.sol";
 import {PackedUserOperation} from "../interfaces/PackedUserOperation.sol";
 import {SelectorManager} from "./SelectorManager.sol";
 import {HookManager} from "./HookManager.sol";
+import {ExecutorManager} from "./ExecutorManager.sol";
 import {ValidationData, ValidAfter, ValidUntil, parseValidationData} from "../interfaces/IAccount.sol";
 import {IAccountExecute} from "../interfaces/IAccountExecute.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
@@ -18,13 +19,16 @@ import {
     PassFlag
 } from "../utils/ValidationTypeLib.sol";
 
+import {CallType} from "../utils/ExecLib.sol";
+import {CALLTYPE_SINGLE} from "../types/Constants.sol";
+
 import {PermissionId, getValidationResult} from "../types/Types.sol";
 import {_intersectValidationData} from "../utils/KernelValidationResult.sol";
 
 import {
     VALIDATION_MODE_DEFAULT,
     VALIDATION_MODE_ENABLE,
-    VALIDATION_TYPE_SUDO,
+    VALIDATION_TYPE_ROOT,
     VALIDATION_TYPE_VALIDATOR,
     VALIDATION_TYPE_PERMISSION,
     SKIP_USEROP,
@@ -35,7 +39,8 @@ import {
     KERNEL_WRAPPER_TYPE_HASH
 } from "../types/Constants.sol";
 
-abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
+abstract contract ValidationManager is EIP712, SelectorManager, HookManager, ExecutorManager {
+    event RootValidatorUpdated(ValidationId rootValidator);
     event ValidatorInstalled(IValidator validator, uint32 nonce);
     event PermissionInstalled(PermissionId permission, uint32 nonce);
     event NonceInvalidated(uint32 nonce);
@@ -57,8 +62,8 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
     error PermissionNotAlllowedForSignature();
     error PermissionDataLengthMismatch();
     error NonceInvalidationError();
+    error RootValidatorCannotBeRemoved();
 
-    // CHECK is it better to have a group config?
     // erc7579 plugins
     struct ValidationConfig {
         uint32 nonce; // 4 bytes
@@ -103,8 +108,7 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
         return _validationStorage().validationConfig[vId];
     }
 
-    function permissionConfig(ValidationId vId) external view returns (PermissionConfig memory) {
-        PermissionId pId = ValidatorLib.getPermissionId(vId);
+    function permissionConfig(PermissionId pId) external view returns (PermissionConfig memory) {
         return (_validationStorage().permissionConfig[pId]);
     }
 
@@ -112,6 +116,12 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
         assembly {
             state.slot := VALIDATION_MANAGER_STORAGE_SLOT
         }
+    }
+
+    function _setRootValidator(ValidationId _rootValidator) internal {
+        ValidationStorage storage vs = _validationStorage();
+        vs.rootValidator = _rootValidator;
+        emit RootValidatorUpdated(_rootValidator);
     }
 
     function _invalidateNonce(uint32 nonce) internal {
@@ -135,11 +145,11 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
         bytes[] calldata validatorData,
         bytes[] calldata hookData
     ) internal {
-        ValidationStorage storage state = _validationStorage();
-        for (uint256 i = 0; i < validators.length; i++) {
-            _installValidationWithoutNonceIncremental(validators[i], configs[i], validatorData[i], hookData[i]);
+        unchecked {
+            for (uint256 i = 0; i < validators.length; i++) {
+                _installValidation(validators[i], configs[i], validatorData[i], hookData[i]);
+            }
         }
-        state.currentNonce++;
     }
 
     function _setSelector(ValidationId vId, bytes4 selector, bool allowed) internal {
@@ -154,7 +164,9 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
     // also, we are not calling hook.onInstall here
     function _uninstallValidation(ValidationId vId, bytes calldata validatorData) internal returns (IHook hook) {
         ValidationStorage storage state = _validationStorage();
-        require(vId != state.rootValidator, "Root validator cannot be uninstalled");
+        if (vId == state.rootValidator) {
+            revert RootValidatorCannotBeRemoved();
+        }
         hook = state.validationConfig[vId].hook;
         state.validationConfig[vId].hook = IHook(address(0));
         ValidationType vType = ValidatorLib.getType(vId);
@@ -176,21 +188,25 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
             permissionDisableData.length := calldataload(sub(permissionDisableData.offset, 32))
         }
         PermissionConfig storage config = _validationStorage().permissionConfig[pId];
-        if (permissionDisableData.length != config.policyData.length + 1) {
-            revert PermissionDataLengthMismatch();
-        }
-        PolicyData[] storage policyData = config.policyData;
-        for (uint256 i = 0; i < policyData.length; i++) {
-            (, IPolicy policy) = ValidatorLib.decodePolicyData(policyData[i]);
+        unchecked {
+            if (permissionDisableData.length != config.policyData.length + 1) {
+                revert PermissionDataLengthMismatch();
+            }
+            PolicyData[] storage policyData = config.policyData;
+            for (uint256 i = 0; i < policyData.length; i++) {
+                (, IPolicy policy) = ValidatorLib.decodePolicyData(policyData[i]);
+                ModuleLib.uninstallModule(
+                    address(policy), abi.encodePacked(bytes32(PermissionId.unwrap(pId)), permissionDisableData[i])
+                );
+            }
+            delete _validationStorage().permissionConfig[pId].policyData;
             ModuleLib.uninstallModule(
-                address(policy), abi.encodePacked(bytes32(PermissionId.unwrap(pId)), permissionDisableData[i])
+                address(config.signer),
+                abi.encodePacked(
+                    bytes32(PermissionId.unwrap(pId)), permissionDisableData[permissionDisableData.length - 1]
+                )
             );
         }
-        delete _validationStorage().permissionConfig[pId].policyData;
-        ModuleLib.uninstallModule(
-            address(config.signer),
-            abi.encodePacked(bytes32(PermissionId.unwrap(pId)), permissionDisableData[permissionDisableData.length - 1])
-        );
         config.signer = ISigner(address(0));
         config.permissionFlag = PassFlag.wrap(bytes2(0));
     }
@@ -204,20 +220,10 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
         ValidationStorage storage state = _validationStorage();
         if (state.validationConfig[vId].nonce == state.currentNonce) {
             // only increase currentNonce when vId's currentNonce is same
-            state.currentNonce++;
+            unchecked {
+                state.currentNonce++;
+            }
         }
-        _installValidationWithoutNonceIncremental(vId, config, validatorData, hookData);
-    }
-
-    // this function will prevent signature replay of enableSig
-    // by not allowing same config.nonce usage
-    function _installValidationWithoutNonceIncremental(
-        ValidationId vId,
-        ValidationConfig memory config,
-        bytes calldata validatorData,
-        bytes calldata hookData
-    ) internal {
-        ValidationStorage storage state = _validationStorage();
         if (config.hook == IHook(address(0))) {
             config.hook = IHook(address(1));
         }
@@ -318,8 +324,44 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
         internal
         returns (ValidationData validationData, bytes calldata userOpSig)
     {
+        validationData = _enableValidationWithSig(vId, packedData);
+
+        assembly {
+            userOpSig.offset := add(add(packedData.offset, 52), calldataload(add(packedData.offset, 148)))
+            userOpSig.length := calldataload(sub(userOpSig.offset, 32))
+        }
+
+        return (validationData, userOpSig);
+    }
+
+    function _enableValidationWithSig(ValidationId vId, bytes calldata packedData)
+        internal
+        returns (ValidationData validationData)
+    {
+        bytes calldata enableSig;
+        (
+            ValidationConfig memory config,
+            bytes calldata validatorData,
+            bytes calldata hookData,
+            bytes calldata selectorData,
+            bytes32 digest
+        ) = _enableDigest(vId, packedData);
+        assembly {
+            enableSig.offset := add(add(packedData.offset, 52), calldataload(add(packedData.offset, 116)))
+            enableSig.length := calldataload(sub(enableSig.offset, 32))
+        }
+        validationData = _checkEnableSig(digest, enableSig);
+        _installValidation(vId, config, validatorData, hookData);
+        _configureSelector(selectorData);
+        _setSelector(vId, bytes4(selectorData[0:4]), true);
+    }
+
+    function _checkEnableSig(bytes32 digest, bytes calldata enableSig)
+        internal
+        view
+        returns (ValidationData validationData)
+    {
         ValidationStorage storage state = _validationStorage();
-        (bytes32 digest, bytes calldata enableSig) = _checkEnableSig(vId, packedData);
         ValidationType vType = ValidatorLib.getType(state.rootValidator);
         bytes4 result;
         if (vType == VALIDATION_TYPE_VALIDATOR) {
@@ -336,34 +378,6 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
         if (result != 0x1626ba7e) {
             revert EnableNotApproved();
         }
-
-        assembly {
-            userOpSig.offset := add(add(packedData.offset, 52), calldataload(add(packedData.offset, 148)))
-            userOpSig.length := calldataload(sub(userOpSig.offset, 32))
-        }
-
-        return (validationData, userOpSig);
-    }
-
-    function _checkEnableSig(ValidationId vId, bytes calldata packedData)
-        internal
-        returns (bytes32, bytes calldata enableSig)
-    {
-        (
-            ValidationConfig memory config,
-            bytes calldata validatorData,
-            bytes calldata hookData,
-            bytes calldata selectorData,
-            bytes32 digest
-        ) = _enableDigest(vId, packedData);
-        assembly {
-            enableSig.offset := add(add(packedData.offset, 52), calldataload(add(packedData.offset, 116)))
-            enableSig.length := calldataload(sub(enableSig.offset, 32))
-        }
-        _installValidation(vId, config, validatorData, hookData); // NOTE: for enable mode, nonce does not increase
-        _configureSelector(selectorData);
-        _setSelector(vId, bytes4(selectorData[0:4]), true);
-        return (digest, enableSig);
     }
 
     function _configureSelector(bytes calldata selectorData) internal {
@@ -373,6 +387,7 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
                 // install selector with hook and target contract
                 bytes calldata selectorInitData;
                 bytes calldata hookInitData;
+                IModule selectorModule = IModule(address(bytes20(selectorData[4:24])));
                 assembly {
                     selectorInitData.offset :=
                         add(add(selectorData.offset, 76), calldataload(add(selectorData.offset, 44)))
@@ -380,11 +395,21 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager {
                     hookInitData.offset := add(add(selectorData.offset, 76), calldataload(add(selectorData.offset, 76)))
                     hookInitData.length := calldataload(sub(hookInitData.offset, 32))
                 }
+                if (CallType.wrap(bytes1(selectorInitData[0])) == CALLTYPE_SINGLE && selectorModule.isModuleType(2)) {
+                    // also adds as executor when fallback module is also a executor
+                    bytes calldata executorHookData;
+                    assembly {
+                        executorHookData.offset :=
+                            add(add(selectorData.offset, 76), calldataload(add(selectorData.offset, 108)))
+                        executorHookData.length := calldataload(sub(executorHookData.offset, 32))
+                    }
+                    IHook executorHook = IHook(address(bytes20(executorHookData[0:20])));
+                    // if module is also executor, install as executor
+                    _installExecutorWithoutInit(IExecutor(address(selectorModule)), executorHook);
+                    _installHook(executorHook, executorHookData[20:]);
+                }
                 _installSelector(
-                    selector,
-                    address(bytes20(selectorData[4:24])),
-                    IHook(address(bytes20(selectorData[24:44]))),
-                    selectorInitData
+                    selector, address(selectorModule), IHook(address(bytes20(selectorData[24:44]))), selectorInitData
                 );
                 _installHook(IHook(address(bytes20(selectorData[24:44]))), hookInitData);
             } else {

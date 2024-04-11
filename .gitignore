@@ -23,3 +23,7 @@ node_modules/
 artifacts/
 cache_hardhat/
 typechain-types/
+
+# zerodev orchestra
+log/
+.envrc

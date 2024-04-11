@@ -84,10 +84,15 @@ contract ECDSAValidator is IValidator, IHook {
         return ERC1271_MAGICVALUE;
     }
 
-    function preCheck(address msgSender, bytes calldata) external payable override returns (bytes memory) {
+    function preCheck(address msgSender, uint256 value, bytes calldata)
+        external
+        payable
+        override
+        returns (bytes memory)
+    {
         require(msgSender == ecdsaValidatorStorage[msg.sender].owner, "ECDSAValidator: sender is not owner");
         return hex"";
     }
 
-    function postCheck(bytes calldata hookData) external payable override returns (bool success) {}
+    function postCheck(bytes calldata hookData, bool success, bytes calldata res) external payable override {}
 }

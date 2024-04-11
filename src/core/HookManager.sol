@@ -13,14 +13,14 @@ abstract contract HookManager {
     // - on 4337 flow, userOp.calldata starts with executeUserOp.selector && validator requires hook
     // - executeFromExecutor() is invoked and executor requires hook
     // - when fallback function has been invoked and fallback requires hook => native functions will not invoke hook
-    function _doPreHook(IHook hook, bytes calldata callData) internal returns (bytes memory context) {
-        context = hook.preCheck(msg.sender, callData);
+    function _doPreHook(IHook hook, uint256 value, bytes calldata callData) internal returns (bytes memory context) {
+        context = hook.preCheck(msg.sender, value, callData);
     }
 
-    function _doPostHook(IHook hook, bytes memory context, bool, /*success*/ bytes memory /*result*/ ) internal {
+    function _doPostHook(IHook hook, bytes memory context, bool success, bytes memory result) internal {
         // bool success,
         // bytes memory result
-        hook.postCheck(context);
+        hook.postCheck(context, success, result);
     }
 
     // @notice if hook is not initialized before, kernel will call hook.onInstall no matter what flag it shows, with hookData[1:]

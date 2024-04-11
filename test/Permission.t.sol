@@ -78,7 +78,7 @@ contract PermissionTest is Test {
         uint256 nonce = uint256(bytes32(0));
         (ValidationMode vMode, ValidationType vType,) = validatorLib.decodeNonce(nonce);
         assertTrue(vMode == VALIDATION_MODE_DEFAULT, "vMode != MODE_DEFAULT");
-        assertTrue(vType == VALIDATION_TYPE_SUDO, "vType != TYPE_VALIDATOR");
+        assertTrue(vType == VALIDATION_TYPE_ROOT, "vType != TYPE_VALIDATOR");
     }
 
     function testDecode(bytes1 mode, bytes1 vtype, bytes20 vIdWithoutType, bytes10 sequencialNonce) external {

@@ -4,13 +4,19 @@ pragma solidity ^0.8.0;
 
 import "../interfaces/IERC7579Modules.sol";
 
-contract MockValidator is IValidator {
+contract MockValidator is IValidator, IHook {
     mapping(address => bool) public initialized;
     bool public success;
     uint256 public count;
 
     mapping(address => bytes) public validatorData;
     mapping(bytes32 => bool) public validSig;
+
+    bool public isHook;
+
+    function setHook(bool _isHook) external {
+        isHook = _isHook;
+    }
 
     function sudoSetSuccess(bool _success) external {
         success = _success;
@@ -57,5 +63,20 @@ contract MockValidator is IValidator {
         } else {
             return 0xffffffff;
         }
+    }
+
+    function preCheck(address msgSender, uint256 value, bytes calldata msgData)
+        external
+        payable
+        returns (bytes memory hookData)
+    {
+        return hex"";
+    }
+
+    function postCheck(bytes calldata hookData, bool executionSuccess, bytes calldata executionReturn)
+        external
+        payable
+    {
+        return;
     }
 }
