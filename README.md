@@ -1,5 +1,7 @@
 # Kernel
 
+> If you are looking for Kernel v3 source code, [it's sitting here](https://github.com/zerodevapp/kernel_v3) while we figure out how to merge it.
+
 Kernel is a smart contract account that is:
 
 - Compatible with [ERC-4337](https://eips.ethereum.org/EIPS/eip-4337).
@@ -36,16 +38,15 @@ MIT
 ## Addresses
 
 <details>
-<summary>v TBD</summary>
+<summary>v3.0</summary>
 
 | Name                 | Address                                    |
 | -------------------- | ------------------------------------------ |
-| Kernel               | 0xd3082872F8B06073A021b4602e022d5A070d7cfC |
-| KernelFactory        | 0x5de4839a76cf55d0c90e2061ef4386d962E15ae3 |
-| SessionKeyValidator  | 0xB8E3c4bEaACAd06f6092793012DA4a8cB23D6123 |
-| ECDSA Validator      | 0xd9AB5096a832b9ce79914329DAEE236f8Eea0390 |
-| FclWebAuthnValidator | 0x42085b533b27B9AfDAF3864a38c72eF853943DAB |
-| P256VerifierWrapper  | 0x738e3257EE928637fE62c37F91D3e722C45Dcc7C |
+| Meta Factory         | 0xd703aaE79538628d27099B8c4f621bE4CCd142d5 |
+| Factory              | 0x6723b44Abeec4E71eBE3232BD5B455805baDD22f |
+| Kernel               | 0x94F097E1ebEB4ecA3AAE54cabb08905B239A7D27 |
+| ECDSA Validator      | 0x8104e3Ad430EA6d354d013A6789fDFc71E671c43 |
+
 </details>
 
 <details>
