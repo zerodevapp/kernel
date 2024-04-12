@@ -13,7 +13,6 @@ Kernel is supported by all major AA SDKs, including:
 - [ZeroDev](https://docs.zerodev.app/)
 - [Permissionless.js](https://docs.pimlico.io/permissionless/how-to/accounts/use-kernel-account)
 - [UserOp.js](https://docs.stackup.sh/docs/useropjs-presets#kernel)
-- [Account Kit](https://github.com/alchemyplatform/aa-sdk/tree/main/packages/accounts/src/kernel-zerodev)
 
 ## Resources
 
