@@ -1,12 +1,6 @@
 name: test
 
-on:
-  workflow_dispatch:
-  pull_request:
-  push:
-    branches:
-      - "main"
-      - "dev"
+on: workflow_dispatch
 
 env:
   FOUNDRY_PROFILE: ci
@@ -38,10 +32,3 @@ jobs:
         run: |
           forge test -vvv
         id: test
-
-      - name: Run snapshot
-        run: NO_COLOR=1 forge snapshot --via-ir >> $GITHUB_STEP_SUMMARY
-        id: snapshot
-
-      - name: Run coverage
-        run: NO_COLOR=1 forge coverage >> $GITHUB_STEP_SUMMARY

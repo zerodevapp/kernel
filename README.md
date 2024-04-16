@@ -1,7 +1,5 @@
 # Kernel
 
-> If you are looking for Kernel v3 source code, [it's sitting here](https://github.com/zerodevapp/kernel_v3) while we figure out how to merge it.
-
 Kernel is a smart contract account that is:
 
 - Compatible with [ERC-4337](https://eips.ethereum.org/EIPS/eip-4337).
