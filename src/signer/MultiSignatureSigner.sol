@@ -4,7 +4,8 @@ pragma solidity ^0.8.0;
 
 import {ECDSA} from "solady/utils/ECDSA.sol";
 import {MerkleProofLib} from "solady/utils/MerkleProofLib.sol";
-import {IValidator, IHook} from "../interfaces/IERC7579Modules.sol";
+import {ISigner} from "../interfaces/IERC7579Modules.sol";
+import {SignerBase} from "../sdk/moduleBase/SignerBase.sol";
 import {PackedUserOperation} from "../interfaces/PackedUserOperation.sol";
 import {
     SIG_VALIDATION_SUCCESS_UINT,
@@ -19,43 +20,40 @@ struct ECDSAValidatorStorage {
     address owner;
 }
 
-contract MultiSignatureECDSAValidator is IValidator, IHook {
-    event OwnerRegistered(address indexed kernel, address indexed owner);
-
-    mapping(address => ECDSAValidatorStorage) public ecdsaValidatorStorage;
-
-    function onInstall(bytes calldata _data) external payable override {
-        if (_isInitialized(msg.sender)) revert AlreadyInitialized(msg.sender);
-        address owner = address(bytes20(_data[0:20]));
-        ecdsaValidatorStorage[msg.sender].owner = owner;
-        emit OwnerRegistered(msg.sender, owner);
+contract MultiSignatureECDSASigner is SignerBase {
+    mapping(address => uint256) public usedIds;
+    mapping(bytes32 id => mapping(address wallet => address)) public signer;
+    event SignerRegistered(address indexed kernel, bytes32 indexed id, address indexed owner);
+    error NoSignerRegistered();
+    
+    function isInitialized(address wallet) external view override returns (bool) {
+        return usedIds[wallet] > 0;
     }
 
-    function onUninstall(bytes calldata) external payable override {
-        if (!_isInitialized(msg.sender)) revert NotInitialized(msg.sender);
-        delete ecdsaValidatorStorage[msg.sender];
+    function _signerOninstall(bytes32 id, bytes calldata _data) internal override {
+        if(signer[id][msg.sender] == address(0)) {
+            usedIds[msg.sender]++;
+        }
+        signer[id][msg.sender] = address(bytes20(_data[0:20]));
+        emit SignerRegistered(msg.sender, id, address(bytes20(_data[0:20])));
     }
 
-    function isModuleType(uint256 typeID) external pure override returns (bool) {
-        return typeID == MODULE_TYPE_VALIDATOR || typeID == MODULE_TYPE_HOOK;
+    function _signerOnUninstall(bytes32 id, bytes calldata) internal override {
+        if(signer[id][msg.sender] == address(0)) {
+            revert NoSignerRegistered();
+        }
+        delete signer[id][msg.sender];
+        usedIds[msg.sender]--;
     }
 
-    function isInitialized(address smartAccount) external view override returns (bool) {
-        return _isInitialized(smartAccount);
-    }
-
-    function _isInitialized(address smartAccount) internal view returns (bool) {
-        return ecdsaValidatorStorage[smartAccount].owner != address(0);
-    }
-
-    function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash)
+    function checkUserOpSignature(bytes32 id, PackedUserOperation calldata userOp, bytes32 userOpHash)
         external
         payable
         override
         returns (uint256)
     {
         bytes calldata sig = userOp.signature;
-        address owner = ecdsaValidatorStorage[msg.sender].owner;
+        address owner = signer[id][msg.sender];
         if (sig.length == 65) {
             // simple ecdsa verification
             if (owner == ECDSA.recover(userOpHash, sig)) {
@@ -84,13 +82,13 @@ contract MultiSignatureECDSAValidator is IValidator, IHook {
         return SIG_VALIDATION_SUCCESS_UINT;
     }
 
-    function isValidSignatureWithSender(address, bytes32 hash, bytes calldata sig)
+    function checkSignature(bytes32 id, address sender, bytes32 hash, bytes calldata sig)
         external
         view
         override
         returns (bytes4)
     {
-        address owner = ecdsaValidatorStorage[msg.sender].owner;
+        address owner = signer[id][msg.sender];
         if (sig.length == 65) {
             // simple ecdsa verification
             if (owner == ECDSA.recover(hash, sig)) {
@@ -118,16 +116,4 @@ contract MultiSignatureECDSAValidator is IValidator, IHook {
         }
         return ERC1271_MAGICVALUE;
     }
-
-    function preCheck(address msgSender, uint256 value, bytes calldata)
-        external
-        payable
-        override
-        returns (bytes memory)
-    {
-        require(msgSender == ecdsaValidatorStorage[msg.sender].owner, "ECDSAValidator: sender is not owner");
-        return hex"";
-    }
-
-    function postCheck(bytes calldata hookData, bool success, bytes calldata res) external payable override {}
 }
