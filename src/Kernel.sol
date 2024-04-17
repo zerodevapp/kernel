@@ -1,201 +1,218 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-// Importing external libraries and contracts
-import {EIP712} from "solady/utils/EIP712.sol";
-import {ECDSA} from "solady/utils/ECDSA.sol";
-import {IEntryPoint} from "I4337/interfaces/IEntryPoint.sol";
-import {UserOperation} from "I4337/interfaces/UserOperation.sol";
-import {Compatibility} from "./abstract/Compatibility.sol";
-import {KernelStorage} from "./abstract/KernelStorage.sol";
-import {_intersectValidationData} from "./utils/KernelHelper.sol";
-import {IKernelValidator} from "./interfaces/IKernelValidator.sol";
-
+import {PackedUserOperation} from "./interfaces/PackedUserOperation.sol";
+import {IAccount, ValidationData, ValidAfter, ValidUntil, parseValidationData} from "./interfaces/IAccount.sol";
+import {IEntryPoint} from "./interfaces/IEntryPoint.sol";
+import {IAccountExecute} from "./interfaces/IAccountExecute.sol";
+import {IERC7579Account} from "./interfaces/IERC7579Account.sol";
+import {ModuleLib} from "./utils/ModuleLib.sol";
 import {
-    KERNEL_NAME,
-    KERNEL_VERSION,
-    VALIDATOR_APPROVED_STRUCT_HASH,
-    KERNEL_STORAGE_SLOT_1,
-    SIG_VALIDATION_FAILED
-} from "./common/Constants.sol";
-import {Operation} from "./common/Enums.sol";
-import {WalletKernelStorage, Call, ExecutionDetail} from "./common/Structs.sol";
-import {ValidationData, ValidAfter, ValidUntil, parseValidationData, packValidationData} from "./common/Types.sol";
+    ValidationManager,
+    ValidationMode,
+    ValidationId,
+    ValidatorLib,
+    ValidationType,
+    PermissionId,
+    PassFlag,
+    SKIP_SIGNATURE
+} from "./core/ValidationManager.sol";
+import {HookManager} from "./core/HookManager.sol";
+import {ExecutorManager} from "./core/ExecutorManager.sol";
+import {SelectorManager} from "./core/SelectorManager.sol";
+import {IModule, IValidator, IHook, IExecutor, IFallback, IPolicy, ISigner} from "./interfaces/IERC7579Modules.sol";
+import {EIP712} from "solady/utils/EIP712.sol";
+import {ExecLib, ExecMode, CallType, ExecType, ExecModeSelector, ExecModePayload} from "./utils/ExecLib.sol";
+import {
+    CALLTYPE_SINGLE,
+    CALLTYPE_DELEGATECALL,
+    ERC1967_IMPLEMENTATION_SLOT,
+    VALIDATION_TYPE_ROOT,
+    VALIDATION_TYPE_VALIDATOR,
+    VALIDATION_TYPE_PERMISSION,
+    MODULE_TYPE_VALIDATOR,
+    MODULE_TYPE_EXECUTOR,
+    MODULE_TYPE_FALLBACK,
+    MODULE_TYPE_HOOK,
+    MODULE_TYPE_POLICY,
+    MODULE_TYPE_SIGNER,
+    EXECTYPE_TRY,
+    EXECTYPE_DEFAULT,
+    EXEC_MODE_DEFAULT,
+    CALLTYPE_DELEGATECALL,
+    CALLTYPE_SINGLE,
+    CALLTYPE_BATCH,
+    CALLTYPE_STATIC
+} from "./types/Constants.sol";
 
-/// @title Kernel
-/// @author taek<leekt216@gmail.com>
-/// @notice wallet kernel for extensible wallet functionality
-contract Kernel is EIP712, Compatibility, KernelStorage {
-    /// @dev Selector of the `DisabledMode()` error, to be used in assembly, 'bytes4(keccak256(bytes("DisabledMode()")))', same as DisabledMode.selector()
-    uint256 private constant _DISABLED_MODE_SELECTOR = 0xfc2f51c5;
-    bytes32 internal constant EIP712_DOMAIN_TYPEHASH =
-        0x8b73c3c69bb8fe3d512ecc4cf759cc79239f7b179b0ffacaa9a75d522b39400f;
+contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager {
+    error ExecutionReverted();
+    error InvalidExecutor();
+    error InvalidFallback();
+    error InvalidCallType();
+    error OnlyExecuteUserOp();
+    error InvalidModuleType();
+    error InvalidCaller();
+    error InvalidSelector();
 
-    /// @dev Current kernel name and version
-    string public constant name = KERNEL_NAME;
-    string public constant version = KERNEL_VERSION;
+    event Received(address sender, uint256 amount);
+    event Upgraded(address indexed implementation);
 
-    /// @dev Sets up the EIP712 and KernelStorage with the provided entry point
-    constructor(IEntryPoint _entryPoint) KernelStorage(_entryPoint) {}
+    IEntryPoint public immutable entrypoint;
 
-    /// @notice Accepts incoming Ether transactions and calls from the EntryPoint contract
-    /// @dev This function will delegate any call to the appropriate executor based on the function signature.
+    // NOTE : when eip 1153 has been enabled, this can be transient storage
+    mapping(bytes32 userOpHash => IHook) internal executionHook;
+
+    constructor(IEntryPoint _entrypoint) {
+        entrypoint = _entrypoint;
+        _validationStorage().rootValidator = ValidationId.wrap(bytes21(abi.encodePacked(hex"deadbeef")));
+    }
+
+    modifier onlyEntryPoint() {
+        if (msg.sender != address(entrypoint)) {
+            revert InvalidCaller();
+        }
+        _;
+    }
+
+    modifier onlyEntryPointOrSelf() {
+        if (msg.sender != address(entrypoint) && msg.sender != address(this)) {
+            revert InvalidCaller();
+        }
+        _;
+    }
+
+    modifier onlyEntryPointOrSelfOrRoot() {
+        IValidator validator = ValidatorLib.getValidator(_validationStorage().rootValidator);
+        if (
+            msg.sender != address(entrypoint) && msg.sender != address(this) // do rootValidator hook
+        ) {
+            if (validator.isModuleType(4)) {
+                bytes memory ret = IHook(address(validator)).preCheck(msg.sender, msg.value, msg.data);
+                _;
+                IHook(address(validator)).postCheck(ret, true, hex""); // TODO don't support try catch hook here
+            } else {
+                revert InvalidCaller();
+            }
+        } else {
+            _;
+        }
+    }
+
+    function initialize(ValidationId _rootValidator, IHook hook, bytes calldata validatorData, bytes calldata hookData)
+        external
+    {
+        ValidationStorage storage vs = _validationStorage();
+        require(ValidationId.unwrap(vs.rootValidator) == bytes21(0), "already initialized");
+        if (ValidationId.unwrap(_rootValidator) == bytes21(0)) {
+            revert InvalidValidator();
+        }
+        ValidationType vType = ValidatorLib.getType(_rootValidator);
+        if (vType != VALIDATION_TYPE_VALIDATOR && vType != VALIDATION_TYPE_PERMISSION) {
+            revert InvalidValidationType();
+        }
+        _setRootValidator(_rootValidator);
+        ValidationConfig memory config = ValidationConfig({nonce: uint32(1), hook: hook});
+        vs.currentNonce = 1;
+        _installValidation(_rootValidator, config, validatorData, hookData);
+    }
+
+    function upgradeTo(address _newImplementation) external payable onlyEntryPointOrSelfOrRoot {
+        assembly {
+            sstore(ERC1967_IMPLEMENTATION_SLOT, _newImplementation)
+        }
+        emit Upgraded(_newImplementation);
+    }
+
+    function _domainNameAndVersion() internal pure override returns (string memory name, string memory version) {
+        name = "Kernel";
+        version = "0.3.0-beta";
+    }
+
+    receive() external payable {
+        emit Received(msg.sender, msg.value);
+    }
+
     fallback() external payable {
-        bytes4 sig = msg.sig;
-        address executor = getKernelStorage().execution[sig].executor;
-        if (msg.sender != address(entryPoint) && !_checkCaller()) {
-            revert NotAuthorizedCaller();
+        SelectorConfig memory config = _selectorConfig(msg.sig);
+        bool success;
+        bytes memory result;
+        if (address(config.hook) == address(0)) {
+            revert InvalidSelector();
+        } else {
+            // action installed
+            bytes memory context;
+            if (address(config.hook) != address(1)) {
+                context = _doPreHook(config.hook, msg.value, msg.data);
+            }
+            // execute action
+            if (config.callType == CALLTYPE_SINGLE) {
+                (success, result) = ExecLib.doFallback2771Call(config.target);
+            } else if (config.callType == CALLTYPE_DELEGATECALL) {
+                (success, result) = ExecLib.executeDelegatecall(config.target, msg.data);
+            } else {
+                revert NotSupportedCallType();
+            }
+            if (address(config.hook) != address(1)) {
+                _doPostHook(config.hook, context, success, result);
+            }
         }
-        assembly {
-            calldatacopy(0, 0, calldatasize())
-            let result := delegatecall(gas(), executor, 0, calldatasize(), 0, 0)
-            returndatacopy(0, 0, returndatasize())
-            switch result
-            case 0 { revert(0, returndatasize()) }
-            default { return(0, returndatasize()) }
-        }
-    }
-
-    /// @notice Executes a function call to an external contract
-    /// @param to The address of the target contract
-    /// @param value The amount of Ether to send
-    /// @param data The call data to be sent
-    /// @dev operation is deprecated param, use executeBatch for batched transaction
-    function execute(address to, uint256 value, bytes memory data, Operation _operation) external payable {
-        if (msg.sender != address(entryPoint) && msg.sender != address(this) && !_checkCaller()) {
-            revert NotAuthorizedCaller();
-        }
-        if (_operation != Operation.Call) {
-            revert DeprecatedOperation();
-        }
-        assembly {
-            let success := call(gas(), to, value, add(data, 0x20), mload(data), 0, 0)
-            returndatacopy(0, 0, returndatasize())
-            switch success
-            case 0 { revert(0, returndatasize()) }
-            default { return(0, returndatasize()) }
-        }
-    }
-
-    /// @notice Executes a function call to an external contract with delegatecall
-    /// @param to The address of the target contract
-    /// @param data The call data to be sent
-    function executeDelegateCall(address to, bytes memory data) external payable {
-        if (msg.sender != address(entryPoint) && msg.sender != address(this) && !_checkCaller()) {
-            revert NotAuthorizedCaller();
-        }
-        assembly {
-            let success := delegatecall(gas(), to, add(data, 0x20), mload(data), 0, 0)
-            returndatacopy(0, 0, returndatasize())
-            switch success
-            case 0 { revert(0, returndatasize()) }
-            default { return(0, returndatasize()) }
-        }
-    }
-
-    /// @notice Executes a function call to an external contract batched
-    /// @param calls The calls to be executed, in order
-    /// @dev operation deprecated param, use executeBatch for batched transaction
-    function executeBatch(Call[] memory calls) external payable {
-        if (msg.sender != address(entryPoint) && !_checkCaller()) {
-            revert NotAuthorizedCaller();
-        }
-        uint256 len = calls.length;
-        for (uint256 i = 0; i < len;) {
-            Call memory call = calls[i];
-            address to = call.to;
-            uint256 value = call.value;
-            bytes memory data = call.data;
+        if (!success) {
             assembly {
-                let success := call(gas(), to, value, add(data, 0x20), mload(data), 0, 0)
-                switch success
-                case 0 {
-                    returndatacopy(0, 0, returndatasize())
-                    revert(0, returndatasize())
-                }
-                default { i := add(i, 1) }
+                revert(add(result, 0x20), mload(result))
+            }
+        } else {
+            assembly {
+                return(add(result, 0x20), mload(result))
             }
         }
     }
 
-    /// @notice Validates a user operation based on its mode
-    /// @dev This function will validate user operation and be called by EntryPoint
-    /// @param _userOp The user operation to be validated
-    /// @param userOpHash The hash of the user operation
-    /// @param missingAccountFunds The funds needed to be reimbursed
-    /// @return validationData The data used for validation
-    function validateUserOp(UserOperation calldata _userOp, bytes32 userOpHash, uint256 missingAccountFunds)
+    // validation part
+    function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash, uint256 missingAccountFunds)
         external
         payable
-        virtual
+        override
+        onlyEntryPoint
         returns (ValidationData validationData)
     {
-        if (msg.sender != address(entryPoint)) {
-            revert NotEntryPoint();
-        }
-        bytes calldata userOpSignature;
-        uint256 userOpEndOffset;
-        assembly {
-            // Store the userOpSignature offset
-            userOpEndOffset := add(calldataload(0x04), 0x24)
-            // Extract the user op signature from the calldata (but keep it in the calldata, just extract offset & length)
-            userOpSignature.offset := add(calldataload(add(userOpEndOffset, 0x120)), userOpEndOffset)
-            userOpSignature.length := calldataload(sub(userOpSignature.offset, 0x20))
-        }
-        // mode based signature
-        bytes4 mode = bytes4(userOpSignature[0:4]); // mode == 00..00 use validators
-        // mode == 0x00000000 use sudo validator
-        if (mode == 0x00000000) {
-            assembly {
-                if missingAccountFunds {
-                    pop(call(gas(), caller(), missingAccountFunds, callvalue(), callvalue(), callvalue(), callvalue()))
-                    //ignore failure (its EntryPoint's job to verify, not account.)
-                }
-            }
-            // short circuit here for default validator
-            return _validateUserOp(_userOp, userOpHash, missingAccountFunds);
-        }
+        ValidationStorage storage vs = _validationStorage();
+        // ONLY ENTRYPOINT
+        // Major change for v2 => v3
+        // 1. instead of packing 4 bytes prefix to userOp.signature to determine the mode, v3 uses userOp.nonce's first 2 bytes to check the mode
+        // 2. instead of packing 20 bytes in userOp.signature for enable mode to provide the validator address, v3 uses userOp.nonce[2:22]
+        // 3. In v2, only 1 plugin validator(aside from root validator) can access the selector.
+        //    In v3, you can use more than 1 plugin to use the exact selector, you need to specify the validator address in userOp.nonce[2:22] to use the validator
 
-        // Check if the kernel is disabled, if that's the case, it's only accepting userOperation with sudo mode
-        assembly ("memory-safe") {
-            // Extract the disabled mode from the storage slot
-            let isKernelDisabled := shl(224, sload(KERNEL_STORAGE_SLOT_1))
-            // If we got a non-zero disabled mode, and non zero mode, then revert
-            if and(isKernelDisabled, mode) {
-                mstore(0x00, _DISABLED_MODE_SELECTOR)
-                revert(0x1c, 0x04)
-            }
+        (ValidationMode vMode, ValidationType vType, ValidationId vId) = ValidatorLib.decodeNonce(userOp.nonce);
+        if (vType == VALIDATION_TYPE_ROOT) {
+            vId = vs.rootValidator;
         }
+        validationData = _doValidation(vMode, vId, userOp, userOpHash);
+        ValidationConfig memory vc = vs.validationConfig[vId];
+        // allow when nonce is not revoked or vType is sudo
+        if (vType != VALIDATION_TYPE_ROOT && vc.nonce < vs.validNonceFrom) {
+            revert InvalidNonce();
+        }
+        IHook execHook = vc.hook;
+        if (address(execHook) == address(0)) {
+            revert InvalidValidator();
+        }
+        executionHook[userOpHash] = execHook;
 
-        // The validator that will be used
-        IKernelValidator validator;
-
-        // mode == 0x00000001 use given validator
-        // mode == 0x00000002 enable validator
-        if (mode == 0x00000001) {
-            bytes calldata userOpCallData;
-            assembly {
-                userOpCallData.offset := add(calldataload(add(userOpEndOffset, 0x40)), userOpEndOffset)
-                userOpCallData.length := calldataload(sub(userOpCallData.offset, 0x20))
+        if (address(execHook) == address(1)) {
+            // does not require hook
+            if (vType != VALIDATION_TYPE_ROOT && !vs.allowedSelectors[vId][bytes4(userOp.callData[0:4])]) {
+                revert InvalidValidator();
             }
-            ExecutionDetail storage detail = getKernelStorage().execution[bytes4(userOpCallData[0:4])];
-            validator = detail.validator;
-            userOpSignature = userOpSignature[4:];
-            validationData = packValidationData(detail.validAfter, detail.validUntil);
-        } else if (mode == 0x00000002) {
-            bytes calldata userOpCallData;
-            assembly {
-                userOpCallData.offset := add(calldataload(add(userOpEndOffset, 0x40)), userOpEndOffset)
-                userOpCallData.length := calldataload(sub(userOpCallData.offset, 0x20))
-            }
-            // use given validator
-            // userOpSignature[4:10] = validAfter,
-            // userOpSignature[10:16] = validUntil,
-            // userOpSignature[16:36] = validator address,
-            (validator, validationData, userOpSignature) =
-                _approveValidator(bytes4(userOpCallData[0:4]), userOpSignature);
         } else {
-            return SIG_VALIDATION_FAILED;
+            // requires hook
+            if (vType != VALIDATION_TYPE_ROOT && !vs.allowedSelectors[vId][bytes4(userOp.callData[4:8])]) {
+                revert InvalidValidator();
+            }
+            if (bytes4(userOp.callData[0:4]) != this.executeUserOp.selector) {
+                revert OnlyExecuteUserOp();
+            }
         }
 
         assembly {
@@ -204,202 +221,273 @@ contract Kernel is EIP712, Compatibility, KernelStorage {
                 //ignore failure (its EntryPoint's job to verify, not account.)
             }
         }
-
-        // Replicate the userOp from memory to calldata, to update it's signature (since with mode 1 & 2 the signatre can be updated)
-        UserOperation memory userOp = _userOp;
-        userOp.signature = userOpSignature;
-
-        // Get the validator data from the designated signer
-        validationData =
-            _intersectValidationData(validationData, validator.validateUserOp(userOp, userOpHash, missingAccountFunds));
-        return validationData;
     }
 
-    /// @dev This function will approve a new validator for the current kernel
-    /// @param sig The signature of the userOp asking for a validator approval
-    /// @param signature The signature of the userOp asking for a validator approval
-    function _approveValidator(bytes4 sig, bytes calldata signature)
-        internal
-        returns (IKernelValidator validator, ValidationData validationData, bytes calldata validationSig)
+    // --- Execution ---
+    function executeUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash)
+        external
+        payable
+        override
+        onlyEntryPoint
     {
-        unchecked {
-            validator = IKernelValidator(address(bytes20(signature[16:36])));
-            uint256 cursor = 88;
-            uint256 length = uint256(bytes32(signature[56:88])); // this is enableDataLength
-            bytes calldata enableData;
-            assembly {
-                enableData.offset := add(signature.offset, cursor)
-                enableData.length := length
-                cursor := add(cursor, length) // 88 + enableDataLength
-            }
-            length = uint256(bytes32(signature[cursor:cursor + 32])); // this is enableSigLength
-            assembly {
-                cursor := add(cursor, 32)
-            }
-            bytes32 enableDigest = _hashTypedData(
-                keccak256(
-                    abi.encode(
-                        VALIDATOR_APPROVED_STRUCT_HASH,
-                        bytes4(sig),
-                        uint256(bytes32(signature[4:36])),
-                        address(bytes20(signature[36:56])),
-                        keccak256(enableData)
-                    )
-                )
-            );
-            validationData = _intersectValidationData(
-                _validateSignature(address(this), enableDigest, enableDigest, signature[cursor:cursor + length]),
-                ValidationData.wrap(
-                    uint256(bytes32(signature[4:36]))
-                        & 0xffffffffffffffffffffffff0000000000000000000000000000000000000000
-                )
-            );
-            assembly {
-                cursor := add(cursor, length)
-                validationSig.offset := add(signature.offset, cursor)
-                validationSig.length := sub(signature.length, cursor)
-            }
-            getKernelStorage().execution[sig] = ExecutionDetail({
-                validAfter: ValidAfter.wrap(uint48(bytes6(signature[4:10]))),
-                validUntil: ValidUntil.wrap(uint48(bytes6(signature[10:16]))),
-                executor: address(bytes20(signature[36:56])),
-                validator: IKernelValidator(address(bytes20(signature[16:36])))
-            });
-            validator.enable(enableData);
+        bytes memory context;
+        IHook hook = executionHook[userOpHash];
+        if (address(hook) != address(1)) {
+            // removed 4bytes selector
+            context = _doPreHook(hook, msg.value, userOp.callData[4:]);
+        }
+        (bool success, bytes memory ret) = ExecLib.executeDelegatecall(address(this), userOp.callData[4:]);
+        if (address(hook) != address(1)) {
+            _doPostHook(hook, context, success, ret);
+        } else if (!success) {
+            revert ExecutionReverted();
         }
     }
 
-    /// @dev Validates a signature for the given kernel
-    /// @param hash The hash of the data that was signed
-    /// @param signature The signature to be validated
-    function validateSignature(bytes32 hash, bytes calldata signature) public view returns (ValidationData) {
-        return _validateSignature(msg.sender, hash, hash, signature);
+    function executeFromExecutor(ExecMode execMode, bytes calldata executionCalldata)
+        external
+        payable
+        returns (bytes[] memory returnData)
+    {
+        // no modifier needed, checking if msg.sender is registered executor will replace the modifier
+        IHook hook = _executorConfig(IExecutor(msg.sender)).hook;
+        if (address(hook) == address(0)) {
+            revert InvalidExecutor();
+        }
+        bytes memory context;
+        if (address(hook) != address(1)) {
+            context = _doPreHook(hook, msg.value, msg.data);
+        }
+        returnData = ExecLib.execute(execMode, executionCalldata);
+        if (address(hook) != address(1)) {
+            _doPostHook(hook, context, true, abi.encode(returnData));
+        }
     }
 
-    /// @dev Get the current name & version of the kernel, used for the EIP-712 domain separator
-    function _domainNameAndVersion() internal pure override returns (string memory, string memory) {
-        return (name, version);
+    function execute(ExecMode execMode, bytes calldata executionCalldata) external payable onlyEntryPointOrSelfOrRoot {
+        ExecLib.execute(execMode, executionCalldata);
     }
 
-    /// @dev Get an EIP-712 compliant domain separator
-    function _domainSeparator() internal view override returns (bytes32) {
-        // Obtain the name and version from the _domainNameAndVersion function.
-        (string memory _name, string memory _version) = _domainNameAndVersion();
-        bytes32 nameHash = keccak256(bytes(_name));
-        bytes32 versionHash = keccak256(bytes(_version));
-
-        // Use the proxy address for the EIP-712 domain separator.
-        address proxyAddress = address(this);
-
-        // Construct the domain separator with name, version, chainId, and proxy address.
-        bytes32 typeHash = EIP712_DOMAIN_TYPEHASH;
-        return keccak256(abi.encode(typeHash, nameHash, versionHash, block.chainid, proxyAddress));
-    }
-
-    /// @notice Checks if a signature is valid
-    /// @dev This function checks if a signature is valid based on the hash of the data signed.
-    /// @param hash The hash of the data that was signed
-    /// @param signature The signature to be validated
-    /// @return The magic value 0x1626ba7e if the signature is valid, otherwise returns 0xffffffff.
-    function isValidSignature(bytes32 hash, bytes calldata signature) public view returns (bytes4) {
-        // Include the proxy address in the domain separator
-        bytes32 domainSeparator = _domainSeparator();
-
-        // Recreate the signed message hash with the correct domain separator
-        bytes32 signedMessageHash = keccak256(abi.encodePacked("\x19\x01", domainSeparator, hash));
-
-        ValidationData validationData = _validateSignature(msg.sender, signedMessageHash, hash, signature);
-        (ValidAfter validAfter, ValidUntil validUntil, address result) = parseValidationData(validationData);
-
-        // Check if the signature is valid within the specified time frame and the result is successful
-        if (
-            ValidAfter.unwrap(validAfter) <= block.timestamp && ValidUntil.unwrap(validUntil) >= block.timestamp
-                && result == address(0)
-        ) {
-            // If all checks pass, return the ERC1271 magic value for a valid signature
-            return 0x1626ba7e;
+    function isValidSignature(bytes32 hash, bytes calldata signature) external view override returns (bytes4) {
+        ValidationStorage storage vs = _validationStorage();
+        (ValidationId vId, bytes calldata sig) = ValidatorLib.decodeSignature(signature);
+        if (ValidatorLib.getType(vId) == VALIDATION_TYPE_ROOT) {
+            vId = vs.rootValidator;
+        }
+        if (address(vs.validationConfig[vId].hook) == address(0)) {
+            revert InvalidValidator();
+        }
+        if (ValidatorLib.getType(vId) == VALIDATION_TYPE_VALIDATOR) {
+            IValidator validator = ValidatorLib.getValidator(vId);
+            return validator.isValidSignatureWithSender(msg.sender, _toWrappedHash(hash), sig);
         } else {
-            // If any check fails, return the failure magic value
-            return 0xffffffff;
+            PermissionId pId = ValidatorLib.getPermissionId(vId);
+            PassFlag permissionFlag = vs.permissionConfig[pId].permissionFlag;
+            if (PassFlag.unwrap(permissionFlag) & PassFlag.unwrap(SKIP_SIGNATURE) != 0) {
+                revert PermissionNotAlllowedForSignature();
+            }
+            return _checkPermissionSignature(pId, msg.sender, hash, sig);
         }
     }
 
-    /// @dev Check if the current caller is authorized or no to perform the call
-    /// @return True if the caller is authorized, otherwise false
-    function _checkCaller() internal returns (bool) {
-        if (_validCaller(msg.sender, msg.data)) {
-            return true;
+    function installModule(uint256 moduleType, address module, bytes calldata initData)
+        external
+        payable
+        override
+        onlyEntryPointOrSelfOrRoot
+    {
+        if (moduleType == MODULE_TYPE_VALIDATOR) {
+            ValidationStorage storage vs = _validationStorage();
+            ValidationId vId = ValidatorLib.validatorToIdentifier(IValidator(module));
+            ValidationConfig memory config =
+                ValidationConfig({nonce: vs.currentNonce, hook: IHook(address(bytes20(initData[0:20])))});
+            bytes calldata validatorData;
+            bytes calldata hookData;
+            assembly {
+                validatorData.offset := add(add(initData.offset, 52), calldataload(add(initData.offset, 20)))
+                validatorData.length := calldataload(sub(validatorData.offset, 32))
+                hookData.offset := add(add(initData.offset, 52), calldataload(add(initData.offset, 52)))
+                hookData.length := calldataload(sub(hookData.offset, 32))
+            }
+            _installValidation(vId, config, validatorData, hookData);
+            //_installHook(config.hook, hookData); hook install is handled inside installvalidation
+        } else if (moduleType == MODULE_TYPE_EXECUTOR) {
+            bytes calldata executorData;
+            bytes calldata hookData;
+            assembly {
+                executorData.offset := add(add(initData.offset, 52), calldataload(add(initData.offset, 20)))
+                executorData.length := calldataload(sub(executorData.offset, 32))
+                hookData.offset := add(add(initData.offset, 52), calldataload(add(initData.offset, 52)))
+                hookData.length := calldataload(sub(hookData.offset, 32))
+            }
+            IHook hook = IHook(address(bytes20(initData[0:20])));
+            _installExecutor(IExecutor(module), executorData, hook);
+            _installHook(hook, hookData);
+        } else if (moduleType == MODULE_TYPE_FALLBACK) {
+            bytes calldata selectorData;
+            bytes calldata hookData;
+            assembly {
+                selectorData.offset := add(add(initData.offset, 56), calldataload(add(initData.offset, 24)))
+                selectorData.length := calldataload(sub(selectorData.offset, 32))
+                hookData.offset := add(add(initData.offset, 56), calldataload(add(initData.offset, 56)))
+                hookData.length := calldataload(sub(hookData.offset, 32))
+            }
+            _installSelector(bytes4(initData[0:4]), module, IHook(address(bytes20(initData[4:24]))), selectorData);
+            _installHook(IHook(address(bytes20(initData[4:24]))), hookData);
+        } else if (moduleType == MODULE_TYPE_HOOK) {
+            // force call onInstall for hook
+            // NOTE: for hook, kernel does not support independant hook install,
+            // hook is expected to be paired with proper validator/executor/selector
+            IHook(module).onInstall(initData);
+        } else if (moduleType == MODULE_TYPE_POLICY) {
+            // force call onInstall for policy
+            // NOTE: for policy, kernel does not support independant policy install,
+            // policy is expected to be paired with proper permissionId
+            // to "ADD" permission, use "installValidations()" function
+            IPolicy(module).onInstall(initData);
+        } else if (moduleType == MODULE_TYPE_SIGNER) {
+            // force call onInstall for signer
+            // NOTE: for signer, kernel does not support independant signer install,
+            // signer is expected to be paired with proper permissionId
+            // to "ADD" permission, use "installValidations()" function
+            ISigner(module).onInstall(initData);
+        } else {
+            revert InvalidModuleType();
         }
-        bytes4 sig = msg.sig;
-        ExecutionDetail storage detail = getKernelStorage().execution[sig];
+    }
+
+    function installValidations(
+        ValidationId[] calldata vIds,
+        ValidationConfig[] memory configs,
+        bytes[] calldata validationData,
+        bytes[] calldata hookData
+    ) external payable onlyEntryPointOrSelfOrRoot {
+        _installValidations(vIds, configs, validationData, hookData);
+    }
+
+    function uninstallValidation(ValidationId vId, bytes calldata deinitData, bytes calldata hookDeinitData)
+        external
+        payable
+        onlyEntryPointOrSelfOrRoot
+    {
+        IHook hook = _uninstallValidation(vId, deinitData);
+        _uninstallHook(hook, hookDeinitData);
+    }
+
+    function invalidateNonce(uint32 nonce) external payable onlyEntryPointOrSelfOrRoot {
+        _invalidateNonce(nonce);
+    }
+
+    function uninstallModule(uint256 moduleType, address module, bytes calldata deInitData)
+        external
+        payable
+        override
+        onlyEntryPointOrSelfOrRoot
+    {
+        if (moduleType == 1) {
+            ValidationId vId = ValidatorLib.validatorToIdentifier(IValidator(module));
+            _uninstallValidation(vId, deInitData);
+        } else if (moduleType == 2) {
+            _uninstallExecutor(IExecutor(module), deInitData);
+        } else if (moduleType == 3) {
+            bytes4 selector = bytes4(deInitData[0:4]);
+            _uninstallSelector(selector, deInitData[4:]);
+        } else if (moduleType == 4) {
+            ValidationId vId = _validationStorage().rootValidator;
+            if (_validationStorage().validationConfig[vId].hook == IHook(module)) {
+                // when root validator hook is being removed
+                // remove hook on root validator to prevent kernel from being locked
+                _validationStorage().validationConfig[vId].hook = IHook(address(1));
+            }
+            // force call onInstall for hook
+            // NOTE: for hook, kernel does not support independant hook install,
+            // hook is expected to be paired with proper validator/executor/selector
+            ModuleLib.uninstallModule(module, deInitData);
+        } else if (moduleType == 5) {
+            ValidationId rootValidator = _validationStorage().rootValidator;
+            bytes32 permissionId = bytes32(deInitData[0:32]);
+            if (ValidatorLib.getType(rootValidator) == VALIDATION_TYPE_PERMISSION) {
+                if (permissionId == bytes32(PermissionId.unwrap(ValidatorLib.getPermissionId(rootValidator)))) {
+                    revert RootValidatorCannotBeRemoved();
+                }
+            }
+            // force call onInstall for policy
+            // NOTE: for policy, kernel does not support independant policy install,
+            // policy is expected to be paired with proper permissionId
+            // to "REMOVE" permission, use "uninstallValidation()" function
+            ModuleLib.uninstallModule(module, deInitData);
+        } else if (moduleType == 6) {
+            ValidationId rootValidator = _validationStorage().rootValidator;
+            bytes32 permissionId = bytes32(deInitData[0:32]);
+            if (ValidatorLib.getType(rootValidator) == VALIDATION_TYPE_PERMISSION) {
+                if (permissionId == bytes32(PermissionId.unwrap(ValidatorLib.getPermissionId(rootValidator)))) {
+                    revert RootValidatorCannotBeRemoved();
+                }
+            }
+            // force call onInstall for signer
+            // NOTE: for signer, kernel does not support independant signer install,
+            // signer is expected to be paired with proper permissionId
+            // to "REMOVE" permission, use "uninstallValidation()" function
+            ModuleLib.uninstallModule(module, deInitData);
+        } else {
+            revert InvalidModuleType();
+        }
+    }
+
+    function supportsModule(uint256 moduleTypeId) external pure override returns (bool) {
+        if (moduleTypeId < 7) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    function isModuleInstalled(uint256 moduleType, address module, bytes calldata additionalContext)
+        external
+        view
+        override
+        returns (bool)
+    {
+        if (moduleType == MODULE_TYPE_VALIDATOR) {
+            return _validationStorage().validationConfig[ValidatorLib.validatorToIdentifier(IValidator(module))].hook
+                != IHook(address(0));
+        } else if (moduleType == MODULE_TYPE_EXECUTOR) {
+            return address(_executorConfig(IExecutor(module)).hook) != address(0);
+        } else if (moduleType == MODULE_TYPE_FALLBACK) {
+            return _selectorConfig(bytes4(additionalContext[0:4])).target == module;
+        } else {
+            return false;
+        }
+    }
+
+    function accountId() external pure override returns (string memory accountImplementationId) {
+        return "kernel.advanced.v0.3.0-beta";
+    }
+
+    function supportsExecutionMode(ExecMode mode) external pure override returns (bool) {
+        (CallType callType, ExecType execType, ExecModeSelector selector, ExecModePayload payload) =
+            ExecLib.decode(mode);
         if (
-            address(detail.validator) == address(0)
-                || (ValidUntil.unwrap(detail.validUntil) != 0 && ValidUntil.unwrap(detail.validUntil) < block.timestamp)
-                || ValidAfter.unwrap(detail.validAfter) > block.timestamp
+            callType != CALLTYPE_BATCH && callType != CALLTYPE_SINGLE && callType != CALLTYPE_DELEGATECALL
+                && callType != CALLTYPE_STATIC
         ) {
             return false;
-        } else {
-            return detail.validator.validCaller(msg.sender, msg.data);
         }
-    }
 
-    /// @dev This function will validate user operation and be called by EntryPoint
-    /// @param _op The user operation to be validated
-    /// @param _opHash The hash of the user operation
-    /// @param _missingFunds The funds needed to be reimbursed
-    function _validateUserOp(UserOperation calldata _op, bytes32 _opHash, uint256 _missingFunds)
-        internal
-        virtual
-        returns (ValidationData)
-    {
-        // Replace the user op in memory to update the signature
-        UserOperation memory op = _op;
-        // Remove the validation mode flag from the signature
-        op.signature = _op.signature[4:];
-
-        IKernelValidator validator;
-        assembly {
-            validator := shr(80, sload(KERNEL_STORAGE_SLOT_1))
+        if (
+            ExecType.unwrap(execType) != ExecType.unwrap(EXECTYPE_TRY)
+                && ExecType.unwrap(execType) != ExecType.unwrap(EXECTYPE_DEFAULT)
+        ) {
+            return false;
         }
-        return IKernelValidator(validator).validateUserOp(op, _opHash, _missingFunds);
-    }
 
-    /// @dev This function will validate a signature for the given kernel
-    /// @param _hash The hash of the data that was signed
-    /// @param _signature The signature to be validated
-    /// @return The magic value 0x1626ba7e if the signature is valid, otherwise returns 0xffffffff.
-    function _validateSignature(address _requestor, bytes32 _hash, bytes32 _rawHash, bytes calldata _signature)
-        internal
-        view
-        virtual
-        returns (ValidationData)
-    {
-        address validator;
-        assembly {
-            validator := shr(80, sload(KERNEL_STORAGE_SLOT_1))
+        if (ExecModeSelector.unwrap(selector) != ExecModeSelector.unwrap(EXEC_MODE_DEFAULT)) {
+            return false;
         }
-        // 20 bytes added at the end of the signature to store the address of the caller
-        (bool success, bytes memory res) = validator.staticcall(
-            abi.encodePacked(
-                abi.encodeWithSelector(IKernelValidator.validateSignature.selector, _hash, _signature),
-                _rawHash,
-                _requestor
-            )
-        );
-        require(success, "Kernel::_validateSignature: failed to validate signature");
-        return abi.decode(res, (ValidationData));
-    }
 
-    /// @dev Check if the given caller is valid for the given data
-    /// @param _caller The caller to be checked
-    /// @param _data The data to be checked
-    /// @return True if the caller is valid, otherwise false
-    function _validCaller(address _caller, bytes calldata _data) internal virtual returns (bool) {
-        address validator;
-        assembly {
-            // Load the validator from the storage slot
-            validator := shr(80, sload(KERNEL_STORAGE_SLOT_1))
+        if (ExecModePayload.unwrap(payload) != bytes22(0)) {
+            return false;
         }
-        return IKernelValidator(validator).validCaller(_caller, _data);
+        return true;
     }
 }

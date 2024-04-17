@@ -1,17 +1,16 @@
 [profile.default]
-src = 'src'
-out = 'out'
-libs = ['lib']
-solc_version = '0.8.21'
-evm_version = 'paris'
+src = "src"
+out = "out"
+libs = ["lib"]
 bytecode_hash = "none"
 cbor_metadata = false
 optimize = true
-via-ir = false
-runs = 1000000
+via-ir = true
+runs = 1000
 
-[profile.optimized]
+[profile.deploy]
 via-ir = true
 
+# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
 [fuzz]
-runs = 1024
+runs = 256
