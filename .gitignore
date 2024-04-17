@@ -1,8 +1,6 @@
 # Compiler files
 cache/
 out/
-dist/
-types/
 
 # Ignores development broadcast logs
 !/broadcast
@@ -15,21 +13,17 @@ docs/
 # Dotenv file
 .env
 
-# coverage files
-coverage/
-node_modules
-.env
-coverage
-coverage.json
-typechain
-typechain-types
-
-# Hardhat files
-cache
-artifacts
-artifacts-selected
-
-cache_hardhat
-
 lcov.info
-settings.json
+coverage/
+
+# node
+node_modules/
+
+# hardhat
+artifacts/
+cache_hardhat/
+typechain-types/
+
+# zerodev orchestra
+log/
+.envrc
