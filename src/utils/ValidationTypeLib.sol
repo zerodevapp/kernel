@@ -97,9 +97,7 @@ library ValidatorLib {
                 sig.offset := add(signature.offset, 5)
                 sig.length := sub(signature.length, 5)
             }
-            default {
-                revert(0x00, 0x00)
-            }
+            default { revert(0x00, 0x00) }
         }
     }
 

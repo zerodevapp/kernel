@@ -1,7 +1,3 @@
 ExcessivelySafeCall/=lib/ExcessivelySafeCall/src/
-ds-test/=lib/forge-std/lib/ds-test/src/
 forge-std/=lib/forge-std/src/
 solady/=lib/solady/src/
-I4337/=lib/I4337/src/
-FreshCryptoLib/=lib/FreshCryptoLib/solidity/src/
-p256-verifier/=lib/p256-verifier/src/

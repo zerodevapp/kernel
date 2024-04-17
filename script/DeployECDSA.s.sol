@@ -10,7 +10,7 @@ contract DeployValidators is Script {
 
     function run() external {
         vm.startBroadcast(DEPLOYER);
-        ECDSAValidator validator = new ECDSAValidator{salt:0}();
+        ECDSAValidator validator = new ECDSAValidator{salt: 0}();
         console.log("ECDSA :", address(validator));
         vm.stopBroadcast();
     }
