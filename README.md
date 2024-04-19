@@ -3,10 +3,12 @@
 Kernel is a smart contract account that is:
 
 - Compatible with [ERC-4337](https://eips.ethereum.org/EIPS/eip-4337).
-- Modular (supports [plugins](./src/validator)).
+- Modular (supports [ERC-7579 plugins](https://eips.ethereum.org/EIPS/eip-7579)).
 - [Highly gas-efficient](https://github.com/zerodevapp/aa-benchmark).
 
-Kernel is also a winner of [the inaugural Ethereum AA grant](https://erc4337.mirror.xyz/hRn_41cef8oKn44ZncN9pXvY3VID6LZOtpLlktXYtmA).  At the time of writing, [Kernel powers over 60% of all AA wallets](https://twitter.com/SixdegreeLab/status/1705585256638849325?s=20).
+Kernel is also a winner of [the inaugural Ethereum AA grant](https://erc4337.mirror.xyz/hRn_41cef8oKn44ZncN9pXvY3VID6LZOtpLlktXYtmA).  At the time of writing, [more than 50% of all ERC-4337 accounts run on Kernel.](https://www.bundlebear.com/factories/all).
+
+## SDKs
 
 Kernel is supported by all major AA SDKs, including:
 
@@ -16,8 +18,7 @@ Kernel is supported by all major AA SDKs, including:
 
 ## Resources
 
-- [Learn more about plugins](https://docs.zerodev.app/sdk/plugins/intro)
-- [Read the source code](https://github.com/zerodevapp/kernel)
+Read more about Kernel modules and permissions system on [ZeroDev docs](https://docs.zerodev.app/sdk/permissions/intro).
 
 ## Build
 
