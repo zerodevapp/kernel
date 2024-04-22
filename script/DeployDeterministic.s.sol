@@ -9,6 +9,7 @@ import "./deterministic/SessionKey.s.sol";
 import "./deterministic/Kernel2_2.s.sol";
 import "./deterministic/Kernel2_3.s.sol";
 import "./deterministic/Kernel2_4.s.sol";
+import "./deterministic/FclWebAuthNValidator.s.sol";
 
 contract DeployDeterministic is Script {
     address constant DEPLOYER = 0x9775137314fE595c943712B0b336327dfa80aE8A;
@@ -40,6 +41,10 @@ contract DeployDeterministic is Script {
         if (!factory.isAllowedImplementation(k24)) {
             factory.setImplementation(k24, true);
         }
+
+        // Deploy the webauthn fcl validators
+        FclWebAuthnValidatorDeploy.deployWebAuthnFclVerifier();
+
         vm.stopBroadcast();
     }
 }
