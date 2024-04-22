@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "../../Kernel.sol";
-import "../../factory/KernelFactory.sol";
-import "../../factory/FactoryStaker.sol";
+import "../Kernel.sol";
+import "../factory/KernelFactory.sol";
+import "../factory/FactoryStaker.sol";
 import "forge-std/Test.sol";
-import "../../mock/MockValidator.sol";
-import "../../mock/MockPolicy.sol";
-import "../../mock/MockSigner.sol";
-import "../../mock/MockAction.sol";
-import "../../mock/MockHook.sol";
-import "../../mock/MockExecutor.sol";
-import "../../mock/MockFallback.sol";
-import "../../core/ValidationManager.sol";
-import "./erc4337Util.sol";
+import "../mock/MockValidator.sol";
+import "../mock/MockPolicy.sol";
+import "../mock/MockSigner.sol";
+import "../mock/MockAction.sol";
+import "../mock/MockHook.sol";
+import "../mock/MockExecutor.sol";
+import "../mock/MockFallback.sol";
+import "../core/ValidationManager.sol";
+import "./TestBase/erc4337Util.sol";
 
 contract MockCallee {
     uint256 public value;
