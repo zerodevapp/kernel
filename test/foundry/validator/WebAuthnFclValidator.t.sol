@@ -67,7 +67,9 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
     }
 
     function getInitializeData() internal view override returns (bytes memory) {
-        return abi.encodeWithSelector(KernelStorage.initialize.selector, webAuthNValidator, abi.encode(x, y));
+        return abi.encodeWithSelector(
+            KernelStorage.initialize.selector, webAuthNValidator, abi.encode("authenticator-id", x, y)
+        );
     }
 
     function test_default_validator_enable() external override {
@@ -76,7 +78,7 @@ contract WebAuthnFclValidatorTest is KernelTestBase {
                 IKernel.execute.selector,
                 address(webAuthNValidator),
                 0,
-                abi.encodeWithSelector(webAuthNValidator.enable.selector, abi.encode(x, y)),
+                abi.encodeWithSelector(webAuthNValidator.enable.selector, abi.encode("authenticator-id", x, y)),
                 Operation.Call
             )
         );

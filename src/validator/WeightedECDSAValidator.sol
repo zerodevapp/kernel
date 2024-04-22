@@ -104,7 +104,7 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
     {
         require(weightedStorage[msg.sender].totalWeight != 0, "Not enabled");
         address currentGuardian = weightedStorage[msg.sender].firstGuardian;
-        while (currentGuardian != msg.sender) {
+        while (currentGuardian != address(uint160(type(uint160).max))) {
             address nextGuardian = guardian[currentGuardian][msg.sender].nextGuardian;
             emit GuardianRemoved(currentGuardian, msg.sender);
             delete guardian[currentGuardian][msg.sender];
@@ -112,7 +112,7 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
         }
         delete weightedStorage[msg.sender];
         require(_guardians.length == _weights.length, "Length mismatch");
-        weightedStorage[msg.sender].firstGuardian = _guardians[0];
+        weightedStorage[msg.sender].firstGuardian = address(uint160(type(uint160).max));
         _addGuardians(_guardians, _weights, msg.sender);
         weightedStorage[msg.sender].delay = _delay;
         weightedStorage[msg.sender].threshold = _threshold;
@@ -217,10 +217,11 @@ contract WeightedECDSAValidator is EIP712, IKernelValidator {
                     passed = true;
                 }
             }
+            proposal.status = ProposalStatus.Executed;
             if (passed && guardian[signer][msg.sender].weight != 0) {
-                proposal.status = ProposalStatus.Executed;
                 return packValidationData(ValidAfter.wrap(0), ValidUntil.wrap(0));
             }
+            return SIG_VALIDATION_FAILED;
         } else if (proposal.status == ProposalStatus.Approved || passed) {
             if (userOp.paymasterAndData.length == 0 || address(bytes20(userOp.paymasterAndData[0:20])) == address(0)) {
                 address signer = ECDSA.recover(ECDSA.toEthSignedMessageHash(userOpHash), userOp.signature);

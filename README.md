@@ -1,5 +1,7 @@
 # Kernel
 
+> If you are looking for Kernel v3 source code, [it's sitting here](https://github.com/zerodevapp/kernel_v3) while we figure out how to merge it.
+
 Kernel is a smart contract account that is:
 
 - Compatible with [ERC-4337](https://eips.ethereum.org/EIPS/eip-4337).
@@ -13,7 +15,6 @@ Kernel is supported by all major AA SDKs, including:
 - [ZeroDev](https://docs.zerodev.app/)
 - [Permissionless.js](https://docs.pimlico.io/permissionless/how-to/accounts/use-kernel-account)
 - [UserOp.js](https://docs.stackup.sh/docs/useropjs-presets#kernel)
-- [Account Kit](https://github.com/alchemyplatform/aa-sdk/tree/main/packages/accounts/src/kernel-zerodev)
 
 ## Resources
 
@@ -35,6 +36,18 @@ forge test
 MIT
 
 ## Addresses
+
+<details>
+<summary>v3.0</summary>
+
+| Name                 | Address                                    |
+| -------------------- | ------------------------------------------ |
+| Meta Factory         | 0xd703aaE79538628d27099B8c4f621bE4CCd142d5 |
+| Factory              | 0x6723b44Abeec4E71eBE3232BD5B455805baDD22f |
+| Kernel               | 0x94F097E1ebEB4ecA3AAE54cabb08905B239A7D27 |
+| ECDSA Validator      | 0x8104e3Ad430EA6d354d013A6789fDFc71E671c43 |
+
+</details>
 
 <details>
 <summary>v2.4</summary>
