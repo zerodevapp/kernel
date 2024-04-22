@@ -59,7 +59,7 @@ contract WeightedECDSAValidator is EIP712, IValidator {
     event GuardianRemoved(address indexed guardian, address indexed kernel);
 
     function _domainNameAndVersion() internal pure override returns (string memory, string memory) {
-        return ("WeightedECDSAValidator", "0.0.2");
+        return ("WeightedECDSAValidator", "0.0.3");
     }
 
     function onInstall(bytes calldata _data) external payable override {
@@ -281,13 +281,17 @@ contract WeightedECDSAValidator is EIP712, IValidator {
             return ERC1271_INVALID;
         }
         uint256 totalWeight = 0;
-        address signer;
+        address prevSigner = address(uint160(type(uint160).max));
         for (uint256 i = 0; i < sigCount; i++) {
-            signer = ECDSA.recover(hash, data[i * 65:(i + 1) * 65]);
+            address signer = ECDSA.recover(hash, data[i * 65:(i + 1) * 65]);
             totalWeight += guardian[signer][msg.sender].weight;
             if (totalWeight >= strg.threshold) {
                 return ERC1271_MAGICVALUE;
             }
+            if (signer >= prevSigner) {
+                return ERC1271_INVALID;
+            }
+            prevSigner = signer;
         }
         return ERC1271_INVALID;
     }
