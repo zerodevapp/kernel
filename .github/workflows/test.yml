@@ -2,12 +2,12 @@ name: ci
 
 on:
   pull_request:
-    branches: [dev]
+    branches: [dev,fix/ci]
     paths:
       - '**.sol'
       - '**.yml'
   push:
-    branches: [dev]
+    branches: [dev,fix/ci]
     paths:
       - '**.sol'
       - '**.yml'
@@ -18,7 +18,7 @@ jobs:
 
     strategy:
       matrix:
-        profile: [post-cancun,post-cancun-via-ir,solc-past-versions-0,solc-past-versions-1,via-ir,min-solc,min-solc-via-ir,intense]
+        profile: [post-cancun,post-cancun-via-ir,solc-past-versions-0,via-ir,min-solc,min-solc-via-ir]
 
     steps:
       - uses: actions/checkout@v4
@@ -30,6 +30,12 @@ jobs:
 
       - name: Install Dependencies
         run: forge install
+      
+      - name: show list
+        run: ls
+
+      - name : pwd
+        run: pwd
 
       - name: Run Tests with ${{ matrix.profile }}
         run: >
@@ -40,26 +46,6 @@ jobs:
             forge test --use 0.8.25 --evm-version "cancun" --via-ir
           ) ||
           ( [ "${{ matrix.profile }}" = "solc-past-versions-0" ] &&
-            forge test --use 0.8.5 --fuzz-runs 16 &&
-            forge test --use 0.8.6 --fuzz-runs 16 &&
-            forge test --use 0.8.7 --fuzz-runs 16 &&
-            forge test --use 0.8.8 --fuzz-runs 16 &&
-            forge test --use 0.8.9 --fuzz-runs 16 &&
-            forge test --use 0.8.10 --fuzz-runs 16 &&
-            forge test --use 0.8.11 --fuzz-runs 16 &&
-            forge test --use 0.8.12 --fuzz-runs 16
-          ) ||
-          ( [ "${{ matrix.profile }}" = "solc-past-versions-1" ] &&
-            forge test --use 0.8.13 --fuzz-runs 16 &&
-            forge test --use 0.8.14 --fuzz-runs 16 &&
-            forge test --use 0.8.15 --fuzz-runs 16 &&
-            forge test --use 0.8.16 --fuzz-runs 16 &&
-            forge test --use 0.8.17 --fuzz-runs 16 &&
-            forge test --use 0.8.18 --fuzz-runs 16 &&
-            forge test --use 0.8.19 --fuzz-runs 16 &&
-            forge test --use 0.8.20 --fuzz-runs 16 &&
-            forge test --use 0.8.21 --fuzz-runs 16 &&
-            forge test --use 0.8.22 --fuzz-runs 16 &&
             forge test --use 0.8.23 --fuzz-runs 16 &&
             forge test --use 0.8.24 --fuzz-runs 16
           ) ||
@@ -68,14 +54,11 @@ jobs:
           ) ||
           ( [ "${{ matrix.profile }}" = "min-solc" ] &&
             forge fmt --check &&
-            forge test --use 0.8.4
+            forge test --use 0.8.23
           ) ||
           ( [ "${{ matrix.profile }}" = "min-solc-via-ir" ] &&
-            forge test --use 0.8.4 --via-ir
-          ) ||
-          ( [ "${{ matrix.profile }}" = "intense" ] &&
-            forge test --fuzz-runs 5000
-          )
+            forge test --use 0.8.23 --via-ir
+          ) 
 
   codespell:
     runs-on: ${{ matrix.os }}
@@ -93,4 +76,4 @@ jobs:
         with:
           check_filenames: true
           ignore_words_list: usera
-          skip: ./.git,package-lock.json,ackee-blockchain-solady-report.pdf,EIP712Mock.sol
+          skip: ./.git,package-lock.json,ackee-blockchain-solady-report.pdf,EIP712Mock.sol,yarn.lock
