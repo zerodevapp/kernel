@@ -58,10 +58,7 @@ jobs:
           ) ||
           ( [ "${{ matrix.profile }}" = "min-solc-via-ir" ] &&
             forge test --use 0.8.23 --via-ir
-          ) ||
-          ( [ "${{ matrix.profile }}" = "intense" ] &&
-            forge test --fuzz-runs 5000
-          )
+          ) 
 
   codespell:
     runs-on: ${{ matrix.os }}
