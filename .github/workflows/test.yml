@@ -34,6 +34,9 @@ jobs:
       - name: show list
         run: ls
 
+      - name : pwd
+        run: pwd
+
       - name: Run Tests with ${{ matrix.profile }}
         run: >
           ( [ "${{ matrix.profile }}" = "post-cancun" ] &&
