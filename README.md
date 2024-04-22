@@ -16,9 +16,10 @@ Kernel is supported by all major AA SDKs, including:
 - [Permissionless.js](https://docs.pimlico.io/permissionless/how-to/accounts/use-kernel-account)
 - [UserOp.js](https://docs.stackup.sh/docs/useropjs-presets#kernel)
 
-## Resources
+## Plugins
 
-Read more about Kernel modules and permissions system on [ZeroDev docs](https://docs.zerodev.app/sdk/permissions/intro).
+- Read more about [Kernel's permissions system](https://docs.zerodev.app/sdk/permissions/intro) and learn to build your own plugins.
+- For officially maintained plugins, some live in [this repo](https://github.com/zerodevapp/kernel-7579-plugins/tree/master), and the rest live in [`/src`](/src).
 
 ## Build
 
