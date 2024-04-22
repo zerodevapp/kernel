@@ -62,31 +62,42 @@ contract WeightedECDSAValidator is EIP712, IValidator {
         return ("WeightedECDSAValidator", "0.0.3");
     }
 
+    function _addGuardians(address[] memory _guardians, uint24[] memory _weights, address _kernel) internal {
+        uint24 totalWeight = weightedStorage[_kernel].totalWeight;
+        require(_guardians.length == _weights.length, "Length mismatch");
+        uint160 prevGuardian = uint160(weightedStorage[_kernel].firstGuardian);
+        for (uint256 i = 0; i < _guardians.length; i++) {
+            require(_guardians[i] != _kernel, "Guardian cannot be self");
+            require(_guardians[i] != address(0), "Guardian cannot be 0");
+            require(_weights[i] != 0, "Weight cannot be 0");
+            require(guardian[_guardians[i]][_kernel].weight == 0, "Guardian already enabled");
+            require(uint160(_guardians[i]) < prevGuardian, "Guardians not sorted");
+            guardian[_guardians[i]][_kernel] =
+                GuardianStorage({weight: _weights[i], nextGuardian: weightedStorage[_kernel].firstGuardian});
+            weightedStorage[_kernel].firstGuardian = _guardians[i];
+            totalWeight += _weights[i];
+            prevGuardian = uint160(_guardians[i]);
+            emit GuardianAdded(_guardians[i], _kernel, _weights[i]);
+        }
+        weightedStorage[_kernel].totalWeight = totalWeight;
+    }
+
     function onInstall(bytes calldata _data) external payable override {
         (address[] memory _guardians, uint24[] memory _weights, uint24 _threshold, uint48 _delay) =
             abi.decode(_data, (address[], uint24[], uint24, uint48));
         require(_guardians.length == _weights.length, "Length mismatch");
         if (_isInitialized(msg.sender)) revert AlreadyInitialized(msg.sender);
-        weightedStorage[msg.sender].firstGuardian = msg.sender;
-        for (uint256 i = 0; i < _guardians.length; i++) {
-            require(_guardians[i] != msg.sender, "Guardian cannot be self");
-            require(_guardians[i] != address(0), "Guardian cannot be 0");
-            require(_weights[i] != 0, "Weight cannot be 0");
-            require(guardian[_guardians[i]][msg.sender].weight == 0, "Guardian already enabled");
-            guardian[_guardians[i]][msg.sender] =
-                GuardianStorage({weight: _weights[i], nextGuardian: weightedStorage[msg.sender].firstGuardian});
-            weightedStorage[msg.sender].firstGuardian = _guardians[i];
-            weightedStorage[msg.sender].totalWeight += _weights[i];
-            emit GuardianAdded(_guardians[i], msg.sender, _weights[i]);
-        }
+        weightedStorage[msg.sender].firstGuardian = address(uint160(type(uint160).max));
+        _addGuardians(_guardians, _weights, msg.sender);
         weightedStorage[msg.sender].delay = _delay;
         weightedStorage[msg.sender].threshold = _threshold;
+        require(_threshold <= weightedStorage[msg.sender].totalWeight, "Threshold too high");
     }
 
     function onUninstall(bytes calldata) external payable override {
         if (!_isInitialized(msg.sender)) revert NotInitialized(msg.sender);
         address currentGuardian = weightedStorage[msg.sender].firstGuardian;
-        while (currentGuardian != msg.sender) {
+        while (currentGuardian != address(uint160(type(uint160).max))) {
             address nextGuardian = guardian[currentGuardian][msg.sender].nextGuardian;
             emit GuardianRemoved(currentGuardian, msg.sender);
             delete guardian[currentGuardian][msg.sender];
@@ -113,7 +124,7 @@ contract WeightedECDSAValidator is EIP712, IValidator {
     {
         if (!_isInitialized(msg.sender)) revert NotInitialized(msg.sender);
         address currentGuardian = weightedStorage[msg.sender].firstGuardian;
-        while (currentGuardian != msg.sender) {
+        while (currentGuardian != address(uint160(type(uint160).max))) {
             address nextGuardian = guardian[currentGuardian][msg.sender].nextGuardian;
             emit GuardianRemoved(currentGuardian, msg.sender);
             delete guardian[currentGuardian][msg.sender];
@@ -121,23 +132,13 @@ contract WeightedECDSAValidator is EIP712, IValidator {
         }
         delete weightedStorage[msg.sender];
         require(_guardians.length == _weights.length, "Length mismatch");
-        weightedStorage[msg.sender].firstGuardian = msg.sender;
-        for (uint256 i = 0; i < _guardians.length; i++) {
-            require(_guardians[i] != msg.sender, "Guardian cannot be self");
-            require(_guardians[i] != address(0), "Guardian cannot be 0");
-            require(_weights[i] != 0, "Weight cannot be 0");
-            require(guardian[_guardians[i]][msg.sender].weight == 0, "Guardian already enabled");
-            guardian[_guardians[i]][msg.sender] =
-                GuardianStorage({weight: _weights[i], nextGuardian: weightedStorage[msg.sender].firstGuardian});
-            weightedStorage[msg.sender].firstGuardian = _guardians[i];
-            weightedStorage[msg.sender].totalWeight += _weights[i];
-            emit GuardianAdded(_guardians[i], msg.sender, _weights[i]);
-        }
+        weightedStorage[msg.sender].firstGuardian = address(uint160(type(uint160).max));
+        _addGuardians(_guardians, _weights, msg.sender);
         weightedStorage[msg.sender].delay = _delay;
         weightedStorage[msg.sender].threshold = _threshold;
     }
 
-    function approve(bytes32 _callDataAndNonceHash, address _kernel) external payable {
+    function approve(bytes32 _callDataAndNonceHash, address _kernel) external {
         require(guardian[msg.sender][_kernel].weight != 0, "Guardian not enabled");
         require(weightedStorage[_kernel].threshold != 0, "Kernel not enabled");
         ProposalStorage storage proposal = proposalStatus[_callDataAndNonceHash][_kernel];
@@ -152,7 +153,7 @@ contract WeightedECDSAValidator is EIP712, IValidator {
         }
     }
 
-    function approveWithSig(bytes32 _callDataAndNonceHash, address _kernel, bytes calldata sigs) external payable {
+    function approveWithSig(bytes32 _callDataAndNonceHash, address _kernel, bytes calldata sigs) external {
         uint256 sigCount = sigs.length / 65;
         require(weightedStorage[_kernel].threshold != 0, "Kernel not enabled");
         ProposalStorage storage proposal = proposalStatus[_callDataAndNonceHash][_kernel];
@@ -176,7 +177,7 @@ contract WeightedECDSAValidator is EIP712, IValidator {
         }
     }
 
-    function veto(bytes32 _callDataAndNonceHash) external payable {
+    function veto(bytes32 _callDataAndNonceHash) external {
         ProposalStorage storage proposal = proposalStatus[_callDataAndNonceHash][msg.sender];
         require(
             proposal.status == ProposalStatus.Ongoing || proposal.status == ProposalStatus.Approved,
@@ -237,13 +238,19 @@ contract WeightedECDSAValidator is EIP712, IValidator {
                     passed = true;
                 }
             }
+            proposal.status = ProposalStatus.Executed;
             if (passed && guardian[signer][msg.sender].weight != 0) {
-                proposal.status = ProposalStatus.Executed;
                 return packValidationData(ValidAfter.wrap(0), ValidUntil.wrap(0));
             }
+            return SIG_VALIDATION_FAILED_UINT;
         } else if (proposal.status == ProposalStatus.Approved || passed) {
-            address signer = ECDSA.recover(ECDSA.toEthSignedMessageHash(userOpHash), userOp.signature);
-            if (guardian[signer][msg.sender].weight != 0) {
+            if (userOp.paymasterAndData.length == 0 || address(bytes20(userOp.paymasterAndData[0:20])) == address(0)) {
+                address signer = ECDSA.recover(ECDSA.toEthSignedMessageHash(userOpHash), userOp.signature);
+                if (guardian[signer][msg.sender].weight != 0) {
+                    proposal.status = ProposalStatus.Executed;
+                    return packValidationData(proposal.validAfter, ValidUntil.wrap(0));
+                }
+            } else {
                 proposal.status = ProposalStatus.Executed;
                 return packValidationData(proposal.validAfter, ValidUntil.wrap(0));
             }
