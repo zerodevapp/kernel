@@ -1,47 +1,96 @@
-name: test
+name: ci
 
 on:
-  workflow_dispatch:
   pull_request:
+    branches: [dev]
+    paths:
+      - '**.sol'
+      - '**.yml'
   push:
-    branches:
-      - "main"
-      - "dev"
-
-env:
-  FOUNDRY_PROFILE: ci
-
+    branches: [dev]
+    paths:
+      - '**.sol'
+      - '**.yml'
 jobs:
-  check:
-    strategy:
-      fail-fast: true
-
-    name: Foundry project
+  tests:
+    name: Forge Testing
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        profile: [post-cancun,post-cancun-via-ir,solc-past-versions-0,solc-past-versions-1,via-ir,min-solc,min-solc-via-ir,intense]
+
     steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: recursive
+      - uses: actions/checkout@v4
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
 
-      - name: Run Forge build
-        run: |
-          forge --version
-          forge build --sizes
-        id: build
+      - name: Install Dependencies
+        run: forge install
 
-      - name: Run Forge tests
-        run: |
-          forge test -vvv
-        id: test
+      - name: Run Tests with ${{ matrix.profile }}
+        run: >
+          ( [ "${{ matrix.profile }}" = "post-cancun" ] &&
+            forge test --use 0.8.25 --evm-version "cancun"
+          ) ||
+          ( [ "${{ matrix.profile }}" = "post-cancun-via-ir" ] &&
+            forge test --use 0.8.25 --evm-version "cancun" --via-ir
+          ) ||
+          ( [ "${{ matrix.profile }}" = "solc-past-versions-0" ] &&
+            forge test --use 0.8.5 --fuzz-runs 16 &&
+            forge test --use 0.8.6 --fuzz-runs 16 &&
+            forge test --use 0.8.7 --fuzz-runs 16 &&
+            forge test --use 0.8.8 --fuzz-runs 16 &&
+            forge test --use 0.8.9 --fuzz-runs 16 &&
+            forge test --use 0.8.10 --fuzz-runs 16 &&
+            forge test --use 0.8.11 --fuzz-runs 16 &&
+            forge test --use 0.8.12 --fuzz-runs 16
+          ) ||
+          ( [ "${{ matrix.profile }}" = "solc-past-versions-1" ] &&
+            forge test --use 0.8.13 --fuzz-runs 16 &&
+            forge test --use 0.8.14 --fuzz-runs 16 &&
+            forge test --use 0.8.15 --fuzz-runs 16 &&
+            forge test --use 0.8.16 --fuzz-runs 16 &&
+            forge test --use 0.8.17 --fuzz-runs 16 &&
+            forge test --use 0.8.18 --fuzz-runs 16 &&
+            forge test --use 0.8.19 --fuzz-runs 16 &&
+            forge test --use 0.8.20 --fuzz-runs 16 &&
+            forge test --use 0.8.21 --fuzz-runs 16 &&
+            forge test --use 0.8.22 --fuzz-runs 16 &&
+            forge test --use 0.8.23 --fuzz-runs 16 &&
+            forge test --use 0.8.24 --fuzz-runs 16
+          ) ||
+          ( [ "${{ matrix.profile }}" = "via-ir" ] &&
+            forge test --via-ir
+          ) ||
+          ( [ "${{ matrix.profile }}" = "min-solc" ] &&
+            forge fmt --check &&
+            forge test --use 0.8.4
+          ) ||
+          ( [ "${{ matrix.profile }}" = "min-solc-via-ir" ] &&
+            forge test --use 0.8.4 --via-ir
+          ) ||
+          ( [ "${{ matrix.profile }}" = "intense" ] &&
+            forge test --fuzz-runs 5000
+          )
 
-      - name: Run snapshot
-        run: NO_COLOR=1 forge snapshot --via-ir >> $GITHUB_STEP_SUMMARY
-        id: snapshot
+  codespell:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
 
-      - name: Run coverage
-        run: NO_COLOR=1 forge coverage >> $GITHUB_STEP_SUMMARY
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run codespell
+        uses: codespell-project/actions-codespell@v2.0
+        with:
+          check_filenames: true
+          ignore_words_list: usera
+          skip: ./.git,package-lock.json,ackee-blockchain-solady-report.pdf,EIP712Mock.sol
