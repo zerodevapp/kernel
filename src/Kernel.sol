@@ -336,18 +336,18 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             _installHook(IHook(address(bytes20(initData[4:24]))), hookData);
         } else if (moduleType == MODULE_TYPE_HOOK) {
             // force call onInstall for hook
-            // NOTE: for hook, kernel does not support independant hook install,
+            // NOTE: for hook, kernel does not support independent hook install,
             // hook is expected to be paired with proper validator/executor/selector
             IHook(module).onInstall(initData);
         } else if (moduleType == MODULE_TYPE_POLICY) {
             // force call onInstall for policy
-            // NOTE: for policy, kernel does not support independant policy install,
+            // NOTE: for policy, kernel does not support independent policy install,
             // policy is expected to be paired with proper permissionId
             // to "ADD" permission, use "installValidations()" function
             IPolicy(module).onInstall(initData);
         } else if (moduleType == MODULE_TYPE_SIGNER) {
             // force call onInstall for signer
-            // NOTE: for signer, kernel does not support independant signer install,
+            // NOTE: for signer, kernel does not support independent signer install,
             // signer is expected to be paired with proper permissionId
             // to "ADD" permission, use "installValidations()" function
             ISigner(module).onInstall(initData);
@@ -400,7 +400,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
                 _validationStorage().validationConfig[vId].hook = IHook(address(1));
             }
             // force call onInstall for hook
-            // NOTE: for hook, kernel does not support independant hook install,
+            // NOTE: for hook, kernel does not support independent hook install,
             // hook is expected to be paired with proper validator/executor/selector
             ModuleLib.uninstallModule(module, deInitData);
         } else if (moduleType == 5) {
@@ -412,7 +412,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
                 }
             }
             // force call onInstall for policy
-            // NOTE: for policy, kernel does not support independant policy install,
+            // NOTE: for policy, kernel does not support independent policy install,
             // policy is expected to be paired with proper permissionId
             // to "REMOVE" permission, use "uninstallValidation()" function
             ModuleLib.uninstallModule(module, deInitData);
@@ -425,7 +425,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
                 }
             }
             // force call onInstall for signer
-            // NOTE: for signer, kernel does not support independant signer install,
+            // NOTE: for signer, kernel does not support independent signer install,
             // signer is expected to be paired with proper permissionId
             // to "REMOVE" permission, use "uninstallValidation()" function
             ModuleLib.uninstallModule(module, deInitData);
