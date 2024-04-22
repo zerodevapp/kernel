@@ -8,6 +8,7 @@ import "./deterministic/Factory.s.sol";
 import "./deterministic/SessionKey.s.sol";
 import "./deterministic/Kernel2_2.s.sol";
 import "./deterministic/Kernel2_3.s.sol";
+import "./deterministic/Kernel2_4.s.sol";
 
 contract DeployDeterministic is Script {
     address constant DEPLOYER = 0x9775137314fE595c943712B0b336327dfa80aE8A;
@@ -28,12 +29,16 @@ contract DeployDeterministic is Script {
         //    factory.setImplementation(k22lite, true);
         //}
 
-        (address k23, address k23lite) = Kernel_2_3_Deploy.deploy();
-        if (!factory.isAllowedImplementation(k23)) {
-            factory.setImplementation(k23, true);
-        }
-        if (!factory.isAllowedImplementation(k23lite)) {
-            factory.setImplementation(k23lite, true);
+        //(address k23, address k23lite) = Kernel_2_3_Deploy.deploy();
+        //if (!factory.isAllowedImplementation(k23)) {
+        //    factory.setImplementation(k23, true);
+        //}
+        //if (!factory.isAllowedImplementation(k23lite)) {
+        //    factory.setImplementation(k23lite, true);
+        //}
+        (address k24,) = Kernel_2_4_Deploy.deploy();
+        if (!factory.isAllowedImplementation(k24)) {
+            factory.setImplementation(k24, true);
         }
         vm.stopBroadcast();
     }
