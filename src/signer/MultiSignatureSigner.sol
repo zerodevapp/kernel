@@ -23,15 +23,17 @@ struct ECDSAValidatorStorage {
 contract MultiSignatureECDSASigner is SignerBase {
     mapping(address => uint256) public usedIds;
     mapping(bytes32 id => mapping(address wallet => address)) public signer;
+
     event SignerRegistered(address indexed kernel, bytes32 indexed id, address indexed owner);
+
     error NoSignerRegistered();
-    
+
     function isInitialized(address wallet) external view override returns (bool) {
         return usedIds[wallet] > 0;
     }
 
     function _signerOninstall(bytes32 id, bytes calldata _data) internal override {
-        if(signer[id][msg.sender] == address(0)) {
+        if (signer[id][msg.sender] == address(0)) {
             usedIds[msg.sender]++;
         }
         signer[id][msg.sender] = address(bytes20(_data[0:20]));
@@ -39,7 +41,7 @@ contract MultiSignatureECDSASigner is SignerBase {
     }
 
     function _signerOnUninstall(bytes32 id, bytes calldata) internal override {
-        if(signer[id][msg.sender] == address(0)) {
+        if (signer[id][msg.sender] == address(0)) {
             revert NoSignerRegistered();
         }
         delete signer[id][msg.sender];
