@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 import {MockCallee, KernelTestBase} from "../src/sdk/testBase/KernelTestBase.sol";
 import {ECDSAValidator} from "../src/validator/ECDSAValidator.sol";
 import {ECDSA} from "solady/utils/ECDSA.sol";
-import {PackedUserOperation} from "src/interfaces/PackedUserOperation.sol";
+import {PackedUserOperation} from "../src/interfaces/PackedUserOperation.sol";
 import {ValidatorLib} from "../src/utils/ValidationTypeLib.sol";
 import {ExecLib} from "../src/utils/ExecLib.sol";
 import {IHook} from "../src/interfaces/IERC7579Modules.sol";

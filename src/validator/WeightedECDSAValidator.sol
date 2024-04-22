@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.0;
 
-import "src/types/Types.sol";
+import "../types/Types.sol";
 import {ECDSA} from "solady/utils/ECDSA.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
 import {PackedUserOperation} from "../interfaces/PackedUserOperation.sol";

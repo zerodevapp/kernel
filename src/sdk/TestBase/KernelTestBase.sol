@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "src/Kernel.sol";
-import "src/factory/KernelFactory.sol";
-import "src/factory/FactoryStaker.sol";
+import "../../Kernel.sol";
+import "../../factory/KernelFactory.sol";
+import "../../factory/FactoryStaker.sol";
 import "forge-std/Test.sol";
-import "src/mock/MockValidator.sol";
-import "src/mock/MockPolicy.sol";
-import "src/mock/MockSigner.sol";
-import "src/mock/MockAction.sol";
-import "src/mock/MockHook.sol";
-import "src/mock/MockExecutor.sol";
-import "src/mock/MockFallback.sol";
-import "src/core/ValidationManager.sol";
+import "../../mock/MockValidator.sol";
+import "../../mock/MockPolicy.sol";
+import "../../mock/MockSigner.sol";
+import "../../mock/MockAction.sol";
+import "../../mock/MockHook.sol";
+import "../../mock/MockExecutor.sol";
+import "../../mock/MockFallback.sol";
+import "../../core/ValidationManager.sol";
 import "./erc4337Util.sol";
 
 contract MockCallee {
