@@ -280,6 +280,7 @@ contract SessionKeyValidator is IKernelValidator {
     }
 
     function verifyPermission(bytes calldata data, Permission calldata permission) internal pure returns (bool) {
+        if(data.length == 0 && permission.sig == bytes4(0x0)) return true;
         if (bytes4(data[0:4]) != permission.sig) return false;
         for (uint256 i = 0; i < permission.rules.length; i++) {
             ParamRule calldata rule = permission.rules[i];
