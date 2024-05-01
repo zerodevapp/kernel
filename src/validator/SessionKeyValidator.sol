@@ -55,7 +55,7 @@ contract SessionKeyValidator is IKernelValidator {
         // to make this fully work with paymaster service, prepack the address of paymaster up front
         if (session.paymaster == address(1)) {
             // any paymaster
-            require(userOp.paymasterAndData.length != 0, "SessionKeyValidator: paymaster not set");
+            require(userOp.paymasterAndData.length != 0 && bytes20(userOp.paymasterAndData[0:20]) != bytes20(0), "SessionKeyValidator: paymaster not set");
         } else if (session.paymaster != address(0)) {
             // specific paymaster
             require(
