@@ -55,7 +55,7 @@ contract SessionKeyValidator is IKernelValidator {
         // to make this fully work with paymaster service, prepack the address of paymaster up front
         if (session.paymaster == address(1)) {
             // any paymaster
-            require(userOp.paymasterAndData.length != 0, "SessionKeyValidator: paymaster not set");
+            require(userOp.paymasterAndData.length != 0 && bytes20(userOp.paymasterAndData[0:20]) != bytes20(0), "SessionKeyValidator: paymaster not set");
         } else if (session.paymaster != address(0)) {
             // specific paymaster
             require(
@@ -280,6 +280,7 @@ contract SessionKeyValidator is IKernelValidator {
     }
 
     function verifyPermission(bytes calldata data, Permission calldata permission) internal pure returns (bool) {
+        if(data.length == 0 && permission.sig == bytes4(0x0)) return true;
         if (bytes4(data[0:4]) != permission.sig) return false;
         for (uint256 i = 0; i < permission.rules.length; i++) {
             ParamRule calldata rule = permission.rules[i];
