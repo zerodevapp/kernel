@@ -75,13 +75,6 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         _;
     }
 
-    modifier onlyEntryPointOrSelf() {
-        if (msg.sender != address(entrypoint) && msg.sender != address(this)) {
-            revert InvalidCaller();
-        }
-        _;
-    }
-
     modifier onlyEntryPointOrSelfOrRoot() {
         IValidator validator = ValidatorLib.getValidator(_validationStorage().rootValidator);
         if (
@@ -131,6 +124,22 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
 
     receive() external payable {
         emit Received(msg.sender, msg.value);
+    }
+
+    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
+        return this.onERC721Received.selector;
+    }
+
+    function onERC1155Received(address, address, uint256, uint256, bytes calldata) external pure returns (bytes4) {
+        return this.onERC1155Received.selector;
+    }
+
+    function onERC1155BatchReceived(address, address, uint256[] calldata, uint256[] calldata, bytes calldata)
+        external
+        pure
+        returns (bytes4)
+    {
+        return this.onERC1155BatchReceived.selector;
     }
 
     fallback() external payable {

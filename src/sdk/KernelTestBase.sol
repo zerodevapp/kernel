@@ -12,6 +12,9 @@ import "../mock/MockAction.sol";
 import "../mock/MockHook.sol";
 import "../mock/MockExecutor.sol";
 import "../mock/MockFallback.sol";
+import "../mock/MockERC20.sol";
+import "../mock/MockERC721.sol";
+import "../mock/MockERC1155.sol";
 import "../core/ValidationManager.sol";
 import "./TestBase/erc4337Util.sol";
 
@@ -43,6 +46,9 @@ abstract contract KernelTestBase is Test {
     MockHook mockHook;
     MockFallback mockFallback;
     MockExecutor mockExecutor;
+    MockERC20 mockERC20;
+    MockERC721 mockERC721;
+    MockERC1155 mockERC1155;
 
     IValidator enabledValidator;
     EnableValidatorConfig validationConfig;
@@ -296,6 +302,9 @@ abstract contract KernelTestBase is Test {
         mockHook = new MockHook();
         mockFallback = new MockFallback();
         mockExecutor = new MockExecutor();
+        mockERC20 = new MockERC20();
+        mockERC721 = new MockERC721();
+        mockERC1155 = new MockERC1155();
         _setRootValidationConfig();
         _setEnableValidatorConfig();
         _setEnablePermissionConfig();
@@ -313,6 +322,25 @@ abstract contract KernelTestBase is Test {
         ops[0] = _prepareUserOp(VALIDATION_TYPE_ROOT, false, false, hex"", true, true);
         // _prepareRootUserOp(hex"", true);
         entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
+    }
+
+    function test_receive() external whenInitialized {
+        vm.expectEmit(false, false, false, true, address(kernel));
+        emit Kernel.Received(address(this), 1);
+        (bool success,) = address(kernel).call{value: 1}(hex"");
+        require(success, "eth transfer failed");
+
+        mockERC721.mint(address(kernel), 100);
+        mockERC721.safeMint(address(kernel), 999);
+
+        mockERC1155.mint(address(kernel), 100, 1, hex"");
+        uint256[] memory ids = new uint256[](2);
+        uint256[] memory amounts = new uint256[](2);
+        ids[0] = 200;
+        ids[1] = 201;
+        amounts[0] = 1;
+        amounts[1] = 1000;
+        mockERC1155.batchMint(address(kernel), ids, amounts, hex"");
     }
 
     function initData() internal view returns (bytes memory) {
