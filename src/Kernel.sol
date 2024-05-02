@@ -119,7 +119,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
 
     function _domainNameAndVersion() internal pure override returns (string memory name, string memory version) {
         name = "Kernel";
-        version = "0.3.0-beta";
+        version = "0.3.1-beta";
     }
 
     receive() external payable {
@@ -151,8 +151,16 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         } else {
             // action installed
             bytes memory context;
-            if (address(config.hook) != address(1)) {
+            if (
+                address(config.hook) != address(1) && address(config.hook) != 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF
+            ) {
                 context = _doPreHook(config.hook, msg.value, msg.data);
+            } else if (address(config.hook) == 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF) {
+                // for selector manager, address(0) for the hook will default to type(address).max,
+                // and this will only allow entrypoints to interact
+                if (msg.sender != address(entrypoint)) {
+                    revert InvalidCaller();
+                }
             }
             // execute action
             if (config.callType == CALLTYPE_SINGLE) {
@@ -312,14 +320,18 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
                 ValidationConfig({nonce: vs.currentNonce, hook: IHook(address(bytes20(initData[0:20])))});
             bytes calldata validatorData;
             bytes calldata hookData;
+            bytes calldata selectorData;
             assembly {
                 validatorData.offset := add(add(initData.offset, 52), calldataload(add(initData.offset, 20)))
                 validatorData.length := calldataload(sub(validatorData.offset, 32))
                 hookData.offset := add(add(initData.offset, 52), calldataload(add(initData.offset, 52)))
                 hookData.length := calldataload(sub(hookData.offset, 32))
+                selectorData.offset := add(add(initData.offset, 52), calldataload(add(initData.offset, 84)))
+                selectorData.length := calldataload(sub(selectorData.offset, 32))
             }
             _installValidation(vId, config, validatorData, hookData);
-            //_installHook(config.hook, hookData); hook install is handled inside installvalidation
+            // NOTE: we don't allow configure on selector data on v3.1, but using bytes instead of bytes4 for selector data to make sure we are future proof
+            _setSelector(vId, bytes4(selectorData[0:4]), true);
         } else if (moduleType == MODULE_TYPE_EXECUTOR) {
             bytes calldata executorData;
             bytes calldata hookData;
@@ -470,7 +482,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
     }
 
     function accountId() external pure override returns (string memory accountImplementationId) {
-        return "kernel.advanced.v0.3.0-beta";
+        return "kernel.advanced.v0.3.1";
     }
 
     function supportsExecutionMode(ExecMode mode) external pure override returns (bool) {

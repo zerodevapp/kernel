@@ -37,7 +37,7 @@ abstract contract SelectorManager {
 
     function _installSelector(bytes4 selector, address target, IHook hook, bytes calldata selectorData) internal {
         if (address(hook) == address(0)) {
-            hook = IHook(address(1));
+            hook = IHook(address(0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF));
         }
         SelectorConfig storage ss = _selectorConfig(selector);
         // we are going to install only through call/delegatecall
