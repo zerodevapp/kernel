@@ -75,13 +75,6 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         _;
     }
 
-    modifier onlyEntryPointOrSelf() {
-        if (msg.sender != address(entrypoint) && msg.sender != address(this)) {
-            revert InvalidCaller();
-        }
-        _;
-    }
-
     modifier onlyEntryPointOrSelfOrRoot() {
         IValidator validator = ValidatorLib.getValidator(_validationStorage().rootValidator);
         if (
