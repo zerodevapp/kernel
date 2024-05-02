@@ -83,7 +83,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             if (validator.isModuleType(4)) {
                 bytes memory ret = IHook(address(validator)).preCheck(msg.sender, msg.value, msg.data);
                 _;
-                IHook(address(validator)).postCheck(ret); // TODO don't support try catch hook here
+                IHook(address(validator)).postCheck(ret);
             } else {
                 revert InvalidCaller();
             }
@@ -119,7 +119,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
 
     function _domainNameAndVersion() internal pure override returns (string memory name, string memory version) {
         name = "Kernel";
-        version = "0.3.1-beta";
+        version = "0.3.1";
     }
 
     receive() external payable {
