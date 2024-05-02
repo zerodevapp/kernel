@@ -200,9 +200,8 @@ abstract contract KernelTestBase is Test {
             )
         );
 
-        bytes32 digest = keccak256(
-            abi.encodePacked("\x19\x01", _buildDomainSeparator("Kernel", "0.3.1-beta", address(kernel)), hash)
-        );
+        bytes32 digest =
+            keccak256(abi.encodePacked("\x19\x01", _buildDomainSeparator("Kernel", "0.3.1", address(kernel)), hash));
 
         return digest;
     }
@@ -947,7 +946,7 @@ abstract contract KernelTestBase is Test {
     function testSignatureRoot(bytes32 hash) external whenInitialized {
         bytes32 wrappedHash = keccak256(abi.encode(keccak256("Kernel(bytes32 hash)"), hash));
         bytes32 digest = keccak256(
-            abi.encodePacked("\x19\x01", _buildDomainSeparator("Kernel", "0.3.1-beta", address(kernel)), wrappedHash)
+            abi.encodePacked("\x19\x01", _buildDomainSeparator("Kernel", "0.3.1", address(kernel)), wrappedHash)
         );
         bytes memory sig = _rootSignDigest(digest, true);
         sig = abi.encodePacked(hex"00", sig);
@@ -975,7 +974,7 @@ abstract contract KernelTestBase is Test {
 
         bytes32 wrappedHash = keccak256(abi.encode(keccak256("Kernel(bytes32 hash)"), hash));
         bytes32 digest = keccak256(
-            abi.encodePacked("\x19\x01", _buildDomainSeparator("Kernel", "0.3.1-beta", address(kernel)), wrappedHash)
+            abi.encodePacked("\x19\x01", _buildDomainSeparator("Kernel", "0.3.1", address(kernel)), wrappedHash)
         );
         bytes memory sig = _validatorSignDigest(digest, true);
         sig = abi.encodePacked(hex"01", address(enabledValidator), sig);
@@ -1002,7 +1001,7 @@ abstract contract KernelTestBase is Test {
         );
         bytes32 wrappedHash = keccak256(abi.encode(keccak256("Kernel(bytes32 hash)"), hash));
         bytes32 digest = keccak256(
-            abi.encodePacked("\x19\x01", _buildDomainSeparator("Kernel", "0.3.1-beta", address(kernel)), wrappedHash)
+            abi.encodePacked("\x19\x01", _buildDomainSeparator("Kernel", "0.3.1", address(kernel)), wrappedHash)
         );
         bytes memory sig = _permissionSignDigest(digest, true);
         sig = abi.encodePacked(hex"02", PermissionId.unwrap(enabledPermission), hex"ff", sig);
