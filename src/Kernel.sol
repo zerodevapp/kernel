@@ -83,7 +83,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             if (validator.isModuleType(4)) {
                 bytes memory ret = IHook(address(validator)).preCheck(msg.sender, msg.value, msg.data);
                 _;
-                IHook(address(validator)).postCheck(ret, true, hex""); // TODO don't support try catch hook here
+                IHook(address(validator)).postCheck(ret); // TODO don't support try catch hook here
             } else {
                 revert InvalidCaller();
             }
@@ -171,7 +171,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
                 revert NotSupportedCallType();
             }
             if (address(config.hook) != address(1)) {
-                _doPostHook(config.hook, context, success, result);
+                _doPostHook(config.hook, context);
             }
         }
         if (!success) {
@@ -255,7 +255,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         }
         (bool success, bytes memory ret) = ExecLib.executeDelegatecall(address(this), userOp.callData[4:]);
         if (address(hook) != address(1)) {
-            _doPostHook(hook, context, success, ret);
+            _doPostHook(hook, context);
         } else if (!success) {
             revert ExecutionReverted();
         }
@@ -277,7 +277,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         }
         returnData = ExecLib.execute(execMode, executionCalldata);
         if (address(hook) != address(1)) {
-            _doPostHook(hook, context, true, abi.encode(returnData));
+            _doPostHook(hook, context);
         }
     }
 

@@ -17,12 +17,23 @@ import "../mock/MockERC721.sol";
 import "../mock/MockERC1155.sol";
 import "../core/ValidationManager.sol";
 import "./TestBase/erc4337Util.sol";
+import "../types/Types.sol";
+import "../types/Structs.sol";
 
 contract MockCallee {
     uint256 public value;
 
+    event MockEvent(address indexed caller, address indexed here);
+
     function setValue(uint256 _value) public {
         value = _value;
+    }
+
+    function emitEvent(bool shouldFail) public {
+        if (shouldFail) {
+            revert("Hello");
+        }
+        emit MockEvent(msg.sender, address(this));
     }
 }
 
@@ -851,6 +862,46 @@ abstract contract KernelTestBase is Test {
             true
         );
         entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
+    }
+
+    function testExecute(CallType callType, ExecType execType, bool shouldFail) external whenInitialized {
+        unchecked {
+            vm.assume(uint8(CallType.unwrap(callType)) + 1 < 3); //only call/batch/delegatecall
+            vm.assume(uint8(ExecType.unwrap(execType)) < 2);
+        }
+        vm.startPrank(address(entrypoint));
+        ExecMode code = ExecLib.encode(callType, execType, ExecModeSelector.wrap(0x00), ExecModePayload.wrap(0x00));
+        if (callType == CALLTYPE_BATCH) {
+            Execution[] memory execs = new Execution[](1);
+            execs[0] = Execution({
+                target: address(callee),
+                value: 0,
+                callData: abi.encodeWithSelector(MockCallee.emitEvent.selector, shouldFail)
+            });
+            bytes memory data = ExecLib.encodeBatch(execs);
+            if (execType == EXECTYPE_DEFAULT && shouldFail) {
+                vm.expectRevert();
+            }
+            kernel.execute(code, data);
+        } else if (callType == CALLTYPE_SINGLE) {
+            if (execType == EXECTYPE_DEFAULT && shouldFail) {
+                vm.expectRevert();
+            }
+            kernel.execute(
+                code,
+                abi.encodePacked(
+                    address(callee), uint256(0), abi.encodeWithSelector(MockCallee.emitEvent.selector, shouldFail)
+                )
+            );
+        } else {
+            if (execType == EXECTYPE_DEFAULT && shouldFail) {
+                vm.expectRevert();
+            }
+            kernel.execute(
+                code,
+                abi.encodePacked(address(callee), abi.encodeWithSelector(MockCallee.emitEvent.selector, shouldFail))
+            );
+        }
     }
 
     function testExecutorInstall(bool withHook) external whenInitialized {
