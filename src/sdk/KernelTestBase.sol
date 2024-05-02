@@ -189,8 +189,9 @@ abstract contract KernelTestBase is Test {
             )
         );
 
-        bytes32 digest =
-            keccak256(abi.encodePacked("\x19\x01", _buildDomainSeparator("Kernel", "0.3.1-beta", address(kernel)), hash));
+        bytes32 digest = keccak256(
+            abi.encodePacked("\x19\x01", _buildDomainSeparator("Kernel", "0.3.1-beta", address(kernel)), hash)
+        );
 
         return digest;
     }
