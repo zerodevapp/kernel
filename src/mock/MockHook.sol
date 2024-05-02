@@ -34,7 +34,7 @@ contract MockHook is IHook {
         return data[msg.sender];
     }
 
-    function postCheck(bytes calldata hookData, bool success, bytes memory res) external payable override {
+    function postCheck(bytes calldata hookData) external payable override {
         postHookData[msg.sender] = hookData;
     }
 }
