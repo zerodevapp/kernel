@@ -170,7 +170,9 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             } else {
                 revert NotSupportedCallType();
             }
-            if (address(config.hook) != address(1)) {
+            if (
+                address(config.hook) != address(1) && address(config.hook) != 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF
+            ) {
                 _doPostHook(config.hook, context);
             }
         }
