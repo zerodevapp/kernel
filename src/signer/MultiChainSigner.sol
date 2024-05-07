@@ -20,7 +20,8 @@ struct ECDSAValidatorStorage {
     address owner;
 }
 
-bytes constant DUMMY_ECDSA_SIG = hex"fffffffffffffffffffffffffffffff0000000000000000000000000000000007aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1c";
+bytes constant DUMMY_ECDSA_SIG =
+    hex"fffffffffffffffffffffffffffffff0000000000000000000000000000000007aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1c";
 
 contract MultiChainSigner is SignerBase {
     mapping(address => uint256) public usedIds;
@@ -76,7 +77,7 @@ contract MultiChainSigner is SignerBase {
         if (keccak256(ecdsaSig) == keccak256(DUMMY_ECDSA_SIG)) {
             (bytes32 dummyUserOpHash, bytes32[] memory proof) = abi.decode(sig[97:], (bytes32, bytes32[]));
             require(MerkleProofLib.verify(proof, merkleRoot, dummyUserOpHash), "hash is not in proof");
-        // otherwise, use real userOpHash
+            // otherwise, use real userOpHash
         } else {
             bytes32[] memory proof = abi.decode(sig[97:], (bytes32[]));
             require(MerkleProofLib.verify(proof, merkleRoot, userOpHash), "hash is not in proof");
