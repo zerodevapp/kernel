@@ -179,9 +179,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
                 if (msg.sender != address(entrypoint)) {
                     revert InvalidCaller();
                 }
-            } else if (
-                address(config.hook) != address(1)
-            ) {
+            } else if (address(config.hook) != address(1)) {
                 context = _doPreHook(config.hook, msg.value, msg.data);
             }
             if (config.callType == CALLTYPE_SINGLE) {
