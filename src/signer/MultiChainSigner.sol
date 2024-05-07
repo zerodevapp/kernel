@@ -20,7 +20,10 @@ struct ECDSAValidatorStorage {
     address owner;
 }
 
-contract MultiSignatureECDSASigner is SignerBase {
+bytes constant DUMMY_ECDSA_SIG =
+    hex"fffffffffffffffffffffffffffffff0000000000000000000000000000000007aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1c";
+
+contract MultiChainSigner is SignerBase {
     mapping(address => uint256) public usedIds;
     mapping(bytes32 id => mapping(address wallet => address)) public signer;
 
@@ -70,8 +73,15 @@ contract MultiSignatureECDSASigner is SignerBase {
         }
         bytes memory ecdsaSig = sig[0:65];
         bytes32 merkleRoot = bytes32(sig[65:97]);
-        bytes32[] memory proof = abi.decode(sig[97:], (bytes32[]));
-        require(MerkleProofLib.verify(proof, merkleRoot, userOpHash), "hash is not in proof");
+        // if the signature is a dummy signature, then use dummyUserOpHash instead of real userOpHash
+        if (keccak256(ecdsaSig) == keccak256(DUMMY_ECDSA_SIG)) {
+            (bytes32 dummyUserOpHash, bytes32[] memory proof) = abi.decode(sig[97:], (bytes32, bytes32[]));
+            require(MerkleProofLib.verify(proof, merkleRoot, dummyUserOpHash), "hash is not in proof");
+            // otherwise, use real userOpHash
+        } else {
+            bytes32[] memory proof = abi.decode(sig[97:], (bytes32[]));
+            require(MerkleProofLib.verify(proof, merkleRoot, userOpHash), "hash is not in proof");
+        }
         // simple ecdsa verification
         if (owner == ECDSA.recover(merkleRoot, ecdsaSig)) {
             return SIG_VALIDATION_SUCCESS_UINT;
