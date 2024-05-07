@@ -705,6 +705,8 @@ abstract contract KernelTestBase is Test {
             );
             PackedUserOperation[] memory ops = new PackedUserOperation[](1);
             ops[0] = op;
+            vm.expectEmit(address(kernel));
+            emit MockAction.MockActionEvent(address(kernel));
             entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
         }
 

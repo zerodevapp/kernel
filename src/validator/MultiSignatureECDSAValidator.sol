@@ -25,7 +25,6 @@ contract MultiSignatureECDSAValidator is IValidator, IHook {
     mapping(address => ECDSAValidatorStorage) public ecdsaValidatorStorage;
 
     function onInstall(bytes calldata _data) external payable override {
-        if (_isInitialized(msg.sender)) revert AlreadyInitialized(msg.sender);
         address owner = address(bytes20(_data[0:20]));
         ecdsaValidatorStorage[msg.sender].owner = owner;
         emit OwnerRegistered(msg.sender, owner);
