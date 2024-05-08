@@ -110,6 +110,28 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         _installValidation(_rootValidator, config, validatorData, hookData);
     }
 
+    function changeRootValidator(
+        ValidationId _rootValidator,
+        IHook hook,
+        bytes calldata validatorData,
+        bytes calldata hookData
+    ) external payable onlyEntryPointOrSelfOrRoot {
+        ValidationStorage storage vs = _validationStorage();
+        if (ValidationId.unwrap(_rootValidator) == bytes21(0)) {
+            revert InvalidValidator();
+        }
+        ValidationType vType = ValidatorLib.getType(_rootValidator);
+        if (vType != VALIDATION_TYPE_VALIDATOR && vType != VALIDATION_TYPE_PERMISSION) {
+            revert InvalidValidationType();
+        }
+        _setRootValidator(_rootValidator);
+        if (_validationStorage().validationConfig[_rootValidator].hook == IHook(address(0))) {
+            // when new rootValidator is not installed yet
+            ValidationConfig memory config = ValidationConfig({nonce: uint32(vs.currentNonce), hook: hook});
+            _installValidation(_rootValidator, config, validatorData, hookData);
+        }
+    }
+
     function upgradeTo(address _newImplementation) external payable onlyEntryPointOrSelfOrRoot {
         assembly {
             sstore(ERC1967_IMPLEMENTATION_SLOT, _newImplementation)
