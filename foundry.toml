@@ -4,9 +4,10 @@ out = "out"
 libs = ["lib"]
 bytecode_hash = "none"
 cbor_metadata = false
+solc_version = "0.8.25"
 optimize = true
 via-ir = false
-runs = 1000
+runs = 200
 
 [profile.deploy]
 via-ir = true

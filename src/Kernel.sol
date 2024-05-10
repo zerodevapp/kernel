@@ -173,15 +173,18 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         } else {
             // action installed
             bytes memory context;
-            if (address(config.hook) == 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF) {
+            if (
+                address(config.hook) != address(1) && address(config.hook) != 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF
+            ) {
+                context = _doPreHook(config.hook, msg.value, msg.data);
+            } else if (address(config.hook) == 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF) {
                 // for selector manager, address(0) for the hook will default to type(address).max,
                 // and this will only allow entrypoints to interact
                 if (msg.sender != address(entrypoint)) {
                     revert InvalidCaller();
                 }
-            } else if (address(config.hook) != address(1)) {
-                context = _doPreHook(config.hook, msg.value, msg.data);
             }
+            // execute action
             if (config.callType == CALLTYPE_SINGLE) {
                 (success, result) = ExecLib.doFallback2771Call(config.target);
             } else if (config.callType == CALLTYPE_DELEGATECALL) {
