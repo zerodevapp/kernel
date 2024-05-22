@@ -17,23 +17,12 @@ import "../mock/MockERC721.sol";
 import "../mock/MockERC1155.sol";
 import "../core/ValidationManager.sol";
 import "./TestBase/erc4337Util.sol";
-import "../types/Types.sol";
-import "../types/Structs.sol";
 
 contract MockCallee {
     uint256 public value;
 
-    event MockEvent(address indexed caller, address indexed here);
-
     function setValue(uint256 _value) public {
         value = _value;
-    }
-
-    function emitEvent(bool shouldFail) public {
-        if (shouldFail) {
-            revert("Hello");
-        }
-        emit MockEvent(msg.sender, address(this));
     }
 }
 
@@ -200,8 +189,9 @@ abstract contract KernelTestBase is Test {
             )
         );
 
-        bytes32 digest =
-            keccak256(abi.encodePacked("\x19\x01", _buildDomainSeparator("Kernel", "0.3.1", address(kernel)), hash));
+        bytes32 digest = keccak256(
+            abi.encodePacked("\x19\x01", _buildDomainSeparator("Kernel", "0.3.0-beta", address(kernel)), hash)
+        );
 
         return digest;
     }
@@ -648,13 +638,7 @@ abstract contract KernelTestBase is Test {
         return abi.encode(permissions);
     }
 
-    enum HookInfo {
-        NoHook,
-        DefaultHook,
-        WithHook
-    }
-
-    function _installAction(HookInfo withHook) internal {
+    function _installAction(bool withHook) internal {
         vm.deal(address(kernel), 1e18);
         MockAction mockAction = new MockAction();
         PackedUserOperation[] memory ops = new PackedUserOperation[](1);
@@ -668,10 +652,8 @@ abstract contract KernelTestBase is Test {
                 address(mockAction),
                 abi.encodePacked(
                     MockAction.doSomething.selector,
-                    withHook == HookInfo.WithHook
-                        ? address(mockHook)
-                        : withHook == HookInfo.NoHook ? address(1) : address(0),
-                    withHook == HookInfo.WithHook
+                    withHook ? address(mockHook) : address(0),
+                    withHook
                         ? abi.encode(hex"ff", abi.encodePacked(bytes1(0xff), "hookData"))
                         : abi.encode(hex"ff", hex"")
                 )
@@ -682,35 +664,14 @@ abstract contract KernelTestBase is Test {
         entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
     }
 
-    function testActionInstall(uint8 hookUint) external whenInitialized {
-        vm.assume(uint8(hookUint) < 3);
-        HookInfo withHook = HookInfo(hookUint);
+    function testActionInstall(bool withHook) external whenInitialized {
         _installAction(withHook);
         SelectorManager.SelectorConfig memory config = kernel.selectorConfig(MockAction.doSomething.selector);
-        assertEq(
-            address(config.hook),
-            withHook == HookInfo.WithHook
-                ? address(mockHook)
-                : withHook == HookInfo.NoHook ? address(1) : address(0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF)
-        );
-        if (withHook != HookInfo.DefaultHook) {
-            vm.expectEmit(address(kernel));
-            emit MockAction.MockActionEvent(address(kernel));
-            MockAction(address(kernel)).doSomething();
-        } else {
-            vm.expectRevert();
-            MockAction(address(kernel)).doSomething();
-            PackedUserOperation memory op = _prepareUserOp(
-                VALIDATION_TYPE_ROOT, false, false, abi.encodeWithSelector(MockAction.doSomething.selector), true, true
-            );
-            PackedUserOperation[] memory ops = new PackedUserOperation[](1);
-            ops[0] = op;
-            vm.expectEmit(address(kernel));
-            emit MockAction.MockActionEvent(address(kernel));
-            entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
-        }
-
-        if (withHook == HookInfo.WithHook) {
+        assertEq(address(config.hook), withHook ? address(mockHook) : address(1));
+        vm.expectEmit(address(kernel));
+        emit MockAction.MockActionEvent(address(kernel));
+        MockAction(address(kernel)).doSomething();
+        if (withHook) {
             assertEq(mockHook.data(address(kernel)), abi.encodePacked("hookData"));
             assertEq(
                 mockHook.preHookData(address(kernel)), abi.encodePacked(address(this), MockAction.doSomething.selector)
@@ -719,9 +680,7 @@ abstract contract KernelTestBase is Test {
         }
     }
 
-    function testActionUninstall(uint8 hookUint) external whenInitialized {
-        vm.assume(uint8(hookUint) < 3);
-        HookInfo withHook = HookInfo(hookUint);
+    function testActionUninstall(bool withHook) external whenInitialized {
         _installAction(withHook);
         PackedUserOperation[] memory ops = new PackedUserOperation[](1);
         ops[0] = _prepareUserOp(
@@ -744,7 +703,7 @@ abstract contract KernelTestBase is Test {
         assertEq(address(config.target), address(0));
     }
 
-    function _installFallback(HookInfo withHook) internal {
+    function _installFallback(bool withHook) internal {
         vm.deal(address(kernel), 1e18);
         PackedUserOperation[] memory ops = new PackedUserOperation[](1);
         ops[0] = _prepareUserOp(
@@ -757,10 +716,8 @@ abstract contract KernelTestBase is Test {
                 address(mockFallback),
                 abi.encodePacked(
                     MockFallback.fallbackFunction.selector,
-                    withHook == HookInfo.WithHook
-                        ? address(mockHook)
-                        : withHook == HookInfo.NoHook ? address(1) : address(0),
-                    withHook == HookInfo.WithHook
+                    withHook ? address(mockHook) : address(0),
+                    withHook
                         ? abi.encode(abi.encodePacked(hex"00", "fallbackData"), abi.encodePacked(bytes1(0xff), "hookData"))
                         : abi.encode(abi.encodePacked(hex"00", "fallbackData"), abi.encodePacked(""))
                 )
@@ -771,43 +728,20 @@ abstract contract KernelTestBase is Test {
         entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
     }
 
-    function testFallbackInstall(uint8 hookUint) external whenInitialized {
-        vm.assume(uint8(hookUint) < 3);
-        HookInfo withHook = HookInfo(hookUint);
+    function testFallbackInstall(bool withHook) external whenInitialized {
         _installFallback(withHook);
         assertEq(mockFallback.data(address(kernel)), abi.encodePacked("fallbackData"));
 
         SelectorManager.SelectorConfig memory config = kernel.selectorConfig(MockFallback.fallbackFunction.selector);
-        assertEq(
-            address(config.hook),
-            withHook == HookInfo.WithHook
-                ? address(mockHook)
-                : withHook == HookInfo.NoHook ? address(1) : address(0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF)
-        );
+        assertEq(address(config.hook), withHook ? address(mockHook) : address(1));
         assertEq(address(config.target), address(mockFallback));
-        if (withHook != HookInfo.DefaultHook) {
-            (bool success, bytes memory result) =
-                address(kernel).call(abi.encodeWithSelector(MockFallback.fallbackFunction.selector, uint256(10)));
-            assertTrue(success);
-            (uint256 res) = abi.decode(result, (uint256));
-            assertEq(res, 100);
-        } else {
-            (bool success, bytes memory result) =
-                address(kernel).call(abi.encodeWithSelector(MockFallback.fallbackFunction.selector, uint256(10)));
-            assertFalse(success);
-            PackedUserOperation memory op = _prepareUserOp(
-                VALIDATION_TYPE_ROOT,
-                false,
-                false,
-                abi.encodeWithSelector(MockFallback.fallbackFunction.selector, uint256(10)),
-                true,
-                true
-            );
-            PackedUserOperation[] memory ops = new PackedUserOperation[](1);
-            ops[0] = op;
-            entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
-        }
-        if (withHook == HookInfo.WithHook) {
+
+        (bool success, bytes memory result) =
+            address(kernel).call(abi.encodeWithSelector(MockFallback.fallbackFunction.selector, uint256(10)));
+        assertTrue(success);
+        (uint256 res) = abi.decode(result, (uint256));
+        assertEq(res, 100);
+        if (withHook) {
             assertEq(mockHook.data(address(kernel)), abi.encodePacked("hookData"));
             assertEq(
                 mockHook.preHookData(address(kernel)),
@@ -817,9 +751,7 @@ abstract contract KernelTestBase is Test {
         }
     }
 
-    function testFallbackUninstall(uint8 hookUint) external whenInitialized {
-        vm.assume(uint8(hookUint) < 3);
-        HookInfo withHook = HookInfo(hookUint);
+    function testFallbackUninstall(bool withHook) external whenInitialized {
         _installFallback(withHook);
         PackedUserOperation[] memory ops = new PackedUserOperation[](1);
         ops[0] = _prepareUserOp(
@@ -865,46 +797,6 @@ abstract contract KernelTestBase is Test {
         entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
     }
 
-    function testExecute(CallType callType, ExecType execType, bool shouldFail) external whenInitialized {
-        unchecked {
-            vm.assume(uint8(CallType.unwrap(callType)) + 1 < 3); //only call/batch/delegatecall
-            vm.assume(uint8(ExecType.unwrap(execType)) < 2);
-        }
-        vm.startPrank(address(entrypoint));
-        ExecMode code = ExecLib.encode(callType, execType, ExecModeSelector.wrap(0x00), ExecModePayload.wrap(0x00));
-        if (callType == CALLTYPE_BATCH) {
-            Execution[] memory execs = new Execution[](1);
-            execs[0] = Execution({
-                target: address(callee),
-                value: 0,
-                callData: abi.encodeWithSelector(MockCallee.emitEvent.selector, shouldFail)
-            });
-            bytes memory data = ExecLib.encodeBatch(execs);
-            if (execType == EXECTYPE_DEFAULT && shouldFail) {
-                vm.expectRevert();
-            }
-            kernel.execute(code, data);
-        } else if (callType == CALLTYPE_SINGLE) {
-            if (execType == EXECTYPE_DEFAULT && shouldFail) {
-                vm.expectRevert();
-            }
-            kernel.execute(
-                code,
-                abi.encodePacked(
-                    address(callee), uint256(0), abi.encodeWithSelector(MockCallee.emitEvent.selector, shouldFail)
-                )
-            );
-        } else {
-            if (execType == EXECTYPE_DEFAULT && shouldFail) {
-                vm.expectRevert();
-            }
-            kernel.execute(
-                code,
-                abi.encodePacked(address(callee), abi.encodeWithSelector(MockCallee.emitEvent.selector, shouldFail))
-            );
-        }
-    }
-
     function testExecutorInstall(bool withHook) external whenInitialized {
         _installExecutor(withHook);
         assertEq(mockExecutor.data(address(kernel)), abi.encodePacked("executorData"));
@@ -948,7 +840,7 @@ abstract contract KernelTestBase is Test {
     function testSignatureRoot(bytes32 hash) external whenInitialized {
         bytes32 wrappedHash = keccak256(abi.encode(keccak256("Kernel(bytes32 hash)"), hash));
         bytes32 digest = keccak256(
-            abi.encodePacked("\x19\x01", _buildDomainSeparator("Kernel", "0.3.1", address(kernel)), wrappedHash)
+            abi.encodePacked("\x19\x01", _buildDomainSeparator("Kernel", "0.3.0-beta", address(kernel)), wrappedHash)
         );
         bytes memory sig = _rootSignDigest(digest, true);
         sig = abi.encodePacked(hex"00", sig);
@@ -976,7 +868,7 @@ abstract contract KernelTestBase is Test {
 
         bytes32 wrappedHash = keccak256(abi.encode(keccak256("Kernel(bytes32 hash)"), hash));
         bytes32 digest = keccak256(
-            abi.encodePacked("\x19\x01", _buildDomainSeparator("Kernel", "0.3.1", address(kernel)), wrappedHash)
+            abi.encodePacked("\x19\x01", _buildDomainSeparator("Kernel", "0.3.0-beta", address(kernel)), wrappedHash)
         );
         bytes memory sig = _validatorSignDigest(digest, true);
         sig = abi.encodePacked(hex"01", address(enabledValidator), sig);
@@ -1003,7 +895,7 @@ abstract contract KernelTestBase is Test {
         );
         bytes32 wrappedHash = keccak256(abi.encode(keccak256("Kernel(bytes32 hash)"), hash));
         bytes32 digest = keccak256(
-            abi.encodePacked("\x19\x01", _buildDomainSeparator("Kernel", "0.3.1", address(kernel)), wrappedHash)
+            abi.encodePacked("\x19\x01", _buildDomainSeparator("Kernel", "0.3.0-beta", address(kernel)), wrappedHash)
         );
         bytes memory sig = _permissionSignDigest(digest, true);
         sig = abi.encodePacked(hex"02", PermissionId.unwrap(enabledPermission), hex"ff", sig);

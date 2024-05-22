@@ -17,10 +17,10 @@ abstract contract HookManager {
         context = hook.preCheck(msg.sender, value, callData);
     }
 
-    function _doPostHook(IHook hook, bytes memory context) internal {
+    function _doPostHook(IHook hook, bytes memory context, bool success, bytes memory result) internal {
         // bool success,
         // bytes memory result
-        hook.postCheck(context);
+        hook.postCheck(context, success, result);
     }
 
     // @notice if hook is not initialized before, kernel will call hook.onInstall no matter what flag it shows, with hookData[1:]
