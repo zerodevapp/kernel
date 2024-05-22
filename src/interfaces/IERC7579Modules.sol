@@ -69,12 +69,30 @@ interface IValidator is IModule {
 interface IExecutor is IModule {}
 
 interface IHook is IModule {
-    function preCheck(address msgSender, uint256 msgValue, bytes calldata msgData)
+    /**
+     * @dev Called by the smart account before execution
+     * @param msgSender the address that called the smart account
+     * @param value the value that was sent to the smart account
+     * @param msgData the data that was sent to the smart account
+     *
+     * MAY return arbitrary data in the `hookData` return value
+     */
+    function preCheck(address msgSender, uint256 value, bytes calldata msgData)
         external
         payable
         returns (bytes memory hookData);
 
-    function postCheck(bytes calldata hookData) external payable;
+    /**
+     * @dev Called by the smart account after execution
+     * @param hookData the data that was returned by the `preCheck` function
+     * @param executionSuccess whether the execution(s) was (were) successful
+     * @param executionReturn the return/revert data of the execution(s)
+     *
+     * MAY validate the `hookData` to validate transaction context of the `preCheck` function
+     */
+    function postCheck(bytes calldata hookData, bool executionSuccess, bytes calldata executionReturn)
+        external
+        payable;
 }
 
 interface IFallback is IModule {}

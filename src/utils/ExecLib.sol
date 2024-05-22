@@ -49,18 +49,9 @@ library ExecLib {
                 revert("Unsupported");
             }
         } else if (callType == CALLTYPE_DELEGATECALL) {
-            returnData = new bytes[](1);
             address delegate = address(bytes20(executionCalldata[0:20]));
             bytes calldata callData = executionCalldata[20:];
-            bool success;
-            (success, returnData[0]) = executeDelegatecall(delegate, callData);
-            if (execType == EXECTYPE_TRY) {
-                if (!success) emit TryExecuteUnsuccessful(0, returnData[0]);
-            } else if (execType == EXECTYPE_DEFAULT) {
-                if (!success) revert("Delegatecall failed");
-            } else {
-                revert("Unsupported");
-            }
+            executeDelegatecall(delegate, callData);
         } else {
             revert("Unsupported");
         }
