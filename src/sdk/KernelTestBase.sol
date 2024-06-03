@@ -44,6 +44,7 @@ abstract contract KernelTestBase is Test {
     FactoryStaker staker;
     IEntryPoint entrypoint;
     ValidationId rootValidation;
+    bytes[] initConfig;
 
     struct RootValidationConfig {
         IHook hook;
@@ -334,6 +335,33 @@ abstract contract KernelTestBase is Test {
         entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
     }
 
+    function testInitConfig() external {
+        bytes[] memory configs = new bytes[](1);
+        MockValidator mv = new MockValidator();
+        configs[0] = abi.encodeWithSelector(
+            Kernel.installModule.selector,
+            1,
+            address(mv),
+            abi.encodePacked(
+                address(0),
+                abi.encode(
+                    hex"",
+                    hex"",
+                    hex""
+                )
+            )
+        );
+        initConfig = configs;
+        kernel = Kernel(payable(factory.getAddress(initData(), bytes32(0))));
+        address deployed = factory.createAccount(initData(), bytes32(0));
+        assertEq(deployed, address(kernel));
+        assertEq(kernel.currentNonce(), 1);
+        assertEq(ValidationId.unwrap(kernel.rootValidator()), ValidationId.unwrap(rootValidation));
+        ValidationManager.ValidationConfig memory config = kernel.validationConfig(ValidatorLib.validatorToIdentifier(mv));
+        assertEq(config.nonce, 1);
+        assertEq(address(config.hook), address(1));
+    }
+
     function test_receive() external whenInitialized {
         vm.expectEmit(false, false, false, true, address(kernel));
         emit Kernel.Received(address(this), 1);
@@ -359,7 +387,8 @@ abstract contract KernelTestBase is Test {
             rootValidation,
             rootValidationConfig.hook,
             rootValidationConfig.validatorData,
-            rootValidationConfig.hookData
+            rootValidationConfig.hookData,
+            initConfig
         );
     }
 

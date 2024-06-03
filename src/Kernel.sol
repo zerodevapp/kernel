@@ -54,6 +54,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
     error InvalidModuleType();
     error InvalidCaller();
     error InvalidSelector();
+    error InitConfigError(uint256 idx);
 
     event Received(address sender, uint256 amount);
     event Upgraded(address indexed implementation);
@@ -92,7 +93,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         }
     }
 
-    function initialize(ValidationId _rootValidator, IHook hook, bytes calldata validatorData, bytes calldata hookData)
+    function initialize(ValidationId _rootValidator, IHook hook, bytes calldata validatorData, bytes calldata hookData, bytes[] calldata initConfig)
         external
     {
         ValidationStorage storage vs = _validationStorage();
@@ -108,6 +109,12 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         ValidationConfig memory config = ValidationConfig({nonce: uint32(1), hook: hook});
         vs.currentNonce = 1;
         _installValidation(_rootValidator, config, validatorData, hookData);
+        for(uint256 i = 0; i<initConfig.length; i++) {
+            (bool success, ) = address(this).call(initConfig[i]);
+            if(!success) {
+                revert InitConfigError(i);
+            }
+        }
     }
 
     function changeRootValidator(
