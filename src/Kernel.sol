@@ -83,7 +83,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             if (validator.isModuleType(4)) {
                 bytes memory ret = IHook(address(validator)).preCheck(msg.sender, msg.value, msg.data);
                 _;
-                IHook(address(validator)).postCheck(ret);
+                IHook(address(validator)).postCheck(ret, true, hex""); // TODO don't support try catch hook here
             } else {
                 revert InvalidCaller();
             }
@@ -108,28 +108,6 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         ValidationConfig memory config = ValidationConfig({nonce: uint32(1), hook: hook});
         vs.currentNonce = 1;
         _installValidation(_rootValidator, config, validatorData, hookData);
-    }
-
-    function changeRootValidator(
-        ValidationId _rootValidator,
-        IHook hook,
-        bytes calldata validatorData,
-        bytes calldata hookData
-    ) external payable onlyEntryPointOrSelfOrRoot {
-        ValidationStorage storage vs = _validationStorage();
-        if (ValidationId.unwrap(_rootValidator) == bytes21(0)) {
-            revert InvalidValidator();
-        }
-        ValidationType vType = ValidatorLib.getType(_rootValidator);
-        if (vType != VALIDATION_TYPE_VALIDATOR && vType != VALIDATION_TYPE_PERMISSION) {
-            revert InvalidValidationType();
-        }
-        _setRootValidator(_rootValidator);
-        if (_validationStorage().validationConfig[_rootValidator].hook == IHook(address(0))) {
-            // when new rootValidator is not installed yet
-            ValidationConfig memory config = ValidationConfig({nonce: uint32(vs.currentNonce), hook: hook});
-            _installValidation(_rootValidator, config, validatorData, hookData);
-        }
     }
 
     function upgradeTo(address _newImplementation) external payable onlyEntryPointOrSelfOrRoot {
@@ -173,16 +151,8 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         } else {
             // action installed
             bytes memory context;
-            if (
-                address(config.hook) != address(1) && address(config.hook) != 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF
-            ) {
+            if (address(config.hook) != address(1)) {
                 context = _doPreHook(config.hook, msg.value, msg.data);
-            } else if (address(config.hook) == 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF) {
-                // for selector manager, address(0) for the hook will default to type(address).max,
-                // and this will only allow entrypoints to interact
-                if (msg.sender != address(entrypoint)) {
-                    revert InvalidCaller();
-                }
             }
             // execute action
             if (config.callType == CALLTYPE_SINGLE) {
@@ -192,10 +162,8 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             } else {
                 revert NotSupportedCallType();
             }
-            if (
-                address(config.hook) != address(1) && address(config.hook) != 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF
-            ) {
-                _doPostHook(config.hook, context);
+            if (address(config.hook) != address(1)) {
+                _doPostHook(config.hook, context, success, result);
             }
         }
         if (!success) {
@@ -279,7 +247,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         }
         (bool success, bytes memory ret) = ExecLib.executeDelegatecall(address(this), userOp.callData[4:]);
         if (address(hook) != address(1)) {
-            _doPostHook(hook, context);
+            _doPostHook(hook, context, success, ret);
         } else if (!success) {
             revert ExecutionReverted();
         }
@@ -301,7 +269,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         }
         returnData = ExecLib.execute(execMode, executionCalldata);
         if (address(hook) != address(1)) {
-            _doPostHook(hook, context);
+            _doPostHook(hook, context, true, abi.encode(returnData));
         }
     }
 
@@ -344,18 +312,14 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
                 ValidationConfig({nonce: vs.currentNonce, hook: IHook(address(bytes20(initData[0:20])))});
             bytes calldata validatorData;
             bytes calldata hookData;
-            bytes calldata selectorData;
             assembly {
                 validatorData.offset := add(add(initData.offset, 52), calldataload(add(initData.offset, 20)))
                 validatorData.length := calldataload(sub(validatorData.offset, 32))
                 hookData.offset := add(add(initData.offset, 52), calldataload(add(initData.offset, 52)))
                 hookData.length := calldataload(sub(hookData.offset, 32))
-                selectorData.offset := add(add(initData.offset, 52), calldataload(add(initData.offset, 84)))
-                selectorData.length := calldataload(sub(selectorData.offset, 32))
             }
             _installValidation(vId, config, validatorData, hookData);
-            // NOTE: we don't allow configure on selector data on v3.1, but using bytes instead of bytes4 for selector data to make sure we are future proof
-            _setSelector(vId, bytes4(selectorData[0:4]), true);
+            //_installHook(config.hook, hookData); hook install is handled inside installvalidation
         } else if (moduleType == MODULE_TYPE_EXECUTOR) {
             bytes calldata executorData;
             bytes calldata hookData;
@@ -506,7 +470,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
     }
 
     function accountId() external pure override returns (string memory accountImplementationId) {
-        return "kernel.advanced.v0.3.1";
+        return "kernel.advanced.v0.3.0-beta";
     }
 
     function supportsExecutionMode(ExecMode mode) external pure override returns (bool) {
