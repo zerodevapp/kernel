@@ -339,17 +339,7 @@ abstract contract KernelTestBase is Test {
         bytes[] memory configs = new bytes[](1);
         MockValidator mv = new MockValidator();
         configs[0] = abi.encodeWithSelector(
-            Kernel.installModule.selector,
-            1,
-            address(mv),
-            abi.encodePacked(
-                address(0),
-                abi.encode(
-                    hex"",
-                    hex"",
-                    hex""
-                )
-            )
+            Kernel.installModule.selector, 1, address(mv), abi.encodePacked(address(0), abi.encode(hex"", hex"", hex""))
         );
         initConfig = configs;
         kernel = Kernel(payable(factory.getAddress(initData(), bytes32(0))));
@@ -357,7 +347,8 @@ abstract contract KernelTestBase is Test {
         assertEq(deployed, address(kernel));
         assertEq(kernel.currentNonce(), 1);
         assertEq(ValidationId.unwrap(kernel.rootValidator()), ValidationId.unwrap(rootValidation));
-        ValidationManager.ValidationConfig memory config = kernel.validationConfig(ValidatorLib.validatorToIdentifier(mv));
+        ValidationManager.ValidationConfig memory config =
+            kernel.validationConfig(ValidatorLib.validatorToIdentifier(mv));
         assertEq(config.nonce, 1);
         assertEq(address(config.hook), address(1));
     }
@@ -699,7 +690,7 @@ abstract contract KernelTestBase is Test {
                     abi.encode(
                         hex"", // validator data
                         hex"", // hook data
-                        hex""  // selector data
+                        hex"" // selector data
                     )
                 )
             ),
@@ -708,7 +699,7 @@ abstract contract KernelTestBase is Test {
         );
         entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
     }
-    
+
     function _uninstallValidator(IValidator validator) internal {
         vm.deal(address(kernel), 1e18);
         PackedUserOperation[] memory ops = new PackedUserOperation[](1);
@@ -716,12 +707,7 @@ abstract contract KernelTestBase is Test {
             VALIDATION_TYPE_ROOT,
             false,
             false,
-            abi.encodeWithSelector(
-                kernel.uninstallModule.selector,
-                1,
-                address(validator),
-                hex""
-            ),
+            abi.encodeWithSelector(kernel.uninstallModule.selector, 1, address(validator), hex""),
             true,
             true
         );
@@ -731,7 +717,8 @@ abstract contract KernelTestBase is Test {
     function testValidatorInstall() external whenInitialized {
         MockValidator mv = new MockValidator();
         _installValidator(mv);
-        ValidationManager.ValidationConfig memory config = kernel.validationConfig(ValidatorLib.validatorToIdentifier(mv));
+        ValidationManager.ValidationConfig memory config =
+            kernel.validationConfig(ValidatorLib.validatorToIdentifier(mv));
         assertEq(config.nonce, 1);
         assertEq(address(config.hook), address(1));
         _uninstallValidator(mv);
