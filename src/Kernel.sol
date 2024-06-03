@@ -54,6 +54,7 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
     error InvalidModuleType();
     error InvalidCaller();
     error InvalidSelector();
+    error InitConfigError(uint256 idx);
 
     event Received(address sender, uint256 amount);
     event Upgraded(address indexed implementation);
@@ -92,9 +93,13 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         }
     }
 
-    function initialize(ValidationId _rootValidator, IHook hook, bytes calldata validatorData, bytes calldata hookData)
-        external
-    {
+    function initialize(
+        ValidationId _rootValidator,
+        IHook hook,
+        bytes calldata validatorData,
+        bytes calldata hookData,
+        bytes[] calldata initConfig
+    ) external {
         ValidationStorage storage vs = _validationStorage();
         require(ValidationId.unwrap(vs.rootValidator) == bytes21(0), "already initialized");
         if (ValidationId.unwrap(_rootValidator) == bytes21(0)) {
@@ -108,6 +113,12 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         ValidationConfig memory config = ValidationConfig({nonce: uint32(1), hook: hook});
         vs.currentNonce = 1;
         _installValidation(_rootValidator, config, validatorData, hookData);
+        for (uint256 i = 0; i < initConfig.length; i++) {
+            (bool success,) = address(this).call(initConfig[i]);
+            if (!success) {
+                revert InitConfigError(i);
+            }
+        }
     }
 
     function changeRootValidator(
@@ -340,6 +351,12 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         if (moduleType == MODULE_TYPE_VALIDATOR) {
             ValidationStorage storage vs = _validationStorage();
             ValidationId vId = ValidatorLib.validatorToIdentifier(IValidator(module));
+            if (vs.validationConfig[vId].nonce == vs.currentNonce) {
+                // only increase currentNonce when vId's currentNonce is same
+                unchecked {
+                    vs.currentNonce++;
+                }
+            }
             ValidationConfig memory config =
                 ValidationConfig({nonce: vs.currentNonce, hook: IHook(address(bytes20(initData[0:20])))});
             bytes calldata validatorData;
@@ -354,8 +371,10 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
                 selectorData.length := calldataload(sub(selectorData.offset, 32))
             }
             _installValidation(vId, config, validatorData, hookData);
-            // NOTE: we don't allow configure on selector data on v3.1, but using bytes instead of bytes4 for selector data to make sure we are future proof
-            _setSelector(vId, bytes4(selectorData[0:4]), true);
+            if (selectorData.length == 4) {
+                // NOTE: we don't allow configure on selector data on v3.1, but using bytes instead of bytes4 for selector data to make sure we are future proof
+                _setSelector(vId, bytes4(selectorData[0:4]), true);
+            }
         } else if (moduleType == MODULE_TYPE_EXECUTOR) {
             bytes calldata executorData;
             bytes calldata hookData;
