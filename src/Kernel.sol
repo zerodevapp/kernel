@@ -340,6 +340,12 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         if (moduleType == MODULE_TYPE_VALIDATOR) {
             ValidationStorage storage vs = _validationStorage();
             ValidationId vId = ValidatorLib.validatorToIdentifier(IValidator(module));
+            if (vs.validationConfig[vId].nonce == vs.currentNonce) {
+                // only increase currentNonce when vId's currentNonce is same
+                unchecked {
+                    vs.currentNonce++;
+                }
+            }
             ValidationConfig memory config =
                 ValidationConfig({nonce: vs.currentNonce, hook: IHook(address(bytes20(initData[0:20])))});
             bytes calldata validatorData;
@@ -354,8 +360,10 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
                 selectorData.length := calldataload(sub(selectorData.offset, 32))
             }
             _installValidation(vId, config, validatorData, hookData);
-            // NOTE: we don't allow configure on selector data on v3.1, but using bytes instead of bytes4 for selector data to make sure we are future proof
-            _setSelector(vId, bytes4(selectorData[0:4]), true);
+            if(selectorData.length == 4) {
+                // NOTE: we don't allow configure on selector data on v3.1, but using bytes instead of bytes4 for selector data to make sure we are future proof
+                _setSelector(vId, bytes4(selectorData[0:4]), true);
+            }
         } else if (moduleType == MODULE_TYPE_EXECUTOR) {
             bytes calldata executorData;
             bytes calldata hookData;

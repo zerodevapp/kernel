@@ -654,6 +654,67 @@ abstract contract KernelTestBase is Test {
         WithHook
     }
 
+    function _installValidator(IValidator validator) internal {
+        vm.deal(address(kernel), 1e18);
+        PackedUserOperation[] memory ops = new PackedUserOperation[](1);
+        ops[0] = _prepareUserOp(
+            VALIDATION_TYPE_ROOT,
+            false,
+            false,
+            abi.encodeWithSelector(
+                kernel.installModule.selector,
+                1,
+                address(validator),
+                abi.encodePacked(
+                    address(0), // Hook
+                    abi.encode(
+                        hex"", // validator data
+                        hex"", // hook data
+                        hex""  // selector data
+                    )
+                )
+            ),
+            true,
+            true
+        );
+        entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
+    }
+    
+    function _uninstallValidator(IValidator validator) internal {
+        vm.deal(address(kernel), 1e18);
+        PackedUserOperation[] memory ops = new PackedUserOperation[](1);
+        ops[0] = _prepareUserOp(
+            VALIDATION_TYPE_ROOT,
+            false,
+            false,
+            abi.encodeWithSelector(
+                kernel.uninstallModule.selector,
+                1,
+                address(validator),
+                hex""
+            ),
+            true,
+            true
+        );
+        entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
+    }
+
+    function testValidatorInstall() external whenInitialized {
+        MockValidator mv = new MockValidator();
+        _installValidator(mv);
+        ValidationManager.ValidationConfig memory config = kernel.validationConfig(ValidatorLib.validatorToIdentifier(mv));
+        assertEq(config.nonce, 1);
+        assertEq(address(config.hook), address(1));
+        _uninstallValidator(mv);
+        config = kernel.validationConfig(ValidatorLib.validatorToIdentifier(mv));
+        assertEq(config.nonce, 1);
+        assertEq(address(config.hook), address(0));
+        _installValidator(mv);
+        config = kernel.validationConfig(ValidatorLib.validatorToIdentifier(mv));
+        assertEq(config.nonce, 2);
+        assertEq(address(config.hook), address(1));
+    }
+
     function _installAction(HookInfo withHook) internal {
         vm.deal(address(kernel), 1e18);
         MockAction mockAction = new MockAction();
