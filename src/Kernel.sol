@@ -181,42 +181,36 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         bytes memory result;
         if (address(config.hook) == address(0)) {
             revert InvalidSelector();
+        }
+        // action installed
+        bytes memory context;
+        if (address(config.hook) != address(1) && address(config.hook) != 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF) {
+            context = _doPreHook(config.hook, msg.value, msg.data);
+        } else if (address(config.hook) == 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF) {
+            // for selector manager, address(0) for the hook will default to type(address).max,
+            // and this will only allow entrypoints to interact
+            if (msg.sender != address(entrypoint)) {
+                revert InvalidCaller();
+            }
+        }
+        // execute action
+        if (config.callType == CALLTYPE_SINGLE) {
+            (success, result) = ExecLib.doFallback2771Call(config.target);
+        } else if (config.callType == CALLTYPE_DELEGATECALL) {
+            (success, result) = ExecLib.executeDelegatecall(config.target, msg.data);
         } else {
-            // action installed
-            bytes memory context;
-            if (
-                address(config.hook) != address(1) && address(config.hook) != 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF
-            ) {
-                context = _doPreHook(config.hook, msg.value, msg.data);
-            } else if (address(config.hook) == 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF) {
-                // for selector manager, address(0) for the hook will default to type(address).max,
-                // and this will only allow entrypoints to interact
-                if (msg.sender != address(entrypoint)) {
-                    revert InvalidCaller();
-                }
-            }
-            // execute action
-            if (config.callType == CALLTYPE_SINGLE) {
-                (success, result) = ExecLib.doFallback2771Call(config.target);
-            } else if (config.callType == CALLTYPE_DELEGATECALL) {
-                (success, result) = ExecLib.executeDelegatecall(config.target, msg.data);
-            } else {
-                revert NotSupportedCallType();
-            }
-            if (
-                address(config.hook) != address(1) && address(config.hook) != 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF
-            ) {
-                _doPostHook(config.hook, context);
-            }
+            revert NotSupportedCallType();
         }
         if (!success) {
             assembly {
                 revert(add(result, 0x20), mload(result))
             }
-        } else {
-            assembly {
-                return(add(result, 0x20), mload(result))
-            }
+        }
+        if (address(config.hook) != address(1) && address(config.hook) != 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF) {
+            _doPostHook(config.hook, context);
+        }
+        assembly {
+            return(add(result, 0x20), mload(result))
         }
     }
 
@@ -289,10 +283,11 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             context = _doPreHook(hook, msg.value, userOp.callData[4:]);
         }
         (bool success, bytes memory ret) = ExecLib.executeDelegatecall(address(this), userOp.callData[4:]);
+        if (!success) {
+            revert ExecutionReverted();
+        }
         if (address(hook) != address(1)) {
             _doPostHook(hook, context);
-        } else if (!success) {
-            revert ExecutionReverted();
         }
     }
 
