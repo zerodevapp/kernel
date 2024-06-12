@@ -30,13 +30,8 @@ abstract contract ExecutorManager {
     }
 
     function _installExecutor(IExecutor executor, bytes calldata executorData, IHook hook) internal {
-        if (address(hook) == address(0)) {
-            hook = IHook(address(1));
-        }
-        ExecutorConfig storage config = _executorConfig(executor);
-        config.hook = hook;
+        _installExecutorWithoutInit(executor, hook);
         executor.onInstall(executorData);
-        emit IERC7579Account.ModuleInstalled(MODULE_TYPE_EXECUTOR, address(executor));
     }
 
     function _installExecutorWithoutInit(IExecutor executor, IHook hook) internal {
@@ -45,6 +40,7 @@ abstract contract ExecutorManager {
         }
         ExecutorConfig storage config = _executorConfig(executor);
         config.hook = hook;
+        emit IERC7579Account.ModuleInstalled(MODULE_TYPE_EXECUTOR, address(executor));
     }
 
     function _uninstallExecutor(IExecutor executor, bytes calldata executorData) internal returns (IHook hook) {
