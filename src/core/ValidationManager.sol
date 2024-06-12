@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import {IValidator, IModule, IExecutor, IHook, IPolicy, ISigner, IFallback} from "../interfaces/IERC7579Modules.sol";
+import {IERC7579Account} from "../interfaces/IERC7579Account.sol";
 import {PackedUserOperation} from "../interfaces/PackedUserOperation.sol";
 import {SelectorManager} from "./SelectorManager.sol";
 import {HookManager} from "./HookManager.sol";
@@ -20,7 +21,7 @@ import {
 } from "../utils/ValidationTypeLib.sol";
 
 import {CallType} from "../utils/ExecLib.sol";
-import {CALLTYPE_SINGLE} from "../types/Constants.sol";
+import {CALLTYPE_SINGLE, MODULE_TYPE_POLICY, MODULE_TYPE_SIGNER, MODULE_TYPE_VALIDATOR} from "../types/Constants.sol";
 
 import {PermissionId, getValidationResult} from "../types/Types.sol";
 import {_intersectValidationData} from "../utils/KernelValidationResult.sol";
@@ -173,6 +174,7 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager, Exe
         if (vType == VALIDATION_TYPE_VALIDATOR) {
             IValidator validator = ValidatorLib.getValidator(vId);
             ModuleLib.uninstallModule(address(validator), validatorData);
+            emit IERC7579Account.ModuleUninstalled(MODULE_TYPE_VALIDATOR, address(validator));
         } else if (vType == VALIDATION_TYPE_PERMISSION) {
             PermissionId permission = ValidatorLib.getPermissionId(vId);
             _uninstallPermission(permission, validatorData);
@@ -198,6 +200,7 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager, Exe
                 ModuleLib.uninstallModule(
                     address(policy), abi.encodePacked(bytes32(PermissionId.unwrap(pId)), permissionDisableData[i])
                 );
+                emit IERC7579Account.ModuleUninstalled(MODULE_TYPE_POLICY, address(policy));
             }
             delete _validationStorage().permissionConfig[pId].policyData;
             ModuleLib.uninstallModule(
@@ -206,6 +209,7 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager, Exe
                     bytes32(PermissionId.unwrap(pId)), permissionDisableData[permissionDisableData.length - 1]
                 )
             );
+            emit IERC7579Account.ModuleUninstalled(MODULE_TYPE_SIGNER, address(config.signer));
         }
         config.signer = ISigner(address(0));
         config.permissionFlag = PassFlag.wrap(bytes2(0));
@@ -238,6 +242,7 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager, Exe
         if (vType == VALIDATION_TYPE_VALIDATOR) {
             IValidator validator = ValidatorLib.getValidator(vId);
             validator.onInstall(validatorData);
+            emit IERC7579Account.ModuleInstalled(MODULE_TYPE_VALIDATOR, address(validator));
         } else if (vType == VALIDATION_TYPE_PERMISSION) {
             PermissionId permission = ValidatorLib.getPermissionId(vId);
             _installPermission(permission, validatorData);
@@ -270,6 +275,9 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager, Exe
                 IPolicy(address(bytes20(permissionEnableData[i][2:22]))).onInstall(
                     abi.encodePacked(bytes32(PermissionId.unwrap(permission)), permissionEnableData[i][22:])
                 );
+                emit IERC7579Account.ModuleInstalled(
+                    MODULE_TYPE_POLICY, address(bytes20(permissionEnableData[i][2:22]))
+                );
             }
             // last permission data will be signer
             ISigner signer = ISigner(address(bytes20(permissionEnableData[permissionEnableData.length - 1][2:22])));
@@ -281,6 +289,7 @@ abstract contract ValidationManager is EIP712, SelectorManager, HookManager, Exe
                     bytes32(PermissionId.unwrap(permission)), permissionEnableData[permissionEnableData.length - 1][22:]
                 )
             );
+            emit IERC7579Account.ModuleInstalled(MODULE_TYPE_SIGNER, address(signer));
         }
     }
 

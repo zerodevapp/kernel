@@ -4,6 +4,8 @@ pragma solidity ^0.8.0;
 
 import {IHook} from "../interfaces/IERC7579Modules.sol";
 import {ModuleLib} from "../utils/ModuleLib.sol";
+import {IERC7579Account} from "../interfaces/IERC7579Account.sol";
+import {MODULE_TYPE_HOOK} from "../types/Constants.sol";
 
 abstract contract HookManager {
     // NOTE: currently, all install/uninstall calls onInstall/onUninstall
@@ -32,12 +34,11 @@ abstract contract HookManager {
         if (!hook.isInitialized(address(this))) {
             // if hook is not installed, it should call onInstall
             hook.onInstall(hookData[1:]);
-            return;
-        }
-        if (bytes1(hookData[0]) == bytes1(0xff)) {
+        } else if (bytes1(hookData[0]) == bytes1(0xff)) {
             // 0xff means you want to explicitly call install hook
             hook.onInstall(hookData[1:]);
         }
+        emit IERC7579Account.ModuleInstalled(MODULE_TYPE_HOOK, address(hook));
     }
 
     // @param hookData encoded as (1bytes flag + actual hookdata) flag is for identifying if the hook has to be initialized or not
@@ -49,5 +50,6 @@ abstract contract HookManager {
             // 0xff means you want to call uninstall hook
             ModuleLib.uninstallModule(address(hook), hookData[1:]);
         }
+        emit IERC7579Account.ModuleUninstalled(MODULE_TYPE_HOOK, address(hook));
     }
 }
