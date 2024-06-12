@@ -398,18 +398,21 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
             // NOTE: for hook, kernel does not support independent hook install,
             // hook is expected to be paired with proper validator/executor/selector
             IHook(module).onInstall(initData);
+            emit ModuleInstalled(moduleType, module);
         } else if (moduleType == MODULE_TYPE_POLICY) {
             // force call onInstall for policy
             // NOTE: for policy, kernel does not support independent policy install,
             // policy is expected to be paired with proper permissionId
             // to "ADD" permission, use "installValidations()" function
             IPolicy(module).onInstall(initData);
+            emit ModuleInstalled(moduleType, module);
         } else if (moduleType == MODULE_TYPE_SIGNER) {
             // force call onInstall for signer
             // NOTE: for signer, kernel does not support independent signer install,
             // signer is expected to be paired with proper permissionId
             // to "ADD" permission, use "installValidations()" function
             ISigner(module).onInstall(initData);
+            emit ModuleInstalled(moduleType, module);
         } else {
             revert InvalidModuleType();
         }
@@ -458,10 +461,11 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
                 // remove hook on root validator to prevent kernel from being locked
                 _validationStorage().validationConfig[vId].hook = IHook(address(1));
             }
-            // force call onInstall for hook
+            // force call onUninstall for hook
             // NOTE: for hook, kernel does not support independent hook install,
             // hook is expected to be paired with proper validator/executor/selector
             ModuleLib.uninstallModule(module, deInitData);
+            emit ModuleUninstalled(moduleType, module);
         } else if (moduleType == 5) {
             ValidationId rootValidator = _validationStorage().rootValidator;
             bytes32 permissionId = bytes32(deInitData[0:32]);
@@ -470,11 +474,12 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
                     revert RootValidatorCannotBeRemoved();
                 }
             }
-            // force call onInstall for policy
+            // force call onUninstall for policy
             // NOTE: for policy, kernel does not support independent policy install,
             // policy is expected to be paired with proper permissionId
             // to "REMOVE" permission, use "uninstallValidation()" function
             ModuleLib.uninstallModule(module, deInitData);
+            emit ModuleUninstalled(moduleType, module);
         } else if (moduleType == 6) {
             ValidationId rootValidator = _validationStorage().rootValidator;
             bytes32 permissionId = bytes32(deInitData[0:32]);
@@ -483,11 +488,12 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
                     revert RootValidatorCannotBeRemoved();
                 }
             }
-            // force call onInstall for signer
+            // force call onUninstall for signer
             // NOTE: for signer, kernel does not support independent signer install,
             // signer is expected to be paired with proper permissionId
             // to "REMOVE" permission, use "uninstallValidation()" function
             ModuleLib.uninstallModule(module, deInitData);
+            emit ModuleUninstalled(moduleType, module);
         } else {
             revert InvalidModuleType();
         }
