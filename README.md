@@ -38,6 +38,18 @@ MIT
 ## Addresses
 
 <details>
+<summary>v3.1</summary>
+
+| Name                 | Address                                    |
+| -------------------- | ------------------------------------------ |
+| Meta Factory         | 0xd703aaE79538628d27099B8c4f621bE4CCd142d5 |
+| Factory              | 0xaac5D4240AF87249B3f71BC8E4A2cae074A3E419 |
+| Kernel               | 0xBAC849bB641841b44E965fB01A4Bf5F074f84b4D |
+| ECDSA Validator      | 0x845ADb2C711129d4f3966735eD98a9F09fC4cE57 |
+
+</details>
+
+<details>
 <summary>v3.0</summary>
 
 | Name                 | Address                                    |
