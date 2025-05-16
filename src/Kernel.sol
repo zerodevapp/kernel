@@ -6,12 +6,13 @@ import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOper
 import {IValidator} from "./interfaces/IERC7579Modules.sol";
 import "./types/Types.sol";
 import {ModuleManager, Install} from "./core/ModuleManager.sol";
-import {ValidationManager} from "./core/ValidationManager.sol";
+import {ExecutionManager} from "./core/ExecutionManager.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
+import {Lib4337} from "./Lib4337.sol";
 import "./types/Error.sol";
 import "./types/Events.sol";
 
-contract Kernel is ValidationManager, ModuleManager, EIP712 {
+contract Kernel is ModuleManager, ExecutionManager, EIP712 {
     IEntryPoint immutable entryPoint;
 
     error Unauthorized();
@@ -65,8 +66,9 @@ contract Kernel is ValidationManager, ModuleManager, EIP712 {
             }
             signature = sig.userOpSignature;
             _verifyInstallSignature(enableReplayable, sig.packages, sig.enableSignature);
+            _install(sig.packages);
         }
-        opHash = userOpHash;
+        opHash = isReplayable(vMode) ? Lib4337.chainAgnosticUserOpHash(msg.sender, userOp) : userOpHash;
     }
 
     function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4) {}
@@ -84,8 +86,6 @@ contract Kernel is ValidationManager, ModuleManager, EIP712 {
         _execute(mode, executionData);
     }
 
-    function _execute(bytes32 mode, bytes calldata executionData) internal {}
-
     /// management
     struct InstallModuleDataFormat {
         bytes installData;
@@ -100,8 +100,8 @@ contract Kernel is ValidationManager, ModuleManager, EIP712 {
 
         _installModule(moduleType, module, imdf.installData, imdf.internalData);
     }
-    // NOTE : this ONLY allows root signature
 
+    // NOTE : this ONLY allows root signature
     function installModule(bool replayable, Install[] calldata packages, bytes calldata signature) external {
         require(_verifyInstallSignature(replayable, packages, signature), InstallSignatureVerificationFailed());
         _install(packages);
