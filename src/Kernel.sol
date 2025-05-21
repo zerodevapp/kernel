@@ -17,8 +17,8 @@ contract Kernel is ModuleManager, ExecutionManager, EIP712 {
 
     error Unauthorized();
 
-    modifier onlyEntryPoint() {
-        require(msg.sender == address(entryPoint), Unauthorized());
+    modifier onlyEntryPointOrSelf() {
+        require(msg.sender == address(entryPoint) || msg.sender == address(this), Unauthorized());
         _;
     }
 
@@ -41,11 +41,17 @@ contract Kernel is ModuleManager, ExecutionManager, EIP712 {
     function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash, uint256 missingAccountFunds)
         external
         payable
-        onlyEntryPoint
+        onlyEntryPointOrSelf
         returns (uint256 validationData)
     {
         (ValidationId verifier, bytes32 opHash, bytes calldata userOpSignature) = _processUserOp(userOp, userOpHash);
-        return _verifySignature(verifier, opHash, userOpSignature);
+        validationData = _validateUserOp(verifier, opHash, userOp, userOpSignature);
+        assembly {
+            if missingAccountFunds {
+                pop(call(gas(), caller(), missingAccountFunds, callvalue(), callvalue(), callvalue(), callvalue()))
+                //ignore failure (its EntryPoint's job to verify, not account.)
+            }
+        }
     }
 
     function _processUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash)
@@ -56,7 +62,6 @@ contract Kernel is ModuleManager, ExecutionManager, EIP712 {
          userOp.nonce = vMode | vType | vId
         */
         (ValidationMode vMode, ValidationType vType, ValidationId vId) = _parseNonce(userOp.nonce);
-        _checkValidation(vMode, vType, vId);
         signature = userOp.signature;
         if (isEnable(vMode)) {
             bool enableReplayable = isEnableReplayable(vMode);
@@ -64,26 +69,52 @@ contract Kernel is ModuleManager, ExecutionManager, EIP712 {
             assembly {
                 sig := signature.offset
             }
-            signature = sig.userOpSignature;
             _verifyInstallSignature(enableReplayable, sig.packages, sig.enableSignature);
             _install(sig.packages);
+            signature = sig.userOpSignature;
         }
+        _checkValidation(vMode, vType, vId);
         opHash = isReplayable(vMode) ? Lib4337.chainAgnosticUserOpHash(msg.sender, userOp) : userOpHash;
     }
 
     function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4) {}
 
     /// execution
-    function executeUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash) external payable onlyEntryPoint {
+    function executeUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash) external payable onlyEntryPointOrSelf {
         (bool success, bytes memory ret) = address(this).delegatecall(userOp.callData[4:]);
     }
 
-    function execute(bytes32 mode, bytes calldata executionData) external payable {
+    function execute(bytes32 mode, bytes calldata executionData) external payable onlyEntryPointOrSelf {
         _execute(mode, executionData);
     }
 
-    function executeFromExecutor(bytes32 mode, bytes calldata executionData) external payable {
+    function executeFromExecutor(bytes32 mode, bytes calldata executionData) external payable onlyExecutor {
         _execute(mode, executionData);
+    }
+    
+    function _fallback() internal {
+        bytes4 selector = bytes4(msg.data);
+        SelectorConfig storage $ = _selectorConfig(selector);
+        if($.target == address(0)) {
+            revert InvalidSelector();
+        }
+        bytes memory hookData;
+        if(address($.hook) != address(0)) {
+            hookData = _preHook($.hook);
+        }
+
+        bool success;
+        if($.callType == CallType.wrap(bytes1(0x00))) {
+            success = _call($.target, 0, msg.data);
+        } else if($.callType == CallType.wrap(bytes1(0xff))) {
+            success = _delegateCall($.target, msg.data);
+        }
+        if(!success) {
+            _onRevertThrow();
+        }
+        if(address($.hook) != address(0)) {
+            _postHook($.hook, hookData);
+        }
     }
 
     /// management
@@ -92,19 +123,32 @@ contract Kernel is ModuleManager, ExecutionManager, EIP712 {
         bytes internalData;
     }
 
-    function installModule(uint256 moduleType, address module, bytes calldata initData) external payable {
+    function installModule(uint256 moduleType, address module, bytes calldata initData) external payable onlyEntryPointOrSelf {
         InstallModuleDataFormat calldata imdf;
         assembly {
             imdf := initData.offset
         }
-
         _installModule(moduleType, module, imdf.installData, imdf.internalData);
     }
 
-    // NOTE : this ONLY allows root signature
+    function setRoot(ValidationId vId) external payable onlyEntryPointOrSelf {
+        _setRoot(vId);
+    }
+
+    // NOTE : this ONLY allows root signature, for now
     function installModule(bool replayable, Install[] calldata packages, bytes calldata signature) external {
-        require(_verifyInstallSignature(replayable, packages, signature), InstallSignatureVerificationFailed());
-        _install(packages);
+        if(_initialized()) {
+            // if 7702 or already initialized, use root signature to install module
+            require(_verifyInstallSignature(replayable, packages, signature), InstallSignatureVerificationFailed());
+            _install(packages);
+        } else {
+            // this is initialize
+            // require first package to be the root validator
+            require(packages.length > 0);
+            Install calldata root = packages[0];
+            _install(packages);
+            _setRoot(root);
+        }
     }
 
     function _verifyInstallSignature(bool replayable, Install[] calldata packages, bytes calldata signature)
@@ -112,7 +156,7 @@ contract Kernel is ModuleManager, ExecutionManager, EIP712 {
         view
         returns (bool success)
     {
-        ValidationId vId = _validationStorage().rootValidator;
+        ValidationId vId = _validationStorage().root;
         function(bytes32) internal view returns(bytes32) hashTypedData =
             replayable ? _hashTypedDataSansChainId : _hashTypedData;
         bytes32 digest = hashTypedData(
@@ -125,6 +169,10 @@ contract Kernel is ModuleManager, ExecutionManager, EIP712 {
                 )
             )
         );
-        _verifySignature(vId, digest, signature);
+        _verifySignature(vId, address(this), digest, signature);
+    }
+
+    fallback() external payable {
+        _fallback();
     }
 }

@@ -2,21 +2,14 @@ pragma solidity ^0.8.0;
 
 import "../interfaces/IERC7579Modules.sol";
 import {ValidationManager} from "./ValidationManager.sol";
+import {ExecutorManager} from "./ExecutorManager.sol";
+import {HookManager} from "./HookManager.sol";
+import {SelectorManager} from "./SelectorManager.sol";
 import "../types/Error.sol";
 import "../types/Events.sol";
+import "../types/Structs.sol";
+import "../types/Types.sol";
 
-struct Install {
-    uint256 moduleType;
-    address module;
-    bytes moduleData;
-    bytes internalData;
-}
-
-struct Uninstall {
-    uint256 moduleType;
-    address module;
-    bytes data;
-}
 
 function calldataKeccak(bytes calldata data) pure returns (bytes32 ret) {
     assembly ("memory-safe") {
@@ -27,7 +20,18 @@ function calldataKeccak(bytes calldata data) pure returns (bytes32 ret) {
     }
 }
 
-contract ModuleManager is ValidationManager {
+contract ModuleManager is ValidationManager, ExecutorManager, HookManager, SelectorManager {
+    modifier onlyExecutor {
+        IHook hook = _executorConfig(IExecutor(msg.sender)).hook;
+        bytes memory hookData = _preHook(hook);
+        _;
+        _postHook(hook, hookData);
+    }
+
+    function _initialized() internal view returns(bool) {
+        return bytes3(address(this).code) == bytes3(0xef0100) || ValidationId.unwrap(_validationStorage().root) != bytes20(0);
+    }
+
     function _installHash(Install[] calldata packages) internal pure returns (bytes32) {
         bytes32[] memory packageHashes = new bytes32[](packages.length);
         for (uint256 i = 0; i < packages.length; i++) {
@@ -44,7 +48,17 @@ contract ModuleManager is ValidationManager {
     {
         function(address, bytes calldata, bool) hook;
         if (moduleType == 1) {
-            hook = _installValidatorHook;
+            hook = _installValidator;
+        } else if(moduleType == 2) {
+            hook = _installExecutor;
+        } else if(moduleType == 3) {
+            hook = _installSelector;
+        } else if(moduleType == 4) {
+            hook = _installHook;
+        } else if(moduleType == 5) {
+            hook = _installPolicy;
+        } else if(moduleType == 6) {
+            hook = _installSigner;
         } else {
             revert NotImplemented();
         }
@@ -79,4 +93,5 @@ contract ModuleManager is ValidationManager {
         (bool success,) = module.call(abi.encodeWithSelector(IModule.onUninstall.selector, data));
         hook(module, internalData, success);
     }
+
 }

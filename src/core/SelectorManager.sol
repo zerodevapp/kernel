@@ -1,0 +1,51 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import {IHook, IFallback, IModule} from "../interfaces/IERC7579Modules.sol";
+import {CallType} from "../types/Types.sol";
+import {
+    SELECTOR_MANAGER_STORAGE_SLOT,
+    CALLTYPE_DELEGATECALL,
+    CALLTYPE_SINGLE,
+    MODULE_TYPE_FALLBACK
+} from "../types/Constants.sol";
+import "../types/Error.sol";
+
+abstract contract SelectorManager {
+
+    struct SelectorConfig {
+        IHook hook; // 20 bytes for hook address
+        address target; // 20 bytes target will be fallback module, called with call
+        CallType callType;
+    }
+
+    struct SelectorStorage {
+        mapping(bytes4 => SelectorConfig) selectorConfig;
+    }
+
+    function selectorConfig(bytes4 selector) external view returns (SelectorConfig memory) {
+        return _selectorConfig(selector);
+    }
+
+    function _selectorConfig(bytes4 selector) internal view returns (SelectorConfig storage config) {
+        config = _selectorStorage().selectorConfig[selector];
+    }
+
+    function _selectorStorage() internal pure returns (SelectorStorage storage ss) {
+        bytes32 slot = SELECTOR_MANAGER_STORAGE_SLOT;
+        assembly {
+            ss.slot := slot
+        }
+    }
+
+    function _installSelector(address _module, bytes calldata _internalData, bool _installSuccess) internal {
+        CallType callType = CallType.wrap(bytes1(_internalData[4]));
+        require(callType == CALLTYPE_DELEGATECALL || _installSuccess, ModuleInstallFailed());
+        bytes4 selector = bytes4(_internalData[0:4]);
+        address hook = address(bytes20(_internalData[5:25]));
+        SelectorConfig storage $ = _selectorConfig(selector);
+        $.target = _module;
+        $.callType = callType;
+        $.hook = IHook(hook);
+    }
+}

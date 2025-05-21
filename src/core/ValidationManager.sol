@@ -5,9 +5,13 @@ import "../interfaces/IERC7579Modules.sol";
 import "../types/Error.sol";
 import "../types/Types.sol";
 import "../types/Constants.sol";
+import "../types/Structs.sol";
+import {ECDSA} from "solady/utils/ECDSA.sol";
 
 struct ValidationInfo {
-    bool enabled;
+    ValidationType vType;
+    address[] policies;
+    address signer;
     bytes4 group;
 }
 
@@ -17,8 +21,8 @@ struct ValidationGroupInfo {
 }
 
 struct ValidationStorage {
-    ValidationId rootValidator;
-    mapping(IValidator validator => ValidationInfo) vInfo;
+    ValidationId root;
+    mapping(ValidationId vId => ValidationInfo) vInfo;
     mapping(bytes4 group => ValidationGroupInfo) gInfo;
 }
 
@@ -34,37 +38,74 @@ function getType(ValidationId validator) pure returns (ValidationType vType) {
     }
 }
 
-contract ValidationManager {
+abstract contract ValidationManager {
+    ValidationId transient installingPermission;
+
     function _validationStorage() internal view returns (ValidationStorage storage $) {
         assembly {
             $.slot := VALIDATION_MANAGER_STORAGE_SLOT
         }
     }
 
-    function _installValidatorHook(address _validator, bytes calldata _internalData, bool _installSuccess) internal {
+    function _installValidator(address _validator, bytes calldata _internalData, bool _installSuccess) internal {
         require(_installSuccess, ModuleInstallFailed());
         ValidationStorage storage $ = _validationStorage();
-        $.vInfo[IValidator(_validator)].enabled = true;
+        $.vInfo[ValidationId.wrap(bytes20(_validator))].vType = VALIDATION_TYPE_VALIDATOR;
     }
 
-    function _uninstallValidatorHook(address _validator, bytes calldata _internalData, bool _uninstallSuccess)
+    function _uninstallValidator(address _validator, bytes calldata _internalData, bool _uninstallSuccess)
         internal
     {
-        require(_uninstallSuccess, ModuleUninstallFailed());
         ValidationStorage storage $ = _validationStorage();
-        $.vInfo[IValidator(_validator)].enabled = false;
+        $.vInfo[ValidationId.wrap(bytes20(_validator))].vType = VALIDATION_TYPE_VALIDATOR;
+    }
+
+    function _installPolicy(address _policy, bytes calldata _internalData, bool _installSuccess) internal {
+        require(_installSuccess, ModuleInstallFailed());
+        ValidationStorage storage $ = _validationStorage();
+        ValidationId vId = ValidationId.wrap(bytes20(_internalData[0:20]));
+        if(installingPermission == ValidationId.wrap(bytes20(0))) {
+            require(vId != ValidationId.wrap(bytes20(0)), "invalid validationId");
+            installingPermission = ValidationId.wrap(bytes20(_internalData[0:20]));
+            $.vInfo[vId].vType = VALIDATION_TYPE_PERMISSION;
+        } else {
+            require(installingPermission == vId, "permissionId should be consistent");
+        }
+        $.vInfo[vId].policies.push(_policy);
+    }
+
+    function _uninstallPolicy(address _policy, bytes calldata _internalData, bool _uninstallSuccess) internal {
+    }
+
+    function _installSigner(address _signer, bytes calldata _internalData, bool _installSuccess) internal {
+        require(_installSuccess, ModuleInstallFailed());
+        ValidationStorage storage $ = _validationStorage();
+        ValidationId vId = ValidationId.wrap(bytes20(_internalData[0:20]));
+        if(installingPermission == ValidationId.wrap(bytes20(0))) {
+            require(vId != ValidationId.wrap(bytes20(0)), "invalid validationId");
+            require($.vInfo[vId].vType == ValidationType.wrap(0x00), "already taken");
+            installingPermission = ValidationId.wrap(bytes20(_internalData[0:20]));
+            $.vInfo[vId].vType = VALIDATION_TYPE_PERMISSION;
+        } else {
+            require(installingPermission == vId, "permissionId should be consistent");
+        }
+        $.vInfo[vId].signer = _signer;
+
+        installingPermission = ValidationId.wrap(bytes20(0));
+    }
+
+    function _uninstallSigner(address _signer, bytes calldata _internalData, bool _uninstallSuccess) internal {
     }
 
     function _checkValidation(ValidationMode vMode, ValidationType vType, ValidationId vId) internal view {
         ValidationStorage storage $ = _validationStorage();
         ValidationId v;
         if (vType == VALIDATION_TYPE_ROOT) {
-            v = $.rootValidator;
+            v = $.root;
         } else {
             v = vId;
-            require($.vInfo[IValidator(getValidator(v))].enabled, InvalidValidator());
+            require($.vInfo[vId].vType == vType, InvalidValidator());
         }
-        // TODO : add permission support
     }
 
     function _parseNonce(uint256 nonce)
@@ -82,12 +123,42 @@ contract ValidationManager {
         }
     }
 
-    function _verifySignature(ValidationId vId, bytes32 _hash, bytes calldata _signature)
+    function _verifySignature(ValidationId vId, address requester, bytes32 _hash, bytes calldata _signature)
         internal
         view
         returns (uint256 validationData)
     {
+        if(ValidationId.unwrap(vId) == bytes20(0)) {
+            return _verify7702Signature(_hash, _signature) ? 0 : 1;
+        }
         IValidator validator = IValidator(getValidator(vId)); // TODO: add permission support;
-        validator.isValidSignatureWithSender(address(0), /*NOTE: fix this */ _hash, _signature);
+        validator.isValidSignatureWithSender(requester, /*NOTE: fix this */ _hash, _signature);
+    }
+
+    function _validateUserOp(ValidationId vId, bytes32 opHash, PackedUserOperation calldata op, bytes calldata userOpSignature) internal returns(uint256 validationData) {
+        if(ValidationId.unwrap(vId) == bytes20(0)) {
+            return _verify7702Signature(opHash, userOpSignature) ? 0 : 1;
+        }
+    }
+
+    function _verify7702Signature(bytes32 hash, bytes calldata sig) internal view returns (bool) {
+        return ECDSA.recover(hash, sig) == address(this);
+    }
+
+    function _setRoot(Install calldata pkg) internal {
+        ValidationId vId;
+        if(pkg.moduleType == 1) {
+            vId = ValidationId.wrap(bytes20(pkg.module));
+        } else if (pkg.moduleType == 5 || pkg.moduleType == 6) {
+            vId = ValidationId.wrap(bytes20(pkg.internalData[0:4]));
+        } else {
+            revert InvalidRootValidation();
+        }
+        _setRoot(vId);
+    }
+
+    function _setRoot(ValidationId vId) internal {
+        ValidationStorage storage $ = _validationStorage();
+        $.root = vId;
     }
 }

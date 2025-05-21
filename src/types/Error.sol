@@ -7,4 +7,12 @@ error InvalidValidator();
 
 error NotImplemented();
 
+error NotInstalled();
+
 error InstallSignatureVerificationFailed();
+
+error InvalidRootValidation();
+error NotSupportedCallType();
+error NotSupportedExecType();
+
+error InvalidSelector();
