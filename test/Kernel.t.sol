@@ -23,8 +23,11 @@ contract MockValidator {
 contract MockCallee {
     uint256 public bar;
     string public data;
+
     event Lorem();
+
     error Haha();
+
     function foo() external {
         bar++;
         emit Lorem();
@@ -38,11 +41,13 @@ contract MockCallee {
         revert Haha();
     }
 }
+
 struct Call {
     address target;
     uint256 value;
     bytes data;
 }
+
 contract KernelTest is Test {
     IEntryPoint ep;
     KernelFactory factory;
@@ -51,13 +56,13 @@ contract KernelTest is Test {
     MockCallee callee;
     address executor;
 
-    modifier unitTest {
+    modifier unitTest() {
         vm.startPrank(address(ep));
         _;
         vm.stopPrank();
     }
 
-    modifier unitTestExecutor {
+    modifier unitTestExecutor() {
         vm.startPrank(address(executor));
         _;
         vm.stopPrank();
@@ -91,31 +96,31 @@ contract KernelTest is Test {
     function test_execute() external unitTest {
         vm.expectEmit(address(callee));
         emit MockCallee.Lorem();
-        kernel.execute(bytes32(0), abi.encodePacked(address(callee), uint256(0), abi.encodeWithSelector(MockCallee.foo.selector)));
+        kernel.execute(
+            bytes32(0), abi.encodePacked(address(callee), uint256(0), abi.encodeWithSelector(MockCallee.foo.selector))
+        );
         assertEq(callee.bar(), 1);
     }
-    
+
     function test_execute_fail() external unitTest {
         vm.expectRevert(MockCallee.Haha.selector);
-        kernel.execute(bytes32(0), abi.encodePacked(address(callee), uint256(0), abi.encodeWithSelector(MockCallee.forceRevert.selector)));
+        kernel.execute(
+            bytes32(0),
+            abi.encodePacked(address(callee), uint256(0), abi.encodeWithSelector(MockCallee.forceRevert.selector))
+        );
     }
-    
+
     function test_execute_fail_try() external unitTest {
-        kernel.execute(LibERC7579.encodeMode(bytes1(0x00), bytes1(0x01), bytes4(0), bytes22(0)), abi.encodePacked(address(callee), uint256(0), abi.encodeWithSelector(MockCallee.forceRevert.selector)));
+        kernel.execute(
+            LibERC7579.encodeMode(bytes1(0x00), bytes1(0x01), bytes4(0), bytes22(0)),
+            abi.encodePacked(address(callee), uint256(0), abi.encodeWithSelector(MockCallee.forceRevert.selector))
+        );
     }
 
     function test_execute_batch() external unitTest {
         Call[] memory calls = new Call[](2);
-        calls[0] = Call({
-            target : address(callee),
-            value : 0,
-            data : abi.encodeWithSelector(MockCallee.foo.selector)
-        });
-        calls[1] = Call({
-            target : address(callee),
-            value : 0,
-            data : abi.encodeWithSelector(MockCallee.lorem.selector)
-        });
+        calls[0] = Call({target: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.foo.selector)});
+        calls[1] = Call({target: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.lorem.selector)});
         assertEq(callee.data(), "");
         vm.expectEmit(address(callee));
         emit MockCallee.Lorem();
@@ -126,16 +131,9 @@ contract KernelTest is Test {
 
     function test_execute_batch_fail() external unitTest {
         Call[] memory calls = new Call[](2);
-        calls[0] = Call({
-            target : address(callee),
-            value : 0,
-            data : abi.encodeWithSelector(MockCallee.foo.selector)
-        });
-        calls[1] = Call({
-            target : address(callee),
-            value : 0,
-            data : abi.encodeWithSelector(MockCallee.forceRevert.selector)
-        });
+        calls[0] = Call({target: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.foo.selector)});
+        calls[1] =
+            Call({target: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.forceRevert.selector)});
         assertEq(callee.data(), "");
         vm.expectRevert(MockCallee.Haha.selector);
         kernel.execute(LibERC7579.encodeMode(bytes1(0x01), bytes1(0x00), bytes4(0), bytes22(0)), abi.encode(calls));
@@ -143,16 +141,9 @@ contract KernelTest is Test {
 
     function test_execute_batch_fail_try() external unitTest {
         Call[] memory calls = new Call[](2);
-        calls[0] = Call({
-            target : address(callee),
-            value : 0,
-            data : abi.encodeWithSelector(MockCallee.foo.selector)
-        });
-        calls[1] = Call({
-            target : address(callee),
-            value : 0,
-            data : abi.encodeWithSelector(MockCallee.forceRevert.selector)
-        });
+        calls[0] = Call({target: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.foo.selector)});
+        calls[1] =
+            Call({target: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.forceRevert.selector)});
         assertEq(callee.data(), "");
         kernel.execute(LibERC7579.encodeMode(bytes1(0x01), bytes1(0x01), bytes4(0), bytes22(0)), abi.encode(calls));
         assertEq(callee.bar(), 1);
@@ -161,41 +152,46 @@ contract KernelTest is Test {
     function test_execute_delegatecall() external unitTest {
         vm.expectEmit(address(kernel));
         emit MockCallee.Lorem();
-        kernel.execute(LibERC7579.encodeMode(bytes1(0xff), bytes1(0x00), bytes4(0), bytes22(0)), abi.encodePacked(address(callee), abi.encodeWithSelector(MockCallee.foo.selector)));
+        kernel.execute(
+            LibERC7579.encodeMode(bytes1(0xff), bytes1(0x00), bytes4(0), bytes22(0)),
+            abi.encodePacked(address(callee), abi.encodeWithSelector(MockCallee.foo.selector))
+        );
     }
 
     function test_execute_delegatecall_fail() external unitTest {
         vm.expectRevert(MockCallee.Haha.selector);
-        kernel.execute(LibERC7579.encodeMode(bytes1(0xff), bytes1(0x00), bytes4(0), bytes22(0)), abi.encodePacked(address(callee), abi.encodeWithSelector(MockCallee.forceRevert.selector)));
+        kernel.execute(
+            LibERC7579.encodeMode(bytes1(0xff), bytes1(0x00), bytes4(0), bytes22(0)),
+            abi.encodePacked(address(callee), abi.encodeWithSelector(MockCallee.forceRevert.selector))
+        );
     }
-    
+
     function test_execute_delegatecall_fail_try() external unitTest {
-        kernel.execute(LibERC7579.encodeMode(bytes1(0xff), bytes1(0x01), bytes4(0), bytes22(0)), abi.encodePacked(address(callee), abi.encodeWithSelector(MockCallee.forceRevert.selector)));
+        kernel.execute(
+            LibERC7579.encodeMode(bytes1(0xff), bytes1(0x01), bytes4(0), bytes22(0)),
+            abi.encodePacked(address(callee), abi.encodeWithSelector(MockCallee.forceRevert.selector))
+        );
     }
-    
+
     function test_execute_from_executor() external unitTestExecutor {
         vm.expectEmit(address(callee));
         emit MockCallee.Lorem();
-        kernel.executeFromExecutor(bytes32(0), abi.encodePacked(address(callee), uint256(0), abi.encodeWithSelector(MockCallee.foo.selector)));
+        kernel.executeFromExecutor(
+            bytes32(0), abi.encodePacked(address(callee), uint256(0), abi.encodeWithSelector(MockCallee.foo.selector))
+        );
         assertEq(callee.bar(), 1);
     }
 
     function test_execute_batch_from_executor() external unitTestExecutor {
         Call[] memory calls = new Call[](2);
-        calls[0] = Call({
-            target : address(callee),
-            value : 0,
-            data : abi.encodeWithSelector(MockCallee.foo.selector)
-        });
-        calls[1] = Call({
-            target : address(callee),
-            value : 0,
-            data : abi.encodeWithSelector(MockCallee.lorem.selector)
-        });
+        calls[0] = Call({target: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.foo.selector)});
+        calls[1] = Call({target: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.lorem.selector)});
         assertEq(callee.data(), "");
         vm.expectEmit(address(callee));
         emit MockCallee.Lorem();
-        kernel.executeFromExecutor(LibERC7579.encodeMode(bytes1(0x01), bytes1(0x00), bytes4(0), bytes22(0)), abi.encode(calls));
+        kernel.executeFromExecutor(
+            LibERC7579.encodeMode(bytes1(0x01), bytes1(0x00), bytes4(0), bytes22(0)), abi.encode(calls)
+        );
         assertEq(callee.bar(), 1);
         assertEq(callee.data(), "lorem ipsum");
     }
@@ -203,6 +199,9 @@ contract KernelTest is Test {
     function test_execute_delegatecall_from_executor() external unitTestExecutor {
         vm.expectEmit(address(kernel));
         emit MockCallee.Lorem();
-        kernel.executeFromExecutor(LibERC7579.encodeMode(bytes1(0xff), bytes1(0x00), bytes4(0), bytes22(0)), abi.encodePacked(address(callee), abi.encodeWithSelector(MockCallee.foo.selector)));
+        kernel.executeFromExecutor(
+            LibERC7579.encodeMode(bytes1(0xff), bytes1(0x00), bytes4(0), bytes22(0)),
+            abi.encodePacked(address(callee), abi.encodeWithSelector(MockCallee.foo.selector))
+        );
     }
 }

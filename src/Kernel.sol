@@ -80,7 +80,11 @@ contract Kernel is ModuleManager, ExecutionManager, EIP712 {
     function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4) {}
 
     /// execution
-    function executeUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash) external payable onlyEntryPointOrSelf {
+    function executeUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash)
+        external
+        payable
+        onlyEntryPointOrSelf
+    {
         (bool success, bytes memory ret) = address(this).delegatecall(userOp.callData[4:]);
     }
 
@@ -91,28 +95,28 @@ contract Kernel is ModuleManager, ExecutionManager, EIP712 {
     function executeFromExecutor(bytes32 mode, bytes calldata executionData) external payable onlyExecutor {
         _execute(mode, executionData);
     }
-    
+
     function _fallback() internal {
         bytes4 selector = bytes4(msg.data);
         SelectorConfig storage $ = _selectorConfig(selector);
-        if($.target == address(0)) {
+        if ($.target == address(0)) {
             revert InvalidSelector();
         }
         bytes memory hookData;
-        if(address($.hook) != address(0)) {
+        if (address($.hook) != address(0)) {
             hookData = _preHook($.hook);
         }
 
         bool success;
-        if($.callType == CallType.wrap(bytes1(0x00))) {
+        if ($.callType == CallType.wrap(bytes1(0x00))) {
             success = _call($.target, 0, msg.data);
-        } else if($.callType == CallType.wrap(bytes1(0xff))) {
+        } else if ($.callType == CallType.wrap(bytes1(0xff))) {
             success = _delegateCall($.target, msg.data);
         }
-        if(!success) {
+        if (!success) {
             _onRevertThrow();
         }
-        if(address($.hook) != address(0)) {
+        if (address($.hook) != address(0)) {
             _postHook($.hook, hookData);
         }
     }
@@ -123,7 +127,11 @@ contract Kernel is ModuleManager, ExecutionManager, EIP712 {
         bytes internalData;
     }
 
-    function installModule(uint256 moduleType, address module, bytes calldata initData) external payable onlyEntryPointOrSelf {
+    function installModule(uint256 moduleType, address module, bytes calldata initData)
+        external
+        payable
+        onlyEntryPointOrSelf
+    {
         InstallModuleDataFormat calldata imdf;
         assembly {
             imdf := initData.offset
@@ -137,7 +145,7 @@ contract Kernel is ModuleManager, ExecutionManager, EIP712 {
 
     // NOTE : this ONLY allows root signature, for now
     function installModule(bool replayable, Install[] calldata packages, bytes calldata signature) external {
-        if(_initialized()) {
+        if (_initialized()) {
             // if 7702 or already initialized, use root signature to install module
             require(_verifyInstallSignature(replayable, packages, signature), InstallSignatureVerificationFailed());
             _install(packages);

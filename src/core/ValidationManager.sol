@@ -139,6 +139,12 @@ abstract contract ValidationManager {
         if(ValidationId.unwrap(vId) == bytes20(0)) {
             return _verify7702Signature(opHash, userOpSignature) ? 0 : 1;
         }
+
+        // NOTE: removed permission for now, adding back after testing is done
+        address validator = address(ValidationId.unwrap(vId));
+        PackedUserOperation memory modifiedOp = op;
+        modifiedOp.signature = userOpSignature;
+        return IValidator(validator).validateUserOp(modifiedOp, opHash);
     }
 
     function _verify7702Signature(bytes32 hash, bytes calldata sig) internal view returns (bool) {

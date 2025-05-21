@@ -17,7 +17,12 @@ contract KernelFactory {
         return Kernel(payable(account));
     }
 
-    function deployWithAdditionalPackage(bytes calldata initData, bool replayable, Install[] calldata packages, bytes calldata signature) external payable returns (Kernel) {
+    function deployWithAdditionalPackage(
+        bytes calldata initData,
+        bool replayable,
+        Install[] calldata packages,
+        bytes calldata signature
+    ) external payable returns (Kernel) {
         bytes32 salt = keccak256(initData);
         (bool deployed, address account) = LibClone.createDeterministicERC1967(msg.value, address(template), salt);
 
