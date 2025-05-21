@@ -6,6 +6,7 @@ import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
 import {Kernel} from "src/Kernel.sol";
 import {KernelFactory} from "src/KernelFactory.sol";
 import {LibERC7579} from "solady/accounts/LibERC7579.sol";
+import {Install} from "src/types/Structs.sol";
 
 contract MockValidator {
     event MockInstall(bytes data);
@@ -78,7 +79,9 @@ contract KernelTest is Test {
     }
 
     function _initialize() internal {
-        kernel = factory.deploy(abi.encode("Kernel Test"));
+        Install[] memory pkgs = new Install[](1);
+        pkgs[0] = Install({moduleType: 1, module: address(mockValidator), moduleData: hex"", internalData: hex""});
+        kernel = factory.deploy(pkgs, 0);
 
         vm.startPrank(address(ep));
         kernel.installModule(2, executor, abi.encode(hex"", ""));
@@ -86,7 +89,9 @@ contract KernelTest is Test {
     }
 
     function test_deploy() external unitTest {
-        Kernel k = factory.deploy(hex"");
+        Install[] memory pkgs = new Install[](1);
+        pkgs[0] = Install({moduleType: 1, module: address(mockValidator), moduleData: hex"", internalData: hex""});
+        Kernel k = factory.deploy(pkgs, 1);
     }
 
     function test_install_validator() external unitTest {

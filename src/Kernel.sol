@@ -77,7 +77,11 @@ contract Kernel is ModuleManager, ExecutionManager, EIP712 {
         opHash = isReplayable(vMode) ? Lib4337.chainAgnosticUserOpHash(msg.sender, userOp) : userOpHash;
     }
 
-    function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4) {}
+    function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4) {
+        bool replayable = bytes1(signature[0]) == 0xff;
+        ValidationId vId = ValidationId.wrap(bytes20(signature[1:21]));
+        _verifySignature(vId, msg.sender, hash, signature[21:]);
+    }
 
     /// execution
     function executeUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash)

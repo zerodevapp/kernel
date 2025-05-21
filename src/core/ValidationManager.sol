@@ -53,9 +53,7 @@ abstract contract ValidationManager {
         $.vInfo[ValidationId.wrap(bytes20(_validator))].vType = VALIDATION_TYPE_VALIDATOR;
     }
 
-    function _uninstallValidator(address _validator, bytes calldata _internalData, bool _uninstallSuccess)
-        internal
-    {
+    function _uninstallValidator(address _validator, bytes calldata _internalData, bool _uninstallSuccess) internal {
         ValidationStorage storage $ = _validationStorage();
         $.vInfo[ValidationId.wrap(bytes20(_validator))].vType = VALIDATION_TYPE_VALIDATOR;
     }
@@ -64,7 +62,7 @@ abstract contract ValidationManager {
         require(_installSuccess, ModuleInstallFailed());
         ValidationStorage storage $ = _validationStorage();
         ValidationId vId = ValidationId.wrap(bytes20(_internalData[0:20]));
-        if(installingPermission == ValidationId.wrap(bytes20(0))) {
+        if (installingPermission == ValidationId.wrap(bytes20(0))) {
             require(vId != ValidationId.wrap(bytes20(0)), "invalid validationId");
             installingPermission = ValidationId.wrap(bytes20(_internalData[0:20]));
             $.vInfo[vId].vType = VALIDATION_TYPE_PERMISSION;
@@ -74,14 +72,13 @@ abstract contract ValidationManager {
         $.vInfo[vId].policies.push(_policy);
     }
 
-    function _uninstallPolicy(address _policy, bytes calldata _internalData, bool _uninstallSuccess) internal {
-    }
+    function _uninstallPolicy(address _policy, bytes calldata _internalData, bool _uninstallSuccess) internal {}
 
     function _installSigner(address _signer, bytes calldata _internalData, bool _installSuccess) internal {
         require(_installSuccess, ModuleInstallFailed());
         ValidationStorage storage $ = _validationStorage();
         ValidationId vId = ValidationId.wrap(bytes20(_internalData[0:20]));
-        if(installingPermission == ValidationId.wrap(bytes20(0))) {
+        if (installingPermission == ValidationId.wrap(bytes20(0))) {
             require(vId != ValidationId.wrap(bytes20(0)), "invalid validationId");
             require($.vInfo[vId].vType == ValidationType.wrap(0x00), "already taken");
             installingPermission = ValidationId.wrap(bytes20(_internalData[0:20]));
@@ -94,8 +91,7 @@ abstract contract ValidationManager {
         installingPermission = ValidationId.wrap(bytes20(0));
     }
 
-    function _uninstallSigner(address _signer, bytes calldata _internalData, bool _uninstallSuccess) internal {
-    }
+    function _uninstallSigner(address _signer, bytes calldata _internalData, bool _uninstallSuccess) internal {}
 
     function _checkValidation(ValidationMode vMode, ValidationType vType, ValidationId vId) internal view {
         ValidationStorage storage $ = _validationStorage();
@@ -128,15 +124,20 @@ abstract contract ValidationManager {
         view
         returns (uint256 validationData)
     {
-        if(ValidationId.unwrap(vId) == bytes20(0)) {
+        if (ValidationId.unwrap(vId) == bytes20(0)) {
             return _verify7702Signature(_hash, _signature) ? 0 : 1;
         }
         IValidator validator = IValidator(getValidator(vId)); // TODO: add permission support;
         validator.isValidSignatureWithSender(requester, /*NOTE: fix this */ _hash, _signature);
     }
 
-    function _validateUserOp(ValidationId vId, bytes32 opHash, PackedUserOperation calldata op, bytes calldata userOpSignature) internal returns(uint256 validationData) {
-        if(ValidationId.unwrap(vId) == bytes20(0)) {
+    function _validateUserOp(
+        ValidationId vId,
+        bytes32 opHash,
+        PackedUserOperation calldata op,
+        bytes calldata userOpSignature
+    ) internal returns (uint256 validationData) {
+        if (ValidationId.unwrap(vId) == bytes20(0)) {
             return _verify7702Signature(opHash, userOpSignature) ? 0 : 1;
         }
 
@@ -153,7 +154,7 @@ abstract contract ValidationManager {
 
     function _setRoot(Install calldata pkg) internal {
         ValidationId vId;
-        if(pkg.moduleType == 1) {
+        if (pkg.moduleType == 1) {
             vId = ValidationId.wrap(bytes20(pkg.module));
         } else if (pkg.moduleType == 5 || pkg.moduleType == 6) {
             vId = ValidationId.wrap(bytes20(pkg.internalData[0:4]));

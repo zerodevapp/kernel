@@ -11,22 +11,29 @@ contract KernelFactory {
         template = new Kernel(_entryPoint);
     }
 
-    function deploy(bytes calldata initData) external payable returns (Kernel) {
-        bytes32 salt = keccak256(initData);
+    function deploy(Install[] calldata initialPackages, uint256 nonce) external payable returns (Kernel) {
+        bytes32 salt = keccak256(abi.encode(initialPackages, nonce));
         (bool deployed, address account) = LibClone.createDeterministicERC1967(msg.value, address(template), salt);
-        return Kernel(payable(account));
+        Kernel k = Kernel(payable(account));
+        if (deployed) {
+            return k;
+        }
+        k.installModule(true, initialPackages, hex"");
+        return k;
     }
 
     function deployWithAdditionalPackage(
-        bytes calldata initData,
+        Install[] calldata initialPackages,
+        uint256 nonce,
         bool replayable,
         Install[] calldata packages,
         bytes calldata signature
     ) external payable returns (Kernel) {
-        bytes32 salt = keccak256(initData);
+        bytes32 salt = keccak256(abi.encode(initialPackages, nonce));
         (bool deployed, address account) = LibClone.createDeterministicERC1967(msg.value, address(template), salt);
 
         Kernel k = Kernel(payable(account));
+        k.installModule(true, initialPackages, hex"");
         k.installModule(replayable, packages, signature);
         return k;
     }
