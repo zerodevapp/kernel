@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
 import {UserOperationLib} from "account-abstraction/core/UserOperationLib.sol";
 import {Eip7702Support} from "account-abstraction/core/Eip7702Support.sol";
+
 interface IERC5267 {
     function eip712Domain()
         external
@@ -21,20 +22,16 @@ interface IERC5267 {
 library Lib4337 {
     bytes32 internal constant _DOMAIN_TYPEHASH_SANS_CHAIN_ID =
         0x91ab3d17e3a50a9d89e63fd30b92be7f5336b03b287bb946787a83a9d62a2766;
-    function chainAgnosticUserOpHash(address ep, PackedUserOperation calldata userOp) public view returns(bytes32) {
+
+    function chainAgnosticUserOpHash(address ep, PackedUserOperation calldata userOp) public view returns (bytes32) {
         bytes32 overrideInitCodeHash = Eip7702Support._getEip7702InitCodeHashOverride(userOp);
-        return
-            _hashTypedDataSansChainId(ep, UserOperationLib.hash(userOp, overrideInitCodeHash));
+        return _hashTypedDataSansChainId(ep, UserOperationLib.hash(userOp, overrideInitCodeHash));
     }
-    
+
     /// @dev Variant of `_hashTypedData` that excludes the chain ID.
     /// Included for the niche use case of cross-chain workflows.
-    function _hashTypedDataSansChainId(address addr, bytes32 structHash)
-        internal
-        view
-        returns (bytes32 digest)
-    {
-        (,string memory name, string memory version, , , , ) = IERC5267(addr).eip712Domain();
+    function _hashTypedDataSansChainId(address addr, bytes32 structHash) internal view returns (bytes32 digest) {
+        (, string memory name, string memory version,,,,) = IERC5267(addr).eip712Domain();
         /// @solidity memory-safe-assembly
         assembly {
             let m := mload(0x40) // Load the free memory pointer.

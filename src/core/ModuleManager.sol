@@ -10,7 +10,6 @@ import "../types/Events.sol";
 import "../types/Structs.sol";
 import "../types/Types.sol";
 
-
 function calldataKeccak(bytes calldata data) pure returns (bytes32 ret) {
     assembly ("memory-safe") {
         let mem := mload(0x40)
@@ -21,15 +20,16 @@ function calldataKeccak(bytes calldata data) pure returns (bytes32 ret) {
 }
 
 contract ModuleManager is ValidationManager, ExecutorManager, HookManager, SelectorManager {
-    modifier onlyExecutor {
+    modifier onlyExecutor() {
         IHook hook = _executorConfig(IExecutor(msg.sender)).hook;
         bytes memory hookData = _preHook(hook);
         _;
         _postHook(hook, hookData);
     }
 
-    function _initialized() internal view returns(bool) {
-        return bytes3(address(this).code) == bytes3(0xef0100) || ValidationId.unwrap(_validationStorage().root) != bytes20(0);
+    function _initialized() internal view returns (bool) {
+        return bytes3(address(this).code) == bytes3(0xef0100)
+            || ValidationId.unwrap(_validationStorage().root) != bytes20(0);
     }
 
     function _installHash(Install[] calldata packages) internal pure returns (bytes32) {
@@ -49,15 +49,15 @@ contract ModuleManager is ValidationManager, ExecutorManager, HookManager, Selec
         function(address, bytes calldata, bool) hook;
         if (moduleType == 1) {
             hook = _installValidator;
-        } else if(moduleType == 2) {
+        } else if (moduleType == 2) {
             hook = _installExecutor;
-        } else if(moduleType == 3) {
+        } else if (moduleType == 3) {
             hook = _installSelector;
-        } else if(moduleType == 4) {
+        } else if (moduleType == 4) {
             hook = _installHook;
-        } else if(moduleType == 5) {
+        } else if (moduleType == 5) {
             hook = _installPolicy;
-        } else if(moduleType == 6) {
+        } else if (moduleType == 6) {
             hook = _installSigner;
         } else {
             revert NotImplemented();
@@ -93,5 +93,4 @@ contract ModuleManager is ValidationManager, ExecutorManager, HookManager, Selec
         (bool success,) = module.call(abi.encodeWithSelector(IModule.onUninstall.selector, data));
         hook(module, internalData, success);
     }
-
 }

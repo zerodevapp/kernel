@@ -12,7 +12,7 @@ import "../types/Error.sol";
 
 abstract contract HookManager {
     function _installHook(address _hook, bytes calldata _internalData, bool _installSuccess) internal {
-        if(_internalData.length == 0) {
+        if (_internalData.length == 0) {
             require(_installSuccess, ModuleInstallFailed());
         }
     }
@@ -21,16 +21,17 @@ abstract contract HookManager {
         // no-op
     }
 
-    function _preHook(IHook _hook) internal returns(bytes memory context){
+    function _preHook(IHook _hook) internal returns (bytes memory context) {
         require(address(_hook) != address(0), NotInstalled());
-        if(address(_hook) != address(1)) {
+        if (address(_hook) != address(1)) {
             context = _hook.preCheck(msg.sender, msg.value, msg.data);
         }
     }
+
     function _postHook(IHook _hook, bytes memory context) internal {
         // bool success,
         // bytes memory result
-        if(address(_hook) != address(1)) {
+        if (address(_hook) != address(1)) {
             _hook.postCheck(context);
         }
     }

@@ -8,20 +8,20 @@ abstract contract ExecutionManager {
         bytes1 callType = LibERC7579.getCallType(mode);
         bytes1 execType = LibERC7579.getExecType(mode);
         function() onRevert;
-        if(execType == LibERC7579.EXECTYPE_DEFAULT) {
+        if (execType == LibERC7579.EXECTYPE_DEFAULT) {
             onRevert = _onRevertThrow;
-        } else if(execType == LibERC7579.EXECTYPE_TRY) {
+        } else if (execType == LibERC7579.EXECTYPE_TRY) {
             onRevert = _onRevertSilent;
         } else {
             revert NotSupportedExecType();
         }
 
         function(bytes calldata, function()) executeFunction;
-        if(callType == LibERC7579.CALLTYPE_SINGLE) {
+        if (callType == LibERC7579.CALLTYPE_SINGLE) {
             executeFunction = _executeCall;
-        } else if(callType == LibERC7579.CALLTYPE_BATCH) {
+        } else if (callType == LibERC7579.CALLTYPE_BATCH) {
             executeFunction = _executeBatchCall;
-        } else if(callType == LibERC7579.CALLTYPE_DELEGATECALL) {
+        } else if (callType == LibERC7579.CALLTYPE_DELEGATECALL) {
             executeFunction = _executeDelegateCall;
         } else {
             revert NotSupportedCallType();
@@ -32,7 +32,7 @@ abstract contract ExecutionManager {
     function _executeCall(bytes calldata executionData, function() onRevert) internal {
         (address target, uint256 value, bytes calldata data) = LibERC7579.decodeSingle(executionData);
         bool success = _call(target, value, data);
-        if(!success) {
+        if (!success) {
             onRevert();
         }
     }
@@ -40,7 +40,7 @@ abstract contract ExecutionManager {
     function _executeDelegateCall(bytes calldata executionData, function() onRevert) internal {
         (address delegate, bytes calldata data) = LibERC7579.decodeDelegate(executionData);
         bool success = _delegateCall(delegate, data);
-        if(!success) {
+        if (!success) {
             onRevert();
         }
     }
@@ -53,7 +53,7 @@ abstract contract ExecutionManager {
             for (uint256 i; i < length; i++) {
                 (address target, uint256 value, bytes calldata data) = LibERC7579.getExecution(pointers, i);
                 bool success = _call(target, value, data);
-                if(!success) {
+                if (!success) {
                     onRevert();
                 }
             }
@@ -68,10 +68,9 @@ abstract contract ExecutionManager {
         }
     }
 
-    function _onRevertSilent() internal {
-    }
+    function _onRevertSilent() internal {}
 
-    function _call(address target, uint256 value, bytes calldata callData) internal returns(bool success){
+    function _call(address target, uint256 value, bytes calldata callData) internal returns (bool success) {
         /// @solidity memory-safe-assembly
         assembly {
             let ptr := mload(0x40)
@@ -80,7 +79,7 @@ abstract contract ExecutionManager {
         }
     }
 
-    function _delegateCall(address delegate, bytes calldata callData) internal returns(bool success){
+    function _delegateCall(address delegate, bytes calldata callData) internal returns (bool success) {
         /// @solidity memory-safe-assembly
         assembly {
             let ptr := mload(0x40)

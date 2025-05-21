@@ -12,7 +12,6 @@ import {
 import "../types/Error.sol";
 
 abstract contract SelectorManager {
-
     struct SelectorConfig {
         IHook hook; // 20 bytes for hook address
         address target; // 20 bytes target will be fallback module, called with call

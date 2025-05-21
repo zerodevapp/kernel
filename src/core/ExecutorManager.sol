@@ -6,6 +6,7 @@ import "../interfaces/IERC7579Modules.sol";
 
 contract ExecutorManager {
     error NotExecutor();
+
     struct ExecutorConfig {
         IHook hook; // address(1) : hook not required, address(0) : validator not installed
     }
@@ -29,9 +30,9 @@ contract ExecutorManager {
     }
 
     function _installExecutor(address _executor, bytes calldata _internalData, bool _installSuccess) internal {
-        // NOTE: we don't care if install was successful 
+        // NOTE: we don't care if install was successful
         address hook = _internalData.length >= 20 ? address(bytes20(_internalData[0:20])) : address(0);
-        if(hook == address(0)) {
+        if (hook == address(0)) {
             hook = address(1); // address(1) indicates it is installed and does not require any hook
         }
         _executorConfig(IExecutor(_executor)).hook = IHook(hook);

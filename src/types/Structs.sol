@@ -1,4 +1,3 @@
-
 struct Install {
     uint256 moduleType;
     address module;
@@ -11,4 +10,3 @@ struct Uninstall {
     address module;
     bytes data;
 }
-
