@@ -74,7 +74,7 @@ contract Kernel is ModuleManager, ExecutionManager, EIP712 {
             _install(sig.packages);
             signature = sig.userOpSignature;
         }
-        _checkValidation(vMode, vType, vId);
+        verifier = _checkValidation(vMode, vType, vId);
         opHash = isReplayable(vMode) ? Lib4337.chainAgnosticUserOpHash(msg.sender, userOp) : userOpHash;
     }
 

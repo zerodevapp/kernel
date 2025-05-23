@@ -104,9 +104,8 @@ abstract contract ValidationManager {
 
     function _uninstallSigner(address _signer, bytes calldata _internalData, bool _uninstallSuccess) internal {}
 
-    function _checkValidation(ValidationMode vMode, ValidationType vType, ValidationId vId) internal view {
+    function _checkValidation(ValidationMode vMode, ValidationType vType, ValidationId vId) internal view returns(ValidationId v) {
         ValidationStorage storage $ = _validationStorage();
-        ValidationId v;
         if (vType == VALIDATION_TYPE_ROOT) {
             v = $.root;
         } else {
@@ -136,7 +135,6 @@ abstract contract ValidationManager {
         if (ValidationId.unwrap(vId) == bytes20(0)) {
             return _verify7702Signature(opHash, userOpSignature) ? 0 : 1;
         }
-
         // NOTE: removed permission for now, adding back after testing is done
         address validator = address(ValidationId.unwrap(vId));
         PackedUserOperation memory modifiedOp = op;
