@@ -38,6 +38,17 @@ function getType(ValidationId validator) pure returns (ValidationType vType) {
     }
 }
 
+function parseNonce(uint256 nonce) pure returns (ValidationMode vMode, ValidationType vType, ValidationId vId) {
+    // 2bytes mode (1byte currentMode, 1byte type)
+    // 20bytes identifier
+    // 1byte mode  | 1byte type | 20bytes vId | 2byte nonceKey | 8byte nonce == 32bytes
+    assembly {
+        vMode := nonce
+        vType := shl(8, nonce)
+        vId := shl(16, nonce)
+    }
+}
+
 abstract contract ValidationManager {
     ValidationId transient installingPermission;
 
@@ -55,7 +66,7 @@ abstract contract ValidationManager {
 
     function _uninstallValidator(address _validator, bytes calldata _internalData, bool _uninstallSuccess) internal {
         ValidationStorage storage $ = _validationStorage();
-        $.vInfo[ValidationId.wrap(bytes20(_validator))].vType = VALIDATION_TYPE_VALIDATOR;
+        $.vInfo[ValidationId.wrap(bytes20(_validator))].vType = VALIDATION_TYPE_ROOT;
     }
 
     function _installPolicy(address _policy, bytes calldata _internalData, bool _installSuccess) internal {
@@ -101,21 +112,6 @@ abstract contract ValidationManager {
         } else {
             v = vId;
             require($.vInfo[vId].vType == vType, InvalidValidator());
-        }
-    }
-
-    function _parseNonce(uint256 nonce)
-        internal
-        pure
-        returns (ValidationMode vMode, ValidationType vType, ValidationId vId)
-    {
-        // 2bytes mode (1byte currentMode, 1byte type)
-        // 20bytes identifier
-        // 1byte mode  | 1byte type | 20bytes vId | 2byte nonceKey | 8byte nonce == 32bytes
-        assembly {
-            vMode := nonce
-            vType := shl(8, nonce)
-            vId := shl(16, nonce)
         }
     }
 

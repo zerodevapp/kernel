@@ -12,7 +12,7 @@ error NotInstalled();
 error InstallSignatureVerificationFailed();
 
 error InvalidRootValidation();
-error NotSupportedCallType();
-error NotSupportedExecType();
+error InvalidCallType();
+error InvalidExecType();
 
 error InvalidSelector();

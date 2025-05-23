@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 import {IHook, IFallback, IModule} from "../interfaces/IERC7579Modules.sol";
 import {CallType} from "../types/Types.sol";
 import {
-    SELECTOR_MANAGER_STORAGE_SLOT,
+    HOOK_MANAGER_STORAGE_SLOT,
     CALLTYPE_DELEGATECALL,
     CALLTYPE_SINGLE,
     MODULE_TYPE_FALLBACK
@@ -11,14 +11,26 @@ import {
 import "../types/Error.sol";
 
 abstract contract HookManager {
+    struct HookStorage {
+        mapping(address => bool) enabled;
+    }
+
+    function _hookStorage() internal view returns (HookStorage storage hs) {
+        bytes32 slot = HOOK_MANAGER_STORAGE_SLOT;
+        assembly {
+            hs.slot := slot
+        }
+    }
+
     function _installHook(address _hook, bytes calldata _internalData, bool _installSuccess) internal {
         if (_internalData.length == 0) {
             require(_installSuccess, ModuleInstallFailed());
         }
+        _hookStorage().enabled[_hook] = true;
     }
 
     function _uninstallHook(address _hook, bytes calldata _internalData, bool _uninstallSuccess) internal {
-        // no-op
+        _hookStorage().enabled[_hook] = false;
     }
 
     function _preHook(IHook _hook) internal returns (bytes memory context) {

@@ -21,8 +21,8 @@ contract ExecutorManager {
         }
     }
 
-    function executorConfig(IExecutor executor) external view returns (ExecutorConfig memory) {
-        return _executorConfig(executor);
+    function executorConfig(address executor) external view returns (ExecutorConfig memory) {
+        return _executorConfig(IExecutor(executor));
     }
 
     function _executorConfig(IExecutor executor) internal view returns (ExecutorConfig storage config) {

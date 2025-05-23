@@ -66,6 +66,32 @@ contract ModuleManager is ValidationManager, ExecutorManager, HookManager, Selec
         emit ModuleInstalled(moduleType, module);
     }
 
+    function _uninstallModule(
+        uint256 moduleType,
+        address module,
+        bytes calldata moduleData,
+        bytes calldata internalData
+    ) internal {
+        function(address, bytes calldata, bool) hook;
+        if (moduleType == 1) {
+            hook = _uninstallValidator;
+        } else if (moduleType == 2) {
+            hook = _uninstallExecutor;
+        } else if (moduleType == 3) {
+            hook = _uninstallSelector;
+        } else if (moduleType == 4) {
+            hook = _uninstallHook;
+        } else if (moduleType == 5) {
+            hook = _uninstallPolicy;
+        } else if (moduleType == 6) {
+            hook = _uninstallSigner;
+        } else {
+            revert NotImplemented();
+        }
+        _uninstall(module, moduleData, internalData, hook);
+        emit ModuleInstalled(moduleType, module);
+    }
+
     function _install(Install[] calldata packages) internal {
         for (uint256 i = 0; i < packages.length; i++) {
             Install calldata pkg = packages[i];
@@ -89,7 +115,6 @@ contract ModuleManager is ValidationManager, ExecutorManager, HookManager, Selec
         bytes calldata internalData,
         function(address, bytes calldata, bool) hook
     ) internal {
-        // TODO: make sure we use extra safe call
         (bool success,) = module.call(abi.encodeWithSelector(IModule.onUninstall.selector, data));
         hook(module, internalData, success);
     }

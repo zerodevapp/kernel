@@ -47,4 +47,12 @@ abstract contract SelectorManager {
         $.callType = callType;
         $.hook = IHook(hook);
     }
+
+    function _uninstallSelector(address _module, bytes calldata _internalData, bool _uninstallSuccess) internal {
+        bytes4 selector = bytes4(_internalData[0:4]);
+        SelectorConfig storage $ = _selectorConfig(selector);
+        $.target = address(0);
+        $.callType = CallType.wrap(bytes1(0x00));
+        $.hook = IHook(address(0));
+    }
 }

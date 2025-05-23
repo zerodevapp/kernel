@@ -13,7 +13,7 @@ abstract contract ExecutionManager {
         } else if (execType == LibERC7579.EXECTYPE_TRY) {
             onRevert = _onRevertSilent;
         } else {
-            revert NotSupportedExecType();
+            revert InvalidExecType();
         }
 
         function(bytes calldata, function()) executeFunction;
@@ -24,7 +24,7 @@ abstract contract ExecutionManager {
         } else if (callType == LibERC7579.CALLTYPE_DELEGATECALL) {
             executeFunction = _executeDelegateCall;
         } else {
-            revert NotSupportedCallType();
+            revert InvalidCallType();
         }
         executeFunction(executionData, onRevert);
     }
@@ -57,6 +57,16 @@ abstract contract ExecutionManager {
                     onRevert();
                 }
             }
+        }
+    }
+
+    function _getReturn() internal returns (bytes memory result) {
+        assembly {
+            result := mload(0x40)
+            mstore(result, returndatasize()) // Store the length.
+            let o := add(result, 0x20)
+            returndatacopy(o, 0x00, returndatasize()) // Copy the returndata.
+            mstore(0x40, add(o, returndatasize())) // Allocate the memory.
         }
     }
 

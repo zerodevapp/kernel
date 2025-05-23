@@ -4,11 +4,12 @@ import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
 import {IAccount} from "account-abstraction/interfaces/IAccount.sol";
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
 import {IValidator} from "./interfaces/IERC7579Modules.sol";
-import "./types/Types.sol";
 import {ModuleManager, Install} from "./core/ModuleManager.sol";
+import {parseNonce} from "./core/ValidationManager.sol";
 import {ExecutionManager} from "./core/ExecutionManager.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
-import {Lib4337} from "./Lib4337.sol";
+import {Lib4337} from "./lib/Lib4337.sol";
+import "./types/Types.sol";
 import "./types/Error.sol";
 import "./types/Events.sol";
 
@@ -61,7 +62,7 @@ contract Kernel is ModuleManager, ExecutionManager, EIP712 {
         /*
          userOp.nonce = vMode | vType | vId
         */
-        (ValidationMode vMode, ValidationType vType, ValidationId vId) = _parseNonce(userOp.nonce);
+        (ValidationMode vMode, ValidationType vType, ValidationId vId) = parseNonce(userOp.nonce);
         signature = userOp.signature;
         if (isEnable(vMode)) {
             bool enableReplayable = isEnableReplayable(vMode);
@@ -100,8 +101,8 @@ contract Kernel is ModuleManager, ExecutionManager, EIP712 {
         _execute(mode, executionData);
     }
 
-    function _fallback() internal {
-        bytes4 selector = bytes4(msg.data);
+    function _fallback() internal returns (bytes memory res) {
+        bytes4 selector = bytes4(msg.data[0:4]);
         SelectorConfig storage $ = _selectorConfig(selector);
         if ($.target == address(0)) {
             revert InvalidSelector();
@@ -119,6 +120,8 @@ contract Kernel is ModuleManager, ExecutionManager, EIP712 {
         }
         if (!success) {
             _onRevertThrow();
+        } else {
+            res = _getReturn();
         }
         if (address($.hook) != address(0)) {
             _postHook($.hook, hookData);
@@ -141,6 +144,18 @@ contract Kernel is ModuleManager, ExecutionManager, EIP712 {
             imdf := initData.offset
         }
         _installModule(moduleType, module, imdf.installData, imdf.internalData);
+    }
+
+    function uninstallModule(uint256 moduleType, address module, bytes calldata initData)
+        external
+        payable
+        onlyEntryPointOrSelf
+    {
+        InstallModuleDataFormat calldata imdf;
+        assembly {
+            imdf := initData.offset
+        }
+        _uninstallModule(moduleType, module, imdf.installData, imdf.internalData);
     }
 
     function setRoot(ValidationId vId) external payable onlyEntryPointOrSelf {
@@ -184,7 +199,7 @@ contract Kernel is ModuleManager, ExecutionManager, EIP712 {
         _verifySignature(vId, address(this), digest, signature);
     }
 
-    fallback() external payable {
-        _fallback();
+    fallback(bytes calldata) external payable returns (bytes memory) {
+        return _fallback();
     }
 }
