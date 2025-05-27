@@ -653,7 +653,7 @@ contract KernelTest is Test {
         Kernel k = factory.deploy(pkgs, 1);
         assertEq(address(k), address(factory.deploy(pkgs, 1)));
     }
-    
+
     function test_deploy_with_call() external unitTest {
         Install[] memory initPkgs = new Install[](1);
         initPkgs[0] = Install({moduleType: 1, module: address(mockValidator), moduleData: hex"", internalData: hex""});
@@ -760,7 +760,9 @@ contract KernelTest is Test {
         kernel.installModule(1, address(newValidator), abi.encode(hex"deadbeef", "InternalData"));
         ValidationInfo memory vInfo = kernel.validationInfo(vId);
         assertTrue(vInfo.vType == VALIDATION_TYPE_VALIDATOR);
-        bytes4 ret = kernel.isValidSignature(keccak256("Hello world"), abi.encodePacked(newValidator, _validatorSignHash(keccak256("Hello world"), true)));
+        bytes4 ret = kernel.isValidSignature(
+            keccak256("Hello world"), abi.encodePacked(newValidator, _validatorSignHash(keccak256("Hello world"), true))
+        );
         assertEq(ret, ERC1271_MAGICVALUE);
         assertTrue(kernel.isModuleInstalled(1, address(newValidator), hex""));
     }
@@ -783,7 +785,10 @@ contract KernelTest is Test {
         assertTrue(vInfo.vType == VALIDATION_TYPE_ROOT);
         kernel.installModule(5, address(policy), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
         kernel.installModule(6, address(signer), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
-        bytes4 ret = kernel.isValidSignature(keccak256("Hello world"), abi.encodePacked(permissionId, _permissionSignHash(keccak256("Hello world"), true)));
+        bytes4 ret = kernel.isValidSignature(
+            keccak256("Hello world"),
+            abi.encodePacked(permissionId, _permissionSignHash(keccak256("Hello world"), true))
+        );
         assertEq(ret, ERC1271_MAGICVALUE);
         assertTrue(kernel.isModuleInstalled(5, address(policy), abi.encodePacked(permissionId)));
         assertTrue(kernel.isModuleInstalled(6, address(signer), abi.encodePacked(permissionId)));
@@ -858,7 +863,9 @@ contract KernelTest is Test {
         assertEq(address(c.target), address(mockFallback));
         assertEq(address(c.hook), address(1));
         assertTrue(c.callType == CallType.wrap(bytes1(0x00)));
-        assertTrue(kernel.isModuleInstalled(3, address(mockFallback), abi.encodePacked(MockFallback.fallbackFunction.selector)));
+        assertTrue(
+            kernel.isModuleInstalled(3, address(mockFallback), abi.encodePacked(MockFallback.fallbackFunction.selector))
+        );
     }
 
     function test_install_selector_call_withhook() external unitTest {
@@ -979,8 +986,7 @@ contract KernelTest is Test {
         assertEq(kernel.supportsExecutionMode(mode), false);
         vm.expectRevert(InvalidCallType.selector, address(kernel));
         kernel.execute(
-            mode,
-            abi.encodePacked(address(callee), uint256(0), abi.encodeWithSelector(MockCallee.foo.selector))
+            mode, abi.encodePacked(address(callee), uint256(0), abi.encodeWithSelector(MockCallee.foo.selector))
         );
     }
 
@@ -989,8 +995,7 @@ contract KernelTest is Test {
         assertEq(kernel.supportsExecutionMode(mode), false);
         vm.expectRevert(InvalidExecType.selector, address(kernel));
         kernel.execute(
-            mode,
-            abi.encodePacked(address(callee), uint256(0), abi.encodeWithSelector(MockCallee.foo.selector))
+            mode, abi.encodePacked(address(callee), uint256(0), abi.encodeWithSelector(MockCallee.foo.selector))
         );
     }
 
@@ -998,8 +1003,7 @@ contract KernelTest is Test {
         bytes32 mode = LibERC7579.encodeMode(bytes1(0x00), bytes1(0x01), bytes4(0), bytes22(0));
         assertEq(kernel.supportsExecutionMode(mode), true);
         kernel.execute(
-            mode,
-            abi.encodePacked(address(callee), uint256(0), abi.encodeWithSelector(MockCallee.forceRevert.selector))
+            mode, abi.encodePacked(address(callee), uint256(0), abi.encodeWithSelector(MockCallee.forceRevert.selector))
         );
     }
 

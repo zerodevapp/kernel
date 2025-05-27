@@ -33,7 +33,7 @@ contract KernelFactory {
         if (!deployed) {
             k.installModule(true, 0, initialPackages, hex"");
         }
-        (bool success, ) = address(k).call(extraCall);
+        (bool success,) = address(k).call(extraCall);
         require(success, "call failed");
         return k;
     }

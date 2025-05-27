@@ -218,56 +218,57 @@ contract Kernel is ModuleManager, ExecutionManager, UUPSUpgradeable {
         emit Received(msg.sender, msg.value);
     }
 
-    function supportsExecutionMode(bytes32 mode) external view returns(bool) {
+    function supportsExecutionMode(bytes32 mode) external view returns (bool) {
         bytes1 callType = LibERC7579.getCallType(mode);
         bytes1 execType = LibERC7579.getExecType(mode);
-        if (execType == LibERC7579.EXECTYPE_DEFAULT) {
-        } else if (execType == LibERC7579.EXECTYPE_TRY) {
-        } else {
+        if (execType == LibERC7579.EXECTYPE_DEFAULT) {} else if (execType == LibERC7579.EXECTYPE_TRY) {} else {
             return false;
         }
-        if (callType == LibERC7579.CALLTYPE_SINGLE) {
-        } else if (callType == LibERC7579.CALLTYPE_BATCH) {
-        } else if (callType == LibERC7579.CALLTYPE_DELEGATECALL) {
-        } else {
+        if (callType == LibERC7579.CALLTYPE_SINGLE) {} else if (callType == LibERC7579.CALLTYPE_BATCH) {} else if (
+            callType == LibERC7579.CALLTYPE_DELEGATECALL
+        ) {} else {
             return false;
         }
         return true;
     }
 
-    function supportsModule(uint256 moduleTypeId) external view returns(bool) {
+    function supportsModule(uint256 moduleTypeId) external view returns (bool) {
         return moduleTypeId < 7;
     }
 
-    function isModuleInstalled(uint256 moduleTypeId, address module, bytes calldata additionalContext) external view returns(bool) {
-        if(moduleTypeId == 1) {
+    function isModuleInstalled(uint256 moduleTypeId, address module, bytes calldata additionalContext)
+        external
+        view
+        returns (bool)
+    {
+        if (moduleTypeId == 1) {
             ValidationId vId = ValidationId.wrap(bytes20(module));
             return !(_validationStorage().vInfo[vId].vType == VALIDATION_TYPE_ROOT);
-        } else if(moduleTypeId == 2) {
+        } else if (moduleTypeId == 2) {
             return address(_executorConfig(IExecutor(module)).hook) != address(0);
-        } else if(moduleTypeId == 3) {
+        } else if (moduleTypeId == 3) {
             bytes4 selector = bytes4(additionalContext);
             return _selectorConfig(selector).target == module;
-        } else if(moduleTypeId == 4) {
+        } else if (moduleTypeId == 4) {
             return _hookStorage().enabled[module];
-        } else if(moduleTypeId == 5) {
+        } else if (moduleTypeId == 5) {
             ValidationId vId = ValidationId.wrap(bytes20(additionalContext));
-            ValidationInfo storage $ =_validationStorage().vInfo[vId];
-            for(uint256 i = 0; i < $.policies.length; i++) {
-                if($.policies[i] == module) {
+            ValidationInfo storage $ = _validationStorage().vInfo[vId];
+            for (uint256 i = 0; i < $.policies.length; i++) {
+                if ($.policies[i] == module) {
                     return true;
                 }
             }
-            return  false;
-        } else if(moduleTypeId == 6) {
+            return false;
+        } else if (moduleTypeId == 6) {
             ValidationId vId = ValidationId.wrap(bytes20(additionalContext));
-            ValidationInfo storage $ =_validationStorage().vInfo[vId];
+            ValidationInfo storage $ = _validationStorage().vInfo[vId];
             return $.signer == module;
         } else {
             revert NotImplemented();
         }
     }
-    
+
     function accountId() external view returns (string memory accountImplementationId) {
         return "kernel.v0.4";
     }
