@@ -25,3 +25,4 @@ error OccupiedValidationId();
 
 error InvalidPermissionUninstallOrder();
 error InvalidPermissionId();
+error InvalidNonce();

@@ -30,8 +30,8 @@ library Lib4337 {
         }
     }
 
-    function checkValidation(uint256 validationData) external view returns(bool) {
-        (uint48 vAfter, uint48 vUntil,address res) = Lib4337.parseValidationData(validationData);
+    function checkValidation(uint256 validationData) external view returns (bool) {
+        (uint48 vAfter, uint48 vUntil, address res) = Lib4337.parseValidationData(validationData);
         if (vAfter > block.timestamp || vUntil < block.timestamp) {
             return false;
         }

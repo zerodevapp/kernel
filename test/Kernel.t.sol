@@ -117,7 +117,10 @@ contract KernelTest is Test {
         vm.stopPrank();
     }
 
-    function _rootSignUserOp(PackedUserOperation memory op, bool success, bool replay) internal returns (bytes memory sig) {
+    function _rootSignUserOp(PackedUserOperation memory op, bool success, bool replay)
+        internal
+        returns (bytes memory sig)
+    {
         mockValidator.sudoSetSuccess(success);
         return hex"";
     }
@@ -129,7 +132,10 @@ contract KernelTest is Test {
         return hex"";
     }
 
-    function _validatorSignUserOp(PackedUserOperation memory op, bool success, bool replay) internal returns (bytes memory sig) {
+    function _validatorSignUserOp(PackedUserOperation memory op, bool success, bool replay)
+        internal
+        returns (bytes memory sig)
+    {
         newValidator.sudoSetSuccess(success);
         return hex"";
     }
@@ -141,7 +147,10 @@ contract KernelTest is Test {
         return hex"";
     }
 
-    function _permissionSignUserOp(PackedUserOperation memory op, bool success, bool replay) internal returns (bytes memory sig) {
+    function _permissionSignUserOp(PackedUserOperation memory op, bool success, bool replay)
+        internal
+        returns (bytes memory sig)
+    {
         bytes[] memory signatures = new bytes[](2);
         signatures[0] = hex"dead";
         signatures[1] = hex"beef";
@@ -155,7 +164,15 @@ contract KernelTest is Test {
         return abi.encode(signatures);
     }
 
-    function _permissionSignHash(bytes32 hash, bool success) internal returns (bytes memory sig) {}
+    function _permissionSignHash(bytes32 hash, bool success) internal returns (bytes memory sig) {
+        bytes[] memory signatures = new bytes[](2);
+        signatures[0] = hex"dead";
+        signatures[1] = hex"beef";
+        policy.sudoSetPass(address(kernel), permissionId, true);
+        signer.sudoSetPass(address(kernel), permissionId, true);
+
+        return abi.encode(signatures);
+    }
 
     function enableSig(
         uint256 nonce,
@@ -305,6 +322,33 @@ contract KernelTest is Test {
         mock.safeBatchTransferFrom(sender, address(kernel), ids, amounts, hex"deadbeef");
 
         mock.batchMint(address(kernel), ids, amounts, hex"deadbeef");
+    }
+
+    function test_executeuserop_root() external entryPointTest {
+        PackedUserOperation[] memory ops = new PackedUserOperation[](1);
+        ops[0] = PackedUserOperation({
+            sender: address(kernel),
+            nonce: encodeNonce(false, false, false, bytes1(0), bytes20(0)),
+            initCode: hex"",
+            callData: abi.encodePacked(
+                Kernel.executeUserOp.selector,
+                abi.encodeWithSelector(
+                    Kernel.execute.selector,
+                    bytes32(0),
+                    abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
+                )
+            ),
+            accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))), // TODO make this dynamic
+            preVerificationGas: 1000000,
+            gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
+            paymasterAndData: hex"",
+            signature: hex""
+        });
+        ops[0].signature = _rootSignUserOp(ops[0], true, false);
+        vm.startPrank(address(ep));
+        kernel.executeUserOp(ops[0], keccak256("hello world"));
+        vm.stopPrank();
+        assertEq(callee.bar(), 1);
     }
 
     function test_userop_root() external entryPointTest {
@@ -603,6 +647,24 @@ contract KernelTest is Test {
         Kernel k = factory.deploy(pkgs, 1);
     }
 
+    function test_deploy_existing() external {
+        Install[] memory pkgs = new Install[](1);
+        pkgs[0] = Install({moduleType: 1, module: address(mockValidator), moduleData: hex"", internalData: hex""});
+        Kernel k = factory.deploy(pkgs, 1);
+        assertEq(address(k), address(factory.deploy(pkgs, 1)));
+    }
+    
+    function test_deploy_with_call() external unitTest {
+        Install[] memory initPkgs = new Install[](1);
+        initPkgs[0] = Install({moduleType: 1, module: address(mockValidator), moduleData: hex"", internalData: hex""});
+        Install[] memory pkgs = new Install[](1);
+        pkgs[0] = Install({moduleType: 1, module: address(newValidator), moduleData: hex"", internalData: hex""});
+        bytes memory sig = enableSig(0, true, false, pkgs, _rootSignHash);
+        Kernel k = factory.deployWithCall(initPkgs, 1, abi.encodeWithSelector(0xa706cd33, false, 0, pkgs, sig));
+        ValidationInfo memory vInfo = k.validationInfo(ValidationId.wrap(bytes20(address(newValidator))));
+        assertTrue(vInfo.vType == VALIDATION_TYPE_VALIDATOR);
+    }
+
     function test_install_executor_oninstall_success() external unitTest {
         address newEx = address(new MockExecutor());
         kernel.installModule(2, newEx, abi.encode(hex"deadbeef", ""));
@@ -633,15 +695,10 @@ contract KernelTest is Test {
 
     function test_install_packages_with_signature() external unitTest {
         Install[] memory packages = new Install[](2);
-        packages[0] = Install({
-            moduleType : 1,
-            module : address(newValidator),
-            internalData: hex"",
-            moduleData: hex""
-        });
+        packages[0] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
         packages[1] = Install({
-            moduleType : 5,
-            module : address(policy),
+            moduleType: 5,
+            module: address(policy),
             internalData: abi.encodePacked(permissionId),
             moduleData: hex""
         });
@@ -650,15 +707,10 @@ contract KernelTest is Test {
 
     function test_change_root() external unitTest {
         Install[] memory packages = new Install[](2);
-        packages[0] = Install({
-            moduleType : 1,
-            module : address(newValidator),
-            internalData: hex"",
-            moduleData: hex""
-        });
+        packages[0] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
         packages[1] = Install({
-            moduleType : 5,
-            module : address(policy),
+            moduleType: 5,
+            module: address(policy),
             internalData: abi.encodePacked(permissionId),
             moduleData: hex""
         });
@@ -670,6 +722,8 @@ contract KernelTest is Test {
     function test_upgradeTo() external unitTest {
         Kernel newTemplate = new Kernel(ep);
         kernel.upgradeToAndCall(address(newTemplate), hex"");
+        bytes32 impl = vm.load(address(kernel), ERC1967_IMPLEMENTATION_SLOT);
+        assertEq(address(uint160(uint256(impl))), address(newTemplate));
     }
 
     function test_install_invalid() external unitTest {
@@ -700,6 +754,8 @@ contract KernelTest is Test {
         kernel.installModule(1, address(newValidator), abi.encode(hex"deadbeef", "InternalData"));
         ValidationInfo memory vInfo = kernel.validationInfo(vId);
         assertTrue(vInfo.vType == VALIDATION_TYPE_VALIDATOR);
+        bytes4 ret = kernel.isValidSignature(keccak256("Hello world"), abi.encodePacked(newValidator, _validatorSignHash(keccak256("Hello world"), true)));
+        assertEq(ret, ERC1271_MAGICVALUE);
     }
 
     function test_uninstall_validator() external unitTest {
@@ -712,6 +768,16 @@ contract KernelTest is Test {
         assertTrue(vInfo.vType == VALIDATION_TYPE_ROOT);
     }
 
+    function test_install_permission() external unitTest {
+        ValidationId vId = ValidationId.wrap(permissionId);
+        ValidationInfo memory vInfo = kernel.validationInfo(vId);
+        assertTrue(vInfo.vType == VALIDATION_TYPE_ROOT);
+        kernel.installModule(5, address(policy), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
+        kernel.installModule(6, address(signer), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
+        bytes4 ret = kernel.isValidSignature(keccak256("Hello world"), abi.encodePacked(permissionId, _permissionSignHash(keccak256("Hello world"), true)));
+        assertEq(ret, ERC1271_MAGICVALUE);
+    }
+
     function test_install_policy() external unitTest {
         MockPolicy mock = new MockPolicy();
         ValidationId vId = ValidationId.wrap(bytes20(keccak256(abi.encodePacked("deadbeef"))));
@@ -721,7 +787,7 @@ contract KernelTest is Test {
         vInfo = kernel.validationInfo(vId);
         assertTrue(vInfo.vType == VALIDATION_TYPE_PERMISSION);
     }
-    
+
     function test_uninstall_policy() external unitTest {
         MockPolicy mock = new MockPolicy();
         ValidationId vId = ValidationId.wrap(bytes20(keccak256(abi.encodePacked("deadbeef"))));
@@ -744,7 +810,7 @@ contract KernelTest is Test {
         vInfo = kernel.validationInfo(vId);
         assertTrue(vInfo.vType == VALIDATION_TYPE_PERMISSION);
     }
-    
+
     function test_uninstall_signer() external unitTest {
         MockSigner mock = new MockSigner();
         ValidationId vId = ValidationId.wrap(bytes20(keccak256(abi.encodePacked("deadbeef"))));
@@ -928,8 +994,7 @@ contract KernelTest is Test {
     function test_execute_batch_fail() external unitTest {
         Call[] memory calls = new Call[](2);
         calls[0] = Call({to: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.foo.selector)});
-        calls[1] =
-            Call({to: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.forceRevert.selector)});
+        calls[1] = Call({to: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.forceRevert.selector)});
         assertEq(callee.data(), "");
         vm.expectRevert(MockCallee.Haha.selector);
         kernel.execute(LibERC7579.encodeMode(bytes1(0x01), bytes1(0x00), bytes4(0), bytes22(0)), abi.encode(calls));
@@ -938,8 +1003,7 @@ contract KernelTest is Test {
     function test_execute_batch_fail_try() external unitTest {
         Call[] memory calls = new Call[](2);
         calls[0] = Call({to: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.foo.selector)});
-        calls[1] =
-            Call({to: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.forceRevert.selector)});
+        calls[1] = Call({to: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.forceRevert.selector)});
         assertEq(callee.data(), "");
         kernel.execute(LibERC7579.encodeMode(bytes1(0x01), bytes1(0x01), bytes4(0), bytes22(0)), abi.encode(calls));
         assertEq(callee.bar(), 1);
@@ -993,31 +1057,21 @@ contract KernelTest is Test {
     }
 
     bytes32 constant MODE_EXECUTE_WITH_OP_DATA = bytes10(0x01000000000078210001);
-    function encodeInstallWithExecute(Call[] memory calls, bool replayable, uint256 nonce, Install[] memory packages) internal returns(bytes memory sig) {
-        InstallAndExecute memory ie = InstallAndExecute({
-            replayable : replayable,
-            nonce : nonce,
-            packages : packages,
-            signature : hex""
-        });
+
+    function encodeInstallWithExecute(Call[] memory calls, bool replayable, uint256 nonce, Install[] memory packages)
+        internal
+        returns (bytes memory sig)
+    {
+        InstallAndExecute memory ie =
+            InstallAndExecute({replayable: replayable, nonce: nonce, packages: packages, signature: hex""});
         bytes32 hash = helper.installAndExecuteDigest(address(kernel), MODE_EXECUTE_WITH_OP_DATA, calls, ie);
-        sig = abi.encode(
-            false,
-            uint256(0),
-            packages,
-            _rootSignHash(hash, true)
-        );
+        sig = abi.encode(false, uint256(0), packages, _rootSignHash(hash, true));
     }
 
     function test_execute_batch_from_executor_with_install_data() external {
         address newExecutor = makeAddr("New Executor");
         Install[] memory packages = new Install[](1);
-        packages[0] = Install({
-            moduleType : 2,
-            module : newExecutor,
-            internalData : hex"",
-            moduleData : hex""
-        });
+        packages[0] = Install({moduleType: 2, module: newExecutor, internalData: hex"", moduleData: hex""});
 
         Call[] memory calls = new Call[](2);
         calls[0] = Call({to: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.foo.selector)});
@@ -1027,13 +1081,7 @@ contract KernelTest is Test {
         bytes memory installData = encodeInstallWithExecute(calls, false, uint256(0), packages);
         vm.expectEmit(address(callee));
         emit MockCallee.Lorem();
-        kernel.executeFromExecutor(
-            MODE_EXECUTE_WITH_OP_DATA,
-            abi.encode(
-                calls,
-                installData
-            )
-        );
+        kernel.executeFromExecutor(MODE_EXECUTE_WITH_OP_DATA, abi.encode(calls, installData));
         assertEq(callee.bar(), 1);
         assertEq(callee.data(), "lorem ipsum");
         vm.stopPrank();

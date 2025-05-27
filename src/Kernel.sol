@@ -14,7 +14,6 @@ import "./types/Error.sol";
 import "./types/Events.sol";
 import "./types/Constants.sol";
 
-
 contract Kernel is ModuleManager, ExecutionManager, UUPSUpgradeable {
     IEntryPoint immutable entryPoint;
 
@@ -89,7 +88,12 @@ contract Kernel is ModuleManager, ExecutionManager, UUPSUpgradeable {
             Lib4337.intersectValidationData(validationData, validateUserOpFn(vId, opHash, userOp, signature));
     }
 
-    function _erc1271IsValidSignatureNowCalldata(bytes32 hash, bytes calldata signature) internal view override returns(bool) {
+    function _erc1271IsValidSignatureNowCalldata(bytes32 hash, bytes calldata signature)
+        internal
+        view
+        override
+        returns (bool)
+    {
         ValidationId vId = ValidationId.wrap(bytes20(signature[0:20]));
         uint256 validationData = _verifySignature(vId, msg.sender, hash, signature[20:]);
         return Lib4337.checkValidation(validationData);

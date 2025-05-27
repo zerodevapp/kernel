@@ -67,7 +67,7 @@ function vTypeEqual(ValidationType a, ValidationType b) pure returns (bool) {
 
 function isEnable(ValidationMode vMode) pure returns (bool enable) {
     assembly {
-        enable := iszero(iszero(and(vMode,     0x800000000000000000000000000000000000000000000000000000000000000)))
+        enable := iszero(iszero(and(vMode, 0x800000000000000000000000000000000000000000000000000000000000000)))
     }
 }
 

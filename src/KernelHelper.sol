@@ -33,7 +33,7 @@ contract KernelHelper {
             )
         );
     }
-    
+
     function installAndExecuteDigest(
         address kernel,
         bytes32 mode,

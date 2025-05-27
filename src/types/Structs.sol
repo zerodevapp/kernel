@@ -31,10 +31,10 @@ struct Call {
     uint256 value;
     bytes data;
 }
-struct InstallAndExecute{
+
+struct InstallAndExecute {
     bool replayable;
     uint256 nonce;
     Install[] packages;
     bytes signature;
 }
-

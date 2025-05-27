@@ -91,7 +91,7 @@ abstract contract ValidationManager {
             require($.policies[$.policies.length - 1] == _policy, InvalidPermissionUninstallOrder());
             $.policies.pop();
         }
-        if($.signer == address(0)) {
+        if ($.signer == address(0)) {
             $.vType = VALIDATION_TYPE_ROOT;
         }
     }
@@ -139,17 +139,23 @@ abstract contract ValidationManager {
         if (ValidationId.unwrap(vId) == bytes20(0)) {
             return _verify7702Signature(_hash, _signature) ? 0 : 1;
         }
-        IValidator validator = IValidator(address(ValidationId.unwrap(vId))); // TODO: add permission support;
-        validationData = validator.isValidSignatureWithSender(requester, /*NOTE: fix this */ _hash, _signature)
+        ValidationInfo storage vInfo = _validationStorage().vInfo[vId];
+        if(vInfo.vType == VALIDATION_TYPE_VALIDATOR) {
+            IValidator validator = IValidator(address(ValidationId.unwrap(vId))); // TODO: add permission support;
+            validationData = validator.isValidSignatureWithSender(requester, /*NOTE: fix this */ _hash, _signature)
             == ERC1271_MAGICVALUE ? 0 : 1;
+        } else if(vInfo.vType == VALIDATION_TYPE_PERMISSION) {
+            return _verifySignaturePermission(vId, vInfo, requester, _hash, _signature);
+        } else {
+            return 1;
+        }
     }
 
-    function _verifySignaturePermission(ValidationId vId, address requester, bytes32 _hash, bytes calldata _signature)
+    function _verifySignaturePermission(ValidationId vId, ValidationInfo storage vInfo, address requester, bytes32 _hash, bytes calldata _signature)
         internal
         view
         returns (uint256 validationData)
     {
-        ValidationInfo storage vInfo = _validationStorage().vInfo[vId];
         unchecked {
             uint256 length = vInfo.policies.length + 1;
 

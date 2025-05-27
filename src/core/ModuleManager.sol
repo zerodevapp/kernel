@@ -48,7 +48,9 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
             for (uint256 i = 0; i < packages.length; i++) {
                 Install calldata pkg = packages[i];
                 packageHashes[i] = keccak256(
-                    abi.encode(pkg.moduleType, pkg.module, calldataKeccak(pkg.moduleData), calldataKeccak(pkg.internalData))
+                    abi.encode(
+                        pkg.moduleType, pkg.module, calldataKeccak(pkg.moduleData), calldataKeccak(pkg.internalData)
+                    )
                 );
             }
         }
@@ -133,7 +135,6 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         hook(module, internalData, success);
     }
 
-
     function _verifyInstallSignature(
         bool replayable,
         uint256 nonce,
@@ -144,7 +145,7 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         return Lib4337.checkValidation(validationData);
     }
 
-    function _checkNonce(uint256 nonce) internal virtual returns(bool) {
+    function _checkNonce(uint256 nonce) internal virtual returns (bool) {
         uint192 key = uint192(nonce >> 64);
         uint64 seq = uint64(nonce);
         return _moduleStorage().nonce[key]++ == seq;
@@ -159,7 +160,7 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         ValidationId vId = _validationStorage().root;
         function(bytes32) internal view returns(bytes32) hashTypedData =
             replayable ? _hashTypedDataSansChainId : _hashTypedData;
-        _checkNonce(nonce);
+        require(_checkNonce(nonce), InvalidNonce());
         bytes32 digest = hashTypedData(
             keccak256(
                 abi.encode(
@@ -175,12 +176,9 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
     }
 
     // NOTE : heavily motivated by solady's erc7821
-    function _verifyExecutionData(
-        bytes32 mode,
-        bytes calldata executionData
-    ) internal returns(bool success) {
+    function _verifyExecutionData(bytes32 mode, bytes calldata executionData) internal returns (bool success) {
         uint256 id = _executionModeId(mode);
-        if(id < 2) {
+        if (id < 2) {
             return true;
         }
         bytes calldata opData;
@@ -207,16 +205,12 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         assembly {
             exec := opData.offset
         }
-        
-        success = _verifyInstallAndExecuteSignature(
-            mode,
-            calls,
-            exec
-        );
+
+        success = _verifyInstallAndExecuteSignature(mode, calls, exec);
 
         _install(exec.packages);
     }
-    
+
     // NOTE : heavily motivated by solady's erc7821
     /// @dev 0: invalid mode, 1: no `opData` support, 2: with `opData` support
     function _executionModeId(bytes32 mode) internal view virtual returns (uint256 id) {
@@ -235,16 +229,15 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
             id := or(shl(1, eq(m, 0x01000000000078210001)), id) // 2.
         }
     }
-    
-    function _verifyInstallAndExecuteSignature(
-        bytes32 mode,
-        Call[] calldata calls,
-        InstallAndExecute calldata opData
-    ) internal returns (bool) {
+
+    function _verifyInstallAndExecuteSignature(bytes32 mode, Call[] calldata calls, InstallAndExecute calldata opData)
+        internal
+        returns (bool)
+    {
         ValidationId vId = _validationStorage().root;
         function(bytes32) internal view returns(bytes32) hashTypedData =
             opData.replayable ? _hashTypedDataSansChainId : _hashTypedData;
-        _checkNonce(opData.nonce);
+        require(_checkNonce(opData.nonce), InvalidNonce());
         bytes32 digest = hashTypedData(
             keccak256(
                 abi.encode(
