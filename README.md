@@ -1,3 +1,14 @@
+# how to run coverage 
+
+```sh
+forge coverage --no-match-coverage "(script|test|Foo|Bar|validator|sdk|signer)" --report lcov && genhtml lcov.info --output-directory coverage --ignore-errors inconsistent --ignore-errors corrupt
+```
+
+and 
+```sh
+open coverage/index.html
+```
+
 ## TODO
 - Testing
     - [ ] certora testing
@@ -5,18 +16,18 @@
     - [ ] halmos testing
 
 ## Kernel V4
-- [ ] native v0.8 support
-    - [ ] factory update, needs to consider 7702 context
-    - [ ] eip712 userOpHash support
+- [x] native v0.8 support
+    - [x] factory update, needs to consider 7702 context
+    - [x] eip712 userOpHash support
 - [ ] native 7702 support
-- [ ] 7579 account
-    - [ ] erc7821 execute interface
-    - [ ] execute with signature
-- [ ] enable mode
-    - [ ] allow installing modules
-    - [ ] allow multichain replay signature
-- [ ] permission validation method
-- [ ] signature replay
-    - [ ] multichain replay
-- [ ] install with signature
-
+    - test
+- [x] 7579 account
+    - [x] erc7821 execute interface
+    - [x] execute with signature
+- [x] enable mode
+    - [x] allow installing modules
+    - [x] allow multichain replay signature
+- [x] permission validation method
+- [x] signature replay
+    - [x] multichain replay
+- [x] install with signature
