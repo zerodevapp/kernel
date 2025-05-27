@@ -14,7 +14,6 @@ import "./types/Error.sol";
 import "./types/Events.sol";
 import "./types/Constants.sol";
 
-import "forge-std/console.sol";
 
 contract Kernel is ModuleManager, ExecutionManager, UUPSUpgradeable {
     IEntryPoint immutable entryPoint;

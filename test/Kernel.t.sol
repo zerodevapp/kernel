@@ -48,12 +48,6 @@ contract MockCallee {
     }
 }
 
-struct Call {
-    address target;
-    uint256 value;
-    bytes data;
-}
-
 contract MockContractETH {
     function useTransfer(address payable recipient, uint256 v) external {
         recipient.transfer(v);
@@ -123,7 +117,7 @@ contract KernelTest is Test {
         vm.stopPrank();
     }
 
-    function _rootSignUserOp(PackedUserOperation memory op, bool success) internal returns (bytes memory sig) {
+    function _rootSignUserOp(PackedUserOperation memory op, bool success, bool replay) internal returns (bytes memory sig) {
         mockValidator.sudoSetSuccess(success);
         return hex"";
     }
@@ -135,7 +129,7 @@ contract KernelTest is Test {
         return hex"";
     }
 
-    function _validatorSignUserOp(PackedUserOperation memory op, bool success) internal returns (bytes memory sig) {
+    function _validatorSignUserOp(PackedUserOperation memory op, bool success, bool replay) internal returns (bytes memory sig) {
         newValidator.sudoSetSuccess(success);
         return hex"";
     }
@@ -147,7 +141,7 @@ contract KernelTest is Test {
         return hex"";
     }
 
-    function _permissionSignUserOp(PackedUserOperation memory op, bool success) internal returns (bytes memory sig) {
+    function _permissionSignUserOp(PackedUserOperation memory op, bool success, bool replay) internal returns (bytes memory sig) {
         bytes[] memory signatures = new bytes[](2);
         signatures[0] = hex"dead";
         signatures[1] = hex"beef";
@@ -219,7 +213,7 @@ contract KernelTest is Test {
         returns (uint256 nonce)
     {
         uint8 uMode = 0;
-        if (replayableEnable) {
+        if (replayableUserOp) {
             uMode += 2 ** 6;
         }
         if (enableFlag) {
@@ -228,6 +222,7 @@ contract KernelTest is Test {
         if (replayableEnable) {
             uMode += 2 ** 2;
         }
+        ValidationMode vMode = ValidationMode.wrap(bytes1(uMode));
         uint192 key = uint192(bytes24(abi.encodePacked(uMode, vType, vId, bytes2(0x00))));
         return ep.getNonce(address(kernel), key);
     }
@@ -326,7 +321,27 @@ contract KernelTest is Test {
             paymasterAndData: hex"",
             signature: hex""
         });
-        ops[0].signature = _rootSignUserOp(ops[0], true);
+        ops[0].signature = _rootSignUserOp(ops[0], true, false);
+        ep.handleOps(ops, beneficiary);
+        assertEq(callee.bar(), 1);
+    }
+
+    function test_userop_root_replayable() external entryPointTest {
+        PackedUserOperation[] memory ops = new PackedUserOperation[](1);
+        ops[0] = PackedUserOperation({
+            sender: address(kernel),
+            nonce: encodeNonce(true, false, false, bytes1(0), bytes20(0)),
+            initCode: hex"",
+            callData: abi.encodeWithSelector(
+                Kernel.execute.selector, bytes32(0), abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
+            ),
+            accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))), // TODO make this dynamic
+            preVerificationGas: 1000000,
+            gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
+            paymasterAndData: hex"",
+            signature: hex""
+        });
+        ops[0].signature = _rootSignUserOp(ops[0], true, true);
         ep.handleOps(ops, beneficiary);
         assertEq(callee.bar(), 1);
     }
@@ -346,7 +361,7 @@ contract KernelTest is Test {
             paymasterAndData: hex"",
             signature: hex""
         });
-        ops[0].signature = _rootSignUserOp(ops[0], false);
+        ops[0].signature = _rootSignUserOp(ops[0], false, false);
         vm.expectRevert(abi.encodeWithSelector(IEntryPoint.FailedOp.selector, 0, "AA24 signature error"));
         ep.handleOps(ops, beneficiary);
     }
@@ -366,7 +381,7 @@ contract KernelTest is Test {
             paymasterAndData: hex"",
             signature: hex""
         });
-        ops[0].signature = _validatorSignUserOp(ops[0], true);
+        ops[0].signature = _validatorSignUserOp(ops[0], true, false);
         vm.expectRevert(abi.encodeWithSelector(IEntryPoint.FailedOp.selector, 0, "AA24 signature error"));
         ep.handleOps(ops, beneficiary);
     }
@@ -386,7 +401,7 @@ contract KernelTest is Test {
             paymasterAndData: hex"",
             signature: hex""
         });
-        ops[0].signature = _rootSignUserOp(ops[0], true);
+        ops[0].signature = _rootSignUserOp(ops[0], true, false);
         ep.handleOps(ops, beneficiary);
         assertEq(callee.bar(), 1);
     }
@@ -407,7 +422,7 @@ contract KernelTest is Test {
             signature: hex""
         });
         ops[0].signature =
-            encodeEnableValidatorSignature(0, true, false, _rootSignHash, _validatorSignUserOp(ops[0], true));
+            encodeEnableValidatorSignature(0, true, false, _rootSignHash, _validatorSignUserOp(ops[0], true, false));
         ep.handleOps(ops, beneficiary);
         assertEq(callee.bar(), 1);
     }
@@ -428,7 +443,7 @@ contract KernelTest is Test {
             signature: hex""
         });
         ops[0].signature =
-            encodeEnableValidatorSignature(0, false, false, _rootSignHash, _validatorSignUserOp(ops[0], true));
+            encodeEnableValidatorSignature(0, false, false, _rootSignHash, _validatorSignUserOp(ops[0], true, false));
         vm.expectRevert(abi.encodeWithSelector(IEntryPoint.FailedOp.selector, 0, "AA24 signature error"));
         ep.handleOps(ops, beneficiary);
     }
@@ -450,7 +465,7 @@ contract KernelTest is Test {
         });
 
         ops[0].signature =
-            encodeEnableValidatorSignature(0, true, false, _rootSignHash, _validatorSignUserOp(ops[0], false));
+            encodeEnableValidatorSignature(0, true, false, _rootSignHash, _validatorSignUserOp(ops[0], false, false));
         vm.expectRevert(abi.encodeWithSelector(IEntryPoint.FailedOp.selector, 0, "AA24 signature error"));
         ep.handleOps(ops, beneficiary);
     }
@@ -470,7 +485,7 @@ contract KernelTest is Test {
             paymasterAndData: hex"",
             signature: hex""
         });
-        ops[0].signature = _permissionSignUserOp(ops[0], true);
+        ops[0].signature = _permissionSignUserOp(ops[0], true, false);
         vm.expectRevert(abi.encodeWithSelector(IEntryPoint.FailedOp.selector, 0, "AA24 signature error"));
         ep.handleOps(ops, beneficiary);
     }
@@ -490,7 +505,7 @@ contract KernelTest is Test {
             paymasterAndData: hex"",
             signature: hex""
         });
-        ops[0].signature = _rootSignUserOp(ops[0], true);
+        ops[0].signature = _rootSignUserOp(ops[0], true, false);
         ep.handleOps(ops, beneficiary);
         assertEq(callee.bar(), 1);
     }
@@ -512,7 +527,7 @@ contract KernelTest is Test {
         });
 
         ops[0].signature =
-            encodeEnablePermissionSignature(0, true, false, _rootSignHash, _permissionSignUserOp(ops[0], true));
+            encodeEnablePermissionSignature(0, true, false, _rootSignHash, _permissionSignUserOp(ops[0], true, false));
         ep.handleOps(ops, beneficiary);
         assertEq(callee.bar(), 1);
     }
@@ -533,7 +548,7 @@ contract KernelTest is Test {
             signature: hex""
         });
         ops[0].signature =
-            encodeEnablePermissionSignature(0, false, false, _rootSignHash, _permissionSignUserOp(ops[0], true));
+            encodeEnablePermissionSignature(0, false, false, _rootSignHash, _permissionSignUserOp(ops[0], true, false));
         vm.expectRevert(abi.encodeWithSelector(IEntryPoint.FailedOp.selector, 0, "AA24 signature error"));
         ep.handleOps(ops, beneficiary);
     }
@@ -554,7 +569,7 @@ contract KernelTest is Test {
             signature: hex""
         });
         ops[0].signature =
-            encodeEnablePermissionSignature(0, true, false, _rootSignHash, _permissionSignUserOp(ops[0], false));
+            encodeEnablePermissionSignature(0, true, false, _rootSignHash, _permissionSignUserOp(ops[0], false, false));
         vm.expectRevert(abi.encodeWithSelector(IEntryPoint.FailedOp.selector, 0, "AA24 signature error"));
         ep.handleOps(ops, beneficiary);
     }
@@ -576,7 +591,7 @@ contract KernelTest is Test {
         });
         permissionRevertIndex = 1;
         ops[0].signature =
-            encodeEnablePermissionSignature(0, true, false, _rootSignHash, _permissionSignUserOp(ops[0], false));
+            encodeEnablePermissionSignature(0, true, false, _rootSignHash, _permissionSignUserOp(ops[0], false, false));
         vm.expectRevert(abi.encodeWithSelector(IEntryPoint.FailedOp.selector, 0, "AA24 signature error"));
         ep.handleOps(ops, beneficiary);
     }
@@ -899,8 +914,8 @@ contract KernelTest is Test {
 
     function test_execute_batch() external unitTest {
         Call[] memory calls = new Call[](2);
-        calls[0] = Call({target: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.foo.selector)});
-        calls[1] = Call({target: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.lorem.selector)});
+        calls[0] = Call({to: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.foo.selector)});
+        calls[1] = Call({to: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.lorem.selector)});
         assertEq(callee.data(), "");
         vm.expectEmit(address(callee));
         emit MockCallee.Lorem();
@@ -911,9 +926,9 @@ contract KernelTest is Test {
 
     function test_execute_batch_fail() external unitTest {
         Call[] memory calls = new Call[](2);
-        calls[0] = Call({target: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.foo.selector)});
+        calls[0] = Call({to: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.foo.selector)});
         calls[1] =
-            Call({target: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.forceRevert.selector)});
+            Call({to: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.forceRevert.selector)});
         assertEq(callee.data(), "");
         vm.expectRevert(MockCallee.Haha.selector);
         kernel.execute(LibERC7579.encodeMode(bytes1(0x01), bytes1(0x00), bytes4(0), bytes22(0)), abi.encode(calls));
@@ -921,9 +936,9 @@ contract KernelTest is Test {
 
     function test_execute_batch_fail_try() external unitTest {
         Call[] memory calls = new Call[](2);
-        calls[0] = Call({target: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.foo.selector)});
+        calls[0] = Call({to: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.foo.selector)});
         calls[1] =
-            Call({target: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.forceRevert.selector)});
+            Call({to: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.forceRevert.selector)});
         assertEq(callee.data(), "");
         kernel.execute(LibERC7579.encodeMode(bytes1(0x01), bytes1(0x01), bytes4(0), bytes22(0)), abi.encode(calls));
         assertEq(callee.bar(), 1);
@@ -964,8 +979,8 @@ contract KernelTest is Test {
 
     function test_execute_batch_from_executor() external unitTestExecutor {
         Call[] memory calls = new Call[](2);
-        calls[0] = Call({target: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.foo.selector)});
-        calls[1] = Call({target: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.lorem.selector)});
+        calls[0] = Call({to: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.foo.selector)});
+        calls[1] = Call({to: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.lorem.selector)});
         assertEq(callee.data(), "");
         vm.expectEmit(address(callee));
         emit MockCallee.Lorem();
@@ -974,6 +989,53 @@ contract KernelTest is Test {
         );
         assertEq(callee.bar(), 1);
         assertEq(callee.data(), "lorem ipsum");
+    }
+
+    bytes32 constant MODE_EXECUTE_WITH_OP_DATA = bytes10(0x01000000000078210001);
+    function encodeInstallWithExecute(Call[] memory calls, bool replayable, uint256 nonce, Install[] memory packages) internal returns(bytes memory sig) {
+        InstallAndExecute memory ie = InstallAndExecute({
+            replayable : replayable,
+            nonce : nonce,
+            packages : packages,
+            signature : hex""
+        });
+        bytes32 hash = helper.installAndExecuteDigest(address(kernel), MODE_EXECUTE_WITH_OP_DATA, calls, ie);
+        console.log("Hello ??");
+        sig = abi.encode(
+            false,
+            uint256(0),
+            packages,
+            _rootSignHash(hash, true)
+        );
+    }
+
+    function test_execute_batch_from_executor_with_install_data() external {
+        address newExecutor = makeAddr("New Executor");
+        Install[] memory packages = new Install[](1);
+        packages[0] = Install({
+            moduleType : 2,
+            module : newExecutor,
+            internalData : hex"",
+            moduleData : hex""
+        });
+
+        Call[] memory calls = new Call[](2);
+        calls[0] = Call({to: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.foo.selector)});
+        calls[1] = Call({to: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.lorem.selector)});
+        assertEq(callee.data(), "");
+        vm.startPrank(newExecutor);
+        //vm.expectEmit(address(callee));
+        //emit MockCallee.Lorem();
+        kernel.executeFromExecutor(
+            MODE_EXECUTE_WITH_OP_DATA,
+            abi.encode(
+                calls,
+                encodeInstallWithExecute(calls, false, uint256(0), packages)
+            )
+        );
+        assertEq(callee.bar(), 1);
+        assertEq(callee.data(), "lorem ipsum");
+        vm.stopPrank();
     }
 
     function test_execute_delegatecall_from_executor() external unitTestExecutor {

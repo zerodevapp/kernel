@@ -25,3 +25,16 @@ struct ValidationStorage {
     ValidationId root;
     mapping(ValidationId vId => ValidationInfo) vInfo;
 }
+
+struct Call {
+    address to;
+    uint256 value;
+    bytes data;
+}
+struct InstallAndExecute{
+    bool replayable;
+    uint256 nonce;
+    Install[] packages;
+    bytes signature;
+}
+

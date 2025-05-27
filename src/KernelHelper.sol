@@ -33,6 +33,31 @@ contract KernelHelper {
             )
         );
     }
+    
+    function installAndExecuteDigest(
+        address kernel,
+        bytes32 mode,
+        Call[] calldata calls,
+        InstallAndExecute calldata opData
+    ) external returns (bytes32) {
+        function(address, bytes32) internal view returns(bytes32) hashTypedData =
+            opData.replayable ? _hashTypedDataSansChainId : _hashTypedData;
+        bytes32 digest = hashTypedData(
+            kernel,
+            keccak256(
+                abi.encode(
+                    keccak256(
+                        "ExecuteWithInstall(bytes32 mode, bytes execData,uint256 nonce,Install[] packages)Install(uint256 moduleType,address module,bytes moduleData,bytes internalData)"
+                    ),
+                    mode,
+                    keccak256(abi.encode(calls)),
+                    opData.nonce,
+                    _installHash(opData.packages)
+                )
+            )
+        );
+        return digest;
+    }
 
     function _installHash(Install[] calldata packages) internal pure returns (bytes32) {
         bytes32[] memory packageHashes = new bytes32[](packages.length);

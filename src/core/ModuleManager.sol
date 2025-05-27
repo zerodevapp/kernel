@@ -174,13 +174,6 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         return _verifySignature(vId, address(this), digest, signature);
     }
 
-    struct InstallAndExecute{
-        bool replayable;
-        uint256 nonce;
-        Install[] packages;
-        bytes signature;
-    }
-
     // NOTE : heavily motivated by solady's erc7821
     function _verifyExecutionData(
         bytes32 mode,
@@ -191,10 +184,13 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
             return true;
         }
         bytes calldata opData;
+        Call[] calldata calls;
         assembly {
             // Use inline assembly to extract the calls and optional `opData` efficiently.
             opData.length := 0
             let o := add(executionData.offset, calldataload(executionData.offset))
+            calls.offset := add(o, 0x20)
+            calls.length := calldataload(o)
             // If the offset of `executionData` allows for `opData`, and the mode supports it.
             if gt(eq(id, 2), gt(0x40, calldataload(executionData.offset))) {
                 let q := add(executionData.offset, calldataload(add(0x20, executionData.offset)))
@@ -211,15 +207,18 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         assembly {
             exec := opData.offset
         }
-        return _verifyInstallAndExecuteSignature(
+        
+        success = _verifyInstallAndExecuteSignature(
             mode,
-            executionData,
+            calls,
             exec
         );
+
+        _install(exec.packages);
     }
     
     // NOTE : heavily motivated by solady's erc7821
-    /// @dev 0: invalid mode, 1: no `opData` support, 2: with `opData` support, 3: batch of batches.
+    /// @dev 0: invalid mode, 1: no `opData` support, 2: with `opData` support
     function _executionModeId(bytes32 mode) internal view virtual returns (uint256 id) {
         // Only supports atomic batched executions.
         // For the encoding scheme, see: https://eips.ethereum.org/EIPS/eip-7579
@@ -234,13 +233,12 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
             let m := and(shr(mul(22, 8), mode), 0xffff00000000ffffffff)
             id := eq(m, 0x01000000000000000000) // 1.
             id := or(shl(1, eq(m, 0x01000000000078210001)), id) // 2.
-            id := or(mul(3, eq(m, 0x01000000000078210002)), id) // 3.
         }
     }
     
     function _verifyInstallAndExecuteSignature(
         bytes32 mode,
-        bytes calldata execData,
+        Call[] calldata calls,
         InstallAndExecute calldata opData
     ) internal returns (bool) {
         ValidationId vId = _validationStorage().root;
@@ -254,7 +252,7 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
                         "ExecuteWithInstall(bytes32 mode, bytes execData,uint256 nonce,Install[] packages)Install(uint256 moduleType,address module,bytes moduleData,bytes internalData)"
                     ),
                     mode,
-                    execData,
+                    keccak256(abi.encode(calls)),
                     opData.nonce,
                     _installHash(opData.packages)
                 )
