@@ -93,9 +93,11 @@ contract ModuleManager is ValidationManager, ExecutorManager, HookManager, Selec
     }
 
     function _install(Install[] calldata packages) internal {
-        for (uint256 i = 0; i < packages.length; i++) {
-            Install calldata pkg = packages[i];
-            _installModule(pkg.moduleType, pkg.module, pkg.moduleData, pkg.internalData);
+        unchecked {
+            for (uint256 i = 0; i < packages.length; i++) {
+                Install calldata pkg = packages[i];
+                _installModule(pkg.moduleType, pkg.module, pkg.moduleData, pkg.internalData);
+            }
         }
     }
 

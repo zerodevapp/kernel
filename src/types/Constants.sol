@@ -31,3 +31,8 @@ bytes32 constant HOOK_MANAGER_STORAGE_SLOT = 0x4605d5f70bb605094b2e761eccdc27bed
 // bytes32(uint256(keccak256('kernel.v3.validation')) - 1)
 bytes32 constant VALIDATION_MANAGER_STORAGE_SLOT = 0x7bcaa2ced2a71450ed5a9a1b4848e8e5206dbc3f06011e595f7f55428cc6f84f;
 bytes32 constant ERC1967_IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+bytes4 constant ERC1271_MAGICVALUE = 0x1626ba7e;
+bytes4 constant ERC1271_INVALID = 0xffffffff;
+ValidationData constant SIG_VALIDATION_FAILED = ValidationData.wrap(SIG_VALIDATION_FAILED_UINT);
+uint256 constant SIG_VALIDATION_FAILED_UINT = 1;
+uint256 constant SIG_VALIDATION_SUCCESS_UINT = 0;

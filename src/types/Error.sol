@@ -16,3 +16,12 @@ error InvalidCallType();
 error InvalidExecType();
 
 error InvalidSelector();
+error InvalidEnableSignature();
+
+error Unauthorized();
+
+error InvalidValidationType();
+error OccupiedValidationId();
+
+error InvalidPermissionUninstallOrder();
+error InvalidPermissionId();

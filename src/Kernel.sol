@@ -12,11 +12,12 @@ import {Lib4337} from "./lib/Lib4337.sol";
 import "./types/Types.sol";
 import "./types/Error.sol";
 import "./types/Events.sol";
+import "./types/Constants.sol";
+
+import "forge-std/console.sol";
 
 contract Kernel is ModuleManager, ExecutionManager, EIP712 {
     IEntryPoint immutable entryPoint;
-
-    error Unauthorized();
 
     modifier onlyEntryPointOrSelf() {
         require(msg.sender == address(entryPoint) || msg.sender == address(this), Unauthorized());
@@ -45,8 +46,14 @@ contract Kernel is ModuleManager, ExecutionManager, EIP712 {
         onlyEntryPointOrSelf
         returns (uint256 validationData)
     {
-        (ValidationId verifier, bytes32 opHash, bytes calldata userOpSignature) = _processUserOp(userOp, userOpHash);
-        validationData = _validateUserOp(verifier, opHash, userOp, userOpSignature);
+        (
+            ValidationId vId,
+            function(ValidationId, bytes32, PackedUserOperation calldata, bytes calldata) internal returns(uint256)
+                validateUserOpFn,
+            bytes32 opHash,
+            bytes calldata userOpSignature
+        ) = _processUserOp(userOp, userOpHash);
+        validationData = validateUserOpFn(vId, opHash, userOp, userOpSignature);
         assembly {
             if missingAccountFunds {
                 pop(call(gas(), caller(), missingAccountFunds, callvalue(), callvalue(), callvalue(), callvalue()))
@@ -57,12 +64,20 @@ contract Kernel is ModuleManager, ExecutionManager, EIP712 {
 
     function _processUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash)
         internal
-        returns (ValidationId verifier, bytes32 opHash, bytes calldata signature)
+        returns (
+            ValidationId vId,
+            function(ValidationId, bytes32, PackedUserOperation calldata, bytes calldata) internal returns(uint256)
+            validateUserOpFn,
+            bytes32 opHash,
+            bytes calldata signature
+        )
     {
         /*
          userOp.nonce = vMode | vType | vId
         */
-        (ValidationMode vMode, ValidationType vType, ValidationId vId) = parseNonce(userOp.nonce);
+        ValidationMode vMode;
+        ValidationType vType;
+        (vMode, vType, vId) = parseNonce(userOp.nonce);
         signature = userOp.signature;
         if (isEnable(vMode)) {
             bool enableReplayable = isEnableReplayable(vMode);
@@ -70,11 +85,13 @@ contract Kernel is ModuleManager, ExecutionManager, EIP712 {
             assembly {
                 sig := signature.offset
             }
-            _verifyInstallSignature(enableReplayable, sig.packages, sig.enableSignature);
+            require(
+                _verifyInstallSignature(enableReplayable, sig.packages, sig.enableSignature), InvalidEnableSignature()
+            );
             _install(sig.packages);
             signature = sig.userOpSignature;
         }
-        verifier = _checkValidation(vMode, vType, vId);
+        (vId, validateUserOpFn) = _checkValidation(vMode, vType, vId);
         opHash = isReplayable(vMode) ? Lib4337.chainAgnosticUserOpHash(msg.sender, userOp) : userOpHash;
     }
 
@@ -102,6 +119,19 @@ contract Kernel is ModuleManager, ExecutionManager, EIP712 {
     }
 
     function _fallback() internal returns (bytes memory res) {
+        /// @solidity memory-safe-assembly
+        assembly {
+            let s := shr(224, calldataload(0))
+            // 0x150b7a02: `onERC721Received(address,address,uint256,bytes)`.
+            // 0xf23a6e61: `onERC1155Received(address,address,uint256,uint256,bytes)`.
+            // 0xbc197c81: `onERC1155BatchReceived(address,address,uint256[],uint256[],bytes)`.
+            if or(eq(s, 0x150b7a02), or(eq(s, 0xf23a6e61), eq(s, 0xbc197c81))) {
+                // Assumes `mload(0x40) <= 0xffffffff` to save gas on cleaning lower bytes.
+                mstore(0x20, s) // Store `msg.sig`.
+                return(0x3c, 0x20) // Return `msg.sig`.
+            }
+        }
+
         bytes4 selector = bytes4(msg.data[0:4]);
         SelectorConfig storage $ = _selectorConfig(selector);
         if ($.target == address(0)) {
@@ -196,10 +226,14 @@ contract Kernel is ModuleManager, ExecutionManager, EIP712 {
                 )
             )
         );
-        _verifySignature(vId, address(this), digest, signature);
+        return _verifySignature(vId, address(this), digest, signature) == ERC1271_MAGICVALUE ? true : false;
     }
 
     fallback(bytes calldata) external payable returns (bytes memory) {
         return _fallback();
+    }
+
+    receive() external payable {
+        emit Received(msg.sender, msg.value);
     }
 }
