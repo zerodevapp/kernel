@@ -39,19 +39,6 @@ function packValidationData(ValidAfter validAfter, ValidUntil validUntil) pure r
     return uint256(ValidAfter.unwrap(validAfter)) << 208 | uint256(ValidUntil.unwrap(validUntil)) << 160;
 }
 
-function parseValidationData(uint256 validationData)
-    pure
-    returns (ValidAfter validAfter, ValidUntil validUntil, address result)
-{
-    assembly {
-        result := validationData
-        validUntil := and(shr(160, validationData), 0xffffffffffff)
-        switch iszero(validUntil)
-        case 1 { validUntil := 0xffffffffffff }
-        validAfter := shr(208, validationData)
-    }
-}
-
 using {vTypeEqual as ==} for ValidationType global;
 using {eqCallType as ==} for CallType global;
 using {notEqCallType as !=} for CallType global;

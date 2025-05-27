@@ -3,31 +3,39 @@ pragma solidity ^0.8.0;
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
 import {UserOperationLib} from "account-abstraction/core/UserOperationLib.sol";
 import {Eip7702Support} from "account-abstraction/core/Eip7702Support.sol";
-import {SIG_VALIDATION_FAILED_UINT} from "../types/Constants.sol";
+import {ERC1271_MAGICVALUE, SIG_VALIDATION_FAILED_UINT} from "../types/Constants.sol";
 import {ValidationData} from "../types/Types.sol";
-
-interface IERC5267 {
-    function eip712Domain()
-    external
-    view
-    returns (
-        bytes1 fields,
-        string memory name,
-        string memory version,
-        uint256 chainId,
-        address verifyingContract,
-        bytes32 salt,
-        uint256[] memory extensions
-    );
-}
+import {IERC5267} from "../interfaces/IERC5267.sol";
 
 library Lib4337 {
     bytes32 internal constant _DOMAIN_TYPEHASH_SANS_CHAIN_ID =
         0x91ab3d17e3a50a9d89e63fd30b92be7f5336b03b287bb946787a83a9d62a2766;
 
-    function chainAgnosticUserOpHash(address ep, PackedUserOperation calldata userOp) public view returns (bytes32) {
+    function chainAgnosticUserOpHash(address ep, PackedUserOperation calldata userOp) external view returns (bytes32) {
         bytes32 overrideInitCodeHash = Eip7702Support._getEip7702InitCodeHashOverride(userOp);
         return _hashTypedDataSansChainId(ep, UserOperationLib.hash(userOp, overrideInitCodeHash));
+    }
+
+    function parseValidationData(uint256 validationData)
+        internal
+        pure
+        returns (uint48 validAfter, uint48 validUntil, address result)
+    {
+        assembly {
+            result := validationData
+            validUntil := and(shr(160, validationData), 0xffffffffffff)
+            switch iszero(validUntil)
+            case 1 { validUntil := 0xffffffffffff }
+            validAfter := shr(208, validationData)
+        }
+    }
+
+    function checkValidation(uint256 validationData) external view returns(bool) {
+        (uint48 vAfter, uint48 vUntil,address res) = Lib4337.parseValidationData(validationData);
+        if (vAfter > block.timestamp || vUntil < block.timestamp) {
+            return false;
+        }
+        return res == address(0);
     }
 
     /// @dev Variant of `_hashTypedData` that excludes the chain ID.
@@ -51,7 +59,15 @@ library Lib4337 {
         }
     }
 
-    function _intersectValidationData(ValidationData a, ValidationData b) internal pure returns (ValidationData validationData) {
+    function intersectValidationData(uint256 a, bytes4 res) external pure returns (uint256) {
+        return _intersectValidationData(a, signatureResultToValidationData(res));
+    }
+
+    function intersectValidationData(uint256 a, uint256 b) external pure returns (uint256 validationData) {
+        return _intersectValidationData(a, b);
+    }
+
+    function _intersectValidationData(uint256 a, uint256 b) private pure returns (uint256 validationData) {
         assembly {
             // xor(a,b) == shows only matching bits
             // and(xor(a,b), 0x000000000000000000000000ffffffffffffffffffffffffffffffffffffffff) == filters out the validAfter and validUntil bits
@@ -82,5 +98,9 @@ library Lib4337 {
             }
             default { validationData := SIG_VALIDATION_FAILED_UINT }
         }
+    }
+
+    function signatureResultToValidationData(bytes4 res) public pure returns (uint256 validationData) {
+        return res == ERC1271_MAGICVALUE ? 0 : 1;
     }
 }

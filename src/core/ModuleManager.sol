@@ -5,22 +5,21 @@ import {ValidationManager} from "./ValidationManager.sol";
 import {ExecutorManager} from "./ExecutorManager.sol";
 import {HookManager} from "./HookManager.sol";
 import {SelectorManager} from "./SelectorManager.sol";
+import {EIP712} from "solady/utils/EIP712.sol";
 import "../types/Error.sol";
 import "../types/Events.sol";
 import "../types/Structs.sol";
+import "../types/Constants.sol";
 import "../types/Types.sol";
+import "../lib/Utils.sol";
+import "../lib/Lib4337.sol";
 
-function calldataKeccak(bytes calldata data) pure returns (bytes32 ret) {
-    assembly ("memory-safe") {
-        let mem := mload(0x40)
-        let len := data.length
-        calldatacopy(mem, data.offset, len)
-        ret := keccak256(mem, len)
-    }
+struct ModuleStorage {
+    mapping(uint192 key => uint64) nonce;
 }
 
-contract ModuleManager is ValidationManager, ExecutorManager, HookManager, SelectorManager {
-    modifier onlyExecutor() {
+abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManager, SelectorManager, EIP712 {
+    modifier executorHook() {
         IHook hook = _executorConfig(IExecutor(msg.sender)).hook;
         bytes memory hookData = _preHook(hook);
         _;
@@ -30,6 +29,12 @@ contract ModuleManager is ValidationManager, ExecutorManager, HookManager, Selec
     function _initialized() internal view returns (bool) {
         return bytes3(address(this).code) == bytes3(0xef0100)
             || ValidationId.unwrap(_validationStorage().root) != bytes20(0);
+    }
+
+    function _moduleStorage() internal view returns (ModuleStorage storage $) {
+        assembly {
+            $.slot := MODULE_MANAGER_STORAGE_SLOT
+        }
     }
 
     function _installHash(Install[] calldata packages) internal pure returns (bytes32) {
@@ -89,7 +94,7 @@ contract ModuleManager is ValidationManager, ExecutorManager, HookManager, Selec
             revert NotImplemented();
         }
         _uninstall(module, moduleData, internalData, hook);
-        emit ModuleInstalled(moduleType, module);
+        emit ModuleUninstalled(moduleType, module);
     }
 
     function _install(Install[] calldata packages) internal {
@@ -119,5 +124,44 @@ contract ModuleManager is ValidationManager, ExecutorManager, HookManager, Selec
     ) internal {
         (bool success,) = module.call(abi.encodeWithSelector(IModule.onUninstall.selector, data));
         hook(module, internalData, success);
+    }
+
+    function _verifyExecutionData(
+        bytes32 mode,
+        bytes calldata callData
+    ) internal view returns(bool success) {
+    }
+
+    function _verifyInstallSignature(
+        bool replayable,
+        uint256 nonce,
+        Install[] calldata packages,
+        bytes calldata signature
+    ) internal view returns (bool success) {
+        uint256 validationData = _verifyInstallSignatureRaw(replayable, nonce, packages, signature);
+        return Lib4337.checkValidation(validationData);
+    }
+
+    function _verifyInstallSignatureRaw(
+        bool replayable,
+        uint256 nonce,
+        Install[] calldata packages,
+        bytes calldata signature
+    ) internal view returns (uint256 validationData) {
+        ValidationId vId = _validationStorage().root;
+        function(bytes32) internal view returns(bytes32) hashTypedData =
+            replayable ? _hashTypedDataSansChainId : _hashTypedData;
+        bytes32 digest = hashTypedData(
+            keccak256(
+                abi.encode(
+                    keccak256(
+                        "InstallPackages(uint256 nonce,Install[] packages)Install(uint256 moduleType,address module,bytes moduleData,bytes internalData)"
+                    ),
+                    nonce,
+                    _installHash(packages)
+                )
+            )
+        );
+        return _verifySignature(vId, address(this), digest, signature);
     }
 }

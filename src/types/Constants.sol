@@ -24,6 +24,7 @@ ValidationType constant VALIDATION_TYPE_PERMISSION = ValidationType.wrap(0x02);
 
 // TODO: change this -- recalculate
 bytes32 constant SELECTOR_MANAGER_STORAGE_SLOT = 0x7c341349a4360fdd5d5bc07e69f325dc6aaea3eb018b3e0ea7e53cc0bb0d6f3b;
+bytes32 constant MODULE_MANAGER_STORAGE_SLOT = 0x9bc558e75ed0a57385e96d6b87fd2864d462eed29668be6fed742168fd90ab0f;
 // bytes32(uint256(keccak256('kernel.v3.executor')) - 1)
 bytes32 constant EXECUTOR_MANAGER_STORAGE_SLOT = 0x1bbee3173dbdc223633258c9f337a0fff8115f206d302bea0ed3eac003b68b86;
 // bytes32(uint256(keccak256('kernel.v3.hook')) - 1)
