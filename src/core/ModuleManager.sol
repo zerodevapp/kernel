@@ -5,7 +5,7 @@ import {ValidationManager} from "./ValidationManager.sol";
 import {ExecutorManager} from "./ExecutorManager.sol";
 import {HookManager} from "./HookManager.sol";
 import {SelectorManager} from "./SelectorManager.sol";
-import {EIP712} from "solady/utils/EIP712.sol";
+import {ERC1271} from "solady/accounts/ERC1271.sol";
 import "../types/Error.sol";
 import "../types/Events.sol";
 import "../types/Structs.sol";
@@ -15,10 +15,11 @@ import "../lib/Utils.sol";
 import "../lib/Lib4337.sol";
 
 struct ModuleStorage {
+    uint64 nonceValidFrom;
     mapping(uint192 key => uint64) nonce;
 }
 
-abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManager, SelectorManager, EIP712 {
+abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManager, SelectorManager, ERC1271 {
     modifier executorHook() {
         IHook hook = _executorConfig(IExecutor(msg.sender)).hook;
         bytes memory hookData = _preHook(hook);
@@ -37,13 +38,19 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         }
     }
 
+    function _erc1271Signer() internal view override returns (address) {
+        return address(1);
+    }
+
     function _installHash(Install[] calldata packages) internal pure returns (bytes32) {
         bytes32[] memory packageHashes = new bytes32[](packages.length);
-        for (uint256 i = 0; i < packages.length; i++) {
-            Install calldata pkg = packages[i];
-            packageHashes[i] = keccak256(
-                abi.encode(pkg.moduleType, pkg.module, calldataKeccak(pkg.moduleData), calldataKeccak(pkg.internalData))
-            );
+        unchecked {
+            for (uint256 i = 0; i < packages.length; i++) {
+                Install calldata pkg = packages[i];
+                packageHashes[i] = keccak256(
+                    abi.encode(pkg.moduleType, pkg.module, calldataKeccak(pkg.moduleData), calldataKeccak(pkg.internalData))
+                );
+            }
         }
         return keccak256(abi.encodePacked(packageHashes));
     }
@@ -126,20 +133,21 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         hook(module, internalData, success);
     }
 
-    function _verifyExecutionData(
-        bytes32 mode,
-        bytes calldata callData
-    ) internal view returns(bool success) {
-    }
 
     function _verifyInstallSignature(
         bool replayable,
         uint256 nonce,
         Install[] calldata packages,
         bytes calldata signature
-    ) internal view returns (bool success) {
+    ) internal returns (bool success) {
         uint256 validationData = _verifyInstallSignatureRaw(replayable, nonce, packages, signature);
         return Lib4337.checkValidation(validationData);
+    }
+
+    function _checkNonce(uint256 nonce) internal virtual returns(bool) {
+        uint192 key = uint192(nonce >> 64);
+        uint64 seq = uint64(nonce);
+        return _moduleStorage().nonce[key]++ == seq;
     }
 
     function _verifyInstallSignatureRaw(
@@ -147,10 +155,11 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         uint256 nonce,
         Install[] calldata packages,
         bytes calldata signature
-    ) internal view returns (uint256 validationData) {
+    ) internal returns (uint256 validationData) {
         ValidationId vId = _validationStorage().root;
         function(bytes32) internal view returns(bytes32) hashTypedData =
             replayable ? _hashTypedDataSansChainId : _hashTypedData;
+        _checkNonce(nonce);
         bytes32 digest = hashTypedData(
             keccak256(
                 abi.encode(
@@ -163,5 +172,94 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
             )
         );
         return _verifySignature(vId, address(this), digest, signature);
+    }
+
+    struct InstallAndExecute{
+        bool replayable;
+        uint256 nonce;
+        Install[] packages;
+        bytes signature;
+    }
+
+    // NOTE : heavily motivated by solady's erc7821
+    function _verifyExecutionData(
+        bytes32 mode,
+        bytes calldata executionData
+    ) internal returns(bool success) {
+        uint256 id = _executionModeId(mode);
+        if(id < 2) {
+            return true;
+        }
+        bytes calldata opData;
+        assembly {
+            // Use inline assembly to extract the calls and optional `opData` efficiently.
+            opData.length := 0
+            let o := add(executionData.offset, calldataload(executionData.offset))
+            // If the offset of `executionData` allows for `opData`, and the mode supports it.
+            if gt(eq(id, 2), gt(0x40, calldataload(executionData.offset))) {
+                let q := add(executionData.offset, calldataload(add(0x20, executionData.offset)))
+                opData.offset := add(q, 0x20)
+                opData.length := calldataload(q)
+            }
+            // Bounds checking for `executionData` is skipped here for efficiency.
+            // This is safe if it is only used as an argument to `execute` externally.
+            // If `executionData` used as an argument to other functions externally,
+            // please perform the bounds checks via `LibERC7579.decodeBatchAndOpData`
+            /// or `abi.decode` in the other functions for safety.
+        }
+        InstallAndExecute calldata exec;
+        assembly {
+            exec := opData.offset
+        }
+        return _verifyInstallAndExecuteSignature(
+            mode,
+            executionData,
+            exec
+        );
+    }
+    
+    // NOTE : heavily motivated by solady's erc7821
+    /// @dev 0: invalid mode, 1: no `opData` support, 2: with `opData` support, 3: batch of batches.
+    function _executionModeId(bytes32 mode) internal view virtual returns (uint256 id) {
+        // Only supports atomic batched executions.
+        // For the encoding scheme, see: https://eips.ethereum.org/EIPS/eip-7579
+        // Bytes Layout:
+        // - [0]      ( 1 byte )  `0x01` for batch call.
+        // - [1]      ( 1 byte )  `0x00` for revert on any failure.
+        // - [2..5]   ( 4 bytes)  Reserved by ERC7579 for future standardization.
+        // - [6..9]   ( 4 bytes)  `0x00000000` or `0x78210001` or `0x78210002`.
+        // - [10..31] (22 bytes)  Unused. Free for use.
+        /// @solidity memory-safe-assembly
+        assembly {
+            let m := and(shr(mul(22, 8), mode), 0xffff00000000ffffffff)
+            id := eq(m, 0x01000000000000000000) // 1.
+            id := or(shl(1, eq(m, 0x01000000000078210001)), id) // 2.
+            id := or(mul(3, eq(m, 0x01000000000078210002)), id) // 3.
+        }
+    }
+    
+    function _verifyInstallAndExecuteSignature(
+        bytes32 mode,
+        bytes calldata execData,
+        InstallAndExecute calldata opData
+    ) internal returns (bool) {
+        ValidationId vId = _validationStorage().root;
+        function(bytes32) internal view returns(bytes32) hashTypedData =
+            opData.replayable ? _hashTypedDataSansChainId : _hashTypedData;
+        _checkNonce(opData.nonce);
+        bytes32 digest = hashTypedData(
+            keccak256(
+                abi.encode(
+                    keccak256(
+                        "ExecuteWithInstall(bytes32 mode, bytes execData,uint256 nonce,Install[] packages)Install(uint256 moduleType,address module,bytes moduleData,bytes internalData)"
+                    ),
+                    mode,
+                    execData,
+                    opData.nonce,
+                    _installHash(opData.packages)
+                )
+            )
+        );
+        return Lib4337.checkValidation(_verifySignature(vId, address(this), digest, opData.signature));
     }
 }

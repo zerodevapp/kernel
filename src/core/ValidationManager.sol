@@ -231,7 +231,7 @@ abstract contract ValidationManager {
         if (pkg.moduleType == 1) {
             vId = ValidationId.wrap(bytes20(pkg.module));
         } else if (pkg.moduleType == 5 || pkg.moduleType == 6) {
-            vId = ValidationId.wrap(bytes20(pkg.internalData[0:4]));
+            vId = ValidationId.wrap(bytes20(pkg.internalData[0:20]));
         } else {
             revert InvalidRootValidation();
         }

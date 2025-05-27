@@ -90,10 +90,10 @@ contract Kernel is ModuleManager, ExecutionManager, UUPSUpgradeable {
             Lib4337.intersectValidationData(validationData, validateUserOpFn(vId, opHash, userOp, signature));
     }
 
-    function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4) {
+    function _erc1271IsValidSignatureNowCalldata(bytes32 hash, bytes calldata signature) internal view override returns(bool) {
         ValidationId vId = ValidationId.wrap(bytes20(signature[0:20]));
         uint256 validationData = _verifySignature(vId, msg.sender, hash, signature[20:]);
-        return Lib4337.checkValidation(validationData) ? ERC1271_MAGICVALUE : ERC1271_INVALID;
+        return Lib4337.checkValidation(validationData);
     }
 
     /// execution

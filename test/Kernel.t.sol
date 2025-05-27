@@ -615,6 +615,59 @@ contract KernelTest is Test {
         assertEq(address(kernel.executorConfig(newEx).hook), address(0));
     }
 
+    function test_install_packages_with_signature() external unitTest {
+        Install[] memory packages = new Install[](2);
+        packages[0] = Install({
+            moduleType : 1,
+            module : address(newValidator),
+            internalData: hex"",
+            moduleData: hex""
+        });
+        packages[1] = Install({
+            moduleType : 5,
+            module : address(policy),
+            internalData: abi.encodePacked(permissionId),
+            moduleData: hex""
+        });
+        kernel.installModule(false, 0, packages, enableSig(0, true, false, packages, _rootSignHash));
+    }
+
+    function test_change_root() external unitTest {
+        Install[] memory packages = new Install[](2);
+        packages[0] = Install({
+            moduleType : 1,
+            module : address(newValidator),
+            internalData: hex"",
+            moduleData: hex""
+        });
+        packages[1] = Install({
+            moduleType : 5,
+            module : address(policy),
+            internalData: abi.encodePacked(permissionId),
+            moduleData: hex""
+        });
+        kernel.installModule(false, 0, packages, enableSig(0, true, false, packages, _rootSignHash));
+
+        kernel.setRoot(ValidationId.wrap(bytes20(address(newValidator))));
+    }
+
+    function test_upgradeTo() external unitTest {
+        Kernel newTemplate = new Kernel(ep);
+        kernel.upgradeToAndCall(address(newTemplate), hex"");
+    }
+
+    function test_install_invalid() external unitTest {
+        MockHook mockHook = new MockHook();
+        vm.expectRevert(NotImplemented.selector);
+        kernel.installModule(10, address(mockHook), abi.encode(hex"", ""));
+    }
+
+    function test_uninstall_invalid() external unitTest {
+        MockHook mockHook = new MockHook();
+        vm.expectRevert(NotImplemented.selector);
+        kernel.uninstallModule(10, address(mockHook), abi.encode(hex"", ""));
+    }
+
     function test_install_hook() external unitTest {
         MockHook mockHook = new MockHook();
         kernel.installModule(4, address(mockHook), abi.encode(hex"", ""));
