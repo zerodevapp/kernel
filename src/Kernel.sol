@@ -3,16 +3,18 @@ pragma solidity ^0.8.0;
 import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
 import {IAccount} from "account-abstraction/interfaces/IAccount.sol";
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
-import {IValidator} from "./interfaces/IERC7579Modules.sol";
+import {IValidator, IExecutor} from "./interfaces/IERC7579Modules.sol";
 import {ModuleManager, Install} from "./core/ModuleManager.sol";
 import {parseNonce} from "./core/ValidationManager.sol";
 import {ExecutionManager} from "./core/ExecutionManager.sol";
 import {Lib4337} from "./lib/Lib4337.sol";
 import {UUPSUpgradeable} from "solady/utils/UUPSUpgradeable.sol";
+import {LibERC7579} from "solady/accounts/LibERC7579.sol";
 import "./types/Types.sol";
 import "./types/Error.sol";
 import "./types/Events.sol";
 import "./types/Constants.sol";
+import "./types/Structs.sol";
 
 contract Kernel is ModuleManager, ExecutionManager, UUPSUpgradeable {
     IEntryPoint immutable entryPoint;
@@ -214,5 +216,59 @@ contract Kernel is ModuleManager, ExecutionManager, UUPSUpgradeable {
 
     receive() external payable {
         emit Received(msg.sender, msg.value);
+    }
+
+    function supportsExecutionMode(bytes32 mode) external view returns(bool) {
+        bytes1 callType = LibERC7579.getCallType(mode);
+        bytes1 execType = LibERC7579.getExecType(mode);
+        if (execType == LibERC7579.EXECTYPE_DEFAULT) {
+        } else if (execType == LibERC7579.EXECTYPE_TRY) {
+        } else {
+            return false;
+        }
+        if (callType == LibERC7579.CALLTYPE_SINGLE) {
+        } else if (callType == LibERC7579.CALLTYPE_BATCH) {
+        } else if (callType == LibERC7579.CALLTYPE_DELEGATECALL) {
+        } else {
+            return false;
+        }
+        return true;
+    }
+
+    function supportsModule(uint256 moduleTypeId) external view returns(bool) {
+        return moduleTypeId < 7;
+    }
+
+    function isModuleInstalled(uint256 moduleTypeId, address module, bytes calldata additionalContext) external view returns(bool) {
+        if(moduleTypeId == 1) {
+            ValidationId vId = ValidationId.wrap(bytes20(module));
+            return !(_validationStorage().vInfo[vId].vType == VALIDATION_TYPE_ROOT);
+        } else if(moduleTypeId == 2) {
+            return address(_executorConfig(IExecutor(module)).hook) != address(0);
+        } else if(moduleTypeId == 3) {
+            bytes4 selector = bytes4(additionalContext);
+            return _selectorConfig(selector).target == module;
+        } else if(moduleTypeId == 4) {
+            return _hookStorage().enabled[module];
+        } else if(moduleTypeId == 5) {
+            ValidationId vId = ValidationId.wrap(bytes20(additionalContext));
+            ValidationInfo storage $ =_validationStorage().vInfo[vId];
+            for(uint256 i = 0; i < $.policies.length; i++) {
+                if($.policies[i] == module) {
+                    return true;
+                }
+            }
+            return  false;
+        } else if(moduleTypeId == 6) {
+            ValidationId vId = ValidationId.wrap(bytes20(additionalContext));
+            ValidationInfo storage $ =_validationStorage().vInfo[vId];
+            return $.signer == module;
+        } else {
+            revert NotImplemented();
+        }
+    }
+    
+    function accountId() external view returns (string memory accountImplementationId) {
+        return "kernel.v0.4";
     }
 }

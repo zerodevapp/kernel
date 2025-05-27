@@ -666,15 +666,18 @@ contract KernelTest is Test {
     }
 
     function test_install_executor_oninstall_success() external unitTest {
+        assertTrue(kernel.supportsModule(2));
         address newEx = address(new MockExecutor());
         kernel.installModule(2, newEx, abi.encode(hex"deadbeef", ""));
         assertEq(address(kernel.executorConfig(newEx).hook), address(1));
+        assertTrue(kernel.isModuleInstalled(2, newEx, hex""));
     }
 
     function test_install_executor_oninstall_fail() external unitTest {
         address newEx = makeAddr("New Executor");
         kernel.installModule(2, newEx, abi.encode(hex"", ""));
         assertEq(address(kernel.executorConfig(newEx).hook), address(1));
+        assertTrue(kernel.isModuleInstalled(2, newEx, hex""));
     }
 
     function test_uninstall_executor_onuninstall_success() external unitTest {
@@ -739,8 +742,10 @@ contract KernelTest is Test {
     }
 
     function test_install_hook() external unitTest {
+        assertTrue(kernel.supportsModule(4));
         MockHook mockHook = new MockHook();
         kernel.installModule(4, address(mockHook), abi.encode(hex"", ""));
+        assertTrue(kernel.isModuleInstalled(4, address(mockHook), hex""));
     }
 
     function test_uninstall_hook() external unitTest {
@@ -750,12 +755,14 @@ contract KernelTest is Test {
     }
 
     function test_install_validator() external unitTest {
+        assertTrue(kernel.supportsModule(1));
         ValidationId vId = ValidationId.wrap(bytes20(address(newValidator)));
         kernel.installModule(1, address(newValidator), abi.encode(hex"deadbeef", "InternalData"));
         ValidationInfo memory vInfo = kernel.validationInfo(vId);
         assertTrue(vInfo.vType == VALIDATION_TYPE_VALIDATOR);
         bytes4 ret = kernel.isValidSignature(keccak256("Hello world"), abi.encodePacked(newValidator, _validatorSignHash(keccak256("Hello world"), true)));
         assertEq(ret, ERC1271_MAGICVALUE);
+        assertTrue(kernel.isModuleInstalled(1, address(newValidator), hex""));
     }
 
     function test_uninstall_validator() external unitTest {
@@ -769,6 +776,8 @@ contract KernelTest is Test {
     }
 
     function test_install_permission() external unitTest {
+        assertTrue(kernel.supportsModule(5));
+        assertTrue(kernel.supportsModule(6));
         ValidationId vId = ValidationId.wrap(permissionId);
         ValidationInfo memory vInfo = kernel.validationInfo(vId);
         assertTrue(vInfo.vType == VALIDATION_TYPE_ROOT);
@@ -776,21 +785,25 @@ contract KernelTest is Test {
         kernel.installModule(6, address(signer), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
         bytes4 ret = kernel.isValidSignature(keccak256("Hello world"), abi.encodePacked(permissionId, _permissionSignHash(keccak256("Hello world"), true)));
         assertEq(ret, ERC1271_MAGICVALUE);
+        assertTrue(kernel.isModuleInstalled(5, address(policy), abi.encodePacked(permissionId)));
+        assertTrue(kernel.isModuleInstalled(6, address(signer), abi.encodePacked(permissionId)));
     }
 
     function test_install_policy() external unitTest {
+        assertTrue(kernel.supportsModule(5));
         MockPolicy mock = new MockPolicy();
-        ValidationId vId = ValidationId.wrap(bytes20(keccak256(abi.encodePacked("deadbeef"))));
+        ValidationId vId = ValidationId.wrap(permissionId);
         ValidationInfo memory vInfo = kernel.validationInfo(vId);
         assertTrue(vInfo.vType == VALIDATION_TYPE_ROOT);
         kernel.installModule(5, address(mock), abi.encode(hex"deadbeef", abi.encodePacked(vId)));
         vInfo = kernel.validationInfo(vId);
         assertTrue(vInfo.vType == VALIDATION_TYPE_PERMISSION);
+        assertTrue(kernel.isModuleInstalled(5, address(mock), abi.encodePacked(permissionId)));
     }
 
     function test_uninstall_policy() external unitTest {
         MockPolicy mock = new MockPolicy();
-        ValidationId vId = ValidationId.wrap(bytes20(keccak256(abi.encodePacked("deadbeef"))));
+        ValidationId vId = ValidationId.wrap(permissionId);
         ValidationInfo memory vInfo = kernel.validationInfo(vId);
         assertTrue(vInfo.vType == VALIDATION_TYPE_ROOT);
         kernel.installModule(5, address(mock), abi.encode(hex"deadbeef", abi.encodePacked(vId)));
@@ -802,13 +815,15 @@ contract KernelTest is Test {
     }
 
     function test_install_signer() external unitTest {
+        assertTrue(kernel.supportsModule(6));
         MockSigner mock = new MockSigner();
-        ValidationId vId = ValidationId.wrap(bytes20(keccak256(abi.encodePacked("deadbeef"))));
+        ValidationId vId = ValidationId.wrap(permissionId);
         ValidationInfo memory vInfo = kernel.validationInfo(vId);
         assertTrue(vInfo.vType == VALIDATION_TYPE_ROOT);
         kernel.installModule(6, address(mock), abi.encode(hex"deadbeef", abi.encodePacked(vId)));
         vInfo = kernel.validationInfo(vId);
         assertTrue(vInfo.vType == VALIDATION_TYPE_PERMISSION);
+        assertTrue(kernel.isModuleInstalled(6, address(mock), abi.encodePacked(permissionId)));
     }
 
     function test_uninstall_signer() external unitTest {
@@ -827,6 +842,7 @@ contract KernelTest is Test {
     }
 
     function test_install_selector_call() external unitTest {
+        assertTrue(kernel.supportsModule(3));
         kernel.installModule(
             3,
             address(mockFallback),
@@ -842,6 +858,7 @@ contract KernelTest is Test {
         assertEq(address(c.target), address(mockFallback));
         assertEq(address(c.hook), address(1));
         assertTrue(c.callType == CallType.wrap(bytes1(0x00)));
+        assertTrue(kernel.isModuleInstalled(3, address(mockFallback), abi.encodePacked(MockFallback.fallbackFunction.selector)));
     }
 
     function test_install_selector_call_withhook() external unitTest {
@@ -942,6 +959,7 @@ contract KernelTest is Test {
     function test_execute() external unitTest {
         vm.expectEmit(address(callee));
         emit MockCallee.Lorem();
+        assertEq(kernel.supportsExecutionMode(bytes32(0)), true);
         kernel.execute(
             bytes32(0), abi.encodePacked(address(callee), uint256(0), abi.encodeWithSelector(MockCallee.foo.selector))
         );
@@ -957,24 +975,30 @@ contract KernelTest is Test {
     }
 
     function test_execute_fail_invalid_callType() external unitTest {
+        bytes32 mode = LibERC7579.encodeMode(bytes1(0x02), bytes1(0x01), bytes4(0), bytes22(0));
+        assertEq(kernel.supportsExecutionMode(mode), false);
         vm.expectRevert(InvalidCallType.selector, address(kernel));
         kernel.execute(
-            LibERC7579.encodeMode(bytes1(0x02), bytes1(0x01), bytes4(0), bytes22(0)),
+            mode,
             abi.encodePacked(address(callee), uint256(0), abi.encodeWithSelector(MockCallee.foo.selector))
         );
     }
 
     function test_execute_fail_invalid_execType() external unitTest {
+        bytes32 mode = LibERC7579.encodeMode(bytes1(0x00), bytes1(0x02), bytes4(0), bytes22(0));
+        assertEq(kernel.supportsExecutionMode(mode), false);
         vm.expectRevert(InvalidExecType.selector, address(kernel));
         kernel.execute(
-            LibERC7579.encodeMode(bytes1(0x00), bytes1(0x02), bytes4(0), bytes22(0)),
+            mode,
             abi.encodePacked(address(callee), uint256(0), abi.encodeWithSelector(MockCallee.foo.selector))
         );
     }
 
     function test_execute_fail_try() external unitTest {
+        bytes32 mode = LibERC7579.encodeMode(bytes1(0x00), bytes1(0x01), bytes4(0), bytes22(0));
+        assertEq(kernel.supportsExecutionMode(mode), true);
         kernel.execute(
-            LibERC7579.encodeMode(bytes1(0x00), bytes1(0x01), bytes4(0), bytes22(0)),
+            mode,
             abi.encodePacked(address(callee), uint256(0), abi.encodeWithSelector(MockCallee.forceRevert.selector))
         );
     }
@@ -984,9 +1008,11 @@ contract KernelTest is Test {
         calls[0] = Call({to: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.foo.selector)});
         calls[1] = Call({to: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.lorem.selector)});
         assertEq(callee.data(), "");
+        bytes32 mode = LibERC7579.encodeMode(bytes1(0x01), bytes1(0x00), bytes4(0), bytes22(0));
+        assertEq(kernel.supportsExecutionMode(mode), true);
         vm.expectEmit(address(callee));
         emit MockCallee.Lorem();
-        kernel.execute(LibERC7579.encodeMode(bytes1(0x01), bytes1(0x00), bytes4(0), bytes22(0)), abi.encode(calls));
+        kernel.execute(mode, abi.encode(calls));
         assertEq(callee.bar(), 1);
         assertEq(callee.data(), "lorem ipsum");
     }
@@ -996,6 +1022,8 @@ contract KernelTest is Test {
         calls[0] = Call({to: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.foo.selector)});
         calls[1] = Call({to: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.forceRevert.selector)});
         assertEq(callee.data(), "");
+        bytes32 mode = LibERC7579.encodeMode(bytes1(0x01), bytes1(0x00), bytes4(0), bytes22(0));
+        assertEq(kernel.supportsExecutionMode(mode), true);
         vm.expectRevert(MockCallee.Haha.selector);
         kernel.execute(LibERC7579.encodeMode(bytes1(0x01), bytes1(0x00), bytes4(0), bytes22(0)), abi.encode(calls));
     }
@@ -1005,11 +1033,15 @@ contract KernelTest is Test {
         calls[0] = Call({to: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.foo.selector)});
         calls[1] = Call({to: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.forceRevert.selector)});
         assertEq(callee.data(), "");
+        bytes32 mode = LibERC7579.encodeMode(bytes1(0x01), bytes1(0x01), bytes4(0), bytes22(0));
+        assertEq(kernel.supportsExecutionMode(mode), true);
         kernel.execute(LibERC7579.encodeMode(bytes1(0x01), bytes1(0x01), bytes4(0), bytes22(0)), abi.encode(calls));
         assertEq(callee.bar(), 1);
     }
 
     function test_execute_delegatecall() external unitTest {
+        bytes32 mode = LibERC7579.encodeMode(bytes1(0xff), bytes1(0x00), bytes4(0), bytes22(0));
+        assertEq(kernel.supportsExecutionMode(mode), true);
         vm.expectEmit(address(kernel));
         emit MockCallee.Lorem();
         kernel.execute(
@@ -1027,6 +1059,8 @@ contract KernelTest is Test {
     }
 
     function test_execute_delegatecall_fail_try() external unitTest {
+        bytes32 mode = LibERC7579.encodeMode(bytes1(0xff), bytes1(0x01), bytes4(0), bytes22(0));
+        assertEq(kernel.supportsExecutionMode(mode), true);
         kernel.execute(
             LibERC7579.encodeMode(bytes1(0xff), bytes1(0x01), bytes4(0), bytes22(0)),
             abi.encodePacked(address(callee), abi.encodeWithSelector(MockCallee.forceRevert.selector))
