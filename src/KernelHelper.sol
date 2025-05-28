@@ -64,7 +64,12 @@ contract KernelHelper {
         for (uint256 i = 0; i < packages.length; i++) {
             Install calldata pkg = packages[i];
             packageHashes[i] = keccak256(
-                abi.encode(pkg.moduleType, pkg.module, calldataKeccak(pkg.moduleData), calldataKeccak(pkg.internalData))
+                abi.encode(
+                    keccak256(
+                        "Install(uint256 moduleType,address module,bytes moduleData,bytes internalData)"
+                    ),
+                    pkg.moduleType, pkg.module, calldataKeccak(pkg.moduleData), calldataKeccak(pkg.internalData)
+                )
             );
         }
         return keccak256(abi.encodePacked(packageHashes));
