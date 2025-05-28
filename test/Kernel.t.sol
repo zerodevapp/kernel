@@ -175,8 +175,12 @@ contract KernelTest is Test {
         bytes[] memory signatures = new bytes[](2);
         signatures[0] = hex"dead";
         signatures[1] = hex"beef";
+        if (success || permissionRevertIndex != 0) {
         policy.sudoSetPass(address(kernel), permissionId, true);
+        }
+        if (success || permissionRevertIndex != 1) {
         signer.sudoSetPass(address(kernel), permissionId, true);
+        }
 
         return abi.encode(signatures);
     }
@@ -654,10 +658,35 @@ contract KernelTest is Test {
         ep.handleOps(ops, beneficiary);
     }
 
-    function test_deploy() external unitTest {
+    function test_deploy_root_validator() external unitTest {
         vm.skip(is7702);
         Install[] memory pkgs = new Install[](1);
         pkgs[0] = Install({moduleType: 1, module: address(mockValidator), moduleData: hex"", internalData: hex""});
+        Kernel k = factory.deploy(pkgs, 1);
+    }
+    
+    function test_deploy_root_permission() external unitTest {
+        Install[] memory pkgs = new Install[](2);
+        pkgs[0] = Install({
+            moduleType: 5,
+            module: address(policy),
+            internalData: abi.encodePacked(permissionId),
+            moduleData: hex""
+        });
+        pkgs[1] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
+        Kernel k = factory.deploy(pkgs, 1);
+    }
+    
+    function test_deploy_root_fail_invalid_root() external unitTest {
+        Install[] memory pkgs = new Install[](2);
+        pkgs[0] = Install({
+            moduleType: 2,
+            module: address(executor),
+            internalData: hex"",
+            moduleData: hex""
+        });
+        pkgs[1] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
+        vm.expectRevert(InvalidRootValidation.selector);
         Kernel k = factory.deploy(pkgs, 1);
     }
 
@@ -752,24 +781,112 @@ contract KernelTest is Test {
         );
     }
 
-    function test_erc1271_root() external {
+    function test_erc1271_root() external unitTest {
         bytes32 messageHash = keccak256("Hello world");
-
         (bytes32 contentsHash, bytes memory sig) =
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _rootSignHash, false, true);
         bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes20(0), sig));
         assertEq(ret, ERC1271_MAGICVALUE);
     }
+    
+    function test_erc1271_root_fail() external unitTest {
+        bytes32 messageHash = keccak256("Hello world");
+        (bytes32 contentsHash, bytes memory sig) =
+            _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _rootSignHash, false, false);
+        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes20(0), sig));
+        assertEq(ret, ERC1271_INVALID);
+    }
 
-    function test_erc1271_root_personal_sign() external {
+    function test_erc1271_root_personal_sign() external unitTest {
         bytes32 messageHash = keccak256("Hello world");
         bytes32 personalHash = _toERC1271HashPersonalSign(messageHash);
-        console.log("PersonalSig Hash :");
-        console.logBytes32(personalHash);
-
         bytes memory sig = _rootSignHash(personalHash, true);
         bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes20(0), sig));
         assertEq(ret, ERC1271_MAGICVALUE);
+    }
+
+    function test_erc1271_root_personal_sign_fail() external unitTest {
+        bytes32 messageHash = keccak256("Hello world");
+        bytes32 personalHash = _toERC1271HashPersonalSign(messageHash);
+        bytes memory sig = _rootSignHash(personalHash, false);
+        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes20(0), sig));
+        assertEq(ret, ERC1271_INVALID);
+    }
+
+    function test_erc1271_validator() external unitTest {
+        bytes32 messageHash = keccak256("Hello world");
+        (bytes32 contentsHash, bytes memory sig) =
+            _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _validatorSignHash, false, true);
+        kernel.installModule(1, address(newValidator), abi.encode(hex"", hex""));
+        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes20(address(newValidator)), sig));
+        assertEq(ret, ERC1271_MAGICVALUE);
+    }
+
+    function test_erc1271_validator_fail() external unitTest {
+        bytes32 messageHash = keccak256("Hello world");
+        (bytes32 contentsHash, bytes memory sig) =
+            _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _validatorSignHash, false, false);
+        kernel.installModule(1, address(newValidator), abi.encode(hex"", hex""));
+        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes20(address(newValidator)), sig));
+        assertEq(ret, ERC1271_INVALID);
+    }
+
+    function test_erc1271_validator_personal_sign() external unitTest{
+        bytes32 messageHash = keccak256("Hello world");
+        bytes32 personalHash = _toERC1271HashPersonalSign(messageHash);
+        bytes memory sig = _validatorSignHash(personalHash, true);
+        kernel.installModule(1, address(newValidator), abi.encode(hex"", hex""));
+        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes20(address(newValidator)), sig));
+        assertEq(ret, ERC1271_MAGICVALUE);
+    }
+
+    function test_erc1271_validator_personal_sign_fail() external unitTest{
+        bytes32 messageHash = keccak256("Hello world");
+        bytes32 personalHash = _toERC1271HashPersonalSign(messageHash);
+        bytes memory sig = _validatorSignHash(personalHash, false);
+        kernel.installModule(1, address(newValidator), abi.encode(hex"", hex""));
+        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes20(address(newValidator)), sig));
+        assertEq(ret, ERC1271_INVALID);
+    }
+
+    function test_erc1271_permission() external unitTest {
+        bytes32 messageHash = keccak256("Hello world");
+        (bytes32 contentsHash, bytes memory sig) =
+            _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _permissionSignHash, false, true);
+        kernel.installModule(5, address(policy), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
+        kernel.installModule(6, address(signer), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
+        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(permissionId, sig));
+        assertEq(ret, ERC1271_MAGICVALUE);
+    }
+
+    function test_erc1271_permission_fail() external unitTest {
+        bytes32 messageHash = keccak256("Hello world");
+        (bytes32 contentsHash, bytes memory sig) =
+            _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _permissionSignHash, false, false);
+        kernel.installModule(5, address(policy), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
+        kernel.installModule(6, address(signer), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
+        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(permissionId, sig));
+        assertEq(ret, ERC1271_INVALID);
+    }
+
+    function test_erc1271_permission_personal_sign() external unitTest{
+        bytes32 messageHash = keccak256("Hello world");
+        bytes32 personalHash = _toERC1271HashPersonalSign(messageHash);
+        bytes memory sig = _permissionSignHash(personalHash, true);
+        kernel.installModule(5, address(policy), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
+        kernel.installModule(6, address(signer), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
+        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(permissionId, sig));
+        assertEq(ret, ERC1271_MAGICVALUE);
+    }
+
+    function test_erc1271_permission_personal_sign_fail() external unitTest{
+        bytes32 messageHash = keccak256("Hello world");
+        bytes32 personalHash = _toERC1271HashPersonalSign(messageHash);
+        bytes memory sig = _permissionSignHash(personalHash, false);
+        kernel.installModule(5, address(policy), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
+        kernel.installModule(6, address(signer), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
+        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(permissionId, sig));
+        assertEq(ret, ERC1271_INVALID);
     }
 
     function test_install_invalid() external unitTest {
