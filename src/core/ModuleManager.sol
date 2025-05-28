@@ -60,6 +60,7 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         }
     }
 
+    // NOTE: this is not accesible, but required to override because of solady's erc1271
     function _erc1271Signer() internal view override returns (address) {
         return address(1);
     }
