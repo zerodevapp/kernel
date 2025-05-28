@@ -11,7 +11,7 @@ library Lib4337 {
     bytes32 internal constant _DOMAIN_TYPEHASH_SANS_CHAIN_ID =
         0x91ab3d17e3a50a9d89e63fd30b92be7f5336b03b287bb946787a83a9d62a2766;
 
-    function chainAgnosticUserOpHash(address ep, PackedUserOperation calldata userOp) internal view returns (bytes32) {
+    function chainAgnosticUserOpHash(address ep, PackedUserOperation calldata userOp) external view returns (bytes32) {
         bytes32 overrideInitCodeHash = Eip7702Support._getEip7702InitCodeHashOverride(userOp);
         return _hashTypedDataSansChainId(ep, UserOperationLib.hash(userOp, overrideInitCodeHash));
     }

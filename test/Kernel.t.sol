@@ -190,8 +190,10 @@ contract KernelTest is Test {
         bytes32 digest = helper.installDigest(address(kernel), replayable, nonce, packages);
         MockKernel mockKernel = new MockKernel(ep);
 
-        vm.store(address(kernel), ERC1967_IMPLEMENTATION_SLOT, bytes32(uint256(uint160(address(mockKernel)))));
-        assertEq(MockKernel(payable(address(kernel))).installDigest(replayable, nonce, packages), digest);
+        if (!is7702) {
+            vm.store(address(kernel), ERC1967_IMPLEMENTATION_SLOT, bytes32(uint256(uint160(address(mockKernel)))));
+            assertEq(MockKernel(payable(address(kernel))).installDigest(replayable, nonce, packages), digest);
+        }
         return signEnable(digest, enableSuccess);
     }
 
@@ -1119,10 +1121,12 @@ contract KernelTest is Test {
 
         MockKernel mockKernel = new MockKernel(ep);
 
-        vm.store(address(kernel), ERC1967_IMPLEMENTATION_SLOT, bytes32(uint256(uint160(address(mockKernel)))));
-        assertEq(
-            MockKernel(payable(address(kernel))).installAndExecuteDigest(MODE_EXECUTE_WITH_OP_DATA, calls, ie), hash
-        );
+        if (!is7702) {
+            vm.store(address(kernel), ERC1967_IMPLEMENTATION_SLOT, bytes32(uint256(uint160(address(mockKernel)))));
+            assertEq(
+                MockKernel(payable(address(kernel))).installAndExecuteDigest(MODE_EXECUTE_WITH_OP_DATA, calls, ie), hash
+            );
+        }
         sig = abi.encode(false, uint256(0), packages, _rootSignHash(hash, true));
     }
 

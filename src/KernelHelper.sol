@@ -65,10 +65,11 @@ contract KernelHelper {
             Install calldata pkg = packages[i];
             packageHashes[i] = keccak256(
                 abi.encode(
-                    keccak256(
-                        "Install(uint256 moduleType,address module,bytes moduleData,bytes internalData)"
-                    ),
-                    pkg.moduleType, pkg.module, calldataKeccak(pkg.moduleData), calldataKeccak(pkg.internalData)
+                    keccak256("Install(uint256 moduleType,address module,bytes moduleData,bytes internalData)"),
+                    pkg.moduleType,
+                    pkg.module,
+                    calldataKeccak(pkg.moduleData),
+                    calldataKeccak(pkg.internalData)
                 )
             );
         }

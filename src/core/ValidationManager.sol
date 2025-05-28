@@ -122,12 +122,12 @@ abstract contract ValidationManager {
             require($.vInfo[vId].vType == vType, InvalidValidator());
         }
 
-        if (vType == VALIDATION_TYPE_VALIDATOR) {
-            validateUserOp = _validateUserOpValidator;
-        } else if (vType == VALIDATION_TYPE_PERMISSION) {
+        if (vType == VALIDATION_TYPE_PERMISSION) {
             validateUserOp = _validateUserOpPermission;
         } else {
-            revert InvalidValidationType();
+            // this includes 7702
+            validateUserOp = _validateUserOpValidator;
+            //revert InvalidValidationType();
         }
     }
 
@@ -231,7 +231,7 @@ abstract contract ValidationManager {
     }
 
     function _verify7702Signature(bytes32 hash, bytes calldata sig) internal view returns (bool) {
-        return ECDSA.recover(hash, sig) == address(this);
+        return ECDSA.tryRecover(hash, sig) == address(this);
     }
 
     function _setRoot(Install calldata pkg) internal {
