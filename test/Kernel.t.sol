@@ -745,12 +745,9 @@ contract KernelTest is Test {
         assertEq(address(uint160(uint256(impl))), address(newTemplate));
     }
 
-
     function test_erc7739() public {
         assertEq(
-            kernel.isValidSignature(
-                0x7739773977397739773977397739773977397739773977397739773977397739, ""
-            ),
+            kernel.isValidSignature(0x7739773977397739773977397739773977397739773977397739773977397739, ""),
             bytes4(0x77390001)
         );
     }
@@ -758,13 +755,12 @@ contract KernelTest is Test {
     function test_erc1271_root() external {
         bytes32 messageHash = keccak256("Hello world");
 
-        (bytes32 contentsHash, bytes memory sig) = _erc1271Signature(messageHash,"C(bytes32 stuff)", "", _rootSignHash, false, true);
-        bytes4 ret = kernel.isValidSignature(
-            _toContentsHash(contentsHash), abi.encodePacked(bytes20(0), sig )
-        );
+        (bytes32 contentsHash, bytes memory sig) =
+            _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _rootSignHash, false, true);
+        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes20(0), sig));
         assertEq(ret, ERC1271_MAGICVALUE);
     }
-    
+
     function test_erc1271_root_personal_sign() external {
         bytes32 messageHash = keccak256("Hello world");
         bytes32 personalHash = _toERC1271HashPersonalSign(messageHash);
@@ -772,9 +768,7 @@ contract KernelTest is Test {
         console.logBytes32(personalHash);
 
         bytes memory sig = _rootSignHash(personalHash, true);
-        bytes4 ret = kernel.isValidSignature(
-            messageHash, abi.encodePacked(bytes20(0), sig)
-        );
+        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes20(0), sig));
         assertEq(ret, ERC1271_MAGICVALUE);
     }
 
@@ -1193,9 +1187,8 @@ contract KernelTest is Test {
     }
 
     // Code heavily inspired by solady's erc1271, erc4337 test file
-    bytes32 internal constant _DOMAIN_SEP_B =
-        0xa1a044077d7677adbbfa892ded5390979b33993e0e2a457e3f974bbcda53821b;
-    
+    bytes32 internal constant _DOMAIN_SEP_B = 0xa1a044077d7677adbbfa892ded5390979b33993e0e2a457e3f974bbcda53821b;
+
     function _erc1271Signature(
         bytes32 hash,
         bytes memory contentsType,
@@ -1203,8 +1196,7 @@ contract KernelTest is Test {
         function(bytes32, bool) returns(bytes memory) signFn,
         bool isExplicit,
         bool success
-    ) internal returns(bytes32 contentsHash, bytes memory sig){
-
+    ) internal returns (bytes32 contentsHash, bytes memory sig) {
         contentsHash = keccak256(abi.encode(hash, contentsType));
         bytes32 actualHash;
         if (isExplicit) {
@@ -1215,21 +1207,15 @@ contract KernelTest is Test {
         sig = signFn(actualHash, success);
         bytes memory contentsDescription = abi.encodePacked(contentsType, contentsName);
 
-        sig = abi.encodePacked(
-            sig,
-            _DOMAIN_SEP_B,
-            contentsHash,
-            contentsDescription,
-            uint16(contentsDescription.length)
-        );
+        sig =
+            abi.encodePacked(sig, _DOMAIN_SEP_B, contentsHash, contentsDescription, uint16(contentsDescription.length));
     }
-    
-    function _toERC1271Hash(
-        address account,
-        bytes32 contents,
-        bytes memory contentsType,
-        bytes memory contentsName
-    ) internal view returns (bytes32) {
+
+    function _toERC1271Hash(address account, bytes32 contents, bytes memory contentsType, bytes memory contentsName)
+        internal
+        view
+        returns (bytes32)
+    {
         bytes32 parentStructHash = keccak256(
             abi.encodePacked(
                 abi.encode(_typedDataSignTypeHash(contentsType, contentsName), contents),
@@ -1238,7 +1224,7 @@ contract KernelTest is Test {
         );
         return keccak256(abi.encodePacked("\x19\x01", _DOMAIN_SEP_B, parentStructHash));
     }
-    
+
     struct _AccountDomainStruct {
         string name;
         string version;
@@ -1247,46 +1233,34 @@ contract KernelTest is Test {
         bytes32 salt;
     }
 
-
     function _toContentsHash(bytes32 contents) internal pure returns (bytes32) {
         return keccak256(abi.encodePacked(hex"1901", _DOMAIN_SEP_B, contents));
     }
-    
+
     function _accountDomainStructFields(address account) internal view returns (bytes memory) {
         _AccountDomainStruct memory t;
-        (, t.name, t.version, t.chainId, t.verifyingContract, t.salt,) =
-            kernel.eip712Domain();
+        (, t.name, t.version, t.chainId, t.verifyingContract, t.salt,) = kernel.eip712Domain();
 
-        return abi.encode(
-            keccak256(bytes(t.name)),
-            keccak256(bytes(t.version)),
-            t.chainId,
-            t.verifyingContract,
-            t.salt
-        );
+        return abi.encode(keccak256(bytes(t.name)), keccak256(bytes(t.version)), t.chainId, t.verifyingContract, t.salt);
     }
 
     function _toERC1271HashPersonalSign(bytes32 childHash) internal view returns (bytes32) {
         _AccountDomainStruct memory t;
-        (, t.name, t.version, t.chainId, t.verifyingContract, t.salt,) =
-            kernel.eip712Domain();
+        (, t.name, t.version, t.chainId, t.verifyingContract, t.salt,) = kernel.eip712Domain();
 
         bytes32 domainSeparator = keccak256(
             abi.encode(
-                keccak256(
-                    "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
-                ),
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
                 keccak256(abi.encodePacked(t.name)),
                 keccak256(abi.encodePacked(t.version)),
                 t.chainId,
                 t.verifyingContract
             )
         );
-        bytes32 parentStructHash =
-            keccak256(abi.encode(keccak256("PersonalSign(bytes prefixed)"), childHash));
+        bytes32 parentStructHash = keccak256(abi.encode(keccak256("PersonalSign(bytes prefixed)"), childHash));
         return keccak256(abi.encodePacked("\x19\x01", domainSeparator, parentStructHash));
     }
-    
+
     function _typedDataSignTypeHash(bytes memory contentsType, bytes memory contentsName)
         internal
         pure
@@ -1301,7 +1275,7 @@ contract KernelTest is Test {
             )
         );
     }
-    
+
     function _contentsName(bytes memory contentsType) internal pure returns (bytes memory) {
         string memory ct = string(contentsType);
         return bytes(LibString.slice(ct, 0, LibString.indexOf(ct, "(", 0)));
