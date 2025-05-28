@@ -11,7 +11,7 @@ library Lib4337 {
     bytes32 internal constant _DOMAIN_TYPEHASH_SANS_CHAIN_ID =
         0x91ab3d17e3a50a9d89e63fd30b92be7f5336b03b287bb946787a83a9d62a2766;
 
-    function chainAgnosticUserOpHash(address ep, PackedUserOperation calldata userOp) external view returns (bytes32) {
+    function chainAgnosticUserOpHash(address ep, PackedUserOperation calldata userOp) internal view returns (bytes32) {
         bytes32 overrideInitCodeHash = Eip7702Support._getEip7702InitCodeHashOverride(userOp);
         return _hashTypedDataSansChainId(ep, UserOperationLib.hash(userOp, overrideInitCodeHash));
     }
@@ -30,7 +30,7 @@ library Lib4337 {
         }
     }
 
-    function checkValidation(uint256 validationData) external view returns (bool) {
+    function checkValidation(uint256 validationData) internal view returns (bool) {
         (uint48 vAfter, uint48 vUntil, address res) = Lib4337.parseValidationData(validationData);
         if (vAfter > block.timestamp || vUntil < block.timestamp) {
             return false;
@@ -59,11 +59,11 @@ library Lib4337 {
         }
     }
 
-    function intersectValidationData(uint256 a, bytes4 res) external pure returns (uint256) {
+    function intersectValidationData(uint256 a, bytes4 res) internal pure returns (uint256) {
         return _intersectValidationData(a, signatureResultToValidationData(res));
     }
 
-    function intersectValidationData(uint256 a, uint256 b) external pure returns (uint256 validationData) {
+    function intersectValidationData(uint256 a, uint256 b) internal pure returns (uint256 validationData) {
         return _intersectValidationData(a, b);
     }
 

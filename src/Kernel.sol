@@ -221,11 +221,12 @@ contract Kernel is ModuleManager, ExecutionManager, UUPSUpgradeable {
     function supportsExecutionMode(bytes32 mode) external view returns (bool) {
         bytes1 callType = LibERC7579.getCallType(mode);
         bytes1 execType = LibERC7579.getExecType(mode);
-        if (execType == LibERC7579.EXECTYPE_DEFAULT) {} else if (execType == LibERC7579.EXECTYPE_TRY) {} else {
+        if (execType == LibERC7579.EXECTYPE_DEFAULT || execType == LibERC7579.EXECTYPE_TRY) {} else {
             return false;
         }
-        if (callType == LibERC7579.CALLTYPE_SINGLE) {} else if (callType == LibERC7579.CALLTYPE_BATCH) {} else if (
-            callType == LibERC7579.CALLTYPE_DELEGATECALL
+        if (
+            callType == LibERC7579.CALLTYPE_SINGLE || callType == LibERC7579.CALLTYPE_BATCH
+                || callType == LibERC7579.CALLTYPE_DELEGATECALL
         ) {} else {
             return false;
         }

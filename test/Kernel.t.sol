@@ -18,6 +18,7 @@ import {MockPolicy} from "./mock/MockPolicy.sol";
 import {MockSigner} from "./mock/MockSigner.sol";
 import {MockERC721} from "./mock/MockERC721.sol";
 import {MockERC1155} from "./mock/MockERC1155.sol";
+import {MockKernel} from "./mock/MockKernel.sol";
 import {IHook} from "src/interfaces/IERC7579Modules.sol";
 import {CallType} from "src/types/Types.sol";
 import "src/types/Constants.sol";
@@ -74,6 +75,8 @@ contract KernelTest is Test {
     uint256 permissionRevertIndex;
     KernelHelper helper;
 
+    bool is7702;
+
     modifier unitTest() {
         vm.startPrank(address(ep));
         _;
@@ -106,7 +109,7 @@ contract KernelTest is Test {
         _initialize();
     }
 
-    function _initialize() internal {
+    function _initialize() internal virtual {
         Install[] memory pkgs = new Install[](1);
         pkgs[0] = Install({moduleType: 1, module: address(mockValidator), moduleData: hex"", internalData: hex""});
         kernel = factory.deploy(pkgs, 0);
@@ -119,13 +122,14 @@ contract KernelTest is Test {
 
     function _rootSignUserOp(PackedUserOperation memory op, bool success, bool replay)
         internal
+        virtual
         returns (bytes memory sig)
     {
         mockValidator.sudoSetSuccess(success);
         return hex"";
     }
 
-    function _rootSignHash(bytes32 hash, bool success) internal returns (bytes memory sig) {
+    function _rootSignHash(bytes32 hash, bool success) internal virtual returns (bytes memory sig) {
         if (success) {
             mockValidator.sudoSetValidSig(hex"");
         }
@@ -134,13 +138,14 @@ contract KernelTest is Test {
 
     function _validatorSignUserOp(PackedUserOperation memory op, bool success, bool replay)
         internal
+        virtual
         returns (bytes memory sig)
     {
         newValidator.sudoSetSuccess(success);
         return hex"";
     }
 
-    function _validatorSignHash(bytes32 hash, bool success) internal returns (bytes memory sig) {
+    function _validatorSignHash(bytes32 hash, bool success) internal virtual returns (bytes memory sig) {
         if (success) {
             newValidator.sudoSetValidSig(hex"");
         }
@@ -149,6 +154,7 @@ contract KernelTest is Test {
 
     function _permissionSignUserOp(PackedUserOperation memory op, bool success, bool replay)
         internal
+        virtual
         returns (bytes memory sig)
     {
         bytes[] memory signatures = new bytes[](2);
@@ -164,7 +170,7 @@ contract KernelTest is Test {
         return abi.encode(signatures);
     }
 
-    function _permissionSignHash(bytes32 hash, bool success) internal returns (bytes memory sig) {
+    function _permissionSignHash(bytes32 hash, bool success) internal virtual returns (bytes memory sig) {
         bytes[] memory signatures = new bytes[](2);
         signatures[0] = hex"dead";
         signatures[1] = hex"beef";
@@ -182,6 +188,10 @@ contract KernelTest is Test {
         function(bytes32, bool) internal returns(bytes memory) signEnable
     ) internal returns (bytes memory sig) {
         bytes32 digest = helper.installDigest(address(kernel), replayable, nonce, packages);
+        MockKernel mockKernel = new MockKernel(ep);
+
+        vm.store(address(kernel), ERC1967_IMPLEMENTATION_SLOT, bytes32(uint256(uint160(address(mockKernel)))));
+        assertEq(MockKernel(payable(address(kernel))).installDigest(replayable, nonce, packages), digest);
         return signEnable(digest, enableSuccess);
     }
 
@@ -642,12 +652,14 @@ contract KernelTest is Test {
     }
 
     function test_deploy() external unitTest {
+        vm.skip(is7702);
         Install[] memory pkgs = new Install[](1);
         pkgs[0] = Install({moduleType: 1, module: address(mockValidator), moduleData: hex"", internalData: hex""});
         Kernel k = factory.deploy(pkgs, 1);
     }
 
     function test_deploy_existing() external {
+        vm.skip(is7702);
         Install[] memory pkgs = new Install[](1);
         pkgs[0] = Install({moduleType: 1, module: address(mockValidator), moduleData: hex"", internalData: hex""});
         Kernel k = factory.deploy(pkgs, 1);
@@ -655,6 +667,7 @@ contract KernelTest is Test {
     }
 
     function test_deploy_with_call() external unitTest {
+        vm.skip(is7702);
         Install[] memory initPkgs = new Install[](1);
         initPkgs[0] = Install({moduleType: 1, module: address(mockValidator), moduleData: hex"", internalData: hex""});
         Install[] memory pkgs = new Install[](1);
@@ -1103,6 +1116,13 @@ contract KernelTest is Test {
         InstallAndExecute memory ie =
             InstallAndExecute({replayable: replayable, nonce: nonce, packages: packages, signature: hex""});
         bytes32 hash = helper.installAndExecuteDigest(address(kernel), MODE_EXECUTE_WITH_OP_DATA, calls, ie);
+
+        MockKernel mockKernel = new MockKernel(ep);
+
+        vm.store(address(kernel), ERC1967_IMPLEMENTATION_SLOT, bytes32(uint256(uint160(address(mockKernel)))));
+        assertEq(
+            MockKernel(payable(address(kernel))).installAndExecuteDigest(MODE_EXECUTE_WITH_OP_DATA, calls, ie), hash
+        );
         sig = abi.encode(false, uint256(0), packages, _rootSignHash(hash, true));
     }
 
