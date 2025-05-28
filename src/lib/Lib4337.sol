@@ -59,10 +59,6 @@ library Lib4337 {
         }
     }
 
-    function intersectValidationData(uint256 a, bytes4 res) internal pure returns (uint256) {
-        return _intersectValidationData(a, signatureResultToValidationData(res));
-    }
-
     function intersectValidationData(uint256 a, uint256 b) internal pure returns (uint256 validationData) {
         return _intersectValidationData(a, b);
     }
@@ -98,9 +94,5 @@ library Lib4337 {
             }
             default { validationData := SIG_VALIDATION_FAILED_UINT }
         }
-    }
-
-    function signatureResultToValidationData(bytes4 res) public pure returns (uint256 validationData) {
-        return res == ERC1271_MAGICVALUE ? 0 : 1;
     }
 }
