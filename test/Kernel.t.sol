@@ -748,6 +748,18 @@ contract KernelTest is Test {
         kernel.installModule(false, 0, packages, enableSig(0, true, false, packages, _rootSignHash));
     }
 
+    function test_install_packages_with_signature_replayable() external unitTest {
+        Install[] memory packages = new Install[](2);
+        packages[0] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
+        packages[1] = Install({
+            moduleType: 5,
+            module: address(policy),
+            internalData: abi.encodePacked(permissionId),
+            moduleData: hex""
+        });
+        kernel.installModule(true, 0, packages, enableSig(0, true, true, packages, _rootSignHash));
+    }
+
     function test_change_root() external unitTest {
         Install[] memory packages = new Install[](2);
         packages[0] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
@@ -774,6 +786,15 @@ contract KernelTest is Test {
             kernel.isValidSignature(0x7739773977397739773977397739773977397739773977397739773977397739, ""),
             bytes4(0x77390001)
         );
+    }
+
+    function test_erc1271_fail_invalid() external unitTest {
+        bytes32 messageHash = keccak256("Hello world");
+        (bytes32 contentsHash, bytes memory sig) =
+            _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _rootSignHash, false, true);
+        bytes4 ret =
+            kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes20(address(this)), sig));
+        assertEq(ret, ERC1271_INVALID);
     }
 
     function test_erc1271_root() external unitTest {
