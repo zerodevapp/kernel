@@ -745,20 +745,35 @@ contract KernelTest is Test {
         assertEq(address(uint160(uint256(impl))), address(newTemplate));
     }
 
+
+    function test_erc7739() public {
+        assertEq(
+            kernel.isValidSignature(
+                0x7739773977397739773977397739773977397739773977397739773977397739, ""
+            ),
+            bytes4(0x77390001)
+        );
+    }
+
     function test_erc1271_root() external {
         bytes32 messageHash = keccak256("Hello world");
-    //function _erc1271Signature(
-    //    bytes32 hash,
-    //    bytes memory contentsType,
-    //    bytes memory contentsName,
-    //    function(bytes32, bool) returns(bytes memory) signFn,
-    //    bool isExplicit,
-    //    bool success
-    //) internal returns(bytes memory sig){
 
         (bytes32 contentsHash, bytes memory sig) = _erc1271Signature(messageHash,"C(bytes32 stuff)", "", _rootSignHash, false, true);
         bytes4 ret = kernel.isValidSignature(
             _toContentsHash(contentsHash), abi.encodePacked(bytes20(0), sig )
+        );
+        assertEq(ret, ERC1271_MAGICVALUE);
+    }
+    
+    function test_erc1271_root_personal_sign() external {
+        bytes32 messageHash = keccak256("Hello world");
+        bytes32 personalHash = _toERC1271HashPersonalSign(messageHash);
+        console.log("PersonalSig Hash :");
+        console.logBytes32(personalHash);
+
+        bytes memory sig = _rootSignHash(personalHash, true);
+        bytes4 ret = kernel.isValidSignature(
+            messageHash, abi.encodePacked(bytes20(0), sig)
         );
         assertEq(ret, ERC1271_MAGICVALUE);
     }
@@ -1176,7 +1191,8 @@ contract KernelTest is Test {
             abi.encodePacked(address(callee), abi.encodeWithSelector(MockCallee.foo.selector))
         );
     }
-    
+
+    // Code heavily inspired by solady's erc1271, erc4337 test file
     bytes32 internal constant _DOMAIN_SEP_B =
         0xa1a044077d7677adbbfa892ded5390979b33993e0e2a457e3f974bbcda53821b;
     
@@ -1248,6 +1264,27 @@ contract KernelTest is Test {
             t.verifyingContract,
             t.salt
         );
+    }
+
+    function _toERC1271HashPersonalSign(bytes32 childHash) internal view returns (bytes32) {
+        _AccountDomainStruct memory t;
+        (, t.name, t.version, t.chainId, t.verifyingContract, t.salt,) =
+            kernel.eip712Domain();
+
+        bytes32 domainSeparator = keccak256(
+            abi.encode(
+                keccak256(
+                    "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+                ),
+                keccak256(abi.encodePacked(t.name)),
+                keccak256(abi.encodePacked(t.version)),
+                t.chainId,
+                t.verifyingContract
+            )
+        );
+        bytes32 parentStructHash =
+            keccak256(abi.encode(keccak256("PersonalSign(bytes prefixed)"), childHash));
+        return keccak256(abi.encodePacked("\x19\x01", domainSeparator, parentStructHash));
     }
     
     function _typedDataSignTypeHash(bytes memory contentsType, bytes memory contentsName)
