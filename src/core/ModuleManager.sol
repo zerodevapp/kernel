@@ -41,6 +41,29 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
     function _erc1271Signer() internal view override returns (address) {
         return address(1);
     }
+    
+    function _erc1271IsValidSignature(bytes32 hash, bytes calldata signature)
+        internal
+        view
+        override
+        returns (bool)
+    {
+        return _erc1271IsValidSignatureViaNestedEIP712(hash, signature);
+    }
+
+    function _erc1271IsValidSignatureNowCalldata(bytes32 hash, bytes calldata signature)
+        internal
+        view
+        override
+        returns (bool)
+    {
+        ValidationId vId = ValidationId.wrap(bytes20(signature[0:20]));
+        if(vId == ValidationId.wrap(bytes20(0))){
+            vId = _validationStorage().root;
+        }
+        uint256 validationData = _verifySignature(vId, msg.sender, hash, signature[20:]);
+        return Lib4337.checkValidation(validationData);
+    }
 
     function _installHash(Install[] calldata packages) internal pure returns (bytes32) {
         bytes32[] memory packageHashes = new bytes32[](packages.length);

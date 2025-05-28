@@ -76,7 +76,7 @@ contract KernelHelper {
         return keccak256(abi.encodePacked(packageHashes));
     }
 
-    function _hashTypedDataSansChainId(address addr, bytes32 structHash) public view returns (bytes32 digest) {
+    function _hashTypedDataSansChainId(address addr, bytes32 structHash) internal view returns (bytes32 digest) {
         (, string memory name, string memory version,,,,) = IERC5267(addr).eip712Domain();
         /// @solidity memory-safe-assembly
         assembly {
