@@ -43,7 +43,7 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
 
     function nonce(uint192 key) external view returns (uint256) {
         uint64 seq = _moduleStorage().nonce[key];
-        if(_moduleStorage().nonceValidFrom > seq) {
+        if (_moduleStorage().nonceValidFrom > seq) {
             seq = _moduleStorage().nonceValidFrom;
         }
         return (uint256(key) << 64) + seq;
