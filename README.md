@@ -13,14 +13,15 @@ open coverage/index.html
 - Testing
     - [ ] certora testing
     - [ ] unit test coverage 100%
+        - almost?
     - [ ] halmos testing
 
 ## Kernel V4
 - [x] native v0.8 support
     - [x] factory update, needs to consider 7702 context
     - [x] eip712 userOpHash support
-- [ ] native 7702 support
-    - test
+- [x] native 7702 support
+    - [x] test
 - [x] 7579 account
     - [x] erc7821 execute interface
     - [x] execute with signature
