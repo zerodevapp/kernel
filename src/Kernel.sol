@@ -210,13 +210,15 @@ contract Kernel is ModuleManager, ExecutionManager, UUPSUpgradeable {
     function supportsExecutionMode(bytes32 mode) external view returns (bool) {
         bytes1 callType = LibERC7579.getCallType(mode);
         bytes1 execType = LibERC7579.getExecType(mode);
-        if (execType == LibERC7579.EXECTYPE_DEFAULT || execType == LibERC7579.EXECTYPE_TRY) {} else {
+        if (!(execType == LibERC7579.EXECTYPE_DEFAULT || execType == LibERC7579.EXECTYPE_TRY)) {
             return false;
         }
         if (
-            callType == LibERC7579.CALLTYPE_SINGLE || callType == LibERC7579.CALLTYPE_BATCH
-                || callType == LibERC7579.CALLTYPE_DELEGATECALL
-        ) {} else {
+            !(
+                callType == LibERC7579.CALLTYPE_SINGLE || callType == LibERC7579.CALLTYPE_BATCH
+                    || callType == LibERC7579.CALLTYPE_DELEGATECALL
+            )
+        ) {
             return false;
         }
         return true;
@@ -261,5 +263,15 @@ contract Kernel is ModuleManager, ExecutionManager, UUPSUpgradeable {
 
     function accountId() external view returns (string memory accountImplementationId) {
         return "kernel.v0.4";
+    }
+
+    function setNonce(uint192 nonceKey, uint64 seq) external {
+        _onlyEntryPointOrSelf();
+        _setNonce(nonceKey, seq);
+    }
+
+    function setValidNonceFrom(uint64 seq) external {
+        _onlyEntryPointOrSelf();
+        _setValidNonceFrom(seq);
     }
 }

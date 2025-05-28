@@ -675,6 +675,8 @@ contract KernelTest is Test {
         });
         pkgs[1] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
         Kernel k = factory.deploy(pkgs, 1);
+        assertEq(k.accountId(), "kernel.v0.4");
+        assertEq(k.registry(), address(0));
     }
 
     function test_deploy_root_fail_invalid_root() external unitTest {
@@ -736,6 +738,55 @@ contract KernelTest is Test {
         assertEq(address(kernel.executorConfig(newEx).hook), address(0));
     }
 
+    function test_set_valid_nonce() external unitTest {
+        kernel.setValidNonceFrom(1);
+        assertEq(kernel.validNonceFrom(), 1);
+
+        Install[] memory packages = new Install[](2);
+        packages[0] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
+        packages[1] = Install({
+            moduleType: 5,
+            module: address(policy),
+            internalData: abi.encodePacked(permissionId),
+            moduleData: hex""
+        });
+        bytes memory sig = enableSig(0, true, false, packages, _rootSignHash);
+        vm.expectRevert(InvalidNonce.selector);
+        kernel.installModule(false, 0, packages, sig);
+        sig = enableSig(uint256(1) << 64, true, false, packages, _rootSignHash);
+        vm.expectRevert(InvalidNonce.selector);
+        kernel.installModule(false, uint256(1) << 64, packages, sig);
+        sig = enableSig(1, true, false, packages, _rootSignHash);
+        kernel.installModule(false, 1, packages, sig);
+    }
+
+    function test_set_nonce() external unitTest {
+        kernel.setNonce(0, 1);
+        assertEq(kernel.nonce(0), 1);
+
+        Install[] memory packages = new Install[](2);
+        packages[0] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
+        packages[1] = Install({
+            moduleType: 5,
+            module: address(policy),
+            internalData: abi.encodePacked(permissionId),
+            moduleData: hex""
+        });
+        bytes memory sig = enableSig(0, true, false, packages, _rootSignHash);
+        vm.expectRevert(InvalidNonce.selector);
+        kernel.installModule(false, 0, packages, sig);
+        sig = enableSig(uint256(1) << 64, true, false, packages, _rootSignHash);
+        kernel.installModule(false, uint256(1) << 64, packages, sig);
+    }
+
+    function test_set_valid_nonce_decrease_nonce() external unitTest {
+        kernel.setValidNonceFrom(100);
+        assertEq(kernel.validNonceFrom(), 100);
+        assertEq(kernel.nonce(0), 100);
+        vm.expectRevert(InvalidNonce.selector);
+        kernel.setValidNonceFrom(1);
+    }
+
     function test_install_packages_with_signature() external unitTest {
         Install[] memory packages = new Install[](2);
         packages[0] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
@@ -788,6 +839,14 @@ contract KernelTest is Test {
         );
     }
 
+    function test_erc1271_root() external unitTest {
+        bytes32 messageHash = keccak256("Hello world");
+        (bytes32 contentsHash, bytes memory sig) =
+            _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _rootSignHash, false, true);
+        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes20(0), sig));
+        assertEq(ret, ERC1271_MAGICVALUE);
+    }
+
     function test_erc1271_fail_invalid() external unitTest {
         bytes32 messageHash = keccak256("Hello world");
         (bytes32 contentsHash, bytes memory sig) =
@@ -795,14 +854,6 @@ contract KernelTest is Test {
         bytes4 ret =
             kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes20(address(this)), sig));
         assertEq(ret, ERC1271_INVALID);
-    }
-
-    function test_erc1271_root() external unitTest {
-        bytes32 messageHash = keccak256("Hello world");
-        (bytes32 contentsHash, bytes memory sig) =
-            _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _rootSignHash, false, true);
-        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes20(0), sig));
-        assertEq(ret, ERC1271_MAGICVALUE);
     }
 
     function test_erc1271_root_fail() external unitTest {
@@ -913,6 +964,8 @@ contract KernelTest is Test {
         MockHook mockHook = new MockHook();
         vm.expectRevert(NotImplemented.selector);
         kernel.installModule(10, address(mockHook), abi.encode(hex"", ""));
+        vm.expectRevert(NotImplemented.selector);
+        kernel.isModuleInstalled(10, address(mockHook), abi.encodePacked(permissionId));
     }
 
     function test_uninstall_invalid() external unitTest {
@@ -963,6 +1016,8 @@ contract KernelTest is Test {
         ValidationId vId = ValidationId.wrap(permissionId);
         ValidationInfo memory vInfo = kernel.validationInfo(vId);
         assertTrue(vInfo.vType == VALIDATION_TYPE_ROOT);
+        assertFalse(kernel.isModuleInstalled(5, address(policy), abi.encodePacked(permissionId)));
+        assertFalse(kernel.isModuleInstalled(6, address(signer), abi.encodePacked(permissionId)));
         kernel.installModule(5, address(policy), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
         kernel.installModule(6, address(signer), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
         bytes4 ret = kernel.isValidSignature(

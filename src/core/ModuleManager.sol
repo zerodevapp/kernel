@@ -15,6 +15,7 @@ import "../lib/Utils.sol";
 import "../lib/Lib4337.sol";
 
 struct ModuleStorage {
+    address registry; // Note : not used on vanila kernel but saving the storage slot for future usage
     uint64 nonceValidFrom;
     mapping(uint192 key => uint64) nonce;
 }
@@ -25,6 +26,27 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         bytes memory hookData = _preHook(hook);
         _;
         _postHook(hook, hookData);
+    }
+
+    // NOTE : override this to use erc7484 registry
+    modifier installModuleHook(uint256 moduleType, address module) virtual {
+        _;
+    }
+
+    function registry() external view returns (address) {
+        return _moduleStorage().registry;
+    }
+
+    function validNonceFrom() external view returns (uint64) {
+        return _moduleStorage().nonceValidFrom;
+    }
+
+    function nonce(uint192 key) external view returns (uint256) {
+        uint64 seq = _moduleStorage().nonce[key];
+        if(_moduleStorage().nonceValidFrom > seq) {
+            seq = _moduleStorage().nonceValidFrom;
+        }
+        return (uint256(key) << 64) + seq;
     }
 
     function _initialized() internal view returns (bool) {
@@ -81,6 +103,7 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
 
     function _installModule(uint256 moduleType, address module, bytes calldata moduleData, bytes calldata internalData)
         internal
+        installModuleHook(moduleType, module)
     {
         function(address, bytes calldata, bool) hook;
         if (moduleType == 1) {
@@ -159,37 +182,50 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
 
     function _verifyInstallSignature(
         bool replayable,
-        uint256 nonce,
+        uint256 _nonce,
         Install[] calldata packages,
         bytes calldata signature
     ) internal returns (bool success) {
-        uint256 validationData = _verifyInstallSignatureRaw(replayable, nonce, packages, signature);
+        uint256 validationData = _verifyInstallSignatureRaw(replayable, _nonce, packages, signature);
         return Lib4337.checkValidation(validationData);
     }
 
-    function _checkNonce(uint256 nonce) internal virtual returns (bool) {
-        uint192 key = uint192(nonce >> 64);
-        uint64 seq = uint64(nonce);
+    function _setValidNonceFrom(uint64 nonceFrom) internal {
+        require(nonceFrom > _moduleStorage().nonceValidFrom, InvalidNonce());
+        _moduleStorage().nonceValidFrom = nonceFrom;
+    }
+
+    function _setNonce(uint192 nonceKey, uint64 seq) internal {
+        require(seq > _moduleStorage().nonce[nonceKey], InvalidNonce());
+        _moduleStorage().nonce[nonceKey] = seq;
+    }
+
+    function _checkNonce(uint256 _nonce) internal virtual returns (bool) {
+        uint192 key = uint192(_nonce >> 64);
+        uint64 seq = uint64(_nonce);
+        if (_moduleStorage().nonceValidFrom > _moduleStorage().nonce[key]) {
+            _moduleStorage().nonce[key] = _moduleStorage().nonceValidFrom;
+        }
         return _moduleStorage().nonce[key]++ == seq;
     }
 
     function _verifyInstallSignatureRaw(
         bool replayable,
-        uint256 nonce,
+        uint256 _nonce,
         Install[] calldata packages,
         bytes calldata signature
     ) internal returns (uint256 validationData) {
         ValidationId vId = _validationStorage().root;
         function(bytes32) internal view returns(bytes32) hashTypedData =
             replayable ? _hashTypedDataSansChainId : _hashTypedData;
-        require(_checkNonce(nonce), InvalidNonce());
+        require(_checkNonce(_nonce), InvalidNonce());
         bytes32 digest = hashTypedData(
             keccak256(
                 abi.encode(
                     keccak256(
                         "InstallPackages(uint256 nonce,Install[] packages)Install(uint256 moduleType,address module,bytes moduleData,bytes internalData)"
                     ),
-                    nonce,
+                    _nonce,
                     _installHash(packages)
                 )
             )
