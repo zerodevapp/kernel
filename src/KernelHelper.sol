@@ -106,8 +106,8 @@ contract KernelHelper {
             mstore(add(m, 0x20), separator) // Name hash.
             mstore(add(m, 0x40), versionHash)
             mstore(add(m, 0x60), chainid())
-            mstore(add(m, 0x80), address())
-            separator := keccak256(m, 0xa0)
+            mstore(add(m, 0x80), addr)
+            digest := keccak256(m, 0xa0)
             // Compute the digest.
             mstore(0x00, 0x1901000000000000) // Store "\x19\x01".
             mstore(0x1a, digest) // Store the domain separator.
