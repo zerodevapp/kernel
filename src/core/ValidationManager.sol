@@ -10,21 +10,13 @@ import {ECDSA} from "solady/utils/ECDSA.sol";
 import "forge-std/console.sol";
 import {Lib4337} from "../lib/Lib4337.sol";
 
-function getValidator(ValidationId vId) pure returns (address v) {
-    assembly {
-        v := shr(96, vId)
-    }
-}
-
 function parseNonce(uint256 nonce) pure returns (ValidationMode vMode, ValidationType vType, ValidationId vId) {
     // 2bytes mode (1byte currentMode, 1byte type)
     // 20bytes identifier
     // 1byte mode | 1byte type | 20bytes vId | 2byte nonceKey | 8byte nonce == 32bytes
-    assembly {
-        vMode := nonce
-        vType := shl(8, nonce)
-        vId := shl(16, nonce)
-    }
+    vMode = ValidationMode.wrap(bytes1(bytes32(nonce)));
+    vType = ValidationType.wrap(bytes1(bytes32(nonce << 8)));
+    vId = ValidationId.wrap(bytes20(bytes32(nonce << 16)));
 }
 
 abstract contract ValidationManager {

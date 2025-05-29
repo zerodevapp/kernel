@@ -384,7 +384,9 @@ contract KernelTest is Test {
             signature: hex""
         });
         ops[0].signature = _rootSignUserOp(ops[0], true, false);
+        vm.startSnapshotGas("Root - foo()");
         ep.handleOps(ops, beneficiary);
+        vm.stopSnapshotGas();
         assertEq(callee.bar(), 1);
     }
 

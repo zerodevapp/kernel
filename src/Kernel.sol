@@ -47,17 +47,16 @@ contract Kernel is ModuleManager, ExecutionManager, UUPSUpgradeable {
     function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash, uint256 missingAccountFunds)
         external
         payable
-        returns (uint256)
+        returns (uint256 validationData)
     {
         _onlyEntryPointOrSelf();
-        uint256 validationData = _processUserOp(userOp, userOpHash);
+        validationData = _processUserOp(userOp, userOpHash);
         assembly {
             if missingAccountFunds {
                 pop(call(gas(), caller(), missingAccountFunds, callvalue(), callvalue(), callvalue(), callvalue()))
                 //ignore failure (its EntryPoint's job to verify, not account.)
             }
         }
-        return validationData;
     }
 
     function _processUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash)
@@ -265,12 +264,12 @@ contract Kernel is ModuleManager, ExecutionManager, UUPSUpgradeable {
         return "kernel.v0.4";
     }
 
-    function setNonce(uint192 nonceKey, uint64 seq) external {
+    function setNonce(uint192 nonceKey, uint64 seq) external payable {
         _onlyEntryPointOrSelf();
         _setNonce(nonceKey, seq);
     }
 
-    function setValidNonceFrom(uint64 seq) external {
+    function setValidNonceFrom(uint64 seq) external payable {
         _onlyEntryPointOrSelf();
         _setValidNonceFrom(seq);
     }

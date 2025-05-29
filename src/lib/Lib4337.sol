@@ -63,36 +63,32 @@ library Lib4337 {
         return _intersectValidationData(a, b);
     }
 
-    function _intersectValidationData(uint256 a, uint256 b) private pure returns (uint256 validationData) {
-        assembly {
-            // xor(a,b) == shows only matching bits
-            // and(xor(a,b), 0x000000000000000000000000ffffffffffffffffffffffffffffffffffffffff) == filters out the validAfter and validUntil bits
-            // if the result is not zero, then aggregator part is not matching
-            // validCase :
-            // a == 0 || b == 0 || xor(a,b) == 0
-            // invalidCase :
-            // a mul b != 0 && xor(a,b) != 0
-            let sum := shl(96, add(a, b))
-            switch or(
-                iszero(and(xor(a, b), 0x000000000000000000000000ffffffffffffffffffffffffffffffffffffffff)),
-                or(eq(sum, shl(96, a)), eq(sum, shl(96, b)))
-            )
-            case 1 {
-                validationData := and(or(a, b), 0x000000000000000000000000ffffffffffffffffffffffffffffffffffffffff)
-                // validAfter
-                let a_vd := and(0xffffffffffff0000000000000000000000000000000000000000000000000000, a)
-                let b_vd := and(0xffffffffffff0000000000000000000000000000000000000000000000000000, b)
-                validationData := or(validationData, xor(a_vd, mul(xor(a_vd, b_vd), gt(b_vd, a_vd))))
-                // validUntil
-                a_vd := and(0x000000000000ffffffffffff0000000000000000000000000000000000000000, a)
-                if iszero(a_vd) { a_vd := 0x000000000000ffffffffffff0000000000000000000000000000000000000000 }
-                b_vd := and(0x000000000000ffffffffffff0000000000000000000000000000000000000000, b)
-                if iszero(b_vd) { b_vd := 0x000000000000ffffffffffff0000000000000000000000000000000000000000 }
-                let until := xor(a_vd, mul(xor(a_vd, b_vd), lt(b_vd, a_vd)))
-                if iszero(until) { until := 0x000000000000ffffffffffff0000000000000000000000000000000000000000 }
-                validationData := or(validationData, until)
+    function _intersectValidationData(uint256 preValidationData, uint256 validationRes)
+        private
+        pure
+        returns (uint256 resValidationData)
+    {
+        //short circuit
+        unchecked {
+            if (preValidationData * validationRes == 0) {
+                return preValidationData | validationRes;
             }
-            default { validationData := SIG_VALIDATION_FAILED_UINT }
         }
+        uint48 validUntil1 = uint48(preValidationData >> 160);
+        if (validUntil1 == 0) {
+            validUntil1 = type(uint48).max;
+        }
+        uint48 validUntil2 = uint48(validationRes >> 160);
+        if (validUntil2 == 0) {
+            validUntil2 = type(uint48).max;
+        }
+        resValidationData = ((validUntil1 > validUntil2) ? uint256(validUntil2) << 160 : uint256(validUntil1) << 160);
+
+        uint48 validAfter1 = uint48(preValidationData >> 208);
+        uint48 validAfter2 = uint48(validationRes >> 208);
+
+        resValidationData |= ((validAfter1 < validAfter2) ? uint256(validAfter2) << 208 : uint256(validAfter1) << 208);
+
+        resValidationData |= uint160(preValidationData) == 1 ? 1 : uint160(validationRes);
     }
 }

@@ -8,6 +8,18 @@ pragma solidity ^0.8.0;
 //                       _ => relayable enable signature flag
 type ValidationMode is bytes1;
 
+function isEnable(ValidationMode vMode) pure returns (bool enable) {
+    return ValidationMode.unwrap(vMode) & bytes1(0x08) != 0;
+}
+
+function isReplayable(ValidationMode vMode) pure returns (bool replayable) {
+    return ValidationMode.unwrap(vMode) & bytes1(0x40) != 0;
+}
+
+function isEnableReplayable(ValidationMode vMode) pure returns (bool replayable) {
+    return ValidationMode.unwrap(vMode) & bytes1(0x04) != 0;
+}
+
 type ValidationId is bytes20;
 
 type ValidationType is bytes1;
@@ -28,12 +40,6 @@ type ValidationData is uint256;
 type ValidAfter is uint48;
 
 type ValidUntil is uint48;
-
-function getValidationResult(ValidationData validationData) pure returns (address result) {
-    assembly {
-        result := validationData
-    }
-}
 
 function packValidationData(ValidAfter validAfter, ValidUntil validUntil) pure returns (uint256) {
     return uint256(ValidAfter.unwrap(validAfter)) << 208 | uint256(ValidUntil.unwrap(validUntil)) << 160;
@@ -63,22 +69,4 @@ function notEqCallType(CallType a, CallType b) pure returns (bool) {
 
 function vTypeEqual(ValidationType a, ValidationType b) pure returns (bool) {
     return ValidationType.unwrap(a) == ValidationType.unwrap(b);
-}
-
-function isEnable(ValidationMode vMode) pure returns (bool enable) {
-    assembly {
-        enable := iszero(iszero(and(vMode, 0x800000000000000000000000000000000000000000000000000000000000000)))
-    }
-}
-
-function isReplayable(ValidationMode vMode) pure returns (bool replayable) {
-    assembly {
-        replayable := iszero(iszero(and(vMode, 0x4000000000000000000000000000000000000000000000000000000000000000)))
-    }
-}
-
-function isEnableReplayable(ValidationMode vMode) pure returns (bool replayable) {
-    assembly {
-        replayable := iszero(iszero(and(vMode, 0x400000000000000000000000000000000000000000000000000000000000000)))
-    }
 }
