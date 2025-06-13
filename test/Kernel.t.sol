@@ -664,7 +664,9 @@ contract KernelTest is Test {
         vm.skip(is7702);
         Install[] memory pkgs = new Install[](1);
         pkgs[0] = Install({moduleType: 1, module: address(mockValidator), moduleData: hex"", internalData: hex""});
+        vm.startSnapshotGas("Mock - deploy()");
         Kernel k = factory.deploy(pkgs, 1);
+        vm.stopSnapshotGas();
     }
 
     function test_deploy_root_permission() external unitTest {

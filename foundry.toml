@@ -2,7 +2,7 @@
 src = "src"
 out = "out"
 libs = ["lib"]
-via_ir = false
+via_ir = true
 optimizer = true
 run = 200
 evm_version = 'prague'

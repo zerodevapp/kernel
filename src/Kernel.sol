@@ -155,6 +155,16 @@ contract Kernel is ModuleManager, ExecutionManager, UUPSUpgradeable {
         bytes internalData;
     }
 
+    function setNonce(uint192 nonceKey, uint64 seq) external payable {
+        _onlyEntryPointOrSelf();
+        _setNonce(nonceKey, seq);
+    }
+
+    function setValidNonceFrom(uint64 seq) external payable {
+        _onlyEntryPointOrSelf();
+        _setValidNonceFrom(seq);
+    }
+
     function installModule(uint256 moduleType, address module, bytes calldata initData) external payable {
         _onlyEntryPointOrSelf();
         InstallModuleDataFormat calldata imdf;
@@ -262,15 +272,5 @@ contract Kernel is ModuleManager, ExecutionManager, UUPSUpgradeable {
 
     function accountId() external view returns (string memory accountImplementationId) {
         return "kernel.v0.4";
-    }
-
-    function setNonce(uint192 nonceKey, uint64 seq) external payable {
-        _onlyEntryPointOrSelf();
-        _setNonce(nonceKey, seq);
-    }
-
-    function setValidNonceFrom(uint64 seq) external payable {
-        _onlyEntryPointOrSelf();
-        _setValidNonceFrom(seq);
     }
 }
