@@ -7,7 +7,6 @@ import "../types/Types.sol";
 import "../types/Constants.sol";
 import "../types/Structs.sol";
 import {ECDSA} from "solady/utils/ECDSA.sol";
-import "forge-std/console.sol";
 import {Lib4337} from "../lib/Lib4337.sol";
 
 function parseNonce(uint256 nonce) pure returns (ValidationMode vMode, ValidationType vType, ValidationId vId) {
@@ -21,6 +20,11 @@ function parseNonce(uint256 nonce) pure returns (ValidationMode vMode, Validatio
 
 abstract contract ValidationManager {
     ValidationId transient installingPermission;
+
+    function root() external view returns (ValidationId) {
+        ValidationStorage storage $ = _validationStorage();
+        return $.root;
+    }
 
     function validationInfo(ValidationId vId) external view returns (ValidationInfo memory) {
         ValidationStorage storage $ = _validationStorage();

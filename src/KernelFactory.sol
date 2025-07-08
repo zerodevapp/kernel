@@ -37,4 +37,9 @@ contract KernelFactory {
         require(success, "call failed");
         return k;
     }
+
+    function getAddress(Install[] calldata initialPackages, uint256 nonce) public view virtual returns (address) {
+        bytes32 salt = keccak256(abi.encode(initialPackages, nonce));
+        return LibClone.predictDeterministicAddressERC1967(address(template), salt, address(this));
+    }
 }

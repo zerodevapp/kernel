@@ -7,15 +7,33 @@ import {ECDSAValidator} from "./mock/ECDSAValidator.sol";
 contract KernelECDSATest is KernelTest {
     address owner;
     uint256 ownerKey;
-    ECDSAValidator ecdsaValidator;
 
     function _initialize() internal override {
         (owner, ownerKey) = makeAddrAndKey("Owner");
-        ecdsaValidator = new ECDSAValidator();
+        rootValidator = new ECDSAValidator();
+        rootValidatorData = abi.encodePacked(owner);
         Install[] memory pkgs = new Install[](1);
-        pkgs[0] = Install({moduleType: 1, module: address(ecdsaValidator), moduleData: abi.encodePacked(owner), internalData: hex""});
+        pkgs[0] = Install({
+            moduleType: 1,
+            module: address(rootValidator),
+            moduleData: abi.encodePacked(owner),
+            internalData: hex""
+        });
         kernel = factory.deploy(pkgs, 0);
         vm.deal(address(kernel), 1e18);
+
+        vm.startPrank(address(ep));
+        kernel.installModule(2, executor, abi.encode(hex"", ""));
+        vm.stopPrank();
+
+        ValidationId vId = kernel.root();
+
+        assertEq(ValidationId.unwrap(vId), bytes20(address(rootValidator)));
+
+        ValidationInfo memory info = kernel.validationInfo(vId);
+
+        console.log("vType :");
+        console.logBytes1(ValidationType.unwrap(info.vType));
     }
 
     function _rootSignUserOp(PackedUserOperation memory op, bool success, bool replay)

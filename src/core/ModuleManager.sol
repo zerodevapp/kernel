@@ -5,7 +5,7 @@ import {ValidationManager} from "./ValidationManager.sol";
 import {ExecutorManager} from "./ExecutorManager.sol";
 import {HookManager} from "./HookManager.sol";
 import {SelectorManager} from "./SelectorManager.sol";
-import {ERC1271} from "solady/accounts/ERC1271.sol";
+import {ERC1271} from "../lib/ERC1271.sol";
 import "../types/Error.sol";
 import "../types/Events.sol";
 import "../types/Structs.sol";
@@ -58,11 +58,6 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         assembly {
             $.slot := MODULE_MANAGER_STORAGE_SLOT
         }
-    }
-
-    // NOTE: this is not accesible, but required to override because of solady's erc1271
-    function _erc1271Signer() internal view override returns (address) {
-        return address(1);
     }
 
     function _erc1271IsValidSignature(bytes32 hash, bytes calldata signature) internal view override returns (bool) {
