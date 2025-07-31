@@ -8,7 +8,6 @@ import {ModuleManager, Install} from "./core/ModuleManager.sol";
 import {parseNonce} from "./core/ValidationManager.sol";
 import {ExecutionManager} from "./core/ExecutionManager.sol";
 import {Lib4337} from "./lib/Lib4337.sol";
-import {UUPSUpgradeable} from "solady/utils/UUPSUpgradeable.sol";
 import {LibERC7579} from "solady/accounts/LibERC7579.sol";
 import "./types/Types.sol";
 import "./types/Error.sol";
@@ -16,7 +15,7 @@ import "./types/Events.sol";
 import "./types/Constants.sol";
 import "./types/Structs.sol";
 
-contract Kernel is ModuleManager, ExecutionManager, UUPSUpgradeable {
+abstract contract Kernel is ModuleManager, ExecutionManager {
     IEntryPoint immutable entryPoint;
 
     function _onlyEntryPointOrSelf() internal {
@@ -25,10 +24,6 @@ contract Kernel is ModuleManager, ExecutionManager, UUPSUpgradeable {
 
     constructor(IEntryPoint _entryPoint) {
         entryPoint = _entryPoint;
-    }
-
-    function _authorizeUpgrade(address) internal override {
-        _onlyEntryPointOrSelf();
     }
 
     function _domainNameAndVersion() internal pure override returns (string memory name, string memory version) {

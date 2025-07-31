@@ -1,14 +1,15 @@
 pragma solidity ^0.8.0;
 
 import {Kernel, Install} from "./Kernel.sol";
+import {KernelUUPS} from "./KernelUUPS.sol";
 import {LibClone} from "solady/utils/LibClone.sol";
 import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
 
 contract KernelFactory {
-    Kernel public immutable template;
+    KernelUUPS public immutable template;
 
     constructor(IEntryPoint _entryPoint) {
-        template = new Kernel(_entryPoint);
+        template = new KernelUUPS(_entryPoint);
     }
 
     function deploy(Install[] calldata initialPackages, uint256 nonce) external payable returns (Kernel) {

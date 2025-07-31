@@ -60,10 +60,6 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         }
     }
 
-    function _erc1271IsValidSignature(bytes32 hash, bytes calldata signature) internal view override returns (bool) {
-        return _erc1271IsValidSignatureViaNestedEIP712(hash, signature);
-    }
-
     function _erc1271IsValidSignatureNowCalldata(bytes32 hash, bytes calldata signature)
         internal
         view

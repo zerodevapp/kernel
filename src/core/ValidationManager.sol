@@ -6,7 +6,6 @@ import "../types/Error.sol";
 import "../types/Types.sol";
 import "../types/Constants.sol";
 import "../types/Structs.sol";
-import {ECDSA} from "solady/utils/ECDSA.sol";
 import {Lib4337} from "../lib/Lib4337.sol";
 
 function parseNonce(uint256 nonce) pure returns (ValidationMode vMode, ValidationType vType, ValidationId vId) {
@@ -112,6 +111,9 @@ abstract contract ValidationManager {
         ValidationStorage storage $ = _validationStorage();
         if (vType == VALIDATION_TYPE_ROOT || $.vInfo[vId].vType == VALIDATION_TYPE_ROOT) {
             v = $.root;
+            if (ValidationId.unwrap(v) == bytes20(0)) {
+                return (v, _validateUserOpFallback);
+            }
             vType = $.vInfo[v].vType;
         } else {
             v = vId;
@@ -121,9 +123,7 @@ abstract contract ValidationManager {
         if (vType == VALIDATION_TYPE_PERMISSION) {
             validateUserOp = _validateUserOpPermission;
         } else {
-            // this includes 7702
             validateUserOp = _validateUserOpValidator;
-            //revert InvalidValidationType();
         }
     }
 
@@ -133,7 +133,7 @@ abstract contract ValidationManager {
         returns (uint256 validationData)
     {
         if (ValidationId.unwrap(vId) == bytes20(0)) {
-            return _verify7702Signature(_hash, _signature) ? 0 : 1;
+            return _verifyFallbackSignature(_hash, _signature) ? 0 : 1;
         }
         ValidationInfo storage vInfo = _validationStorage().vInfo[vId];
         if (vInfo.vType == VALIDATION_TYPE_VALIDATOR) {
@@ -178,15 +178,21 @@ abstract contract ValidationManager {
         }
     }
 
+    function _validateUserOpFallback(
+        ValidationId vId,
+        bytes32 opHash,
+        PackedUserOperation memory op,
+        bytes calldata userOpSignature
+    ) internal returns (uint256 validationData) {
+        return _verifyFallbackSignature(opHash, userOpSignature) ? 0 : 1;
+    }
+
     function _validateUserOpValidator(
         ValidationId vId,
         bytes32 opHash,
         PackedUserOperation memory op,
         bytes calldata userOpSignature
     ) internal returns (uint256 validationData) {
-        if (ValidationId.unwrap(vId) == bytes20(0)) {
-            return _verify7702Signature(opHash, userOpSignature) ? 0 : 1;
-        }
         // NOTE: removed permission for now, adding back after testing is done
         address validator = address(ValidationId.unwrap(vId));
         op.signature = userOpSignature;
@@ -226,8 +232,8 @@ abstract contract ValidationManager {
         }
     }
 
-    function _verify7702Signature(bytes32 hash, bytes calldata sig) internal view returns (bool) {
-        return ECDSA.tryRecover(hash, sig) == address(this);
+    function _verifyFallbackSignature(bytes32 hash, bytes calldata sig) internal view virtual returns (bool) {
+        return false;
     }
 
     function _setRoot(Install calldata pkg) internal {

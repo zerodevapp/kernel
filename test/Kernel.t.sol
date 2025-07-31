@@ -5,6 +5,7 @@ import {EntryPointLib} from "./utils/EntryPointLib.sol";
 import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
 import {Kernel} from "src/Kernel.sol";
+import {KernelUUPS} from "src/KernelUUPS.sol";
 import {KernelHelper} from "src/KernelHelper.sol";
 import {SelectorManager} from "src/core/SelectorManager.sol";
 import {KernelFactory} from "src/KernelFactory.sol";
@@ -107,6 +108,7 @@ contract KernelTest is Test {
         policy = new MockPolicy();
         signer = new MockSigner();
         permissionId = bytes20(keccak256(abi.encodePacked("Hello world")));
+        vm.txGasPrice(1);
         _initialize();
     }
 
@@ -840,8 +842,9 @@ contract KernelTest is Test {
     }
 
     function test_upgradeTo() external unitTest {
-        Kernel newTemplate = new Kernel(ep);
-        kernel.upgradeToAndCall(address(newTemplate), hex"");
+        vm.skip(is7702);
+        KernelUUPS newTemplate = new KernelUUPS(ep);
+        KernelUUPS(payable(address(kernel))).upgradeToAndCall(address(newTemplate), hex"");
         bytes32 impl = vm.load(address(kernel), ERC1967_IMPLEMENTATION_SLOT);
         assertEq(address(uint160(uint256(impl))), address(newTemplate));
     }
