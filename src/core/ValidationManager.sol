@@ -100,7 +100,7 @@ abstract contract ValidationManager {
         $.vType = VALIDATION_TYPE_ROOT;
     }
 
-    function _checkValidation(ValidationMode vMode, ValidationType vType, ValidationId vId)
+    function _checkValidation(ValidationType vType, ValidationId vId)
         internal
         view
         returns (

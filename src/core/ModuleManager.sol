@@ -23,7 +23,7 @@ struct ModuleStorage {
 abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManager, SelectorManager, ERC1271 {
     modifier executorHook() {
         IHook hook = _executorConfig(IExecutor(msg.sender)).hook;
-        bytes memory hookData = _preHook(hook);
+        bytes memory hookData = _preHook(hook, msg.data);
         _;
         _postHook(hook, hookData);
     }
@@ -54,7 +54,7 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
             || ValidationId.unwrap(_validationStorage().root) != bytes20(0);
     }
 
-    function _moduleStorage() internal view returns (ModuleStorage storage $) {
+    function _moduleStorage() internal pure returns (ModuleStorage storage $) {
         assembly {
             $.slot := MODULE_MANAGER_STORAGE_SLOT
         }

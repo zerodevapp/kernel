@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
 import {IAccount} from "account-abstraction/interfaces/IAccount.sol";
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
-import {IValidator, IExecutor} from "./interfaces/IERC7579Modules.sol";
+import {IValidator, IExecutor, IHook} from "./interfaces/IERC7579Modules.sol";
 import {ModuleManager, Install} from "./core/ModuleManager.sol";
 import {parseNonce} from "./core/ValidationManager.sol";
 import {ExecutionManager} from "./core/ExecutionManager.sol";
@@ -17,6 +17,8 @@ import "./types/Structs.sol";
 
 abstract contract Kernel is ModuleManager, ExecutionManager {
     IEntryPoint immutable entryPoint;
+
+    IHook transient validationHook;
 
     function _onlyEntryPointOrSelf() internal {
         require(msg.sender == address(entryPoint) || msg.sender == address(this), Unauthorized());
@@ -78,7 +80,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager {
             _install(sig.packages);
             signature = sig.userOpSignature;
         }
-        (vId, validateUserOpFn) = _checkValidation(vMode, vType, vId);
+        (vId, validateUserOpFn) = _checkValidation(vType, vId);
         bytes32 opHash = isReplayable(vMode) ? Lib4337.chainAgnosticUserOpHash(msg.sender, userOp) : userOpHash;
         validationData =
             Lib4337.intersectValidationData(validationData, validateUserOpFn(vId, opHash, userOp, signature));
@@ -87,7 +89,9 @@ abstract contract Kernel is ModuleManager, ExecutionManager {
     /// execution
     function executeUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash) external payable {
         _onlyEntryPointOrSelf();
+        bytes memory context = _preHook(validationHook, userOp.callData[4:]);
         (bool success, bytes memory ret) = address(this).delegatecall(userOp.callData[4:]);
+        _postHook(validationHook, context);
     }
 
     function execute(bytes32 mode, bytes calldata executionData) external payable {
@@ -125,7 +129,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager {
         }
         bytes memory hookData;
         if (address($.hook) != address(0)) {
-            hookData = _preHook($.hook);
+            hookData = _preHook($.hook, msg.data);
         }
 
         bool success;
@@ -211,7 +215,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager {
         emit Received(msg.sender, msg.value);
     }
 
-    function supportsExecutionMode(bytes32 mode) external view returns (bool) {
+    function supportsExecutionMode(bytes32 mode) external pure returns (bool) {
         bytes1 callType = LibERC7579.getCallType(mode);
         bytes1 execType = LibERC7579.getExecType(mode);
         if (!(execType == LibERC7579.EXECTYPE_DEFAULT || execType == LibERC7579.EXECTYPE_TRY)) {
@@ -228,7 +232,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager {
         return true;
     }
 
-    function supportsModule(uint256 moduleTypeId) external view returns (bool) {
+    function supportsModule(uint256 moduleTypeId) external pure returns (bool) {
         return moduleTypeId < 7;
     }
 
@@ -265,7 +269,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager {
         }
     }
 
-    function accountId() external view returns (string memory accountImplementationId) {
+    function accountId() external pure returns (string memory accountImplementationId) {
         return "kernel.v0.4";
     }
 }
