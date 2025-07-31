@@ -138,11 +138,14 @@ abstract contract Kernel is ModuleManager, ExecutionManager {
 
         bytes4 selector = bytes4(msg.data[0:4]);
         SelectorConfig storage $ = _selectorConfig(selector);
-        if ($.target == address(0)) {
+        // if the selector is not initialized, revert
+        // if the selector is installed but hook is not set, only entrypoint can call it
+        if ($.target == address(0) || ($.hook == IHook(address(0)) && msg.sender != address(entryPoint))) {
             revert InvalidSelector();
         }
         bytes memory hookData;
-        if (address($.hook) != address(0)) {
+        // explicitly set to address(1) to skip the hook while allowing anyone to call it
+        if (address($.hook) != address(0) && address($.hook) != address(1)) {
             hookData = _preHook($.hook, msg.data);
         }
 
@@ -157,7 +160,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager {
         } else {
             res = _getReturn();
         }
-        if (address($.hook) != address(0)) {
+        if (address($.hook) != address(0) && address($.hook) != address(1)) {
             _postHook($.hook, hookData);
         }
     }
