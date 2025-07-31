@@ -18,8 +18,6 @@ import "./types/Structs.sol";
 abstract contract Kernel is ModuleManager, ExecutionManager {
     IEntryPoint immutable entryPoint;
 
-    IHook transient validationHook;
-
     function _onlyEntryPointOrSelf() internal {
         require(msg.sender == address(entryPoint) || msg.sender == address(this), Unauthorized());
     }
@@ -80,6 +78,16 @@ abstract contract Kernel is ModuleManager, ExecutionManager {
             _install(sig.packages);
             signature = sig.userOpSignature;
         }
+        ValidationStorage storage $ = _validationStorage();
+
+        // check if the call data is allowed by the validationId
+        if ($.vInfo[vId].hook != address(0)) {
+            require(bytes4(userOp.callData[0:4]) == this.executeUserOp.selector && $.allowed[vId][bytes4(userOp.callData[4:])], UnauthorizedCallData());
+            validationHook = IHook($.vInfo[vId].hook);
+        } else {
+            require(vType == VALIDATION_TYPE_ROOT || $.allowed[vId][bytes4(userOp.callData)], UnauthorizedCallData());
+        }
+
         (vId, validateUserOpFn) = _checkValidation(vType, vId);
         bytes32 opHash = isReplayable(vMode) ? Lib4337.chainAgnosticUserOpHash(msg.sender, userOp) : userOpHash;
         validationData =
@@ -91,6 +99,12 @@ abstract contract Kernel is ModuleManager, ExecutionManager {
         _onlyEntryPointOrSelf();
         bytes memory context = _preHook(validationHook, userOp.callData[4:]);
         (bool success, bytes memory ret) = address(this).delegatecall(userOp.callData[4:]);
+        // propagete the revert message
+        if (!success) {
+            assembly {
+                revert(add(ret, 0x20), mload(ret))
+            }
+        }
         _postHook(validationHook, context);
     }
 

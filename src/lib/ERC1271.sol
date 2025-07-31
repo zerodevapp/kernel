@@ -80,7 +80,9 @@ abstract contract ERC1271 is EIP712 {
     /// @dev Returns whether the `signature` is valid for the `hash.
     function _erc1271IsValidSignature(bytes32 hash, bytes calldata signature) internal view virtual returns (bool) {
         return _erc1271IsValidSignatureViaSafeCaller(hash, signature)
-            || _erc1271IsValidSignatureViaNestedEIP712(hash, signature) || _erc1271IsValidSignatureViaNestedEIP712Replayable(hash, signature) || _erc1271IsValidSignatureViaRPC(hash, signature);
+            || _erc1271IsValidSignatureViaNestedEIP712(hash, signature)
+            || _erc1271IsValidSignatureViaNestedEIP712Replayable(hash, signature)
+            || _erc1271IsValidSignatureViaRPC(hash, signature);
     }
 
     /// @dev Performs the signature validation without nested EIP-712 if the caller is
@@ -256,7 +258,7 @@ abstract contract ERC1271 is EIP712 {
         if (t == uint256(0)) hash = _hashTypedData(hash); // `PersonalSign` workflow.
         result = _erc1271IsValidSignatureNowCalldata(hash, signature);
     }
-    
+
     function _erc1271IsValidSignatureViaNestedEIP712Replayable(bytes32 hash, bytes calldata signature)
         internal
         view
@@ -266,7 +268,7 @@ abstract contract ERC1271 is EIP712 {
         uint256 t = uint256(uint160(address(this)));
         // Forces the compiler to pop the variables after the scope, avoiding stack-too-deep.
         if (t != uint256(0)) {
-            (, string memory name, string memory version, /*chainId*/,address verifyingContract, bytes32 salt,) =
+            (, string memory name, string memory version, /*chainId*/, address verifyingContract, bytes32 salt,) =
                 eip712Domain();
             /// @solidity memory-safe-assembly
             assembly {

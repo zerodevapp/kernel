@@ -29,12 +29,12 @@ abstract contract HookManager {
         _hookStorage().enabled[_hook] = true;
     }
 
-    function _uninstallHook(address _hook, bytes calldata , bool ) internal {
+    function _uninstallHook(address _hook, bytes calldata, bool) internal {
         _hookStorage().enabled[_hook] = false;
     }
 
     function _preHook(IHook _hook, bytes calldata _data) internal returns (bytes memory context) {
-        if (address(_hook) != address(0)) {
+        if (address(_hook) != address(1) && address(_hook) != address(0)) {
             context = _hook.preCheck(msg.sender, msg.value, _data);
         }
     }
@@ -42,7 +42,7 @@ abstract contract HookManager {
     function _postHook(IHook _hook, bytes memory context) internal {
         // bool success,
         // bytes memory result
-        if (address(_hook) != address(0)) {
+        if (address(_hook) != address(1) && address(_hook) != address(0)) {
             _hook.postCheck(context);
         }
     }

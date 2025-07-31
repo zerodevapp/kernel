@@ -19,11 +19,13 @@ struct ValidationInfo {
     ValidationType vType;
     address[] policies;
     address signer;
+    address hook;
 }
 
 struct ValidationStorage {
     ValidationId root;
     mapping(ValidationId vId => ValidationInfo) vInfo;
+    mapping(ValidationId vId => mapping(bytes4 selector => bool)) allowed;
 }
 
 struct Call {

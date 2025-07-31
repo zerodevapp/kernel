@@ -19,6 +19,7 @@ function parseNonce(uint256 nonce) pure returns (ValidationMode vMode, Validatio
 
 abstract contract ValidationManager {
     ValidationId transient installingPermission;
+    IHook transient validationHook;
 
     function root() external view returns (ValidationId) {
         ValidationStorage storage $ = _validationStorage();
@@ -30,9 +31,29 @@ abstract contract ValidationManager {
         return $.vInfo[vId];
     }
 
-    function _validationStorage() internal view returns (ValidationStorage storage $) {
+    function _validationStorage() internal pure returns (ValidationStorage storage $) {
         assembly {
             $.slot := VALIDATION_MANAGER_STORAGE_SLOT
+        }
+    }
+
+    function _initializeValidation(ValidationId vId, bytes calldata _internalData) internal {
+        ValidationStorage storage $ = _validationStorage();
+
+        // if _internalData is empty, skip the initialization
+        if (_internalData.length == 0) {
+            return;
+        }
+        // if not, first 20 bytes is the hook address
+        address hook = address(bytes20(_internalData[0:20]));
+        $.vInfo[vId].hook = hook;
+        _internalData = _internalData[20:];
+
+        // then the rest is the allowed selectors
+        while (_internalData.length >= 4) {
+            bytes4 selector = bytes4(_internalData[0:4]);
+            $.allowed[vId][selector] = true;
+            _internalData = _internalData[4:];
         }
     }
 
@@ -42,6 +63,7 @@ abstract contract ValidationManager {
         ValidationId vId = ValidationId.wrap(bytes20(_validator));
         require($.vInfo[vId].vType == VALIDATION_TYPE_ROOT, OccupiedValidationId());
         $.vInfo[vId].vType = VALIDATION_TYPE_VALIDATOR;
+        _initializeValidation(vId, _internalData);
     }
 
     function _installPolicy(address _policy, bytes calldata _internalData, bool _installSuccess) internal {
@@ -67,6 +89,7 @@ abstract contract ValidationManager {
             require($.vType == ValidationType.wrap(0x00), "already taken");
             installingPermission = vId;
             $.vType = VALIDATION_TYPE_PERMISSION;
+            _initializeValidation(vId, _internalData[20:]);
         } else {
             require(installingPermission == vId, "permissionId should be consistent");
         }
@@ -155,8 +178,6 @@ abstract contract ValidationManager {
         bytes calldata _signature
     ) internal view returns (uint256 validationData) {
         unchecked {
-            uint256 length = vInfo.policies.length + 1;
-
             PermissionSignature calldata permissionSig;
             assembly {
                 permissionSig := _signature.offset
@@ -179,11 +200,11 @@ abstract contract ValidationManager {
     }
 
     function _validateUserOpFallback(
-        ValidationId vId,
+        ValidationId,
         bytes32 opHash,
-        PackedUserOperation memory op,
+        PackedUserOperation memory,
         bytes calldata userOpSignature
-    ) internal returns (uint256 validationData) {
+    ) internal virtual returns (uint256 validationData) {
         return _verifyFallbackSignature(opHash, userOpSignature) ? 0 : 1;
     }
 
@@ -211,8 +232,6 @@ abstract contract ValidationManager {
     ) internal returns (uint256 validationData) {
         ValidationInfo storage vInfo = _validationStorage().vInfo[vId];
         unchecked {
-            uint256 length = vInfo.policies.length + 1;
-
             PermissionSignature calldata permissionSig;
             assembly {
                 permissionSig := userOpSignature.offset
@@ -232,7 +251,7 @@ abstract contract ValidationManager {
         }
     }
 
-    function _verifyFallbackSignature(bytes32 hash, bytes calldata sig) internal view virtual returns (bool) {
+    function _verifyFallbackSignature(bytes32, bytes calldata) internal view virtual returns (bool) {
         return false;
     }
 
