@@ -2,16 +2,20 @@ pragma solidity ^0.8.0;
 
 import "./Kernel.t.sol";
 import {Lib4337} from "src/lib/Lib4337.sol";
+import {Kernel7702} from "src/Kernel7702.sol";
 
 contract Kernel7702Test is KernelTest {
     address owner;
     uint256 ownerKey;
 
+    Kernel7702 template;
+
     function _initialize() internal override {
+        template = new Kernel7702(ep);
         is7702 = true;
         (owner, ownerKey) = makeAddrAndKey("Owner");
         kernel = Kernel(payable(owner));
-        vm.etch(owner, abi.encodePacked(bytes3(0xef0100), address(factory.template())));
+        vm.etch(owner, abi.encodePacked(bytes3(0xef0100), address(template)));
         vm.deal(owner, 1e18);
 
         vm.startPrank(address(ep));

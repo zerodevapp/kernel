@@ -3,12 +3,11 @@ pragma solidity ^0.8.0;
 import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
 import {IAccount} from "account-abstraction/interfaces/IAccount.sol";
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
-import {IValidator, IExecutor} from "./interfaces/IERC7579Modules.sol";
+import {IValidator, IExecutor, IHook} from "./interfaces/IERC7579Modules.sol";
 import {ModuleManager, Install} from "./core/ModuleManager.sol";
 import {parseNonce} from "./core/ValidationManager.sol";
 import {ExecutionManager} from "./core/ExecutionManager.sol";
 import {Lib4337} from "./lib/Lib4337.sol";
-import {UUPSUpgradeable} from "solady/utils/UUPSUpgradeable.sol";
 import {LibERC7579} from "solady/accounts/LibERC7579.sol";
 import "./types/Types.sol";
 import "./types/Error.sol";
@@ -16,7 +15,7 @@ import "./types/Events.sol";
 import "./types/Constants.sol";
 import "./types/Structs.sol";
 
-contract Kernel is ModuleManager, ExecutionManager, UUPSUpgradeable {
+abstract contract Kernel is ModuleManager, ExecutionManager {
     IEntryPoint immutable entryPoint;
 
     function _onlyEntryPointOrSelf() internal {
@@ -25,10 +24,6 @@ contract Kernel is ModuleManager, ExecutionManager, UUPSUpgradeable {
 
     constructor(IEntryPoint _entryPoint) {
         entryPoint = _entryPoint;
-    }
-
-    function _authorizeUpgrade(address) internal override {
-        _onlyEntryPointOrSelf();
     }
 
     function _domainNameAndVersion() internal pure override returns (string memory name, string memory version) {
@@ -83,7 +78,17 @@ contract Kernel is ModuleManager, ExecutionManager, UUPSUpgradeable {
             _install(sig.packages);
             signature = sig.userOpSignature;
         }
-        (vId, validateUserOpFn) = _checkValidation(vMode, vType, vId);
+        ValidationStorage storage $ = _validationStorage();
+
+        // check if the call data is allowed by the validationId
+        if ($.vInfo[vId].hook != address(0)) {
+            require(bytes4(userOp.callData[0:4]) == this.executeUserOp.selector && $.allowed[vId][bytes4(userOp.callData[4:])], UnauthorizedCallData());
+            validationHook = IHook($.vInfo[vId].hook);
+        } else {
+            require(vType == VALIDATION_TYPE_ROOT || $.allowed[vId][bytes4(userOp.callData)], UnauthorizedCallData());
+        }
+
+        (vId, validateUserOpFn) = _checkValidation(vType, vId);
         bytes32 opHash = isReplayable(vMode) ? Lib4337.chainAgnosticUserOpHash(msg.sender, userOp) : userOpHash;
         validationData =
             Lib4337.intersectValidationData(validationData, validateUserOpFn(vId, opHash, userOp, signature));
@@ -92,7 +97,15 @@ contract Kernel is ModuleManager, ExecutionManager, UUPSUpgradeable {
     /// execution
     function executeUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash) external payable {
         _onlyEntryPointOrSelf();
+        bytes memory context = _preHook(validationHook, userOp.callData[4:]);
         (bool success, bytes memory ret) = address(this).delegatecall(userOp.callData[4:]);
+        // propagete the revert message
+        if (!success) {
+            assembly {
+                revert(add(ret, 0x20), mload(ret))
+            }
+        }
+        _postHook(validationHook, context);
     }
 
     function execute(bytes32 mode, bytes calldata executionData) external payable {
@@ -125,12 +138,15 @@ contract Kernel is ModuleManager, ExecutionManager, UUPSUpgradeable {
 
         bytes4 selector = bytes4(msg.data[0:4]);
         SelectorConfig storage $ = _selectorConfig(selector);
-        if ($.target == address(0)) {
+        // if the selector is not initialized, revert
+        // if the selector is installed but hook is not set, only entrypoint can call it
+        if ($.target == address(0) || ($.hook == IHook(address(0)) && msg.sender != address(entryPoint))) {
             revert InvalidSelector();
         }
         bytes memory hookData;
-        if (address($.hook) != address(0)) {
-            hookData = _preHook($.hook);
+        // explicitly set to address(1) to skip the hook while allowing anyone to call it
+        if (address($.hook) != address(0) && address($.hook) != address(1)) {
+            hookData = _preHook($.hook, msg.data);
         }
 
         bool success;
@@ -144,7 +160,7 @@ contract Kernel is ModuleManager, ExecutionManager, UUPSUpgradeable {
         } else {
             res = _getReturn();
         }
-        if (address($.hook) != address(0)) {
+        if (address($.hook) != address(0) && address($.hook) != address(1)) {
             _postHook($.hook, hookData);
         }
     }
@@ -216,7 +232,7 @@ contract Kernel is ModuleManager, ExecutionManager, UUPSUpgradeable {
         emit Received(msg.sender, msg.value);
     }
 
-    function supportsExecutionMode(bytes32 mode) external view returns (bool) {
+    function supportsExecutionMode(bytes32 mode) external pure returns (bool) {
         bytes1 callType = LibERC7579.getCallType(mode);
         bytes1 execType = LibERC7579.getExecType(mode);
         if (!(execType == LibERC7579.EXECTYPE_DEFAULT || execType == LibERC7579.EXECTYPE_TRY)) {
@@ -233,7 +249,7 @@ contract Kernel is ModuleManager, ExecutionManager, UUPSUpgradeable {
         return true;
     }
 
-    function supportsModule(uint256 moduleTypeId) external view returns (bool) {
+    function supportsModule(uint256 moduleTypeId) external pure returns (bool) {
         return moduleTypeId < 7;
     }
 
@@ -270,7 +286,7 @@ contract Kernel is ModuleManager, ExecutionManager, UUPSUpgradeable {
         }
     }
 
-    function accountId() external view returns (string memory accountImplementationId) {
+    function accountId() external pure returns (string memory accountImplementationId) {
         return "kernel.v0.4";
     }
 }

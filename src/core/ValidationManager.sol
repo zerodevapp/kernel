@@ -6,8 +6,6 @@ import "../types/Error.sol";
 import "../types/Types.sol";
 import "../types/Constants.sol";
 import "../types/Structs.sol";
-import {ECDSA} from "solady/utils/ECDSA.sol";
-import "forge-std/console.sol";
 import {Lib4337} from "../lib/Lib4337.sol";
 
 function parseNonce(uint256 nonce) pure returns (ValidationMode vMode, ValidationType vType, ValidationId vId) {
@@ -21,15 +19,41 @@ function parseNonce(uint256 nonce) pure returns (ValidationMode vMode, Validatio
 
 abstract contract ValidationManager {
     ValidationId transient installingPermission;
+    IHook transient validationHook;
+
+    function root() external view returns (ValidationId) {
+        ValidationStorage storage $ = _validationStorage();
+        return $.root;
+    }
 
     function validationInfo(ValidationId vId) external view returns (ValidationInfo memory) {
         ValidationStorage storage $ = _validationStorage();
         return $.vInfo[vId];
     }
 
-    function _validationStorage() internal view returns (ValidationStorage storage $) {
+    function _validationStorage() internal pure returns (ValidationStorage storage $) {
         assembly {
             $.slot := VALIDATION_MANAGER_STORAGE_SLOT
+        }
+    }
+
+    function _initializeValidation(ValidationId vId, bytes calldata _internalData) internal {
+        ValidationStorage storage $ = _validationStorage();
+
+        // if _internalData is empty, skip the initialization
+        if (_internalData.length == 0) {
+            return;
+        }
+        // if not, first 20 bytes is the hook address
+        address hook = address(bytes20(_internalData[0:20]));
+        $.vInfo[vId].hook = hook;
+        _internalData = _internalData[20:];
+
+        // then the rest is the allowed selectors
+        while (_internalData.length >= 4) {
+            bytes4 selector = bytes4(_internalData[0:4]);
+            $.allowed[vId][selector] = true;
+            _internalData = _internalData[4:];
         }
     }
 
@@ -39,6 +63,7 @@ abstract contract ValidationManager {
         ValidationId vId = ValidationId.wrap(bytes20(_validator));
         require($.vInfo[vId].vType == VALIDATION_TYPE_ROOT, OccupiedValidationId());
         $.vInfo[vId].vType = VALIDATION_TYPE_VALIDATOR;
+        _initializeValidation(vId, _internalData);
     }
 
     function _installPolicy(address _policy, bytes calldata _internalData, bool _installSuccess) internal {
@@ -64,6 +89,7 @@ abstract contract ValidationManager {
             require($.vType == ValidationType.wrap(0x00), "already taken");
             installingPermission = vId;
             $.vType = VALIDATION_TYPE_PERMISSION;
+            _initializeValidation(vId, _internalData[20:]);
         } else {
             require(installingPermission == vId, "permissionId should be consistent");
         }
@@ -97,7 +123,7 @@ abstract contract ValidationManager {
         $.vType = VALIDATION_TYPE_ROOT;
     }
 
-    function _checkValidation(ValidationMode vMode, ValidationType vType, ValidationId vId)
+    function _checkValidation(ValidationType vType, ValidationId vId)
         internal
         view
         returns (
@@ -108,6 +134,9 @@ abstract contract ValidationManager {
         ValidationStorage storage $ = _validationStorage();
         if (vType == VALIDATION_TYPE_ROOT || $.vInfo[vId].vType == VALIDATION_TYPE_ROOT) {
             v = $.root;
+            if (ValidationId.unwrap(v) == bytes20(0)) {
+                return (v, _validateUserOpFallback);
+            }
             vType = $.vInfo[v].vType;
         } else {
             v = vId;
@@ -117,9 +146,7 @@ abstract contract ValidationManager {
         if (vType == VALIDATION_TYPE_PERMISSION) {
             validateUserOp = _validateUserOpPermission;
         } else {
-            // this includes 7702
             validateUserOp = _validateUserOpValidator;
-            //revert InvalidValidationType();
         }
     }
 
@@ -129,7 +156,7 @@ abstract contract ValidationManager {
         returns (uint256 validationData)
     {
         if (ValidationId.unwrap(vId) == bytes20(0)) {
-            return _verify7702Signature(_hash, _signature) ? 0 : 1;
+            return _verifyFallbackSignature(_hash, _signature) ? 0 : 1;
         }
         ValidationInfo storage vInfo = _validationStorage().vInfo[vId];
         if (vInfo.vType == VALIDATION_TYPE_VALIDATOR) {
@@ -151,8 +178,6 @@ abstract contract ValidationManager {
         bytes calldata _signature
     ) internal view returns (uint256 validationData) {
         unchecked {
-            uint256 length = vInfo.policies.length + 1;
-
             PermissionSignature calldata permissionSig;
             assembly {
                 permissionSig := _signature.offset
@@ -174,15 +199,21 @@ abstract contract ValidationManager {
         }
     }
 
+    function _validateUserOpFallback(
+        ValidationId,
+        bytes32 opHash,
+        PackedUserOperation memory,
+        bytes calldata userOpSignature
+    ) internal virtual returns (uint256 validationData) {
+        return _verifyFallbackSignature(opHash, userOpSignature) ? 0 : 1;
+    }
+
     function _validateUserOpValidator(
         ValidationId vId,
         bytes32 opHash,
         PackedUserOperation memory op,
         bytes calldata userOpSignature
     ) internal returns (uint256 validationData) {
-        if (ValidationId.unwrap(vId) == bytes20(0)) {
-            return _verify7702Signature(opHash, userOpSignature) ? 0 : 1;
-        }
         // NOTE: removed permission for now, adding back after testing is done
         address validator = address(ValidationId.unwrap(vId));
         op.signature = userOpSignature;
@@ -201,8 +232,6 @@ abstract contract ValidationManager {
     ) internal returns (uint256 validationData) {
         ValidationInfo storage vInfo = _validationStorage().vInfo[vId];
         unchecked {
-            uint256 length = vInfo.policies.length + 1;
-
             PermissionSignature calldata permissionSig;
             assembly {
                 permissionSig := userOpSignature.offset
@@ -222,8 +251,8 @@ abstract contract ValidationManager {
         }
     }
 
-    function _verify7702Signature(bytes32 hash, bytes calldata sig) internal view returns (bool) {
-        return ECDSA.tryRecover(hash, sig) == address(this);
+    function _verifyFallbackSignature(bytes32, bytes calldata) internal view virtual returns (bool) {
+        return false;
     }
 
     function _setRoot(Install calldata pkg) internal {

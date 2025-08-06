@@ -77,7 +77,8 @@ contract KernelHelper {
     }
 
     function _hashTypedDataSansChainId(address addr, bytes32 structHash) internal view returns (bytes32 digest) {
-        (, string memory name, string memory version,,,,) = IERC5267(addr).eip712Domain();
+        string memory name = "Kernel";
+        string memory version = "0.4.0";
         /// @solidity memory-safe-assembly
         assembly {
             let m := mload(0x40) // Load the free memory pointer.
@@ -96,8 +97,8 @@ contract KernelHelper {
     }
 
     function _hashTypedData(address addr, bytes32 structHash) internal view virtual returns (bytes32 digest) {
-        // We will use `digest` to store the domain separator to save a bit of gas.
-        (, string memory name, string memory version,,,,) = IERC5267(addr).eip712Domain();
+        string memory name = "Kernel";
+        string memory version = "0.4.0";
         bytes32 separator = keccak256(bytes(name));
         bytes32 versionHash = keccak256(bytes(version));
         /// @solidity memory-safe-assembly

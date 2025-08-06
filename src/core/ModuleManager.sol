@@ -5,7 +5,7 @@ import {ValidationManager} from "./ValidationManager.sol";
 import {ExecutorManager} from "./ExecutorManager.sol";
 import {HookManager} from "./HookManager.sol";
 import {SelectorManager} from "./SelectorManager.sol";
-import {ERC1271} from "solady/accounts/ERC1271.sol";
+import {ERC1271} from "../lib/ERC1271.sol";
 import "../types/Error.sol";
 import "../types/Events.sol";
 import "../types/Structs.sol";
@@ -23,7 +23,7 @@ struct ModuleStorage {
 abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManager, SelectorManager, ERC1271 {
     modifier executorHook() {
         IHook hook = _executorConfig(IExecutor(msg.sender)).hook;
-        bytes memory hookData = _preHook(hook);
+        bytes memory hookData = _preHook(hook, msg.data);
         _;
         _postHook(hook, hookData);
     }
@@ -54,19 +54,10 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
             || ValidationId.unwrap(_validationStorage().root) != bytes20(0);
     }
 
-    function _moduleStorage() internal view returns (ModuleStorage storage $) {
+    function _moduleStorage() internal pure returns (ModuleStorage storage $) {
         assembly {
             $.slot := MODULE_MANAGER_STORAGE_SLOT
         }
-    }
-
-    // NOTE: this is not accesible, but required to override because of solady's erc1271
-    function _erc1271Signer() internal view override returns (address) {
-        return address(1);
-    }
-
-    function _erc1271IsValidSignature(bytes32 hash, bytes calldata signature) internal view override returns (bool) {
-        return _erc1271IsValidSignatureViaNestedEIP712(hash, signature);
     }
 
     function _erc1271IsValidSignatureNowCalldata(bytes32 hash, bytes calldata signature)
