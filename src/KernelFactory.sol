@@ -10,9 +10,9 @@ contract KernelFactory {
     KernelUUPS public immutable uups;
     KernelImmutableECDSA public immutable immutableECDSA;
 
-    constructor(IEntryPoint _entryPoint) {
-        uups = new KernelUUPS(_entryPoint);
-        immutableECDSA = new KernelImmutableECDSA(_entryPoint);
+    constructor(KernelUUPS _uups, KernelImmutableECDSA _immutableECDSA) {
+        uups = _uups;
+        immutableECDSA = _immutableECDSA;
     }
 
     // Kernel UUPS

@@ -9,6 +9,8 @@ import {KernelUUPS} from "src/KernelUUPS.sol";
 import {KernelHelper} from "src/KernelHelper.sol";
 import {SelectorManager} from "src/core/SelectorManager.sol";
 import {KernelFactory} from "src/KernelFactory.sol";
+import {KernelUUPS} from "src/KernelUUPS.sol";
+import {KernelImmutableECDSA} from "src/KernelImmutableECDSA.sol";
 import {LibERC7579} from "solady/accounts/LibERC7579.sol";
 import {LibString} from "solady/utils/LibString.sol";
 import {Install} from "src/types/Structs.sol";
@@ -98,7 +100,10 @@ contract KernelTest is Test {
 
     function setUp() external {
         ep = EntryPointLib.deploy();
-        factory = new KernelFactory(ep);
+
+        KernelUUPS uups = new KernelUUPS(ep);
+        KernelImmutableECDSA immutableECDSA = new KernelImmutableECDSA(ep);
+        factory = new KernelFactory(uups, immutableECDSA);
         helper = new KernelHelper();
         newValidator = new MockValidator();
         callee = new MockCallee();
