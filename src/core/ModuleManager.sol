@@ -49,7 +49,7 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         return (uint256(key) << 64) + seq;
     }
 
-    function _initialized() internal view returns (bool) {
+    function _initialized() internal virtual view returns (bool) {
         return bytes3(address(this).code) == bytes3(0xef0100)
             || ValidationId.unwrap(_validationStorage().root) != bytes20(0);
     }
