@@ -9,6 +9,8 @@ import {KernelUUPS} from "src/KernelUUPS.sol";
 import {KernelHelper} from "src/KernelHelper.sol";
 import {SelectorManager} from "src/core/SelectorManager.sol";
 import {KernelFactory} from "src/KernelFactory.sol";
+import {KernelUUPS} from "src/KernelUUPS.sol";
+import {KernelImmutableECDSA} from "src/KernelImmutableECDSA.sol";
 import {LibERC7579} from "solady/accounts/LibERC7579.sol";
 import {LibString} from "solady/utils/LibString.sol";
 import {Install} from "src/types/Structs.sol";
@@ -98,7 +100,10 @@ contract KernelTest is Test {
 
     function setUp() external {
         ep = EntryPointLib.deploy();
-        factory = new KernelFactory(ep);
+
+        KernelUUPS uups = new KernelUUPS(ep);
+        KernelImmutableECDSA immutableECDSA = new KernelImmutableECDSA(ep);
+        factory = new KernelFactory(uups, immutableECDSA);
         helper = new KernelHelper();
         newValidator = new MockValidator();
         callee = new MockCallee();
@@ -216,7 +221,12 @@ contract KernelTest is Test {
         bytes memory userOpSig
     ) internal returns (bytes memory sig) {
         Install[] memory packages = new Install[](1);
-        packages[0] = Install({moduleType: 1, module: address(newValidator), moduleData: hex"", internalData: abi.encodePacked(address(0), selector)});
+        packages[0] = Install({
+            moduleType: 1,
+            module: address(newValidator),
+            moduleData: hex"",
+            internalData: abi.encodePacked(address(0), selector)
+        });
         sig = abi.encode(
             uint256(0), packages, enableSig(nonce, enableSuccess, replayable, packages, signEnable), userOpSig
         );
@@ -270,7 +280,7 @@ contract KernelTest is Test {
 
     function test_codesize() external {
         vm.skip(true);
-        address implementation = address(factory.template());
+        address implementation = address(factory.uups());
         console.log("Code size :", implementation.code.length);
         require(implementation.code.length <= 24576, "Code too big");
         console.log("space left :", 24576 - implementation.code.length);
@@ -493,8 +503,9 @@ contract KernelTest is Test {
             paymasterAndData: hex"",
             signature: hex""
         });
-        ops[0].signature =
-            encodeEnableValidatorSignature(Kernel.execute.selector, 0, true, false, _rootSignHash,  _validatorSignUserOp(ops[0], true, false));
+        ops[0].signature = encodeEnableValidatorSignature(
+            Kernel.execute.selector, 0, true, false, _rootSignHash, _validatorSignUserOp(ops[0], true, false)
+        );
         ep.handleOps(ops, beneficiary);
         assertEq(callee.bar(), 1);
     }
@@ -514,8 +525,9 @@ contract KernelTest is Test {
             paymasterAndData: hex"",
             signature: hex""
         });
-        ops[0].signature =
-            encodeEnableValidatorSignature(Kernel.execute.selector, 0, false, false, _rootSignHash, _validatorSignUserOp(ops[0], true, false));
+        ops[0].signature = encodeEnableValidatorSignature(
+            Kernel.execute.selector, 0, false, false, _rootSignHash, _validatorSignUserOp(ops[0], true, false)
+        );
         vm.expectRevert(abi.encodeWithSelector(IEntryPoint.FailedOp.selector, 0, "AA24 signature error"));
         ep.handleOps(ops, beneficiary);
     }
@@ -536,8 +548,9 @@ contract KernelTest is Test {
             signature: hex""
         });
 
-        ops[0].signature =
-            encodeEnableValidatorSignature(Kernel.execute.selector, 0, true, false, _rootSignHash, _validatorSignUserOp(ops[0], false, false));
+        ops[0].signature = encodeEnableValidatorSignature(
+            Kernel.execute.selector, 0, true, false, _rootSignHash, _validatorSignUserOp(ops[0], false, false)
+        );
         vm.expectRevert(abi.encodeWithSelector(IEntryPoint.FailedOp.selector, 0, "AA24 signature error"));
         ep.handleOps(ops, beneficiary);
     }
@@ -599,8 +612,9 @@ contract KernelTest is Test {
             signature: hex""
         });
 
-        ops[0].signature =
-            encodeEnablePermissionSignature(Kernel.execute.selector, 0, true, false, _rootSignHash, _permissionSignUserOp(ops[0], true, false));
+        ops[0].signature = encodeEnablePermissionSignature(
+            Kernel.execute.selector, 0, true, false, _rootSignHash, _permissionSignUserOp(ops[0], true, false)
+        );
         ep.handleOps(ops, beneficiary);
         assertEq(callee.bar(), 1);
     }
@@ -620,8 +634,9 @@ contract KernelTest is Test {
             paymasterAndData: hex"",
             signature: hex""
         });
-        ops[0].signature =
-            encodeEnablePermissionSignature(Kernel.execute.selector, 0, false, false, _rootSignHash, _permissionSignUserOp(ops[0], true, false));
+        ops[0].signature = encodeEnablePermissionSignature(
+            Kernel.execute.selector, 0, false, false, _rootSignHash, _permissionSignUserOp(ops[0], true, false)
+        );
         vm.expectRevert(abi.encodeWithSelector(IEntryPoint.FailedOp.selector, 0, "AA24 signature error"));
         ep.handleOps(ops, beneficiary);
     }
@@ -641,8 +656,9 @@ contract KernelTest is Test {
             paymasterAndData: hex"",
             signature: hex""
         });
-        ops[0].signature =
-            encodeEnablePermissionSignature(Kernel.execute.selector, 0, true, false, _rootSignHash, _permissionSignUserOp(ops[0], false, false));
+        ops[0].signature = encodeEnablePermissionSignature(
+            Kernel.execute.selector, 0, true, false, _rootSignHash, _permissionSignUserOp(ops[0], false, false)
+        );
         vm.expectRevert(abi.encodeWithSelector(IEntryPoint.FailedOp.selector, 0, "AA24 signature error"));
         ep.handleOps(ops, beneficiary);
     }
@@ -663,8 +679,9 @@ contract KernelTest is Test {
             signature: hex""
         });
         permissionRevertIndex = 1;
-        ops[0].signature =
-            encodeEnablePermissionSignature(Kernel.execute.selector, 0, true, false, _rootSignHash, _permissionSignUserOp(ops[0], false, false));
+        ops[0].signature = encodeEnablePermissionSignature(
+            Kernel.execute.selector, 0, true, false, _rootSignHash, _permissionSignUserOp(ops[0], false, false)
+        );
         vm.expectRevert(abi.encodeWithSelector(IEntryPoint.FailedOp.selector, 0, "AA24 signature error"));
         ep.handleOps(ops, beneficiary);
     }

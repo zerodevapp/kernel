@@ -10,4 +10,8 @@ contract Kernel7702 is Kernel {
     function _verifyFallbackSignature(bytes32 hash, bytes calldata sig) internal view override returns (bool) {
         return ECDSA.tryRecover(hash, sig) == address(this);
     }
+
+    function _statelessInitializeCheck() internal view override returns (bool) {
+        return true;
+    }
 }

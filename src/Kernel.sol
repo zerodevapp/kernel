@@ -39,6 +39,20 @@ abstract contract Kernel is ModuleManager, ExecutionManager {
         bytes userOpSignature;
     }
 
+    function initialize(Install[] calldata packages) external {
+        require(!_initialized(), InvalidInitialization());
+        // this is initialize
+        // require first package to be the root validator
+        _initialize(packages);
+    }
+
+    function _initialize(Install[] calldata packages) internal virtual {
+        require(packages.length > 0);
+        Install calldata root = packages[0];
+        _install(packages);
+        _setRoot(root);
+    }
+
     function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash, uint256 missingAccountFunds)
         external
         payable
@@ -82,7 +96,11 @@ abstract contract Kernel is ModuleManager, ExecutionManager {
 
         // check if the call data is allowed by the validationId
         if ($.vInfo[vId].hook != address(0)) {
-            require(bytes4(userOp.callData[0:4]) == this.executeUserOp.selector && $.allowed[vId][bytes4(userOp.callData[4:])], UnauthorizedCallData());
+            require(
+                bytes4(userOp.callData[0:4]) == this.executeUserOp.selector
+                    && $.allowed[vId][bytes4(userOp.callData[4:])],
+                UnauthorizedCallData()
+            );
             validationHook = IHook($.vInfo[vId].hook);
         } else {
             require(vType == VALIDATION_TYPE_ROOT || $.allowed[vId][bytes4(userOp.callData)], UnauthorizedCallData());
@@ -208,20 +226,9 @@ abstract contract Kernel is ModuleManager, ExecutionManager {
     function installModule(bool replayable, uint256 nonce, Install[] calldata packages, bytes calldata signature)
         external
     {
-        if (_initialized()) {
-            // if 7702 or already initialized, use root signature to install module
-            require(
-                _verifyInstallSignature(replayable, nonce, packages, signature), InstallSignatureVerificationFailed()
-            );
-            _install(packages);
-        } else {
-            // this is initialize
-            // require first package to be the root validator
-            require(packages.length > 0);
-            Install calldata root = packages[0];
-            _install(packages);
-            _setRoot(root);
-        }
+        // if 7702 or already initialized, use root signature to install module
+        require(_verifyInstallSignature(replayable, nonce, packages, signature), InstallSignatureVerificationFailed());
+        _install(packages);
     }
 
     fallback(bytes calldata) external payable returns (bytes memory) {
