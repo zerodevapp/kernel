@@ -29,7 +29,7 @@ contract KernelFactory {
                 context = abi.encodePacked(bytes20(p.internalData));
             }
 
-            if (Kernel(payable(account)).isModuleInstalled(p.moduleType, p.module, context)) {
+            if (!Kernel(payable(account)).isModuleInstalled(p.moduleType, p.module, context)) {
                 return false;
             }
         }
