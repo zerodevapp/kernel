@@ -25,7 +25,7 @@ contract KernelFactory {
             Install memory p = packages[i];
 
             bytes memory context;
-            if(p.moduleType == 5 || p.moduleType == 6) {
+            if (p.moduleType == 5 || p.moduleType == 6) {
                 context = abi.encodePacked(bytes20(p.internalData));
             }
 
