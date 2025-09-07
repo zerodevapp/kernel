@@ -7,3 +7,6 @@
 [submodule "lib/ExcessivelySafeCall"]
 	path = lib/ExcessivelySafeCall
 	url = https://github.com/nomad-xyz/ExcessivelySafeCall
+[submodule "lib/SolRsaVerify"]
+	path = lib/SolRsaVerify
+	url = https://github.com/adria0/SolRsaVerify
