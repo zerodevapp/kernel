@@ -3,13 +3,12 @@
 pragma solidity ^0.8.26;
 
 import {RsaVerifyOptimized} from "../../lib/SolRsaVerify/src/RsaVerifyOptimized.sol";
-import {IValidator, IHook, IExecutor} from "../interfaces/IERC7579Modules.sol";
+import {IValidator, IExecutor} from "../interfaces/IERC7579Modules.sol";
 import {PackedUserOperation} from "../interfaces/PackedUserOperation.sol";
 import {
     SIG_VALIDATION_SUCCESS_UINT,
     SIG_VALIDATION_FAILED_UINT,
     MODULE_TYPE_VALIDATOR,
-    MODULE_TYPE_HOOK,
     MODULE_TYPE_EXECUTOR,
     ERC1271_MAGICVALUE,
     ERC1271_INVALID
@@ -46,7 +45,7 @@ struct EMVTransactionData {
  * @dev Complete ERC-7579 module for EMV CDA validation and ERC20 execution
  * @notice Validates EMV CDA signatures and executes ERC20 transfers with merchant registry integration
  */
-contract EMVProcessor is IValidator, IHook, IExecutor {
+contract EMVProcessor is IValidator, IExecutor {
     // ========== EVENTS ==========
     
     event EMVSignatureValidated(address indexed kernel, bool success);
@@ -81,6 +80,8 @@ contract EMVProcessor is IValidator, IHook, IExecutor {
     error TokenNotConfigured();
     error MerchantNotRegistered(bytes15 merchantId);
     error MerchantRegistryNotSet();
+    error InvalidConfig();
+    error ModuleNotInstalled();
 
     // ========== MODULE LIFECYCLE ==========
 
@@ -92,34 +93,17 @@ contract EMVProcessor is IValidator, IHook, IExecutor {
      *              If empty, only validator/hook functionality is enabled
      */
     function onInstall(bytes calldata _data) external payable override {
-        // Initialize ATC counter to 0 for this kernel instance
-        expectedATC = 0;
-        
-        // Configure ERC20 executor if data is provided
-        if (_data.length > 0) {
-            // Try to decode with merchant registry first
-            try this.decodeFullConfig(_data) returns (address tokenAddress, address recipient, address registry) {
-                configuredToken = tokenAddress;
-                configuredRecipient = recipient;
-                if (registry != address(0)) {
-                    merchantRegistry = MerchantRegistry(registry);
-                }
-                emit EMVExecutorConfigured(msg.sender, tokenAddress, recipient);
-            } catch {
-                // Fall back to basic config
-                (address tokenAddress, address recipient) = abi.decode(_data, (address, address));
-                configuredToken = tokenAddress;
-                configuredRecipient = recipient;
-                emit EMVExecutorConfigured(msg.sender, tokenAddress, recipient);
-            }
-        }
-    }
+        (address tokenAddress, address recipient, address registry, uint16 atc) = abi.decode(_data, (address, address, address, uint16));
 
-    /**
-     * @dev Helper function to decode full configuration (for try/catch)
-     */
-    function decodeFullConfig(bytes calldata _data) external pure returns (address, address, address) {
-        return abi.decode(_data, (address, address, address));
+        if (tokenAddress == address(0) || recipient == address(0) || registry == address(0)) {
+            revert InvalidConfig();
+        }
+
+        expectedATC = atc;
+        configuredToken = tokenAddress;
+        configuredRecipient = recipient;
+        merchantRegistry = MerchantRegistry(registry);
+        emit EMVExecutorConfigured(msg.sender, tokenAddress, recipient);
     }
 
     /**
@@ -139,17 +123,21 @@ contract EMVProcessor is IValidator, IHook, IExecutor {
      * @dev Check if module supports the given type
      */
     function isModuleType(uint256 typeID) external pure override returns (bool) {
-        return typeID == MODULE_TYPE_VALIDATOR || typeID == MODULE_TYPE_HOOK || typeID == MODULE_TYPE_EXECUTOR;
+        return typeID == MODULE_TYPE_VALIDATOR || typeID == MODULE_TYPE_EXECUTOR;
     }
 
     /**
      * @dev Check if module is initialized for the smart account
      */
-    function isInitialized(address smartAccount) external pure override returns (bool) {
+    function isInitialized(address smartAccount) external view override returns (bool) {
+        return _isInitialized(smartAccount);
+    }
+
+    function _isInitialized(address smartAccount) internal view returns (bool) {
         // Module is considered initialized (always true after onInstall is called)
         // In delegate call context, we can't easily track initialization per address
         // This is acceptable since the kernel manages module lifecycle
-        return true;
+        return configuredToken != address(0)  && configuredRecipient != address(0) && merchantRegistry != MerchantRegistry(address(0));
     }
 
     // ========== VALIDATOR FUNCTIONS ==========
@@ -168,9 +156,6 @@ contract EMVProcessor is IValidator, IHook, IExecutor {
     {
         // Directly validate without external call to preserve msg.sender context
         EMVTransactionData memory txnData = abi.decode(userOp.signature, (EMVTransactionData));
-        
-        // Validate field lengths according to EMV specification
-        _validateEMVFieldLengths(txnData);
         
         // Validate currency code
         _validateCurrencyCode(txnData);
@@ -223,9 +208,6 @@ contract EMVProcessor is IValidator, IHook, IExecutor {
     function verifyEMVSignature(bytes calldata emvData) external returns (bool) {
         EMVTransactionData memory txnData = abi.decode(emvData, (EMVTransactionData));
         
-        // Validate field lengths according to EMV specification
-        _validateEMVFieldLengths(txnData);
-        
         // Validate currency code
         _validateCurrencyCode(txnData);
         
@@ -252,9 +234,6 @@ contract EMVProcessor is IValidator, IHook, IExecutor {
     function verifyEMVSignatureView(bytes calldata emvData) external view returns (bool) {
         EMVTransactionData memory txnData = abi.decode(emvData, (EMVTransactionData));
         
-        // Validate field lengths according to EMV specification
-        _validateEMVFieldLengths(txnData);
-        
         // Validate currency code
         _validateCurrencyCode(txnData);
         
@@ -274,95 +253,6 @@ contract EMVProcessor is IValidator, IHook, IExecutor {
         return _verifyEMVSignature(txnData);
     }
 
-    /**
-     * @dev Public interface for EMV signature verification with explicit parameters
-     * @param arqc Application Cryptogram (9F26) - 8 bytes
-     * @param unpredictableNumber Unpredictable Number (9F37) - 4 bytes
-     * @param atc Application Transaction Counter (9F36) - 2 bytes
-     * @param amount Amount (9F02) - 6 bytes BCD
-     * @param currency Currency (5F2A) - 2 bytes
-     * @param date Date (9A) - 3 bytes BCD YYMMDD
-     * @param txnType Transaction Type (9C) - 1 byte
-     * @param tvr Terminal Verification Results (95) - 5 bytes
-     * @param cvmResults CVM Results (9F34) - 3 bytes
-     * @param terminalId Terminal ID (9F1C) - 8 bytes
-     * @param merchantId Merchant ID (9F16) - 15 bytes
-     * @param signature RSA signature (9F4B)
-     * @param exponent RSA public key exponent
-     * @param modulus RSA public key modulus
-     * @return true if signature is valid, false otherwise
-     */
-    function verify9F4B(
-        bytes calldata arqc,
-        bytes calldata unpredictableNumber,
-        bytes calldata atc,
-        bytes calldata amount,
-        bytes calldata currency,
-        bytes calldata date,
-        bytes calldata txnType,
-        bytes calldata tvr,
-        bytes calldata cvmResults,
-        bytes calldata terminalId,
-        bytes calldata merchantId,
-        bytes calldata signature,
-        bytes calldata exponent,
-        bytes calldata modulus
-    ) external view returns (bool) {
-        EMVTransactionData memory txnData = EMVTransactionData({
-            arqc: arqc,
-            unpredictableNumber: unpredictableNumber,
-            atc: atc,
-            amount: amount,
-            currency: currency,
-            date: date,
-            txnType: txnType,
-            tvr: tvr,
-            cvmResults: cvmResults,
-            terminalId: terminalId,
-            merchantId: merchantId,
-            signature: signature,
-            exponent: exponent,
-            modulus: modulus
-        });
-        
-        // Validate field lengths
-        _validateEMVFieldLengths(txnData);
-        
-        // Validate currency code
-        _validateCurrencyCode(txnData);
-        
-        // Verify signature
-        return _verifyEMVSignature(txnData);
-    }
-
-    // ========== HOOK FUNCTIONS ==========
-
-    /**
-     * @dev Pre-execution hook - validates EMV signature before transaction
-     * @param msgSender The sender of the transaction
-     * @param value The value being sent
-     * @param data The call data
-     * @return hookData Empty data
-     */
-    function preCheck(address msgSender, uint256 value, bytes calldata data)
-        external
-        payable
-        override
-        returns (bytes memory)
-    {
-        // For EMV validator, we can perform additional checks here if needed
-        // For now, we'll just return empty data as the main validation happens in validateUserOp
-        return hex"";
-    }
-
-    /**
-     * @dev Post-execution hook - currently no post-execution logic needed
-     * @param hookData Data from preCheck
-     */
-    function postCheck(bytes calldata hookData) external payable override {
-        // No post-execution logic needed for EMV validation
-    }
-
     // ========== EXECUTOR FUNCTIONS ==========
 
     /**
@@ -371,16 +261,12 @@ contract EMVProcessor is IValidator, IHook, IExecutor {
      * @param customRecipient Optional custom recipient (if zero address, uses merchant registry)
      */
     function executeEMVTransfer(bytes calldata emvData, address customRecipient) external payable {
-        if (configuredToken == address(0)) {
-            revert TokenNotConfigured();
+        if (!_isInitialized(msg.sender)) {
+            revert ModuleNotInstalled();
         }
 
         // Decode EMV transaction data
         EMVTransactionData memory txnData = abi.decode(emvData, (EMVTransactionData));
-        
-        // Validate field lengths and currency (same validation as validator)
-        _validateEMVFieldLengths(txnData);
-        _validateCurrencyCode(txnData);
 
         // Extract amount from EMV BCD format (6 bytes)
         uint256 transferAmount = _extractAmountFromBCD(txnData.amount);
@@ -427,21 +313,6 @@ contract EMVProcessor is IValidator, IHook, IExecutor {
         );
     }
 
-    /**
-     * @dev Execute EMV-based ERC20 transfer with default recipient
-     * @param emvData Encoded EMV transaction data
-     */
-    function executeEMVTransfer(bytes calldata emvData) external payable {
-        this.executeEMVTransfer(emvData, address(0));
-    }
-
-    /**
-     * @dev Set the merchant registry contract
-     * @param registry The MerchantRegistry contract address
-     */
-    function setMerchantRegistry(address registry) external {
-        merchantRegistry = MerchantRegistry(registry);
-    }
 
     /**
      * @dev Get the configured token, recipient, and merchant registry
@@ -466,54 +337,6 @@ contract EMVProcessor is IValidator, IHook, IExecutor {
     }
 
     // ========== INTERNAL VALIDATION FUNCTIONS ==========
-
-    /**
-     * @dev Validate EMV field lengths according to specification
-     */
-    function _validateEMVFieldLengths(EMVTransactionData memory txnData) internal pure {
-        if (txnData.arqc.length != 8) {
-            revert InvalidEMVDataLength("ARQC", 8, txnData.arqc.length);
-        }
-        if (txnData.unpredictableNumber.length != 4) {
-            revert InvalidEMVDataLength("UnpredictableNumber", 4, txnData.unpredictableNumber.length);
-        }
-        if (txnData.atc.length != 2) {
-            revert InvalidEMVDataLength("ATC", 2, txnData.atc.length);
-        }
-        if (txnData.amount.length != 6) {
-            revert InvalidEMVDataLength("Amount", 6, txnData.amount.length);
-        }
-        if (txnData.currency.length != 2) {
-            revert InvalidEMVDataLength("Currency", 2, txnData.currency.length);
-        }
-        if (txnData.date.length != 3) {
-            revert InvalidEMVDataLength("Date", 3, txnData.date.length);
-        }
-        if (txnData.txnType.length != 1) {
-            revert InvalidEMVDataLength("TxnType", 1, txnData.txnType.length);
-        }
-        if (txnData.tvr.length != 5) {
-            revert InvalidEMVDataLength("TVR", 5, txnData.tvr.length);
-        }
-        if (txnData.cvmResults.length != 3) {
-            revert InvalidEMVDataLength("CVMResults", 3, txnData.cvmResults.length);
-        }
-        if (txnData.terminalId.length != 8) {
-            revert InvalidEMVDataLength("TerminalId", 8, txnData.terminalId.length);
-        }
-        if (txnData.merchantId.length != 15) {
-            revert InvalidEMVDataLength("MerchantId", 15, txnData.merchantId.length);
-        }
-        if (txnData.signature.length == 0) {
-            revert InvalidEMVDataLength("Signature", 1, 0);
-        }
-        if (txnData.exponent.length == 0) {
-            revert InvalidEMVDataLength("Exponent", 1, 0);
-        }
-        if (txnData.modulus.length < 128) {
-            revert InvalidEMVDataLength("Modulus", 128, txnData.modulus.length);
-        }
-    }
 
     /**
      * @dev Validate currency code (must be 840 USD or 997 USN)

@@ -303,7 +303,7 @@ abstract contract KernelTestBase is TestPlus, Test {
         }
     }
 
-    function setUp() public {
+    function setUp() public virtual {
         enabledPermission = PermissionId.wrap(bytes4(0xdeadbeef));
         entrypoint = IEntryPoint(EntryPointLib.deploy());
         Kernel impl = new Kernel(entrypoint);

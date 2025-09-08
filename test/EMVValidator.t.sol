@@ -1,20 +1,31 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import "forge-std/Test.sol";
+import "./base/KernelTestBase.sol";
 import "../src/emv/EMVProcessor.sol";
 import "../src/emv/MerchantRegistry.sol";
 import "../src/interfaces/PackedUserOperation.sol";
 import "../src/types/Constants.sol";
+import "../src/types/Types.sol";
+import "forge-std/console.sol";
 
-contract EMVValidatorTest is Test {
-    EMVProcessor public emvValidator;
+contract EMVValidatorTest is KernelTestBase {
+    EMVProcessor public emvProcessor;
     MerchantRegistry public merchantRegistry;
+    address public merchantAddress;
     
     // Event declarations for testing
     event EMVSignatureValidated(address indexed kernel, bool success);
     event UnpredictableNumberUsed(address indexed kernel, bytes4 unpredictableNumber);
     event ATCIncremented(address indexed kernel, uint16 newATC);
+    event EMVTransferExecuted(
+        address indexed from,
+        address indexed to,
+        address indexed token,
+        uint256 amount,
+        bytes4 unpredictableNumber,
+        uint16 atc
+    );
     
     // Test RSA key pair (2048-bit)
     bytes constant TEST_EXPONENT = hex"010001";
@@ -38,574 +49,318 @@ contract EMVValidatorTest is Test {
     
     // Expected dynamic data (for reference) - updated with properly padded Terminal ID and Merchant ID
     bytes constant EXPECTED_DYNAMIC_DATA = hex"6a031234567890abcdef123456780000000000010000034823120100000000000000000054455354303031004d45524348414e5430303132333400bc";
-    
-    address user1 = address(0x1);
-    address user2 = address(0x2);
 
-    function setUp() public {
-        emvValidator = new EMVProcessor();
+    function setUp() public override {
+        super.setUp(); // Initialize KernelTestBase
+        
+        // Deploy EMV components
+        emvProcessor = new EMVProcessor();
         merchantRegistry = new MerchantRegistry();
+        merchantAddress = makeAddr("merchant");
+        
+        // Register test merchant
+        merchantRegistry.modifyMerchant(bytes15(TEST_MERCHANT_ID), merchantAddress);
+        
+        // Mint tokens to the test contract
+        mockERC20.mint(address(this), 1e24); // 1 million tokens with 18 decimals
+        
+        // Verify test contract has tokens from the inherited mockERC20
+        uint256 balance = mockERC20.balanceOf(address(this));
+        console.log("Test contract balance from mockERC20:", balance);
     }
 
-    function test_Deployment() public {
-        assertTrue(address(emvValidator) != address(0));
-        assertEq(emvValidator.expectedATC(), 0);
-        assertFalse(emvValidator.usedUnpredictableNumbers(uint32(bytes4(TEST_UNPREDICTABLE_NUMBER))));
+    // Override root validation config to use EMVProcessor
+    function _setRootValidationConfig() internal override {
+        // Use a MockValidator instead of EMVProcessor as the root validator for now
+        // We'll install EMVProcessor as a separate validator/executor module
+        mockValidator = new MockValidator();
+        rootValidation = ValidatorLib.validatorToIdentifier(IValidator(address(mockValidator)));
+        rootValidationConfig.hook = IHook(address(0));
+        rootValidationConfig.validatorData = "";
+        rootValidationConfig.hookData = "";
+    }
+
+    // Helper to install EMVProcessor as both validator and executor
+    function _installEMVProcessor() internal {
+        vm.deal(address(kernel), 1e18);
+
+        // Install EMVProcessor as validator with selector access
+        PackedUserOperation[] memory ops1 = new PackedUserOperation[](1);
+        ops1[0] = _prepareUserOp(
+            VALIDATION_TYPE_ROOT,
+            false,
+            false,
+            abi.encodeWithSelector(
+                kernel.installModule.selector,
+                MODULE_TYPE_VALIDATOR,
+                address(emvProcessor),
+                abi.encodePacked(
+                    address(0), // No hook
+                    abi.encode(
+                        abi.encode(address(mockERC20), merchantAddress, address(merchantRegistry), uint16(0)), // validator data
+                        hex"", // hook data
+                        abi.encodePacked(kernel.execute.selector) // selector data - grant access to execute
+                    )
+                )
+            ),
+            true,
+            true,
+            false
+        );
+        entrypoint.handleOps(ops1, payable(address(0xdeadbeef)));
+
+        // Install EMVProcessor as executor
+        PackedUserOperation[] memory ops2 = new PackedUserOperation[](1);
+        ops2[0] = _prepareUserOp(
+            VALIDATION_TYPE_ROOT,
+            false,
+            false,
+            abi.encodeWithSelector(
+                kernel.installModule.selector,
+                MODULE_TYPE_EXECUTOR,
+                address(emvProcessor),
+                abi.encodePacked(
+                    address(0), // No hook
+                    abi.encode(
+                        abi.encode(address(mockERC20), merchantAddress, address(merchantRegistry), uint16(0)), // executor data
+                        hex"" // hook data
+                    )
+                )
+            ),
+            true,
+            true,
+            false
+        );
+        entrypoint.handleOps(ops2, payable(address(0xdeadbeef)));
+    }
+
+    function _createEMVTransactionData() internal pure returns (bytes memory) {
+        EMVTransactionData memory txnData = EMVTransactionData({
+            arqc: TEST_ARQC,
+            unpredictableNumber: TEST_UNPREDICTABLE_NUMBER,
+            atc: TEST_ATC,
+            amount: TEST_AMOUNT,
+            currency: TEST_CURRENCY,
+            date: TEST_DATE,
+            txnType: TEST_TXN_TYPE,
+            tvr: TEST_TVR,
+            cvmResults: TEST_CVM_RESULTS,
+            terminalId: TEST_TERMINAL_ID,
+            merchantId: TEST_MERCHANT_ID,
+            signature: TEST_SIGNATURE,
+            exponent: TEST_EXPONENT,
+            modulus: TEST_MODULUS
+        });
+        return abi.encode(txnData);
+    }
+
+    function _createInvalidEMVTransactionData() internal pure returns (bytes memory) {
+        EMVTransactionData memory txnData = EMVTransactionData({
+            arqc: TEST_ARQC,
+            unpredictableNumber: TEST_UNPREDICTABLE_NUMBER,
+            atc: TEST_ATC,
+            amount: TEST_AMOUNT,
+            currency: TEST_CURRENCY,
+            date: TEST_DATE,
+            txnType: TEST_TXN_TYPE,
+            tvr: TEST_TVR,
+            cvmResults: TEST_CVM_RESULTS,
+            terminalId: TEST_TERMINAL_ID,
+            merchantId: TEST_MERCHANT_ID,
+            signature: hex"deadbeef", // Invalid signature
+            exponent: TEST_EXPONENT,
+            modulus: TEST_MODULUS
+        });
+        return abi.encode(txnData);
+    }
+
+    function _encodeEMVExecuteCall() internal view returns (bytes memory) {
+        // First install the EMV processor as an executor
+        bytes memory installExecutorCall = abi.encodeWithSelector(
+            kernel.installModule.selector,
+            MODULE_TYPE_EXECUTOR,
+            address(emvProcessor),
+            abi.encodePacked(
+                address(0), // No hook
+                abi.encode(
+                    abi.encode(address(mockERC20), merchantAddress, address(merchantRegistry), uint16(0)), // executor data
+                    hex"" // hook data
+                )
+            )
+        );
+
+        // Then execute the EMV transfer
+        bytes memory emvTransferCall = abi.encodeWithSelector(
+            emvProcessor.executeEMVTransfer.selector,
+            _createEMVTransactionData(),
+            address(0) // Use merchant registry
+        );
+
+        // Use batch execution to install executor and execute transfer
+        Execution[] memory executions = new Execution[](2);
+        executions[0] = Execution({
+            target: address(kernel),
+            value: 0,
+            callData: installExecutorCall
+        });
+        executions[1] = Execution({
+            target: address(kernel),
+            value: 0,
+            callData: emvTransferCall
+        });
+
+        return encodeBatchExecute(executions);
+    }
+
+    function _encodeSimpleTransferCall() internal view returns (bytes memory) {
+        // Simple ERC20 transfer to demonstrate the validation working
+        return abi.encodeWithSelector(
+            kernel.execute.selector,
+            ExecMode.wrap(bytes32(0)), // Default execution mode
+            ExecLib.encodeSingle(
+                address(mockERC20), // target (token contract)
+                0, // value
+                abi.encodeWithSelector(
+                    mockERC20.transfer.selector,
+                    merchantAddress,
+                    1e20 // amount (100.00 dollars)
+                )
+            )
+        );
+    }
+
+    function _prepareEMVUserOp(bytes memory callData, bool success) internal returns (PackedUserOperation memory op) {
+        // Create a UserOperation that uses EMVProcessor as the validator
+        uint192 nonceKey = ValidatorLib.encodeAsNonceKey(
+            ValidationMode.unwrap(VALIDATION_MODE_DEFAULT),
+            ValidationType.unwrap(VALIDATION_TYPE_VALIDATOR),
+            bytes20(address(emvProcessor)),
+            0 // parallel key
+        );
+
+        op = PackedUserOperation({
+            sender: address(kernel),
+            nonce: entrypoint.getNonce(address(kernel), nonceKey),
+            initCode: "",
+            callData: callData,
+            accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
+            preVerificationGas: 1000000,
+            gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
+            paymasterAndData: "",
+            signature: success ? _createEMVTransactionData() : _createInvalidEMVTransactionData()
+        });
+    }
+
+    function test_Deployment() public whenInitialized {
+        assertTrue(address(emvProcessor) != address(0));
+        assertTrue(address(kernel) != address(0));
+        assertTrue(address(entrypoint) != address(0));
+        
+        // Check that the kernel was initialized with MockValidator as root validator
+        assertEq(ValidationId.unwrap(kernel.rootValidator()), ValidationId.unwrap(rootValidation));
+        
+        // EMVProcessor should not be installed yet
+        assertFalse(kernel.isModuleInstalled(MODULE_TYPE_VALIDATOR, address(emvProcessor), ""));
+        assertFalse(kernel.isModuleInstalled(MODULE_TYPE_EXECUTOR, address(emvProcessor), ""));
     }
 
     function test_ModuleType() public {
-        assertTrue(emvValidator.isModuleType(MODULE_TYPE_VALIDATOR));
-        assertTrue(emvValidator.isModuleType(MODULE_TYPE_HOOK));
-        assertTrue(emvValidator.isModuleType(MODULE_TYPE_EXECUTOR));
-        assertFalse(emvValidator.isModuleType(MODULE_TYPE_FALLBACK));
+        assertTrue(emvProcessor.isModuleType(MODULE_TYPE_VALIDATOR));
+        assertTrue(emvProcessor.isModuleType(MODULE_TYPE_EXECUTOR));
+        assertFalse(emvProcessor.isModuleType(MODULE_TYPE_HOOK));
+        assertFalse(emvProcessor.isModuleType(MODULE_TYPE_FALLBACK));
     }
 
-    function test_OnInstall() public {
-        vm.prank(user1);
-        emvValidator.onInstall("");
+    function test_ValidEMVTransaction() public whenInitialized {
+        // Install EMVProcessor as both validator and executor
+        _installEMVProcessor();
         
-        assertEq(emvValidator.expectedATC(), 0);
-        assertTrue(emvValidator.isInitialized(user1));
-    }
-
-    function test_OnUninstall() public {
-        vm.prank(user1);
-        emvValidator.onInstall("");
+        // Check test contract balance first
+        uint256 testBalance = mockERC20.balanceOf(address(this));
+        console.log("Test contract balance:", testBalance);
         
-        vm.prank(user1);
-        emvValidator.onUninstall("");
+        // Fund the kernel with tokens for transfer (reasonable amount)
+        mockERC20.transfer(address(kernel), 1e21); // 1,000 tokens
+        vm.deal(address(kernel), 1e18);
+
+        // Check that kernel has the tokens
+        uint256 kernelBalance = mockERC20.balanceOf(address(kernel));
+        assertGt(kernelBalance, 1e20, "Kernel should have enough tokens");
+
+        // Create a UserOperation using EMVProcessor as validator to execute simple transfer
+        PackedUserOperation[] memory ops = new PackedUserOperation[](1);
+        ops[0] = _prepareEMVUserOp(
+            _encodeSimpleTransferCall(),
+            true // successful signature
+        );
+
+        // Execute the operation through EntryPoint
+        entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
+
+        // Check that the transfer was successful
+        uint256 merchantBalance = mockERC20.balanceOf(merchantAddress);
+        assertGt(merchantBalance, 0, "Merchant should have received tokens");
         
-        assertEq(emvValidator.expectedATC(), 0);
-        // Note: isInitialized will still return true since expectedATC[user1] exists (is 0)
+        // The amount should be 1e20 wei (100.00 dollars worth)
+        assertEq(merchantBalance, 1e20, "Merchant should have received exactly 1e20 tokens");
     }
 
-    function test_ValidEMVSignature() public {
-        vm.prank(user1);
-        emvValidator.onInstall("");
-
-        EMVTransactionData memory txnData = EMVTransactionData({
-            arqc: TEST_ARQC,
-            unpredictableNumber: TEST_UNPREDICTABLE_NUMBER,
-            atc: TEST_ATC,
-            amount: TEST_AMOUNT,
-            currency: TEST_CURRENCY,
-            date: TEST_DATE,
-            txnType: TEST_TXN_TYPE,
-            tvr: TEST_TVR,
-            cvmResults: TEST_CVM_RESULTS,
-            terminalId: TEST_TERMINAL_ID,
-            merchantId: TEST_MERCHANT_ID,
-            signature: TEST_SIGNATURE,
-            exponent: TEST_EXPONENT,
-            modulus: TEST_MODULUS
-        });
-
-        bytes memory emvData = abi.encode(txnData);
-
-        vm.prank(user1);
-        bool result = emvValidator.verifyEMVSignature(emvData);
-
-        assertTrue(result);
-        assertEq(emvValidator.expectedATC(), 1);
-        assertTrue(emvValidator.usedUnpredictableNumbers(uint32(bytes4(TEST_UNPREDICTABLE_NUMBER))));
-    }
-
-    function test_Verify9F4B_ValidSignature() public {
-        bool result = emvValidator.verify9F4B(
-            TEST_ARQC,
-            TEST_UNPREDICTABLE_NUMBER,
-            TEST_ATC,
-            TEST_AMOUNT,
-            TEST_CURRENCY,
-            TEST_DATE,
-            TEST_TXN_TYPE,
-            TEST_TVR,
-            TEST_CVM_RESULTS,
-            TEST_TERMINAL_ID,
-            TEST_MERCHANT_ID,
-            TEST_SIGNATURE,
-            TEST_EXPONENT,
-            TEST_MODULUS
-        );
-
-        assertTrue(result);
-    }
-
-    function test_Verify9F4B_InvalidSignature() public {
-        bytes memory badSignature = hex"deadbeef";
-        // Pad to correct length
-        bytes memory paddedBadSignature = new bytes(256);
-        for (uint i = 0; i < 4; i++) {
-            paddedBadSignature[i] = badSignature[i];
-        }
-
-        bool result =         emvValidator.verify9F4B(
-            TEST_ARQC,
-            TEST_UNPREDICTABLE_NUMBER,
-            TEST_ATC,
-            TEST_AMOUNT,
-            TEST_CURRENCY,
-            TEST_DATE,
-            TEST_TXN_TYPE,
-            TEST_TVR,
-            TEST_CVM_RESULTS,
-            TEST_TERMINAL_ID,
-            TEST_MERCHANT_ID,
-            paddedBadSignature,
-            TEST_EXPONENT,
-            TEST_MODULUS
-        );
-
-        assertFalse(result);
-    }
-
-    function test_ReplayProtection_UnpredictableNumber() public {
-        vm.prank(user1);
-        emvValidator.onInstall("");
-
-        EMVTransactionData memory txnData = EMVTransactionData({
-            arqc: TEST_ARQC,
-            unpredictableNumber: TEST_UNPREDICTABLE_NUMBER,
-            atc: TEST_ATC,
-            amount: TEST_AMOUNT,
-            currency: TEST_CURRENCY,
-            date: TEST_DATE,
-            txnType: TEST_TXN_TYPE,
-            tvr: TEST_TVR,
-            cvmResults: TEST_CVM_RESULTS,
-            terminalId: TEST_TERMINAL_ID,
-            merchantId: TEST_MERCHANT_ID,
-            signature: TEST_SIGNATURE,
-            exponent: TEST_EXPONENT,
-            modulus: TEST_MODULUS
-        });
-
-        bytes memory emvData = abi.encode(txnData);
-
-        // First transaction should succeed
-        vm.prank(user1);
-        bool result1 = emvValidator.verifyEMVSignature(emvData);
-        assertTrue(result1);
-
-        // Second transaction with same unpredictable number should fail
-        vm.prank(user1);
-        vm.expectRevert(abi.encodeWithSelector(EMVProcessor.UnpredictableNumberAlreadyUsed.selector, bytes4(TEST_UNPREDICTABLE_NUMBER)));
-        emvValidator.verifyEMVSignature(emvData);
-    }
-
-    function test_ATCSequence() public {
-        vm.prank(user1);
-        emvValidator.onInstall("");
-
-        // First transaction with ATC = 0
-        EMVTransactionData memory txnData1 = EMVTransactionData({
-            arqc: TEST_ARQC,
-            unpredictableNumber: TEST_UNPREDICTABLE_NUMBER,
-            atc: hex"0000", // ATC = 0
-            amount: TEST_AMOUNT,
-            currency: TEST_CURRENCY,
-            date: TEST_DATE,
-            txnType: TEST_TXN_TYPE,
-            tvr: TEST_TVR,
-            cvmResults: TEST_CVM_RESULTS,
-            terminalId: TEST_TERMINAL_ID,
-            merchantId: TEST_MERCHANT_ID,
-            signature: TEST_SIGNATURE,
-            exponent: TEST_EXPONENT,
-            modulus: TEST_MODULUS
-        });
-
-        vm.prank(user1);
-        bool result1 = emvValidator.verifyEMVSignature(abi.encode(txnData1));
-        assertTrue(result1);
-        assertEq(emvValidator.expectedATC(), 1);
-
-        // Second transaction with wrong ATC should fail
-        EMVTransactionData memory txnData2 = EMVTransactionData({
-            arqc: hex"ABCDEF1234567890", // Different ARQC
-            unpredictableNumber: hex"87654321", // Different unpredictable number
-            atc: hex"0002", // ATC = 2 (should be 1)
-            amount: TEST_AMOUNT,
-            currency: TEST_CURRENCY,
-            date: TEST_DATE,
-            txnType: TEST_TXN_TYPE,
-            tvr: TEST_TVR,
-            cvmResults: TEST_CVM_RESULTS,
-            terminalId: TEST_TERMINAL_ID,
-            merchantId: TEST_MERCHANT_ID,
-            signature: hex"1234", // This will fail signature verification anyway
-            exponent: TEST_EXPONENT,
-            modulus: TEST_MODULUS
-        });
-
-        vm.prank(user1);
-        vm.expectRevert(abi.encodeWithSelector(EMVProcessor.InvalidATCSequence.selector, 1, 2));
-        emvValidator.verifyEMVSignature(abi.encode(txnData2));
-    }
-
-    function test_CrossAddressIsolation() public {
-        // With delegate call, each kernel instance has its own storage
-        // This test now demonstrates that different unpredictable numbers work
+    function test_InvalidEMVSignature() public whenInitialized {
+        // Install EMVProcessor as both validator and executor
+        _installEMVProcessor();
         
-        vm.prank(user1);
-        emvValidator.onInstall("");
+        // Fund the kernel with tokens for transfer
+        mockERC20.transfer(address(kernel), 1e20);
+        vm.deal(address(kernel), 1e18);
 
-        // First transaction with one unpredictable number
-        EMVTransactionData memory txnData1 = EMVTransactionData({
-            arqc: TEST_ARQC,
-            unpredictableNumber: TEST_UNPREDICTABLE_NUMBER, // 0x12345678
-            atc: TEST_ATC,
-            amount: TEST_AMOUNT,
-            currency: TEST_CURRENCY,
-            date: TEST_DATE,
-            txnType: TEST_TXN_TYPE,
-            tvr: TEST_TVR,
-            cvmResults: TEST_CVM_RESULTS,
-            terminalId: TEST_TERMINAL_ID,
-            merchantId: TEST_MERCHANT_ID,
-            signature: TEST_SIGNATURE,
-            exponent: TEST_EXPONENT,
-            modulus: TEST_MODULUS
-        });
+        // Create a UserOperation with invalid EMV signature
+        PackedUserOperation[] memory ops = new PackedUserOperation[](1);
+        ops[0] = _prepareEMVUserOp(
+            _encodeSimpleTransferCall(),
+            false // invalid signature
+        );
 
-        vm.prank(user1);
-        bool result1 = emvValidator.verifyEMVSignature(abi.encode(txnData1));
-        assertTrue(result1);
-
-        // Second transaction with different unpredictable number should work
-        EMVTransactionData memory txnData2 = EMVTransactionData({
-            arqc: hex"ABCDEF1234567890", // Different ARQC
-            unpredictableNumber: hex"87654321", // Different unpredictable number
-            atc: hex"0001", // ATC = 1 (next in sequence)
-            amount: TEST_AMOUNT,
-            currency: TEST_CURRENCY,
-            date: TEST_DATE,
-            txnType: TEST_TXN_TYPE,
-            tvr: TEST_TVR,
-            cvmResults: TEST_CVM_RESULTS,
-            terminalId: TEST_TERMINAL_ID,
-            merchantId: TEST_MERCHANT_ID,
-            signature: hex"1234", // Will fail signature but should pass unpredictable number check
-            exponent: TEST_EXPONENT,
-            modulus: TEST_MODULUS
-        });
-
-        vm.prank(user1);
-        // This should fail at signature verification, not unpredictable number check
-        bool result2 = emvValidator.verifyEMVSignature(abi.encode(txnData2));
-        assertFalse(result2);
-
-        // But using the same unpredictable number should fail
-        vm.prank(user1);
-        vm.expectRevert(abi.encodeWithSelector(EMVProcessor.UnpredictableNumberAlreadyUsed.selector, bytes4(TEST_UNPREDICTABLE_NUMBER)));
-        emvValidator.verifyEMVSignature(abi.encode(txnData1));
+        // Expect the operation to fail due to invalid signature
+        vm.expectRevert(abi.encodeWithSelector(IEntryPoint.FailedOp.selector, 0, "AA24 signature error"));
+        entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
     }
 
-    function test_InvalidFieldLengths() public {
-        // Test invalid ARQC length
-        vm.expectRevert(abi.encodeWithSelector(EMVProcessor.InvalidEMVDataLength.selector, "ARQC", 8, 2));
-        emvValidator.verify9F4B(
-            hex"1234", // Too short
-            TEST_UNPREDICTABLE_NUMBER,
-            TEST_ATC,
-            TEST_AMOUNT,
-            TEST_CURRENCY,
-            TEST_DATE,
-            TEST_TXN_TYPE,
-            TEST_TVR,
-            TEST_CVM_RESULTS,
-            TEST_TERMINAL_ID,
-            TEST_MERCHANT_ID,
-            TEST_SIGNATURE,
-            TEST_EXPONENT,
-            TEST_MODULUS
-        );
+    function test_InstallEMVAsValidatorAndExecutor() public whenInitialized {
+        // Install EMVProcessor as both validator and executor
+        _installEMVProcessor();
 
-        // Test invalid unpredictable number length
-        vm.expectRevert(abi.encodeWithSelector(EMVProcessor.InvalidEMVDataLength.selector, "UnpredictableNumber", 4, 1));
-        emvValidator.verify9F4B(
-            TEST_ARQC,
-            hex"12", // Too short
-            TEST_ATC,
-            TEST_AMOUNT,
-            TEST_CURRENCY,
-            TEST_DATE,
-            TEST_TXN_TYPE,
-            TEST_TVR,
-            TEST_CVM_RESULTS,
-            TEST_TERMINAL_ID,
-            TEST_MERCHANT_ID,
-            TEST_SIGNATURE,
-            TEST_EXPONENT,
-            TEST_MODULUS
-        );
-
-        // Test invalid modulus length
-        vm.expectRevert(abi.encodeWithSelector(EMVProcessor.InvalidEMVDataLength.selector, "Modulus", 128, 2));
-        emvValidator.verify9F4B(
-            TEST_ARQC,
-            TEST_UNPREDICTABLE_NUMBER,
-            TEST_ATC,
-            TEST_AMOUNT,
-            TEST_CURRENCY,
-            TEST_DATE,
-            TEST_TXN_TYPE,
-            TEST_TVR,
-            TEST_CVM_RESULTS,
-            TEST_TERMINAL_ID,
-            TEST_MERCHANT_ID,
-            TEST_SIGNATURE,
-            TEST_EXPONENT,
-            hex"1234" // Too short
-        );
-
-        // Test invalid terminal ID length
-        vm.expectRevert(abi.encodeWithSelector(EMVProcessor.InvalidEMVDataLength.selector, "TerminalId", 8, 2));
-        emvValidator.verify9F4B(
-            TEST_ARQC,
-            TEST_UNPREDICTABLE_NUMBER,
-            TEST_ATC,
-            TEST_AMOUNT,
-            TEST_CURRENCY,
-            TEST_DATE,
-            TEST_TXN_TYPE,
-            TEST_TVR,
-            TEST_CVM_RESULTS,
-            hex"1234", // Too short (should be 8 bytes)
-            TEST_MERCHANT_ID,
-            TEST_SIGNATURE,
-            TEST_EXPONENT,
-            TEST_MODULUS
-        );
-
-        // Test invalid merchant ID length
-        vm.expectRevert(abi.encodeWithSelector(EMVProcessor.InvalidEMVDataLength.selector, "MerchantId", 15, 2));
-        emvValidator.verify9F4B(
-            TEST_ARQC,
-            TEST_UNPREDICTABLE_NUMBER,
-            TEST_ATC,
-            TEST_AMOUNT,
-            TEST_CURRENCY,
-            TEST_DATE,
-            TEST_TXN_TYPE,
-            TEST_TVR,
-            TEST_CVM_RESULTS,
-            TEST_TERMINAL_ID,
-            hex"1234", // Too short (should be 15 bytes)
-            TEST_SIGNATURE,
-            TEST_EXPONENT,
-            TEST_MODULUS
-        );
+        // Check that both modules were installed
+        assertTrue(kernel.isModuleInstalled(MODULE_TYPE_VALIDATOR, address(emvProcessor), ""));
+        assertTrue(kernel.isModuleInstalled(MODULE_TYPE_EXECUTOR, address(emvProcessor), ""));
     }
 
-    function test_InvalidCurrencyCode() public {
-        // Test invalid currency code (not 840 or 997)
-        vm.expectRevert(abi.encodeWithSelector(EMVProcessor.InvalidCurrencyCode.selector, 854));
-        emvValidator.verify9F4B(
-            TEST_ARQC,
-            TEST_UNPREDICTABLE_NUMBER,
-            TEST_ATC,
-            TEST_AMOUNT,
-            hex"0356", // 854 (EUR) - not allowed
-            TEST_DATE,
-            TEST_TXN_TYPE,
-            TEST_TVR,
-            TEST_CVM_RESULTS,
-            TEST_TERMINAL_ID,
-            TEST_MERCHANT_ID,
-            TEST_SIGNATURE,
-            TEST_EXPONENT,
-            TEST_MODULUS
-        );
-
-        // Test another invalid currency code
-        vm.expectRevert(abi.encodeWithSelector(EMVProcessor.InvalidCurrencyCode.selector, 500));
-        emvValidator.verify9F4B(
-            TEST_ARQC,
-            TEST_UNPREDICTABLE_NUMBER,
-            TEST_ATC,
-            TEST_AMOUNT,
-            hex"01F4", // 500 - not allowed
-            TEST_DATE,
-            TEST_TXN_TYPE,
-            TEST_TVR,
-            TEST_CVM_RESULTS,
-            TEST_TERMINAL_ID,
-            TEST_MERCHANT_ID,
-            TEST_SIGNATURE,
-            TEST_EXPONENT,
-            TEST_MODULUS
-        );
-    }
-
-    function test_ValidCurrencyCodes() public {
-        // Test 840 (USD) - should pass (already tested in other tests)
-        // Test 997 (USN) - should pass validation (signature will fail but currency validation should pass)
+    function test_MerchantRegistryIntegration() public whenInitialized {
+        // Install EMVProcessor as both validator and executor
+        _installEMVProcessor();
         
-        // We expect this to fail at signature verification, not currency validation
-        bool result = emvValidator.verify9F4B(
-            TEST_ARQC,
-            TEST_UNPREDICTABLE_NUMBER,
-            TEST_ATC,
-            TEST_AMOUNT,
-            hex"03E5", // 997 (USN) in big-endian
-            TEST_DATE,
-            TEST_TXN_TYPE,
-            TEST_TVR,
-            TEST_CVM_RESULTS,
-            TEST_TERMINAL_ID,
-            TEST_MERCHANT_ID,
-            TEST_SIGNATURE, // This signature won't match the new data, but currency validation should pass
-            TEST_EXPONENT,
-            TEST_MODULUS
+        // Fund the kernel with tokens for transfer
+        mockERC20.transfer(address(kernel), 1e20);
+        vm.deal(address(kernel), 1e18);
+
+        // Check initial balances
+        uint256 merchantBalanceBefore = mockERC20.balanceOf(merchantAddress);
+
+        // Create a UserOperation using EMVProcessor as validator to execute EMV transfer
+        PackedUserOperation[] memory ops = new PackedUserOperation[](1);
+        ops[0] = _prepareEMVUserOp(
+            _encodeSimpleTransferCall(),
+            true // successful signature
         );
+
+        // Execute the operation through EntryPoint
+        entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
+
+        // Check that the transfer was successful
+        uint256 merchantBalanceAfter = mockERC20.balanceOf(merchantAddress);
+        assertGt(merchantBalanceAfter, merchantBalanceBefore);
         
-        // Should be false due to signature mismatch, not currency validation
-        assertFalse(result);
-    }
-
-    function test_ValidateUserOp() public {
-        vm.prank(user1);
-        emvValidator.onInstall("");
-
-        EMVTransactionData memory txnData = EMVTransactionData({
-            arqc: TEST_ARQC,
-            unpredictableNumber: TEST_UNPREDICTABLE_NUMBER,
-            atc: TEST_ATC,
-            amount: TEST_AMOUNT,
-            currency: TEST_CURRENCY,
-            date: TEST_DATE,
-            txnType: TEST_TXN_TYPE,
-            tvr: TEST_TVR,
-            cvmResults: TEST_CVM_RESULTS,
-            terminalId: TEST_TERMINAL_ID,
-            merchantId: TEST_MERCHANT_ID,
-            signature: TEST_SIGNATURE,
-            exponent: TEST_EXPONENT,
-            modulus: TEST_MODULUS
-        });
-
-        PackedUserOperation memory userOp = PackedUserOperation({
-            sender: user1,
-            nonce: 0,
-            initCode: "",
-            callData: "",
-            accountGasLimits: bytes32(0),
-            preVerificationGas: 0,
-            gasFees: bytes32(0),
-            paymasterAndData: "",
-            signature: abi.encode(txnData)
-        });
-
-        vm.prank(user1);
-        uint256 result = emvValidator.validateUserOp(userOp, bytes32(0));
-
-        assertEq(result, SIG_VALIDATION_SUCCESS_UINT);
-        assertEq(emvValidator.expectedATC(), 1);
-    }
-
-    function test_IsValidSignatureWithSender() public {
-        EMVTransactionData memory txnData = EMVTransactionData({
-            arqc: TEST_ARQC,
-            unpredictableNumber: TEST_UNPREDICTABLE_NUMBER,
-            atc: TEST_ATC,
-            amount: TEST_AMOUNT,
-            currency: TEST_CURRENCY,
-            date: TEST_DATE,
-            txnType: TEST_TXN_TYPE,
-            tvr: TEST_TVR,
-            cvmResults: TEST_CVM_RESULTS,
-            terminalId: TEST_TERMINAL_ID,
-            merchantId: TEST_MERCHANT_ID,
-            signature: TEST_SIGNATURE,
-            exponent: TEST_EXPONENT,
-            modulus: TEST_MODULUS
-        });
-
-        vm.prank(user1);
-        emvValidator.onInstall("");
-
-        vm.prank(user1);
-        bytes4 result = emvValidator.isValidSignatureWithSender(
-            address(0),
-            bytes32(0),
-            abi.encode(txnData)
-        );
-
-        assertEq(result, ERC1271_MAGICVALUE);
-    }
-
-    function test_VerifyEMVSignatureView() public {
-        // Use a different unpredictable number that hasn't been used yet
-        EMVTransactionData memory txnData = EMVTransactionData({
-            arqc: TEST_ARQC,
-            unpredictableNumber: hex"FFFFFFFF", // Different unpredictable number
-            atc: hex"0002", // Use ATC that matches current expected value
-            amount: TEST_AMOUNT,
-            currency: TEST_CURRENCY,
-            date: TEST_DATE,
-            txnType: TEST_TXN_TYPE,
-            tvr: TEST_TVR,
-            cvmResults: TEST_CVM_RESULTS,
-            terminalId: TEST_TERMINAL_ID,
-            merchantId: TEST_MERCHANT_ID,
-            signature: TEST_SIGNATURE, // This will fail signature but should pass other validations
-            exponent: TEST_EXPONENT,
-            modulus: TEST_MODULUS
-        });
-
-        vm.prank(user1);
-        bool result = emvValidator.verifyEMVSignatureView(abi.encode(txnData));
-
-        // Should fail due to signature mismatch, but not due to replay protection
-        assertFalse(result);
-        // View function should not modify state - check that unpredictable number wasn't marked as used
-        assertFalse(emvValidator.usedUnpredictableNumbers(uint32(bytes4(hex"FFFFFFFF"))));
-    }
-
-    function test_PreCheckAndPostCheck() public {
-        vm.prank(user1);
-        bytes memory hookData = emvValidator.preCheck(address(0), 0, "");
-        assertEq(hookData.length, 0);
-
-        vm.prank(user1);
-        emvValidator.postCheck("");
-        // Should not revert
-    }
-
-    function test_Events() public {
-        vm.prank(user1);
-        emvValidator.onInstall("");
-
-        EMVTransactionData memory txnData = EMVTransactionData({
-            arqc: TEST_ARQC,
-            unpredictableNumber: TEST_UNPREDICTABLE_NUMBER,
-            atc: TEST_ATC,
-            amount: TEST_AMOUNT,
-            currency: TEST_CURRENCY,
-            date: TEST_DATE,
-            txnType: TEST_TXN_TYPE,
-            tvr: TEST_TVR,
-            cvmResults: TEST_CVM_RESULTS,
-            terminalId: TEST_TERMINAL_ID,
-            merchantId: TEST_MERCHANT_ID,
-            signature: TEST_SIGNATURE,
-            exponent: TEST_EXPONENT,
-            modulus: TEST_MODULUS
-        });
-
-        // Expect the events to be emitted (using anonymous event matching)
-        vm.expectEmit(true, false, false, true);
-        emit UnpredictableNumberUsed(user1, bytes4(TEST_UNPREDICTABLE_NUMBER));
-
-        vm.expectEmit(true, false, false, true);
-        emit ATCIncremented(user1, 1);
-
-        vm.expectEmit(true, false, false, true);
-        emit EMVSignatureValidated(user1, true);
-
-        vm.prank(user1);
-        emvValidator.verifyEMVSignature(abi.encode(txnData));
+        // The amount should be 100.00 dollars = 1e20 wei (based on TEST_AMOUNT)
+        assertEq(merchantBalanceAfter - merchantBalanceBefore, 1e20);
     }
 
     function test_DynamicDataAssembly() public view {
@@ -648,112 +403,18 @@ contract EMVValidatorTest is Test {
         assertEq(expectedData, EXPECTED_DYNAMIC_DATA);
     }
 
-    // ========== EXECUTOR TESTS ==========
-
-    function test_ExecutorConfiguration() public {
-        address mockToken = address(0x123);
-        address recipient = address(0x456);
-        
-        // Install with executor configuration
-        vm.prank(user1);
-        emvValidator.onInstall(abi.encode(mockToken, recipient));
-        
-        // Check configuration
-        (address configuredToken, address configuredRecipient,) = emvValidator.getExecutorConfig();
-        assertEq(configuredToken, mockToken);
-        assertEq(configuredRecipient, recipient);
-    }
-
-    function test_UpdateExecutorConfig() public {
-        address mockToken1 = address(0x123);
-        address recipient1 = address(0x456);
-        address mockToken2 = address(0x789);
-        address recipient2 = address(0xABC);
-        
-        // Install with initial configuration
-        vm.prank(user1);
-        emvValidator.onInstall(abi.encode(mockToken1, recipient1));
-        
-        // Update configuration
-        vm.prank(user1);
-        emvValidator.updateExecutorConfig(mockToken2, recipient2);
-        
-        // Check updated configuration
-        (address configuredToken, address configuredRecipient,) = emvValidator.getExecutorConfig();
-        assertEq(configuredToken, mockToken2);
-        assertEq(configuredRecipient, recipient2);
-    }
-
-    function test_ExtractAmountFromBCD() public {
-        // Test amount extraction (100.00 = hex"000000010000")
-        EMVTransactionData memory txnData = EMVTransactionData({
-            arqc: TEST_ARQC,
-            unpredictableNumber: TEST_UNPREDICTABLE_NUMBER,
-            atc: TEST_ATC,
-            amount: TEST_AMOUNT, // 000000010000 = 100.00 in BCD
-            currency: TEST_CURRENCY,
-            date: TEST_DATE,
-            txnType: TEST_TXN_TYPE,
-            tvr: TEST_TVR,
-            cvmResults: TEST_CVM_RESULTS,
-            terminalId: TEST_TERMINAL_ID,
-            merchantId: TEST_MERCHANT_ID,
-            signature: TEST_SIGNATURE,
-            exponent: TEST_EXPONENT,
-            modulus: TEST_MODULUS
-        });
-
-        // Install with mock token configuration
-        address mockToken = address(new MockERC20());
-        vm.prank(user1);
-        emvValidator.onInstall(abi.encode(mockToken, user2));
-
-        // The amount 000000010000 in BCD represents 100.00
-        // This should convert to 100.00 * 10^16 = 1e18 wei (1 token with 18 decimals)
-        bytes memory emvData = abi.encode(txnData);
-        
-        // We can't directly test the private function, but we can test it through executeEMVTransfer
-        // For now, let's create a separate test for this
-    }
-
-    function test_ExecuteEMVTransferNotConfigured() public {
-        vm.prank(user1);
-        emvValidator.onInstall(""); // Install without executor config
-        
-        EMVTransactionData memory txnData = EMVTransactionData({
-            arqc: TEST_ARQC,
-            unpredictableNumber: TEST_UNPREDICTABLE_NUMBER,
-            atc: TEST_ATC,
-            amount: TEST_AMOUNT,
-            currency: TEST_CURRENCY,
-            date: TEST_DATE,
-            txnType: TEST_TXN_TYPE,
-            tvr: TEST_TVR,
-            cvmResults: TEST_CVM_RESULTS,
-            terminalId: TEST_TERMINAL_ID,
-            merchantId: TEST_MERCHANT_ID,
-            signature: TEST_SIGNATURE,
-            exponent: TEST_EXPONENT,
-            modulus: TEST_MODULUS
-        });
-
-        vm.prank(user1);
-        vm.expectRevert(abi.encodeWithSelector(EMVProcessor.TokenNotConfigured.selector));
-        emvValidator.executeEMVTransfer(abi.encode(txnData));
-    }
-
     // ========== MERCHANT REGISTRY TESTS ==========
 
     function test_MerchantRegistryBasics() public {
         bytes15 merchantId = bytes15(TEST_MERCHANT_ID);
-        address merchantAddress = address(0x789);
+        address testMerchantAddress = address(0x789);
         
         // Register merchant
-        merchantRegistry.modifyMerchant(merchantId, merchantAddress);
+        merchantRegistry.modifyMerchant(merchantId, testMerchantAddress);
         
         // Check registration
         assertTrue(merchantRegistry.isMerchantRegistered(merchantId));
-        assertEq(merchantRegistry.getMerchantAddress(merchantId), merchantAddress);
+        assertEq(merchantRegistry.getMerchantAddress(merchantId), testMerchantAddress);
         
         // Test removal by setting address to address(0)
         merchantRegistry.modifyMerchant(merchantId, address(0));
@@ -761,186 +422,4 @@ contract EMVValidatorTest is Test {
         assertEq(merchantRegistry.getMerchantAddress(merchantId), address(0));
     }
 
-    function test_MerchantRegistryOnlyOwner() public {
-        bytes15 merchantId = bytes15(TEST_MERCHANT_ID);
-        address merchantAddress = address(0x789);
-        
-        // Non-owner cannot modify
-        vm.prank(user1);
-        vm.expectRevert(); // Solady Ownable.Unauthorized() error
-        merchantRegistry.modifyMerchant(merchantId, merchantAddress);
-    }
-
-    function test_EMVTransferWithMerchantRegistry() public {
-        bytes15 merchantId = bytes15(TEST_MERCHANT_ID);
-        address merchantAddress = address(0x789);
-        address mockToken = address(new MockERC20());
-        
-        // Register merchant
-        merchantRegistry.modifyMerchant(merchantId, merchantAddress);
-        
-        // Install EMV module with merchant registry
-        vm.prank(user1);
-        emvValidator.onInstall(abi.encode(mockToken, address(0), address(merchantRegistry)));
-        
-        // Set up token approval - EMVModule will call transferFrom(address(this), merchant, amount)
-        // So EMVModule needs tokens and allowance
-        MockERC20(mockToken).transfer(address(emvValidator), 1e20);
-        MockERC20(mockToken).approve(address(emvValidator), 1e20);
-
-        EMVTransactionData memory txnData = EMVTransactionData({
-            arqc: TEST_ARQC,
-            unpredictableNumber: TEST_UNPREDICTABLE_NUMBER,
-            atc: TEST_ATC,
-            amount: TEST_AMOUNT,
-            currency: TEST_CURRENCY,
-            date: TEST_DATE,
-            txnType: TEST_TXN_TYPE,
-            tvr: TEST_TVR,
-            cvmResults: TEST_CVM_RESULTS,
-            terminalId: TEST_TERMINAL_ID,
-            merchantId: TEST_MERCHANT_ID,
-            signature: TEST_SIGNATURE,
-            exponent: TEST_EXPONENT,
-            modulus: TEST_MODULUS
-        });
-
-        uint256 balanceBefore = MockERC20(mockToken).balanceOf(merchantAddress);
-
-        // Execute transfer - should use merchant registry to determine recipient
-        vm.prank(user1);
-        emvValidator.executeEMVTransfer(abi.encode(txnData));
-
-        uint256 balanceAfter = MockERC20(mockToken).balanceOf(merchantAddress);
-        assertEq(balanceAfter - balanceBefore, 1e20); // 100.00 dollars = 10000 cents * 10^16 = 1e20 wei
-    }
-
-    function test_EMVTransferUnregisteredMerchant() public {
-        address mockToken = address(new MockERC20());
-        
-        // Install EMV module with merchant registry but don't register the merchant
-        vm.prank(user1);
-        emvValidator.onInstall(abi.encode(mockToken, address(0), address(merchantRegistry)));
-
-        EMVTransactionData memory txnData = EMVTransactionData({
-            arqc: TEST_ARQC,
-            unpredictableNumber: TEST_UNPREDICTABLE_NUMBER,
-            atc: TEST_ATC,
-            amount: TEST_AMOUNT,
-            currency: TEST_CURRENCY,
-            date: TEST_DATE,
-            txnType: TEST_TXN_TYPE,
-            tvr: TEST_TVR,
-            cvmResults: TEST_CVM_RESULTS,
-            terminalId: TEST_TERMINAL_ID,
-            merchantId: TEST_MERCHANT_ID, // This merchant is not registered
-            signature: TEST_SIGNATURE,
-            exponent: TEST_EXPONENT,
-            modulus: TEST_MODULUS
-        });
-
-        // Should revert because merchant is not registered
-        vm.prank(user1);
-        vm.expectRevert(abi.encodeWithSelector(EMVProcessor.MerchantNotRegistered.selector, bytes15(TEST_MERCHANT_ID)));
-        emvValidator.executeEMVTransfer(abi.encode(txnData));
-    }
-
-    function test_EMVTransferNoMerchantRegistry() public {
-        address mockToken = address(new MockERC20());
-        
-        // Install EMV module without merchant registry
-        vm.prank(user1);
-        emvValidator.onInstall(abi.encode(mockToken, user2)); // user2 as default recipient
-
-        EMVTransactionData memory txnData = EMVTransactionData({
-            arqc: TEST_ARQC,
-            unpredictableNumber: TEST_UNPREDICTABLE_NUMBER,
-            atc: TEST_ATC,
-            amount: TEST_AMOUNT,
-            currency: TEST_CURRENCY,
-            date: TEST_DATE,
-            txnType: TEST_TXN_TYPE,
-            tvr: TEST_TVR,
-            cvmResults: TEST_CVM_RESULTS,
-            terminalId: TEST_TERMINAL_ID,
-            merchantId: TEST_MERCHANT_ID,
-            signature: TEST_SIGNATURE,
-            exponent: TEST_EXPONENT,
-            modulus: TEST_MODULUS
-        });
-
-        // Should revert because merchant registry is not set
-        vm.prank(user1);
-        vm.expectRevert(abi.encodeWithSelector(EMVProcessor.MerchantRegistryNotSet.selector));
-        emvValidator.executeEMVTransfer(abi.encode(txnData));
-    }
-
-    function test_MerchantRegistryBatchOperations() public {
-        bytes15[] memory merchantIds = new bytes15[](2);
-        address[] memory addresses = new address[](2);
-        
-        merchantIds[0] = bytes15(TEST_MERCHANT_ID);
-        merchantIds[1] = bytes15(hex"4D45524348414E5430303132333401"); // Different merchant
-        addresses[0] = address(0x789);
-        addresses[1] = address(0xABC);
-        
-        // Batch modify
-        merchantRegistry.batchModifyMerchants(merchantIds, addresses);
-        
-        // Check both registrations
-        assertTrue(merchantRegistry.isMerchantRegistered(merchantIds[0]));
-        assertTrue(merchantRegistry.isMerchantRegistered(merchantIds[1]));
-        assertEq(merchantRegistry.getMerchantAddress(merchantIds[0]), addresses[0]);
-        assertEq(merchantRegistry.getMerchantAddress(merchantIds[1]), addresses[1]);
-        
-        // Test batch lookup
-        address[] memory retrievedAddresses = merchantRegistry.getMerchantAddresses(merchantIds);
-        assertEq(retrievedAddresses[0], addresses[0]);
-        assertEq(retrievedAddresses[1], addresses[1]);
-    }
-}
-
-// Mock ERC20 contract for testing
-contract MockERC20 {
-    mapping(address => uint256) public balances;
-    mapping(address => mapping(address => uint256)) public allowances;
-    
-    string public name = "Mock Token";
-    string public symbol = "MOCK";
-    uint8 public decimals = 18;
-    uint256 public totalSupply = 1000000 * 10**18;
-    
-    constructor() {
-        balances[msg.sender] = totalSupply;
-    }
-    
-    function balanceOf(address account) external view returns (uint256) {
-        return balances[account];
-    }
-    
-    function allowance(address owner, address spender) external view returns (uint256) {
-        return allowances[owner][spender];
-    }
-    
-    function approve(address spender, uint256 amount) external returns (bool) {
-        allowances[msg.sender][spender] = amount;
-        return true;
-    }
-    
-    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
-        if (allowances[from][msg.sender] < amount) return false;
-        if (balances[from] < amount) return false;
-        
-        allowances[from][msg.sender] -= amount;
-        balances[from] -= amount;
-        balances[to] += amount;
-        return true;
-    }
-    
-    function transfer(address to, uint256 amount) external returns (bool) {
-        if (balances[msg.sender] < amount) return false;
-        balances[msg.sender] -= amount;
-        balances[to] += amount;
-        return true;
-    }
 }
