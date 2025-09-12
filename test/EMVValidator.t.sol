@@ -2,15 +2,21 @@
 pragma solidity ^0.8.26;
 
 import "./base/KernelTestBase.sol";
-import "../src/emv/EMVProcessor.sol";
+import "../src/emv/EMVValidator.sol";
+import "../src/emv/EMVSettlement.sol";
 import "../src/emv/MerchantRegistry.sol";
 import "../src/interfaces/PackedUserOperation.sol";
 import "../src/types/Constants.sol";
 import "../src/types/Types.sol";
 import "forge-std/console.sol";
+import {
+    CALLTYPE_DELEGATECALL,
+    EXECTYPE_DEFAULT
+} from "../src/types/Constants.sol";
 
 contract EMVValidatorTest is KernelTestBase {
-    EMVProcessor public emvProcessor;
+    EMVValidator public emvValidator;
+    EMVSettlement public emvSettlement;
     MerchantRegistry public merchantRegistry;
     address public merchantAddress;
     
@@ -54,37 +60,39 @@ contract EMVValidatorTest is KernelTestBase {
         super.setUp(); // Initialize KernelTestBase
         
         // Deploy EMV components
-        emvProcessor = new EMVProcessor();
         merchantRegistry = new MerchantRegistry();
         merchantAddress = makeAddr("merchant");
         
         // Register test merchant
         merchantRegistry.modifyMerchant(bytes15(TEST_MERCHANT_ID), merchantAddress);
         
-        // Mint tokens to the test contract
+        // Deploy settlement contract with configuration
+        emvSettlement = new EMVSettlement(
+            address(mockERC20),        // token address
+            address(merchantRegistry), // merchant registry address  
+            18                         // token decimals
+        );
+        
+        // Deploy EMV validator with target and selector
+        emvValidator = new EMVValidator(
+            address(emvSettlement),    // target address for validation
+            kernel.execute.selector    // function selector for validation
+        );
+        
+        // Mint tokens to the test contract and kernel
         mockERC20.mint(address(this), 1e24); // 1 million tokens with 18 decimals
+        mockERC20.mint(address(kernel), 1e24); // 1 million tokens to kernel for EMV transfers
         
         // Verify test contract has tokens from the inherited mockERC20
         uint256 balance = mockERC20.balanceOf(address(this));
         console.log("Test contract balance from mockERC20:", balance);
     }
 
-    // Override root validation config to use EMVProcessor
-    function _setRootValidationConfig() internal override {
-        // Use a MockValidator instead of EMVProcessor as the root validator for now
-        // We'll install EMVProcessor as a separate validator/executor module
-        mockValidator = new MockValidator();
-        rootValidation = ValidatorLib.validatorToIdentifier(IValidator(address(mockValidator)));
-        rootValidationConfig.hook = IHook(address(0));
-        rootValidationConfig.validatorData = "";
-        rootValidationConfig.hookData = "";
-    }
-
-    // Helper to install EMVProcessor as both validator and executor
-    function _installEMVProcessor() internal {
+    // Helper to install EMVValidator as validator, executor, and hook
+    function _installEMVValidator() internal {
         vm.deal(address(kernel), 1e18);
 
-        // Install EMVProcessor as validator with selector access
+        // Install EMVValidator as validator with EMVValidator itself as hook for execution validation
         PackedUserOperation[] memory ops1 = new PackedUserOperation[](1);
         ops1[0] = _prepareUserOp(
             VALIDATION_TYPE_ROOT,
@@ -93,11 +101,11 @@ contract EMVValidatorTest is KernelTestBase {
             abi.encodeWithSelector(
                 kernel.installModule.selector,
                 MODULE_TYPE_VALIDATOR,
-                address(emvProcessor),
+                address(emvValidator),
                 abi.encodePacked(
-                    address(0), // No hook
+                    address(0), // No hook for validator
                     abi.encode(
-                        abi.encode(address(mockERC20), merchantAddress, address(merchantRegistry), uint16(0)), // validator data
+                        abi.encode(uint16(0)), // validator data - only ATC needed
                         hex"", // hook data
                         abi.encodePacked(kernel.execute.selector) // selector data - grant access to execute
                     )
@@ -109,7 +117,7 @@ contract EMVValidatorTest is KernelTestBase {
         );
         entrypoint.handleOps(ops1, payable(address(0xdeadbeef)));
 
-        // Install EMVProcessor as executor
+        // Install EMVSettlement as executor
         PackedUserOperation[] memory ops2 = new PackedUserOperation[](1);
         ops2[0] = _prepareUserOp(
             VALIDATION_TYPE_ROOT,
@@ -118,12 +126,13 @@ contract EMVValidatorTest is KernelTestBase {
             abi.encodeWithSelector(
                 kernel.installModule.selector,
                 MODULE_TYPE_EXECUTOR,
-                address(emvProcessor),
+                address(emvSettlement),
                 abi.encodePacked(
-                    address(0), // No hook
+                    address(0), // No hook for executor
                     abi.encode(
-                        abi.encode(address(mockERC20), merchantAddress, address(merchantRegistry), uint16(0)), // executor data
-                        hex"" // hook data
+                        abi.encode(address(mockERC20), address(merchantRegistry), uint8(18)), // executor data - configure token, registry, and decimals
+                        hex"", // hook data
+                        hex"" // selector data
                     )
                 )
             ),
@@ -179,7 +188,7 @@ contract EMVValidatorTest is KernelTestBase {
         bytes memory installExecutorCall = abi.encodeWithSelector(
             kernel.installModule.selector,
             MODULE_TYPE_EXECUTOR,
-            address(emvProcessor),
+            address(emvValidator),
             abi.encodePacked(
                 address(0), // No hook
                 abi.encode(
@@ -191,9 +200,8 @@ contract EMVValidatorTest is KernelTestBase {
 
         // Then execute the EMV transfer
         bytes memory emvTransferCall = abi.encodeWithSelector(
-            emvProcessor.executeEMVTransfer.selector,
-            _createEMVTransactionData(),
-            address(0) // Use merchant registry
+            emvSettlement.execute.selector,
+            _createEMVTransactionData()
         );
 
         // Use batch execution to install executor and execute transfer
@@ -213,28 +221,26 @@ contract EMVValidatorTest is KernelTestBase {
     }
 
     function _encodeSimpleTransferCall() internal view returns (bytes memory) {
-        // Simple ERC20 transfer to demonstrate the validation working
+        // Call through Kernel's execute function using delegate call to EMVSettlement
         return abi.encodeWithSelector(
             kernel.execute.selector,
-            ExecMode.wrap(bytes32(0)), // Default execution mode
-            ExecLib.encodeSingle(
-                address(mockERC20), // target (token contract)
-                0, // value
+            ExecLib.encode(CALLTYPE_DELEGATECALL, EXECTYPE_DEFAULT, ExecModeSelector.wrap(0x00), ExecModePayload.wrap(0x00)),
+            abi.encodePacked(
+                address(emvSettlement), // delegate target
                 abi.encodeWithSelector(
-                    mockERC20.transfer.selector,
-                    merchantAddress,
-                    1e20 // amount (100.00 dollars)
+                    emvSettlement.execute.selector,
+                    _createEMVTransactionData()
                 )
             )
         );
     }
 
     function _prepareEMVUserOp(bytes memory callData, bool success) internal returns (PackedUserOperation memory op) {
-        // Create a UserOperation that uses EMVProcessor as the validator
+        // Create a UserOperation that uses EMVValidator as the validator
         uint192 nonceKey = ValidatorLib.encodeAsNonceKey(
             ValidationMode.unwrap(VALIDATION_MODE_DEFAULT),
             ValidationType.unwrap(VALIDATION_TYPE_VALIDATOR),
-            bytes20(address(emvProcessor)),
+            bytes20(address(emvValidator)),
             0 // parallel key
         );
 
@@ -252,28 +258,52 @@ contract EMVValidatorTest is KernelTestBase {
     }
 
     function test_Deployment() public whenInitialized {
-        assertTrue(address(emvProcessor) != address(0));
+        assertTrue(address(emvValidator) != address(0));
         assertTrue(address(kernel) != address(0));
         assertTrue(address(entrypoint) != address(0));
         
         // Check that the kernel was initialized with MockValidator as root validator
         assertEq(ValidationId.unwrap(kernel.rootValidator()), ValidationId.unwrap(rootValidation));
         
-        // EMVProcessor should not be installed yet
-        assertFalse(kernel.isModuleInstalled(MODULE_TYPE_VALIDATOR, address(emvProcessor), ""));
-        assertFalse(kernel.isModuleInstalled(MODULE_TYPE_EXECUTOR, address(emvProcessor), ""));
+        // EMVValidator should not be installed yet
+        assertFalse(kernel.isModuleInstalled(MODULE_TYPE_VALIDATOR, address(emvValidator), ""));
+        assertFalse(kernel.isModuleInstalled(MODULE_TYPE_EXECUTOR, address(emvSettlement), ""));
     }
 
     function test_ModuleType() public {
-        assertTrue(emvProcessor.isModuleType(MODULE_TYPE_VALIDATOR));
-        assertTrue(emvProcessor.isModuleType(MODULE_TYPE_EXECUTOR));
-        assertFalse(emvProcessor.isModuleType(MODULE_TYPE_HOOK));
-        assertFalse(emvProcessor.isModuleType(MODULE_TYPE_FALLBACK));
+        assertTrue(emvValidator.isModuleType(MODULE_TYPE_VALIDATOR));
+        assertFalse(emvValidator.isModuleType(MODULE_TYPE_EXECUTOR));
+        assertFalse(emvValidator.isModuleType(MODULE_TYPE_HOOK));
+        assertFalse(emvValidator.isModuleType(MODULE_TYPE_FALLBACK));
+        
+        // Test EMVSettlement module types
+        assertTrue(emvSettlement.isModuleType(MODULE_TYPE_EXECUTOR));
+        assertFalse(emvSettlement.isModuleType(MODULE_TYPE_VALIDATOR));
+        assertFalse(emvSettlement.isModuleType(MODULE_TYPE_HOOK));
+    }
+
+    function test_InvalidTargetAndSelectorValidation() public whenInitialized {
+        // Install EMVValidator as both validator and executor
+        _installEMVValidator();
+        
+        // Create a UserOp with wrong function selector
+        bytes memory wrongCallData = abi.encodeWithSelector(bytes4(keccak256("wrongFunction()")));
+        PackedUserOperation memory userOp = _prepareEMVUserOp(wrongCallData, true);
+        
+        // The EntryPoint will wrap our custom error in FailedOpWithRevert
+        // We expect the operation to fail due to InvalidFunctionSelector
+        vm.expectRevert(); // Just expect any revert since EntryPoint wraps errors
+        PackedUserOperation[] memory ops = new PackedUserOperation[](1);
+        ops[0] = userOp;
+        entrypoint.handleOps(ops, payable(address(0x69)));
     }
 
     function test_ValidEMVTransaction() public whenInitialized {
-        // Install EMVProcessor as both validator and executor
-        _installEMVProcessor();
+        // Install EMVValidator as both validator and executor
+        _installEMVValidator();
+        
+        // Verify that EMVValidator was installed properly
+        assertTrue(kernel.isModuleInstalled(MODULE_TYPE_VALIDATOR, address(emvValidator), ""), "EMVValidator should be installed");
         
         // Check test contract balance first
         uint256 testBalance = mockERC20.balanceOf(address(this));
@@ -285,9 +315,10 @@ contract EMVValidatorTest is KernelTestBase {
 
         // Check that kernel has the tokens
         uint256 kernelBalance = mockERC20.balanceOf(address(kernel));
+        console.log("Kernel balance before EMV transaction:", kernelBalance);
         assertGt(kernelBalance, 1e20, "Kernel should have enough tokens");
 
-        // Create a UserOperation using EMVProcessor as validator to execute simple transfer
+        // Create a UserOperation using EMVValidator as validator to execute simple transfer
         PackedUserOperation[] memory ops = new PackedUserOperation[](1);
         ops[0] = _prepareEMVUserOp(
             _encodeSimpleTransferCall(),
@@ -306,8 +337,8 @@ contract EMVValidatorTest is KernelTestBase {
     }
 
     function test_InvalidEMVSignature() public whenInitialized {
-        // Install EMVProcessor as both validator and executor
-        _installEMVProcessor();
+        // Install EMVValidator as both validator and executor
+        _installEMVValidator();
         
         // Fund the kernel with tokens for transfer
         mockERC20.transfer(address(kernel), 1e20);
@@ -326,17 +357,17 @@ contract EMVValidatorTest is KernelTestBase {
     }
 
     function test_InstallEMVAsValidatorAndExecutor() public whenInitialized {
-        // Install EMVProcessor as both validator and executor
-        _installEMVProcessor();
+        // Install EMVValidator as both validator and executor
+        _installEMVValidator();
 
         // Check that both modules were installed
-        assertTrue(kernel.isModuleInstalled(MODULE_TYPE_VALIDATOR, address(emvProcessor), ""));
-        assertTrue(kernel.isModuleInstalled(MODULE_TYPE_EXECUTOR, address(emvProcessor), ""));
+        assertTrue(kernel.isModuleInstalled(MODULE_TYPE_VALIDATOR, address(emvValidator), ""));
+        assertTrue(kernel.isModuleInstalled(MODULE_TYPE_EXECUTOR, address(emvSettlement), ""));
     }
 
     function test_MerchantRegistryIntegration() public whenInitialized {
-        // Install EMVProcessor as both validator and executor
-        _installEMVProcessor();
+        // Install EMVValidator as both validator and executor
+        _installEMVValidator();
         
         // Fund the kernel with tokens for transfer
         mockERC20.transfer(address(kernel), 1e20);
@@ -345,7 +376,7 @@ contract EMVValidatorTest is KernelTestBase {
         // Check initial balances
         uint256 merchantBalanceBefore = mockERC20.balanceOf(merchantAddress);
 
-        // Create a UserOperation using EMVProcessor as validator to execute EMV transfer
+        // Create a UserOperation using EMVValidator as validator to execute EMV transfer
         PackedUserOperation[] memory ops = new PackedUserOperation[](1);
         ops[0] = _prepareEMVUserOp(
             _encodeSimpleTransferCall(),
@@ -401,6 +432,54 @@ contract EMVValidatorTest is KernelTestBase {
         );
 
         assertEq(expectedData, EXPECTED_DYNAMIC_DATA);
+    }
+
+    function test_SecurityVulnerability_ValidatorExecutorSeparation() public whenInitialized {
+        // This test verifies that the security vulnerability has been FIXED:
+        // EMV validation now prevents execution that doesn't match EMV constraints
+        
+        // Install EMVValidator as validator with access to execute
+        _installEMVValidator();
+        
+        // Fund the kernel with tokens
+        mockERC20.transfer(address(kernel), 1e21);
+        vm.deal(address(kernel), 1e18);
+
+        // Try to create a malicious UserOperation:
+        // - Uses valid EMV signature for validation
+        // - But tries to execute a DIFFERENT action (transfer to attacker instead of merchant)
+        address attacker = makeAddr("attacker");
+        
+        PackedUserOperation[] memory ops = new PackedUserOperation[](1);
+        ops[0] = _prepareEMVUserOp(
+            // MALICIOUS: Transfer to attacker instead of merchant, ignoring EMV data
+            abi.encodeWithSelector(
+                kernel.execute.selector,
+                ExecMode.wrap(bytes32(0)),
+                ExecLib.encodeSingle(
+                    address(mockERC20),
+                    0,
+                    abi.encodeWithSelector(
+                        mockERC20.transfer.selector,
+                        attacker, // Attacker tries to get the funds!
+                        1e21 // Much more than the EMV amount!
+                    )
+                )
+            ),
+            true // Valid EMV signature
+        );
+
+        // SECURITY FIX: The operation should now FAIL during validation
+        vm.expectRevert(); // Should revert with InvalidExecutionRecipient or InvalidExecutionAmount
+        entrypoint.handleOps(ops, payable(address(0xdeadbeef)));
+
+        // Verify that the attack was prevented:
+        uint256 attackerBalance = mockERC20.balanceOf(attacker);
+        uint256 merchantBalance = mockERC20.balanceOf(merchantAddress);
+        
+        // Security is now enforced:
+        assertEq(attackerBalance, 0, "Attacker should NOT receive funds");
+        assertEq(merchantBalance, 0, "Merchant should also not receive funds (transaction failed)");
     }
 
     // ========== MERCHANT REGISTRY TESTS ==========

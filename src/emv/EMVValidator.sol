@@ -3,17 +3,21 @@
 pragma solidity ^0.8.26;
 
 import {RsaVerifyOptimized} from "../../lib/SolRsaVerify/src/RsaVerifyOptimized.sol";
-import {IValidator, IExecutor} from "../interfaces/IERC7579Modules.sol";
+import {IValidator, IExecutor, IHook} from "../interfaces/IERC7579Modules.sol";
 import {PackedUserOperation} from "../interfaces/PackedUserOperation.sol";
 import {
     SIG_VALIDATION_SUCCESS_UINT,
     SIG_VALIDATION_FAILED_UINT,
     MODULE_TYPE_VALIDATOR,
     MODULE_TYPE_EXECUTOR,
+    MODULE_TYPE_HOOK,
     ERC1271_MAGICVALUE,
     ERC1271_INVALID
 } from "../types/Constants.sol";
 import {MerchantRegistry} from "./MerchantRegistry.sol";
+import {EMVSettlement} from "./EMVSettlement.sol";
+import {ExecLib} from "../utils/ExecLib.sol";
+import {ExecMode, CallType} from "../types/Types.sol";
 
 // Simple IERC20 interface for transfers
 interface IERC20 {
@@ -41,33 +45,27 @@ struct EMVTransactionData {
 }
 
 /**
- * @title EMVProcessor
+ * @title EMVValidator
  * @dev Complete ERC-7579 module for EMV CDA validation and ERC20 execution
  * @notice Validates EMV CDA signatures and executes ERC20 transfers with merchant registry integration
  */
-contract EMVProcessor is IValidator, IExecutor {
+contract EMVValidator is IValidator {
     // ========== EVENTS ==========
     
     event EMVSignatureValidated(address indexed kernel, bool success);
     event UnpredictableNumberUsed(address indexed kernel, bytes4 unpredictableNumber);
     event ATCIncremented(address indexed kernel, uint16 newATC);
-    event EMVTransferExecuted(
-        address indexed from,
-        address indexed to,
-        address indexed token,
-        uint256 amount,
-        bytes4 unpredictableNumber,
-        uint16 atc
-    );
-    event EMVExecutorConfigured(address indexed account, address token, address recipient);
 
     // ========== STORAGE ==========
     
-    mapping(uint32 => bool) public usedUnpredictableNumbers;  // Track used unpredictable numbers (4 bytes)
-    uint16 public expectedATC;  // Next expected ATC value for this kernel instance
-    address public configuredToken;      // ERC20 token address for this kernel instance
-    address public configuredRecipient;  // Default recipient for this kernel instance
-    MerchantRegistry public merchantRegistry; // Registry for merchant address validation
+    struct EMVValidatorStorage {
+        mapping(uint32 => bool) usedUnpredictableNumbers;  // Track used unpredictable numbers (4 bytes)
+        uint16 expectedATC;  // Next expected ATC value for this kernel instance
+    }
+    
+    mapping(address => EMVValidatorStorage) public emvValidatorStorage;
+    address public immutable target;               // Expected target address for validation
+    bytes4 public immutable selector;              // Expected function selector for validation
 
     // ========== ERRORS ==========
     
@@ -75,47 +73,47 @@ contract EMVProcessor is IValidator, IExecutor {
     error UnpredictableNumberAlreadyUsed(bytes4 unpredictableNumber);
     error InvalidATCSequence(uint16 expected, uint16 received);
     error InvalidCurrencyCode(uint16 currency);
-    error TransferFailed();
-    error InvalidAmount();
-    error TokenNotConfigured();
-    error MerchantNotRegistered(bytes15 merchantId);
-    error MerchantRegistryNotSet();
     error InvalidConfig();
     error ModuleNotInstalled();
+    error InvalidTarget(address expected, address actual);
+    error InvalidFunctionSelector(bytes4 expected, bytes4 actual);
+
+    // ========== CONSTRUCTOR ==========
+    
+    /**
+     * @dev Constructor to initialize immutable values
+     * @param _target The target address for validation
+     * @param _selector The function selector for validation
+     */
+    constructor(address _target, bytes4 _selector) {
+        if (_target == address(0) || _selector == bytes4(0)) {
+            revert InvalidConfig();
+        }
+        target = _target;
+        selector = _selector;
+    }
 
     // ========== MODULE LIFECYCLE ==========
 
     /**
-     * @dev Install the module with optional ERC20 and merchant registry configuration
-     * @param _data Optional encoded configuration: 
-     *              - abi.encode(tokenAddress, recipient) for basic config
-     *              - abi.encode(tokenAddress, recipient, merchantRegistry) for full config
-     *              If empty, only validator/hook functionality is enabled
+     * @dev Install the module with ATC configuration
+     * @param _data Encoded configuration: abi.encode(atc)
      */
     function onInstall(bytes calldata _data) external payable override {
-        (address tokenAddress, address recipient, address registry, uint16 atc) = abi.decode(_data, (address, address, address, uint16));
-
-        if (tokenAddress == address(0) || recipient == address(0) || registry == address(0)) {
+        if (_data.length == 0) {
             revert InvalidConfig();
         }
-
-        expectedATC = atc;
-        configuredToken = tokenAddress;
-        configuredRecipient = recipient;
-        merchantRegistry = MerchantRegistry(registry);
-        emit EMVExecutorConfigured(msg.sender, tokenAddress, recipient);
+        
+        uint16 atc = abi.decode(_data, (uint16));
+        emvValidatorStorage[msg.sender].expectedATC = atc;
     }
 
     /**
      * @dev Uninstall the module
      */
     function onUninstall(bytes calldata) external payable override {
-        // Reset ATC counter
-        expectedATC = 0;
-        // Clean up executor configuration
-        configuredToken = address(0);
-        configuredRecipient = address(0);
-        merchantRegistry = MerchantRegistry(address(0));
+        // Reset ATC counter for this account
+        emvValidatorStorage[msg.sender].expectedATC = 0;
         // Note: usedUnpredictableNumbers entries remain for security
     }
 
@@ -123,7 +121,7 @@ contract EMVProcessor is IValidator, IExecutor {
      * @dev Check if module supports the given type
      */
     function isModuleType(uint256 typeID) external pure override returns (bool) {
-        return typeID == MODULE_TYPE_VALIDATOR || typeID == MODULE_TYPE_EXECUTOR;
+        return typeID == MODULE_TYPE_VALIDATOR;
     }
 
     /**
@@ -134,10 +132,9 @@ contract EMVProcessor is IValidator, IExecutor {
     }
 
     function _isInitialized(address smartAccount) internal view returns (bool) {
-        // Module is considered initialized (always true after onInstall is called)
-        // In delegate call context, we can't easily track initialization per address
-        // This is acceptable since the kernel manages module lifecycle
-        return configuredToken != address(0)  && configuredRecipient != address(0) && merchantRegistry != MerchantRegistry(address(0));
+        // Module is considered initialized if the account has been configured
+        // Check if ATC has been set (non-zero) or if there are used unpredictable numbers
+        return emvValidatorStorage[smartAccount].expectedATC > 0;
     }
 
     // ========== VALIDATOR FUNCTIONS ==========
@@ -154,6 +151,9 @@ contract EMVProcessor is IValidator, IExecutor {
         override
         returns (uint256)
     {
+        // Validate that this EMV signature is being used for the correct target and function
+        _validateTargetAndSelector(userOp.callData);
+        
         // Directly validate without external call to preserve msg.sender context
         EMVTransactionData memory txnData = abi.decode(userOp.signature, (EMVTransactionData));
         
@@ -233,19 +233,20 @@ contract EMVProcessor is IValidator, IExecutor {
      */
     function verifyEMVSignatureView(bytes calldata emvData) external view returns (bool) {
         EMVTransactionData memory txnData = abi.decode(emvData, (EMVTransactionData));
+        EMVValidatorStorage storage accountStorage = emvValidatorStorage[msg.sender];
         
         // Validate currency code
         _validateCurrencyCode(txnData);
         
         // Check unpredictable number hasn't been used
         uint32 unpredictableNumber = uint32(bytes4(txnData.unpredictableNumber));
-        if (usedUnpredictableNumbers[unpredictableNumber]) {
+        if (accountStorage.usedUnpredictableNumbers[unpredictableNumber]) {
             return false; // Already used
         }
         
         // Check ATC sequence
         uint16 receivedATC = uint16(bytes2(txnData.atc));
-        if (receivedATC != expectedATC) {
+        if (receivedATC != accountStorage.expectedATC) {
             return false; // Invalid sequence
         }
         
@@ -253,90 +254,69 @@ contract EMVProcessor is IValidator, IExecutor {
         return _verifyEMVSignature(txnData);
     }
 
-    // ========== EXECUTOR FUNCTIONS ==========
-
-    /**
-     * @dev Execute EMV-based ERC20 transfer using validated EMV data
-     * @param emvData Encoded EMV transaction data (should be same as from UserOp signature)
-     * @param customRecipient Optional custom recipient (if zero address, uses merchant registry)
-     */
-    function executeEMVTransfer(bytes calldata emvData, address customRecipient) external payable {
-        if (!_isInitialized(msg.sender)) {
-            revert ModuleNotInstalled();
-        }
-
-        // Decode EMV transaction data
-        EMVTransactionData memory txnData = abi.decode(emvData, (EMVTransactionData));
-
-        // Extract amount from EMV BCD format (6 bytes)
-        uint256 transferAmount = _extractAmountFromBCD(txnData.amount);
-        if (transferAmount == 0) {
-            revert InvalidAmount();
-        }
-
-        // Determine recipient using MerchantRegistry
-        address recipient;
-        if (customRecipient != address(0)) {
-            // Use custom recipient if provided
-            recipient = customRecipient;
-        } else {
-            // Look up merchant address from registry
-            if (address(merchantRegistry) == address(0)) {
-                revert MerchantRegistryNotSet();
-            }
-            
-            bytes15 merchantId = bytes15(txnData.merchantId);
-            recipient = merchantRegistry.getMerchantAddress(merchantId);
-            
-            if (recipient == address(0)) {
-                revert MerchantNotRegistered(bytes15(txnData.merchantId));
-            }
-        }
-
-        // Execute ERC20 transfer
-        IERC20 token = IERC20(configuredToken);
-        // In delegate call context, address(this) is the kernel, so use transfer instead of transferFrom
-        bool success = token.transfer(recipient, transferAmount);
-        
-        if (!success) {
-            revert TransferFailed();
-        }
-
-        // Emit event with EMV details
-        emit EMVTransferExecuted(
-            msg.sender,
-            recipient,
-            configuredToken,
-            transferAmount,
-            bytes4(txnData.unpredictableNumber),
-            uint16(bytes2(txnData.atc))
-        );
-    }
 
 
     /**
-     * @dev Get the configured token, recipient, and merchant registry
-     * @return tokenAddress The configured ERC20 token address
-     * @return recipient The configured recipient address
-     * @return registry The merchant registry address
+     * @dev Get the configured target and selector
+     * @return targetAddress The target address for validation
+     * @return functionSelector The function selector for validation
      */
-    function getExecutorConfig() external view returns (address tokenAddress, address recipient, address registry) {
-        return (configuredToken, configuredRecipient, address(merchantRegistry));
+    function getValidationConfig() external view returns (address targetAddress, bytes4 functionSelector) {
+        return (target, selector);
     }
 
     /**
-     * @dev Update the executor configuration
-     * @param tokenAddress New ERC20 token address
-     * @param recipient New recipient address
+     * @dev Get the EMV storage for a specific account
+     * @param account The smart account address
+     * @return expectedATC The next expected ATC value
      */
-    function updateExecutorConfig(address tokenAddress, address recipient) external {
-        configuredToken = tokenAddress;
-        configuredRecipient = recipient;
-        
-        emit EMVExecutorConfigured(msg.sender, tokenAddress, recipient);
+    function getEMVStorage(address account) external view returns (uint16 expectedATC) {
+        return emvValidatorStorage[account].expectedATC;
+    }
+
+    /**
+     * @dev Check if an unpredictable number has been used for a specific account
+     * @param account The smart account address
+     * @param unpredictableNumber The unpredictable number to check
+     * @return used True if the unpredictable number has been used
+     */
+    function isUnpredictableNumberUsed(address account, bytes4 unpredictableNumber) external view returns (bool used) {
+        return emvValidatorStorage[account].usedUnpredictableNumbers[uint32(unpredictableNumber)];
     }
 
     // ========== INTERNAL VALIDATION FUNCTIONS ==========
+
+    /**
+     * @dev Validate that the callData is calling the expected target and function
+     * @param callData The callData from the PackedUserOperation
+     */
+    function _validateTargetAndSelector(bytes calldata callData) internal view {        
+        bytes4 actualSelector = bytes4(callData[0:4]);
+        if (actualSelector != selector) {
+            revert InvalidFunctionSelector(selector, actualSelector);
+        }
+        
+        // Parse execute(ExecMode, bytes) call data structure:
+        // selector(4) + execMode(32) + offset(32) + length(32) + executionCalldata(variable)
+        
+        // Get offset to executionCalldata (should be 0x40 = 64)
+        uint256 executionDataOffset = uint256(bytes32(callData[36:68]));
+        
+        // ExecutionCalldata starts at: 4 + offset + 32 (skip length field)
+        uint256 executionDataStart = 4 + executionDataOffset + 32;
+        
+        // Extract target address from the beginning of executionCalldata (encodeSingle format)
+        // encodeSingle format: target(20) + value(32) + calldata(variable)
+        if (callData.length >= executionDataStart + 20) {
+            address actualTarget = address(bytes20(callData[executionDataStart:executionDataStart + 20]));
+            if (actualTarget != target) {
+                revert InvalidTarget(target, actualTarget);
+            }
+        } else {
+            revert InvalidTarget(target, address(0));
+        }
+    }
+    
 
     /**
      * @dev Validate currency code (must be 840 USD or 997 USN)
@@ -355,16 +335,18 @@ contract EMVProcessor is IValidator, IExecutor {
      * @param txnData Transaction data to validate
      */
     function _validateReplayProtection(EMVTransactionData memory txnData) internal view {
+        EMVValidatorStorage storage accountStorage = emvValidatorStorage[msg.sender];
+        
         // Check unpredictable number hasn't been used
         uint32 unpredictableNumber = uint32(bytes4(txnData.unpredictableNumber));
-        if (usedUnpredictableNumbers[unpredictableNumber]) {
+        if (accountStorage.usedUnpredictableNumbers[unpredictableNumber]) {
             revert UnpredictableNumberAlreadyUsed(bytes4(txnData.unpredictableNumber));
         }
         
         // Check ATC sequence
         uint16 receivedATC = uint16(bytes2(txnData.atc));
-        if (receivedATC != expectedATC) {
-            revert InvalidATCSequence(expectedATC, receivedATC);
+        if (receivedATC != accountStorage.expectedATC) {
+            revert InvalidATCSequence(accountStorage.expectedATC, receivedATC);
         }
     }
     
@@ -373,16 +355,18 @@ contract EMVProcessor is IValidator, IExecutor {
      * @param txnData Transaction data that was validated
      */
     function _updateTransactionState(EMVTransactionData memory txnData) internal {
+        EMVValidatorStorage storage accountStorage = emvValidatorStorage[msg.sender];
+        
         // Mark unpredictable number as used
         uint32 unpredictableNumber = uint32(bytes4(txnData.unpredictableNumber));
-        usedUnpredictableNumbers[unpredictableNumber] = true;
+        accountStorage.usedUnpredictableNumbers[unpredictableNumber] = true;
         
         // Increment expected ATC
-        expectedATC++;
+        accountStorage.expectedATC++;
         
         // Emit events
         emit UnpredictableNumberUsed(msg.sender, bytes4(txnData.unpredictableNumber));
-        emit ATCIncremented(msg.sender, expectedATC);
+        emit ATCIncremented(msg.sender, accountStorage.expectedATC);
     }
 
     /**
@@ -427,32 +411,4 @@ contract EMVProcessor is IValidator, IExecutor {
         );
     }
 
-    /**
-     * @dev Extract amount from EMV BCD format
-     * @param bcdAmount 6-byte BCD encoded amount
-     * @return Amount in wei (assumes 2 decimal places)
-     */
-    function _extractAmountFromBCD(bytes memory bcdAmount) internal pure returns (uint256) {
-        if (bcdAmount.length != 6) {
-            return 0;
-        }
-
-        uint256 amount = 0;
-        for (uint256 i = 0; i < 6; i++) {
-            uint8 byte_val = uint8(bcdAmount[i]);
-            uint8 high_nibble = byte_val >> 4;
-            uint8 low_nibble = byte_val & 0x0F;
-            
-            // Validate BCD digits (0-9)
-            if (high_nibble > 9 || low_nibble > 9) {
-                return 0;
-            }
-            
-            amount = amount * 100 + high_nibble * 10 + low_nibble;
-        }
-        
-        // Convert from cents to wei (assuming token has 18 decimals)
-        // EMV amounts are typically in cents, so multiply by 10^16 to get wei
-        return amount * 10**16;
-    }
 }
