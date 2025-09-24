@@ -27,5 +27,6 @@ error InvalidPermissionUninstallOrder();
 error InvalidPermissionId();
 error InvalidNonce();
 error InvalidInitialization();
+error InvalidDataLength();
 
 error UnauthorizedCallData();
