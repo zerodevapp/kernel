@@ -257,18 +257,20 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
     function setRoot(Install[] calldata pkg, bool removeCurrent, bytes calldata uninstallData) external payable {
         _onlyEntryPointOrSelf();
         ValidationId currentRoot = _validationStorage().root;
-        if(removeCurrent) {
+        if (removeCurrent) {
             ValidationId vId = _validationStorage().root;
             ValidationInfo memory vInfo = _validationStorage().vInfo[vId];
-            if(vInfo.vType == VALIDATION_TYPE_VALIDATOR) {
-                (bool success, ) = address(ValidationId.unwrap(vId)).call(abi.encodeWithSelector(IModule.onUninstall.selector, uninstallData));
+            if (vInfo.vType == VALIDATION_TYPE_VALIDATOR) {
+                (bool success,) = address(ValidationId.unwrap(vId)).call(
+                    abi.encodeWithSelector(IModule.onUninstall.selector, uninstallData)
+                );
                 _uninstallValidator(
                     address(ValidationId.unwrap(vId)),
                     // passing in uninstallData here to use calldata, but it's never used
                     uninstallData,
                     success
                 );
-            } else if(vInfo.vType == VALIDATION_TYPE_PERMISSION) {
+            } else if (vInfo.vType == VALIDATION_TYPE_PERMISSION) {
                 PermissionUninstallData calldata data;
                 assembly {
                     data := uninstallData.offset
@@ -276,12 +278,14 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
                 bytes[] calldata uninstallDataArr = data.uninstallData;
                 require(uninstallDataArr.length == vInfo.policies.length + 1, InvalidDataLength());
                 // uninstall policies first
-                for(uint256 i = 0; i<vInfo.policies.length; i++){
+                for (uint256 i = 0; i < vInfo.policies.length; i++) {
                     vInfo.policies[i].call(abi.encodeWithSelector(IModule.onUninstall.selector, uninstallDataArr[i]));
                     _uninstallPolicyWithVid(vInfo.policies[i], vId);
                 }
 
-                vInfo.signer.call(abi.encodeWithSelector(IModule.onUninstall.selector, uninstallDataArr[uninstallDataArr.length - 1]));
+                vInfo.signer.call(
+                    abi.encodeWithSelector(IModule.onUninstall.selector, uninstallDataArr[uninstallDataArr.length - 1])
+                );
                 _uninstallSignerWithVid(vInfo.signer, vId);
             } else {
                 revert InvalidRootValidation();
