@@ -23,6 +23,8 @@ import {MockSigner} from "./mock/MockSigner.sol";
 import {MockERC721} from "./mock/MockERC721.sol";
 import {MockERC1155} from "./mock/MockERC1155.sol";
 import {MockKernel} from "./mock/MockKernel.sol";
+import {MockCallee} from "./mock/MockCallee.sol";
+import {MockContractETH} from "./mock/MockContractETH.sol";
 import {IHook, IValidator} from "src/interfaces/IERC7579Modules.sol";
 import {CallType} from "src/types/Types.sol";
 import "src/types/Constants.sol";
@@ -30,74 +32,9 @@ import "forge-std/console.sol";
 import "src/types/Error.sol";
 import "src/types/Events.sol";
 import "src/types/Structs.sol";
+import {KernelTestBase} from "./KernelTestBase.sol";
 
-contract MockCallee {
-    uint256 public bar;
-    string public data;
-
-    event Lorem();
-
-    error Haha();
-
-    function foo() external {
-        bar++;
-        emit Lorem();
-    }
-
-    function lorem() external {
-        data = "lorem ipsum";
-    }
-
-    function forceRevert() external {
-        revert Haha();
-    }
-}
-
-contract MockContractETH {
-    function useTransfer(address payable recipient, uint256 v) external {
-        recipient.transfer(v);
-    }
-
-    function useSend(address payable recipient, uint256 v) external {
-        require(recipient.send(v), "send failed");
-    }
-}
-
-contract KernelTest is Test {
-    IEntryPoint ep;
-    KernelFactory factory;
-    IValidator rootValidator;
-    bytes rootValidatorData;
-    MockValidator newValidator;
-    Kernel kernel;
-    MockCallee callee;
-    MockFallback mockFallback;
-    address executor;
-    address payable beneficiary;
-    MockPolicy policy;
-    MockSigner signer;
-    bytes20 permissionId;
-    uint256 permissionRevertIndex;
-    KernelHelper helper;
-
-    bool is7702;
-
-    modifier unitTest() {
-        vm.startPrank(address(ep));
-        _;
-        vm.stopPrank();
-    }
-
-    modifier unitTestExecutor() {
-        vm.startPrank(address(executor));
-        _;
-        vm.stopPrank();
-    }
-
-    modifier entryPointTest() {
-        _;
-    }
-
+contract KernelTest is KernelTestBase {
     function setUp() external {
         ep = EntryPointLib.deploy();
 
@@ -117,7 +54,7 @@ contract KernelTest is Test {
         _initialize();
     }
 
-    function _initialize() internal virtual {
+    function _initialize() internal virtual override {
         rootValidator = new MockValidator();
         rootValidatorData = hex"";
         Install[] memory pkgs = new Install[](1);
@@ -128,154 +65,6 @@ contract KernelTest is Test {
         vm.startPrank(address(ep));
         kernel.installModule(2, executor, abi.encode(hex"", ""));
         vm.stopPrank();
-    }
-
-    function _rootSignUserOp(PackedUserOperation memory op, bool success, bool replay)
-        internal
-        virtual
-        returns (bytes memory sig)
-    {
-        MockValidator(address(rootValidator)).sudoSetSuccess(success);
-        return hex"";
-    }
-
-    function _rootSignHash(bytes32 hash, bool success) internal virtual returns (bytes memory sig) {
-        if (success) {
-            MockValidator(address(rootValidator)).sudoSetValidSig(hex"");
-        }
-        return hex"";
-    }
-
-    function _validatorSignUserOp(PackedUserOperation memory op, bool success, bool replay)
-        internal
-        virtual
-        returns (bytes memory sig)
-    {
-        newValidator.sudoSetSuccess(success);
-        return hex"";
-    }
-
-    function _validatorSignHash(bytes32 hash, bool success) internal virtual returns (bytes memory sig) {
-        if (success) {
-            newValidator.sudoSetValidSig(hex"");
-        }
-        return hex"";
-    }
-
-    function _permissionSignUserOp(PackedUserOperation memory op, bool success, bool replay)
-        internal
-        virtual
-        returns (bytes memory sig)
-    {
-        bytes[] memory signatures = new bytes[](2);
-        signatures[0] = hex"dead";
-        signatures[1] = hex"beef";
-        if (success || permissionRevertIndex != 0) {
-            policy.sudoSetValidSig(address(kernel), permissionId, hex"dead");
-        }
-        if (success || permissionRevertIndex != 1) {
-            signer.sudoSetValidSig(address(kernel), permissionId, hex"beef");
-        }
-
-        return abi.encode(signatures);
-    }
-
-    function _permissionSignHash(bytes32 hash, bool success) internal virtual returns (bytes memory sig) {
-        bytes[] memory signatures = new bytes[](2);
-        signatures[0] = hex"dead";
-        signatures[1] = hex"beef";
-        if (success || permissionRevertIndex != 0) {
-            policy.sudoSetPass(address(kernel), permissionId, true);
-        }
-        if (success || permissionRevertIndex != 1) {
-            signer.sudoSetPass(address(kernel), permissionId, true);
-        }
-
-        return abi.encode(signatures);
-    }
-
-    function enableSig(
-        uint256 nonce,
-        bool enableSuccess,
-        bool replayable,
-        Install[] memory packages,
-        function(bytes32, bool) internal returns(bytes memory) signEnable
-    ) internal returns (bytes memory sig) {
-        bytes32 digest = helper.installDigest(address(kernel), replayable, nonce, packages);
-        MockKernel mockKernel = new MockKernel(ep);
-
-        if (!is7702) {
-            //vm.store(address(kernel), ERC1967_IMPLEMENTATION_SLOT, bytes32(uint256(uint160(address(mockKernel)))));
-            //assertEq(MockKernel(payable(address(kernel))).installDigest(replayable, nonce, packages), digest);
-            //vm.store(address(kernel), ERC1967_IMPLEMENTATION_SLOT, bytes32(uint256(uint160(address(factory.template())))));
-        }
-        return signEnable(digest, enableSuccess);
-    }
-
-    function encodeEnableValidatorSignature(
-        bytes4 selector,
-        uint256 nonce,
-        bool enableSuccess,
-        bool replayable,
-        function(bytes32, bool) internal returns(bytes memory) signEnable,
-        bytes memory userOpSig
-    ) internal returns (bytes memory sig) {
-        Install[] memory packages = new Install[](1);
-        packages[0] = Install({
-            moduleType: 1,
-            module: address(newValidator),
-            moduleData: hex"",
-            internalData: abi.encodePacked(address(0), selector)
-        });
-        sig = abi.encode(
-            uint256(0), packages, enableSig(nonce, enableSuccess, replayable, packages, signEnable), userOpSig
-        );
-    }
-
-    function encodeEnablePermissionSignature(
-        bytes4 selector,
-        uint256 nonce,
-        bool enableSuccess,
-        bool replayable,
-        function(bytes32, bool) internal returns(bytes memory) signEnable,
-        bytes memory userOpSig
-    ) internal returns (bytes memory sig) {
-        Install[] memory packages = new Install[](2);
-        packages[0] = Install({
-            moduleType: 5,
-            module: address(policy),
-            moduleData: hex"",
-            internalData: abi.encodePacked(permissionId, address(0), selector)
-        });
-        packages[1] = Install({
-            moduleType: 6,
-            module: address(signer),
-            moduleData: hex"",
-            internalData: abi.encodePacked(permissionId)
-        });
-
-        sig = abi.encode(
-            uint256(0), packages, enableSig(nonce, enableSuccess, replayable, packages, signEnable), userOpSig
-        );
-    }
-
-    function encodeNonce(bool replayableUserOp, bool enableFlag, bool replayableEnable, bytes1 vType, bytes20 vId)
-        internal
-        returns (uint256 nonce)
-    {
-        uint8 uMode = 0;
-        if (replayableUserOp) {
-            uMode += 2 ** 6;
-        }
-        if (enableFlag) {
-            uMode += 2 ** 3;
-        }
-        if (replayableEnable) {
-            uMode += 2 ** 2;
-        }
-        ValidationMode vMode = ValidationMode.wrap(bytes1(uMode));
-        uint192 key = uint192(bytes24(abi.encodePacked(uMode, vType, vId, bytes2(0x00))));
-        return ep.getNonce(address(kernel), key);
     }
 
     function test_codesize() external {
@@ -463,30 +252,9 @@ contract KernelTest is Test {
             signature: hex""
         });
         ops[0].signature = _validatorSignUserOp(ops[0], true, false);
-        //vm.expectRevert(abi.encodeWithSelector(IEntryPoint.FailedOp.selector, 0, "AA24 signature error"));
         vm.expectRevert();
         ep.handleOps(ops, beneficiary);
     }
-
-    // function test_userop_validator_use_root_if_notinstalled() external entryPointTest {
-    //     PackedUserOperation[] memory ops = new PackedUserOperation[](1);
-    //     ops[0] = PackedUserOperation({
-    //         sender: address(kernel),
-    //         nonce: encodeNonce(false, false, false, bytes1(0x01), bytes20(address(newValidator))),
-    //         initCode: hex"",
-    //         callData: abi.encodeWithSelector(
-    //             Kernel.execute.selector, bytes32(0), abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
-    //         ),
-    //         accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))), // TODO make this dynamic
-    //         preVerificationGas: 1000000,
-    //         gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
-    //         paymasterAndData: hex"",
-    //         signature: hex""
-    //     });
-    //     ops[0].signature = _rootSignUserOp(ops[0], true, false);
-    //     ep.handleOps(ops, beneficiary);
-    //     assertEq(callee.bar(), 1);
-    // }
 
     function test_userop_validator_enable() external entryPointTest {
         PackedUserOperation[] memory ops = new PackedUserOperation[](1);
@@ -575,26 +343,6 @@ contract KernelTest is Test {
         vm.expectRevert();
         ep.handleOps(ops, beneficiary);
     }
-
-    // function test_userop_permission_use_root_if_notinstalled() external entryPointTest {
-    //     PackedUserOperation[] memory ops = new PackedUserOperation[](1);
-    //     ops[0] = PackedUserOperation({
-    //         sender: address(kernel),
-    //         nonce: encodeNonce(false, false, false, bytes1(0x02), permissionId),
-    //         initCode: hex"",
-    //         callData: abi.encodeWithSelector(
-    //             Kernel.execute.selector, bytes32(0), abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
-    //         ),
-    //         accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))), // TODO make this dynamic
-    //         preVerificationGas: 1000000,
-    //         gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
-    //         paymasterAndData: hex"",
-    //         signature: hex""
-    //     });
-    //     ops[0].signature = _rootSignUserOp(ops[0], true, false);
-    //     ep.handleOps(ops, beneficiary);
-    //     assertEq(callee.bar(), 1);
-    // }
 
     function test_userop_permission_enable() external entryPointTest {
         PackedUserOperation[] memory ops = new PackedUserOperation[](1);

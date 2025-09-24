@@ -1,0 +1,219 @@
+pragma solidity ^0.8.0;
+
+import {Test} from "forge-std/Test.sol";
+import {EntryPointLib} from "./utils/EntryPointLib.sol";
+import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
+import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
+import {Kernel} from "src/Kernel.sol";
+import {KernelUUPS} from "src/KernelUUPS.sol";
+import {KernelHelper} from "src/KernelHelper.sol";
+import {SelectorManager} from "src/core/SelectorManager.sol";
+import {KernelFactory} from "src/KernelFactory.sol";
+import {KernelUUPS} from "src/KernelUUPS.sol";
+import {KernelImmutableECDSA} from "src/KernelImmutableECDSA.sol";
+import {LibERC7579} from "solady/accounts/LibERC7579.sol";
+import {LibString} from "solady/utils/LibString.sol";
+import {Install} from "src/types/Structs.sol";
+import {MockFallback} from "./mock/MockFallback.sol";
+import {MockExecutor} from "./mock/MockExecutor.sol";
+import {MockValidator} from "./mock/MockValidator.sol";
+import {MockHook} from "./mock/MockHook.sol";
+import {MockPolicy} from "./mock/MockPolicy.sol";
+import {MockSigner} from "./mock/MockSigner.sol";
+import {MockERC721} from "./mock/MockERC721.sol";
+import {MockERC1155} from "./mock/MockERC1155.sol";
+import {MockCallee} from "./mock/MockCallee.sol";
+import {MockKernel} from "./mock/MockKernel.sol";
+import {IHook, IValidator} from "src/interfaces/IERC7579Modules.sol";
+import {CallType} from "src/types/Types.sol";
+import "src/types/Constants.sol";
+import "forge-std/console.sol";
+import "src/types/Error.sol";
+import "src/types/Events.sol";
+import "src/types/Structs.sol";
+
+abstract contract KernelTestBase is Test {
+    IEntryPoint ep;
+    KernelFactory factory;
+    IValidator rootValidator;
+    bytes rootValidatorData;
+    MockValidator newValidator;
+    Kernel kernel;
+    MockCallee callee;
+    MockFallback mockFallback;
+    address executor;
+    address payable beneficiary;
+    MockPolicy policy;
+    MockSigner signer;
+    bytes20 permissionId;
+    uint256 permissionRevertIndex;
+    KernelHelper helper;
+
+    bool is7702;
+
+    modifier unitTest() {
+        vm.startPrank(address(ep));
+        _;
+        vm.stopPrank();
+    }
+
+    modifier unitTestExecutor() {
+        vm.startPrank(address(executor));
+        _;
+        vm.stopPrank();
+    }
+
+    modifier entryPointTest() {
+        _;
+    }
+
+    function _initialize() internal virtual;
+
+    function _rootSignUserOp(PackedUserOperation memory op, bool success, bool replay)
+        internal
+        virtual
+        returns (bytes memory sig)
+    {
+        MockValidator(address(rootValidator)).sudoSetSuccess(success);
+        return hex"";
+    }
+
+    function _rootSignHash(bytes32 hash, bool success) internal virtual returns (bytes memory sig) {
+        if (success) {
+            MockValidator(address(rootValidator)).sudoSetValidSig(hex"");
+        }
+        return hex"";
+    }
+
+    function _validatorSignUserOp(PackedUserOperation memory op, bool success, bool replay)
+        internal
+        virtual
+        returns (bytes memory sig)
+    {
+        newValidator.sudoSetSuccess(success);
+        return hex"";
+    }
+
+    function _validatorSignHash(bytes32 hash, bool success) internal virtual returns (bytes memory sig) {
+        if (success) {
+            newValidator.sudoSetValidSig(hex"");
+        }
+        return hex"";
+    }
+
+    function _permissionSignUserOp(PackedUserOperation memory op, bool success, bool replay)
+        internal
+        virtual
+        returns (bytes memory sig)
+    {
+        bytes[] memory signatures = new bytes[](2);
+        signatures[0] = hex"dead";
+        signatures[1] = hex"beef";
+        if (success || permissionRevertIndex != 0) {
+            policy.sudoSetValidSig(address(kernel), permissionId, hex"dead");
+        }
+        if (success || permissionRevertIndex != 1) {
+            signer.sudoSetValidSig(address(kernel), permissionId, hex"beef");
+        }
+
+        return abi.encode(signatures);
+    }
+
+    function _permissionSignHash(bytes32 hash, bool success) internal virtual returns (bytes memory sig) {
+        bytes[] memory signatures = new bytes[](2);
+        signatures[0] = hex"dead";
+        signatures[1] = hex"beef";
+        if (success || permissionRevertIndex != 0) {
+            policy.sudoSetPass(address(kernel), permissionId, true);
+        }
+        if (success || permissionRevertIndex != 1) {
+            signer.sudoSetPass(address(kernel), permissionId, true);
+        }
+
+        return abi.encode(signatures);
+    }
+
+    function enableSig(
+        uint256 nonce,
+        bool enableSuccess,
+        bool replayable,
+        Install[] memory packages,
+        function(bytes32, bool) internal returns(bytes memory) signEnable
+    ) internal returns (bytes memory sig) {
+        bytes32 digest = helper.installDigest(address(kernel), replayable, nonce, packages);
+        MockKernel mockKernel = new MockKernel(ep);
+
+        if (!is7702) {
+            //vm.store(address(kernel), ERC1967_IMPLEMENTATION_SLOT, bytes32(uint256(uint160(address(mockKernel)))));
+            //assertEq(MockKernel(payable(address(kernel))).installDigest(replayable, nonce, packages), digest);
+            //vm.store(address(kernel), ERC1967_IMPLEMENTATION_SLOT, bytes32(uint256(uint160(address(factory.template())))));
+        }
+        return signEnable(digest, enableSuccess);
+    }
+
+    function encodeEnableValidatorSignature(
+        bytes4 selector,
+        uint256 nonce,
+        bool enableSuccess,
+        bool replayable,
+        function(bytes32, bool) internal returns(bytes memory) signEnable,
+        bytes memory userOpSig
+    ) internal returns (bytes memory sig) {
+        Install[] memory packages = new Install[](1);
+        packages[0] = Install({
+            moduleType: 1,
+            module: address(newValidator),
+            moduleData: hex"",
+            internalData: abi.encodePacked(address(0), selector)
+        });
+        sig = abi.encode(
+            uint256(0), packages, enableSig(nonce, enableSuccess, replayable, packages, signEnable), userOpSig
+        );
+    }
+
+    function encodeEnablePermissionSignature(
+        bytes4 selector,
+        uint256 nonce,
+        bool enableSuccess,
+        bool replayable,
+        function(bytes32, bool) internal returns(bytes memory) signEnable,
+        bytes memory userOpSig
+    ) internal returns (bytes memory sig) {
+        Install[] memory packages = new Install[](2);
+        packages[0] = Install({
+            moduleType: 5,
+            module: address(policy),
+            moduleData: hex"",
+            internalData: abi.encodePacked(permissionId, address(0), selector)
+        });
+        packages[1] = Install({
+            moduleType: 6,
+            module: address(signer),
+            moduleData: hex"",
+            internalData: abi.encodePacked(permissionId)
+        });
+
+        sig = abi.encode(
+            uint256(0), packages, enableSig(nonce, enableSuccess, replayable, packages, signEnable), userOpSig
+        );
+    }
+
+    function encodeNonce(bool replayableUserOp, bool enableFlag, bool replayableEnable, bytes1 vType, bytes20 vId)
+        internal
+        returns (uint256 nonce)
+    {
+        uint8 uMode = 0;
+        if (replayableUserOp) {
+            uMode += 2 ** 6;
+        }
+        if (enableFlag) {
+            uMode += 2 ** 3;
+        }
+        if (replayableEnable) {
+            uMode += 2 ** 2;
+        }
+        ValidationMode vMode = ValidationMode.wrap(bytes1(uMode));
+        uint192 key = uint192(bytes24(abi.encodePacked(uMode, vType, vId, bytes2(0x00))));
+        return ep.getNonce(address(kernel), key);
+    }
+}
