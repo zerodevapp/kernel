@@ -1,18 +1,18 @@
 pragma solidity ^0.8.0;
 
-import "../interfaces/IERC7579Modules.sol";
+import {IHook, IExecutor, IModule} from "../interfaces/IERC7579Modules.sol";
 import {ValidationManager} from "./ValidationManager.sol";
 import {ExecutorManager} from "./ExecutorManager.sol";
 import {HookManager} from "./HookManager.sol";
 import {SelectorManager} from "./SelectorManager.sol";
 import {ERC1271} from "../lib/ERC1271.sol";
-import "../types/Error.sol";
-import "../types/Events.sol";
-import "../types/Structs.sol";
-import "../types/Constants.sol";
-import "../types/Types.sol";
-import "../lib/Utils.sol";
-import "../lib/Lib4337.sol";
+import {InvalidNonce, NotImplemented} from "../types/Error.sol";
+import {ModuleInstalled, ModuleUninstalled} from "../types/Events.sol";
+import {Install, Call, InstallAndExecute} from "../types/Structs.sol";
+import {ValidationId} from "../types/Types.sol";
+import {calldataKeccak} from "../lib/Utils.sol";
+import {Lib4337} from "../lib/Lib4337.sol";
+import {MODULE_MANAGER_STORAGE_SLOT} from "../types/Constants.sol";
 
 struct ModuleStorage {
     address registry; // Note : not used on vanila kernel but saving the storage slot for future usage

@@ -2,7 +2,8 @@
 
 pragma solidity ^0.8.0;
 
-import "src/interfaces/IERC7579Modules.sol";
+import {ISigner} from "src/interfaces/IERC7579Modules.sol";
+import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
 
 contract MockSigner is ISigner {
     mapping(address wallet => bytes) public data;

@@ -1,8 +1,7 @@
 pragma solidity ^0.8.0;
 
-import "./types/Structs.sol";
-import {IERC5267} from "./interfaces/IERC5267.sol";
-import "./lib/Utils.sol";
+import {calldataKeccak} from "./lib/Utils.sol";
+import {Install, Call, InstallAndExecute} from "./types/Structs.sol";
 
 contract KernelHelper {
     /// @dev `keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)")`.

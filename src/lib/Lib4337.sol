@@ -3,8 +3,6 @@ pragma solidity ^0.8.0;
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
 import {UserOperationLib} from "account-abstraction/core/UserOperationLib.sol";
 import {Eip7702Support} from "account-abstraction/core/Eip7702Support.sol";
-import {ERC1271_MAGICVALUE, SIG_VALIDATION_FAILED_UINT} from "../types/Constants.sol";
-import {ValidationData} from "../types/Types.sol";
 import {IERC5267} from "../interfaces/IERC5267.sol";
 
 library Lib4337 {

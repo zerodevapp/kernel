@@ -2,7 +2,8 @@
 
 pragma solidity ^0.8.0;
 
-import "src/interfaces/IERC7579Modules.sol";
+import {IValidator, IHook} from "src/interfaces/IERC7579Modules.sol";
+import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
 
 contract MockValidator is IValidator, IHook {
     mapping(address => bool) public initialized;
@@ -36,8 +37,8 @@ contract MockValidator is IValidator, IHook {
         validatorData[msg.sender] = data;
     }
 
-    function isModuleType(uint256 typeID) external pure returns (bool) {
-        return typeID == 1;
+    function isModuleType(uint256 typeId) external pure returns (bool) {
+        return typeId == 1;
     }
 
     /**

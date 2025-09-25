@@ -1,23 +1,14 @@
 pragma solidity ^0.8.0;
 
 import {Test} from "forge-std/Test.sol";
-import {EntryPointLib} from "./utils/EntryPointLib.sol";
 import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
 import {Kernel} from "src/Kernel.sol";
-import {KernelUUPS} from "src/KernelUUPS.sol";
 import {KernelHelper} from "src/KernelHelper.sol";
-import {SelectorManager} from "src/core/SelectorManager.sol";
 import {KernelFactory} from "src/KernelFactory.sol";
-import {KernelUUPS} from "src/KernelUUPS.sol";
-import {KernelImmutableECDSA} from "src/KernelImmutableECDSA.sol";
-import {LibERC7579} from "solady/accounts/LibERC7579.sol";
-import {LibString} from "solady/utils/LibString.sol";
 import {Install} from "src/types/Structs.sol";
 import {MockFallback} from "./mock/MockFallback.sol";
-import {MockExecutor} from "./mock/MockExecutor.sol";
 import {MockValidator} from "./mock/MockValidator.sol";
-import {MockHook} from "./mock/MockHook.sol";
 import {MockPolicy} from "./mock/MockPolicy.sol";
 import {MockSigner} from "./mock/MockSigner.sol";
 import {MockERC721} from "./mock/MockERC721.sol";
@@ -25,13 +16,11 @@ import {MockERC1155} from "./mock/MockERC1155.sol";
 import {MockCallee} from "./mock/MockCallee.sol";
 import {MockContractETH} from "./mock/MockContractETH.sol";
 import {MockKernel} from "./mock/MockKernel.sol";
-import {IHook, IValidator} from "src/interfaces/IERC7579Modules.sol";
-import {CallType} from "src/types/Types.sol";
-import "src/types/Constants.sol";
-import "forge-std/console.sol";
-import "src/types/Error.sol";
-import "src/types/Events.sol";
-import "src/types/Structs.sol";
+import {IValidator} from "src/interfaces/IERC7579Modules.sol";
+import {console} from "forge-std/console.sol";
+import {Received} from "src/types/Events.sol";
+import {Install} from "src/types/Structs.sol";
+import {ValidationMode} from "src/types/Types.sol";
 
 abstract contract KernelTestBase is Test {
     IEntryPoint ep;
@@ -220,7 +209,7 @@ abstract contract KernelTestBase is Test {
 
     function test_codesize() external {
         vm.skip(true);
-        address implementation = address(factory.uups());
+        address implementation = address(factory.UUPS());
         console.log("Code size :", implementation.code.length);
         require(implementation.code.length <= 24576, "Code too big");
         console.log("space left :", 24576 - implementation.code.length);

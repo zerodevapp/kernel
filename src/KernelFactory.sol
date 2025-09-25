@@ -4,15 +4,14 @@ import {Kernel, Install} from "./Kernel.sol";
 import {KernelUUPS} from "./KernelUUPS.sol";
 import {KernelImmutableECDSA} from "./KernelImmutableECDSA.sol";
 import {LibClone} from "solady/utils/LibClone.sol";
-import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
 
 contract KernelFactory {
-    KernelUUPS public immutable uups;
-    KernelImmutableECDSA public immutable immutableECDSA;
+    KernelUUPS public immutable UUPS;
+    KernelImmutableECDSA public immutable IMMUTABLE_ECDSA;
 
-    constructor(KernelUUPS _uups, KernelImmutableECDSA _immutableECDSA) {
-        uups = _uups;
-        immutableECDSA = _immutableECDSA;
+    constructor(KernelUUPS _uups, KernelImmutableECDSA _immutableEcdsa) {
+        UUPS = _uups;
+        IMMUTABLE_ECDSA = _immutableEcdsa;
     }
 
     function checkInitialized(address account, bytes calldata initData) external view returns (bool) {
@@ -39,7 +38,7 @@ contract KernelFactory {
     // Kernel UUPS
     function deploy(Install[] calldata initialPackages, uint256 nonce) external payable returns (Kernel) {
         bytes32 salt = keccak256(abi.encode(initialPackages, nonce));
-        (bool deployed, address account) = LibClone.createDeterministicERC1967(msg.value, address(uups), salt);
+        (bool deployed, address account) = LibClone.createDeterministicERC1967(msg.value, address(UUPS), salt);
         Kernel k = Kernel(payable(account));
         if (deployed) {
             return k;
@@ -54,7 +53,7 @@ contract KernelFactory {
         returns (Kernel)
     {
         bytes32 salt = keccak256(abi.encode(initialPackages, nonce));
-        (bool deployed, address account) = LibClone.createDeterministicERC1967(msg.value, address(uups), salt);
+        (bool deployed, address account) = LibClone.createDeterministicERC1967(msg.value, address(UUPS), salt);
         Kernel k = Kernel(payable(account));
         if (!deployed) {
             k.initialize(initialPackages);
@@ -66,10 +65,11 @@ contract KernelFactory {
 
     function getAddress(Install[] calldata initialPackages, uint256 nonce) public view virtual returns (address) {
         bytes32 salt = keccak256(abi.encode(initialPackages, nonce));
-        return LibClone.predictDeterministicAddressERC1967(address(uups), salt, address(this));
+        return LibClone.predictDeterministicAddressERC1967(address(UUPS), salt, address(this));
     }
 
     // Kernel UUPS ECDSA fallback
+    /// forge-lint: disable-next-line(mixed-case-function)
     function deployECDSA(address signer, Install[] calldata initialPackages, uint256 nonce)
         external
         payable
@@ -77,12 +77,13 @@ contract KernelFactory {
     {
         bytes32 salt = keccak256(abi.encode(initialPackages, nonce));
         (, address account) =
-            LibClone.createDeterministicERC1967(address(immutableECDSA), abi.encodePacked(signer), salt);
+            LibClone.createDeterministicERC1967(address(IMMUTABLE_ECDSA), abi.encodePacked(signer), salt);
         Kernel k = Kernel(payable(account));
         k.initialize(initialPackages);
         return k;
     }
 
+    /// forge-lint: disable-next-line(mixed-case-function)
     function deployECDSAWithCall(
         address signer,
         Install[] calldata initialPackages,
@@ -91,7 +92,7 @@ contract KernelFactory {
     ) external payable returns (Kernel) {
         bytes32 salt = keccak256(abi.encode(initialPackages, nonce));
         (, address account) =
-            LibClone.createDeterministicERC1967(address(immutableECDSA), abi.encodePacked(signer), salt);
+            LibClone.createDeterministicERC1967(address(IMMUTABLE_ECDSA), abi.encodePacked(signer), salt);
         Kernel k = Kernel(payable(account));
         k.initialize(initialPackages);
         (bool success,) = address(k).call(extraCall);
@@ -99,6 +100,7 @@ contract KernelFactory {
         return k;
     }
 
+    /// forge-lint: disable-next-line(mixed-case-function)
     function getECDSAAddress(address signer, Install[] calldata initialPackages, uint256 nonce)
         public
         view
@@ -107,7 +109,7 @@ contract KernelFactory {
     {
         bytes32 salt = keccak256(abi.encode(initialPackages, nonce));
         return LibClone.predictDeterministicAddressERC1967(
-            address(immutableECDSA), abi.encodePacked(signer), salt, address(this)
+            address(IMMUTABLE_ECDSA), abi.encodePacked(signer), salt, address(this)
         );
     }
 }

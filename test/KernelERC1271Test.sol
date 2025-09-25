@@ -1,36 +1,7 @@
 pragma solidity ^0.8.0;
 
-import {Test} from "forge-std/Test.sol";
-import {EntryPointLib} from "./utils/EntryPointLib.sol";
-import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
-import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
-import {Kernel} from "src/Kernel.sol";
-import {KernelUUPS} from "src/KernelUUPS.sol";
-import {KernelHelper} from "src/KernelHelper.sol";
-import {SelectorManager} from "src/core/SelectorManager.sol";
-import {KernelFactory} from "src/KernelFactory.sol";
-import {KernelUUPS} from "src/KernelUUPS.sol";
-import {KernelImmutableECDSA} from "src/KernelImmutableECDSA.sol";
-import {LibERC7579} from "solady/accounts/LibERC7579.sol";
 import {LibString} from "solady/utils/LibString.sol";
-import {Install} from "src/types/Structs.sol";
-import {MockFallback} from "./mock/MockFallback.sol";
-import {MockExecutor} from "./mock/MockExecutor.sol";
-import {MockValidator} from "./mock/MockValidator.sol";
-import {MockHook} from "./mock/MockHook.sol";
-import {MockPolicy} from "./mock/MockPolicy.sol";
-import {MockSigner} from "./mock/MockSigner.sol";
-import {MockERC721} from "./mock/MockERC721.sol";
-import {MockERC1155} from "./mock/MockERC1155.sol";
-import {MockCallee} from "./mock/MockCallee.sol";
-import {MockKernel} from "./mock/MockKernel.sol";
-import {IHook, IValidator} from "src/interfaces/IERC7579Modules.sol";
-import {CallType} from "src/types/Types.sol";
-import "src/types/Constants.sol";
-import "forge-std/console.sol";
-import "src/types/Error.sol";
-import "src/types/Events.sol";
-import "src/types/Structs.sol";
+import {ERC1271_MAGICVALUE, ERC1271_INVALID} from "src/types/Constants.sol";
 import {KernelTestBase} from "./KernelTestBase.sol";
 
 abstract contract KernelERC1271Test is KernelTestBase {
@@ -68,7 +39,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
 
     function test_erc1271_root_personal_sign() external unitTest {
         bytes32 messageHash = keccak256("Hello world");
-        bytes32 personalHash = _toERC1271HashPersonalSign(messageHash);
+        bytes32 personalHash = _toErc1271HashPersonalSign(messageHash);
         bytes memory sig = _rootSignHash(personalHash, true);
         bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes20(0), sig));
         assertEq(ret, ERC1271_MAGICVALUE);
@@ -76,7 +47,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
 
     function test_erc1271_root_personal_sign_fail() external unitTest {
         bytes32 messageHash = keccak256("Hello world");
-        bytes32 personalHash = _toERC1271HashPersonalSign(messageHash);
+        bytes32 personalHash = _toErc1271HashPersonalSign(messageHash);
         bytes memory sig = _rootSignHash(personalHash, false);
         bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes20(0), sig));
         assertEq(ret, ERC1271_INVALID);
@@ -106,7 +77,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
 
     function test_erc1271_validator_personal_sign() external unitTest {
         bytes32 messageHash = keccak256("Hello world");
-        bytes32 personalHash = _toERC1271HashPersonalSign(messageHash);
+        bytes32 personalHash = _toErc1271HashPersonalSign(messageHash);
         bytes memory sig = _validatorSignHash(personalHash, true);
         kernel.installModule(1, address(newValidator), abi.encode(hex"", hex""));
         bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes20(address(newValidator)), sig));
@@ -115,7 +86,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
 
     function test_erc1271_validator_personal_sign_fail() external unitTest {
         bytes32 messageHash = keccak256("Hello world");
-        bytes32 personalHash = _toERC1271HashPersonalSign(messageHash);
+        bytes32 personalHash = _toErc1271HashPersonalSign(messageHash);
         bytes memory sig = _validatorSignHash(personalHash, false);
         kernel.installModule(1, address(newValidator), abi.encode(hex"", hex""));
         bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes20(address(newValidator)), sig));
@@ -144,7 +115,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
 
     function test_erc1271_permission_personal_sign() external unitTest {
         bytes32 messageHash = keccak256("Hello world");
-        bytes32 personalHash = _toERC1271HashPersonalSign(messageHash);
+        bytes32 personalHash = _toErc1271HashPersonalSign(messageHash);
         bytes memory sig = _permissionSignHash(personalHash, true);
         kernel.installModule(5, address(policy), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
         kernel.installModule(6, address(signer), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
@@ -154,7 +125,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
 
     function test_erc1271_permission_personal_sign_fail() external unitTest {
         bytes32 messageHash = keccak256("Hello world");
-        bytes32 personalHash = _toERC1271HashPersonalSign(messageHash);
+        bytes32 personalHash = _toErc1271HashPersonalSign(messageHash);
         bytes memory sig = _permissionSignHash(personalHash, false);
         kernel.installModule(5, address(policy), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
         kernel.installModule(6, address(signer), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
@@ -176,9 +147,9 @@ abstract contract KernelERC1271Test is KernelTestBase {
         contentsHash = keccak256(abi.encode(hash, contentsType));
         bytes32 actualHash;
         if (isExplicit) {
-            actualHash = _toERC1271Hash(address(kernel), contentsHash, contentsType, contentsName);
+            actualHash = _toErc1271Hash(address(kernel), contentsHash, contentsType, contentsName);
         } else {
-            actualHash = _toERC1271Hash(address(kernel), contentsHash, contentsType, _contentsName(contentsType));
+            actualHash = _toErc1271Hash(address(kernel), contentsHash, contentsType, _contentsName(contentsType));
         }
         sig = signFn(actualHash, success);
         bytes memory contentsDescription = abi.encodePacked(contentsType, contentsName);
@@ -187,7 +158,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
             abi.encodePacked(sig, _DOMAIN_SEP_B, contentsHash, contentsDescription, uint16(contentsDescription.length));
     }
 
-    function _toERC1271Hash(address account, bytes32 contents, bytes memory contentsType, bytes memory contentsName)
+    function _toErc1271Hash(address account, bytes32 contents, bytes memory contentsType, bytes memory contentsName)
         internal
         view
         returns (bytes32)
@@ -201,7 +172,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
         return keccak256(abi.encodePacked("\x19\x01", _DOMAIN_SEP_B, parentStructHash));
     }
 
-    struct _AccountDomainStruct {
+    struct AccountDomainStruct {
         string name;
         string version;
         uint256 chainId;
@@ -214,14 +185,14 @@ abstract contract KernelERC1271Test is KernelTestBase {
     }
 
     function _accountDomainStructFields(address account) internal view returns (bytes memory) {
-        _AccountDomainStruct memory t;
+        AccountDomainStruct memory t;
         (, t.name, t.version, t.chainId, t.verifyingContract, t.salt,) = kernel.eip712Domain();
 
         return abi.encode(keccak256(bytes(t.name)), keccak256(bytes(t.version)), t.chainId, t.verifyingContract, t.salt);
     }
 
-    function _toERC1271HashPersonalSign(bytes32 childHash) internal view returns (bytes32) {
-        _AccountDomainStruct memory t;
+    function _toErc1271HashPersonalSign(bytes32 childHash) internal view returns (bytes32) {
+        AccountDomainStruct memory t;
         (, t.name, t.version, t.chainId, t.verifyingContract, t.salt,) = kernel.eip712Domain();
 
         bytes32 domainSeparator = keccak256(

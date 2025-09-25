@@ -1,7 +1,7 @@
 pragma solidity ^0.8.0;
 
-import "src/Kernel.sol";
-import "forge-std/console.sol";
+import {IEntryPoint, Kernel} from "src/Kernel.sol";
+import {Call, Install, InstallAndExecute} from "src/types/Structs.sol";
 
 // NOTE: this is not for real usecase, just a contract to deploy for test checks
 contract MockKernel is Kernel {

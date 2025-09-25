@@ -1,7 +1,6 @@
 pragma solidity ^0.8.0;
 
 import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
-import {Kernel} from "./Kernel.sol";
 import {KernelUUPS} from "./KernelUUPS.sol";
 import {ECDSA} from "solady/utils/ECDSA.sol";
 import {LibClone} from "solady/utils/LibClone.sol";

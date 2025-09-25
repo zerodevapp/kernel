@@ -2,7 +2,6 @@
 pragma solidity ^0.8.4;
 
 import {EIP712} from "solady/utils/EIP712.sol";
-import {SignatureCheckerLib} from "solady/utils/SignatureCheckerLib.sol";
 
 /// @notice ERC1271 mixin with nested EIP-712 approach.
 /// @author Solady (https://github.com/vectorized/solady/blob/main/src/accounts/ERC1271.sol)
@@ -172,6 +171,7 @@ abstract contract ERC1271 is EIP712 {
     /// All these are just for widespread out-of-the-box compatibility with other wallet clients.
     /// We want to create bazaars, not walled castles.
     /// And we'll use push the Turing Completeness of the EVM to the limits to do so.
+    /// forge-lint: disable-next-line(mixed-case-function)
     function _erc1271IsValidSignatureViaNestedEIP712(bytes32 hash, bytes calldata signature)
         internal
         view
@@ -259,6 +259,7 @@ abstract contract ERC1271 is EIP712 {
         result = _erc1271IsValidSignatureNowCalldata(hash, signature);
     }
 
+    /// forge-lint: disable-next-line(mixed-case-function)
     function _erc1271IsValidSignatureViaNestedEIP712Replayable(bytes32 hash, bytes calldata signature)
         internal
         view
@@ -347,6 +348,7 @@ abstract contract ERC1271 is EIP712 {
 
     /// @dev Performs the signature validation without nested EIP-712 to allow for easy sign ins.
     /// This function must always return false or revert if called on-chain.
+    /// forge-lint: disable-next-line(mixed-case-function)
     function _erc1271IsValidSignatureViaRPC(bytes32 hash, bytes calldata signature)
         internal
         view

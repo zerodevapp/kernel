@@ -1,6 +1,6 @@
 pragma solidity ^0.8.0;
 
-import "./Types.sol";
+import {ValidationId, ValidationType} from "./Types.sol";
 
 struct Install {
     uint256 moduleType;
