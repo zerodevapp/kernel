@@ -283,6 +283,7 @@ abstract contract ValidationManager {
     }
 
     function _setRoot(ValidationId vId) internal {
+        require(ValidationId.unwrap(vId) != bytes20(0), InvalidRootValidation());
         ValidationStorage storage $ = _validationStorage();
         $.root = vId;
     }
