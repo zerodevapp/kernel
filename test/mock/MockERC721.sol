@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "solady/tokens/ERC721.sol";
+import {ERC721} from "solady/tokens/ERC721.sol";
 
 contract MockERC721 is ERC721 {
-    constructor() ERC721() {}
+    constructor() {}
 
     function test_ignore() public {}
 
@@ -15,6 +15,7 @@ contract MockERC721 is ERC721 {
     function symbol() public pure override returns (string memory) {
         return "MOCK";
     }
+    /// forge-lint: disable-next-line(mixed-case-function)
 
     function tokenURI(uint256) public pure override returns (string memory) {
         return "";

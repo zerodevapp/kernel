@@ -3,7 +3,7 @@
 pragma solidity ^0.8.0;
 
 import {ECDSA} from "solady/utils/ECDSA.sol";
-import {IValidator, IHook} from "src/interfaces/IERC7579Modules.sol";
+import {IValidator} from "src/interfaces/IERC7579Modules.sol";
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
 import {
     SIG_VALIDATION_SUCCESS_UINT,
@@ -14,6 +14,7 @@ import {
     ERC1271_INVALID
 } from "src/types/Constants.sol";
 
+/// forge-lint: disable-next-item(pascal-case-struct)
 struct ECDSAValidatorStorage {
     address owner;
 }
@@ -34,8 +35,8 @@ contract ECDSAValidator is IValidator {
         delete ecdsaValidatorStorage[msg.sender];
     }
 
-    function isModuleType(uint256 typeID) external pure override returns (bool) {
-        return typeID == MODULE_TYPE_VALIDATOR || typeID == MODULE_TYPE_HOOK;
+    function isModuleType(uint256 typeId) external pure override returns (bool) {
+        return typeId == MODULE_TYPE_VALIDATOR || typeId == MODULE_TYPE_HOOK;
     }
 
     function isInitialized(address smartAccount) external view override returns (bool) {

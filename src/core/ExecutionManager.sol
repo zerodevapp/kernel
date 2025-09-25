@@ -1,7 +1,7 @@
 pragma solidity ^0.8.0;
 
 import {LibERC7579} from "solady/accounts/LibERC7579.sol";
-import "../types/Error.sol";
+import {InvalidExecType, InvalidCallType} from "../types/Error.sol";
 
 abstract contract ExecutionManager {
     function _execute(bytes32 mode, bytes calldata executionData) internal {

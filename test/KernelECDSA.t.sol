@@ -1,8 +1,11 @@
 pragma solidity ^0.8.0;
 
-import "./Kernel.t.sol";
+import {KernelTest} from "./Kernel.t.sol";
 import {Lib4337} from "src/lib/Lib4337.sol";
 import {ECDSAValidator} from "./mock/ECDSAValidator.sol";
+import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
+import {Install, ValidationInfo} from "src/types/Structs.sol";
+import {ValidationId} from "src/types/Types.sol";
 
 contract KernelECDSATest is KernelTest {
     address owner;
@@ -31,9 +34,6 @@ contract KernelECDSATest is KernelTest {
         assertEq(ValidationId.unwrap(vId), bytes20(address(rootValidator)));
 
         ValidationInfo memory info = kernel.validationInfo(vId);
-
-        console.log("vType :");
-        console.logBytes1(ValidationType.unwrap(info.vType));
     }
 
     function _rootSignUserOp(PackedUserOperation memory op, bool success, bool replay)

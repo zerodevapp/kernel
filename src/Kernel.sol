@@ -1,29 +1,43 @@
 pragma solidity ^0.8.0;
 
 import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
-import {IAccount} from "account-abstraction/interfaces/IAccount.sol";
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
-import {IValidator, IExecutor, IHook} from "./interfaces/IERC7579Modules.sol";
+import {IExecutor, IHook} from "./interfaces/IERC7579Modules.sol";
 import {ModuleManager, Install} from "./core/ModuleManager.sol";
 import {parseNonce} from "./core/ValidationManager.sol";
 import {ExecutionManager} from "./core/ExecutionManager.sol";
 import {Lib4337} from "./lib/Lib4337.sol";
 import {LibERC7579} from "solady/accounts/LibERC7579.sol";
-import "./types/Types.sol";
-import "./types/Error.sol";
-import "./types/Events.sol";
-import "./types/Constants.sol";
-import "./types/Structs.sol";
+import {
+    CallType,
+    ValidationId,
+    ValidationMode,
+    ValidationType,
+    isEnable,
+    isReplayable,
+    isEnableReplayable
+} from "./types/Types.sol";
+import {
+    NotImplemented,
+    Unauthorized,
+    UnauthorizedCallData,
+    InvalidSelector,
+    InvalidInitialization,
+    InstallSignatureVerificationFailed
+} from "./types/Error.sol";
+import {Received} from "./types/Events.sol";
+import {VALIDATION_TYPE_ROOT} from "./types/Constants.sol";
+import {ValidationStorage, ValidationInfo} from "./types/Structs.sol";
 
 abstract contract Kernel is ModuleManager, ExecutionManager {
-    IEntryPoint immutable entryPoint;
+    IEntryPoint immutable ENTRYPOINT;
 
     function _onlyEntryPointOrSelf() internal {
-        require(msg.sender == address(entryPoint) || msg.sender == address(this), Unauthorized());
+        require(msg.sender == address(ENTRYPOINT) || msg.sender == address(this), Unauthorized());
     }
 
-    constructor(IEntryPoint _entryPoint) {
-        entryPoint = _entryPoint;
+    constructor(IEntryPoint _entrypoint) {
+        ENTRYPOINT = _entrypoint;
     }
 
     function _domainNameAndVersion() internal pure override returns (string memory name, string memory version) {
@@ -158,7 +172,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager {
         SelectorConfig storage $ = _selectorConfig(selector);
         // if the selector is not initialized, revert
         // if the selector is installed but hook is not set, only entrypoint can call it
-        if ($.target == address(0) || ($.hook == IHook(address(0)) && msg.sender != address(entryPoint))) {
+        if ($.target == address(0) || ($.hook == IHook(address(0)) && msg.sender != address(ENTRYPOINT))) {
             revert InvalidSelector();
         }
         bytes memory hookData;

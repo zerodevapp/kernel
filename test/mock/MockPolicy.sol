@@ -4,7 +4,6 @@ pragma solidity ^0.8.0;
 
 import {IPolicy} from "src/interfaces/IERC7579Modules.sol";
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
-import "forge-std/console.sol";
 
 contract MockPolicy is IPolicy {
     mapping(address => mapping(bytes32 => bool)) public pass;

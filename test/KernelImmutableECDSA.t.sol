@@ -1,6 +1,8 @@
 pragma solidity ^0.8.0;
 
-import "./Kernel.t.sol";
+import {KernelTest} from "./Kernel.t.sol";
+import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
+import {Install} from "src/types/Structs.sol";
 import {Lib4337} from "src/lib/Lib4337.sol";
 import {ECDSAValidator} from "./mock/ECDSAValidator.sol";
 
@@ -31,9 +33,6 @@ contract KernelImmutableECDSATest is KernelTest {
     }
 
     function _rootSignHash(bytes32 hash, bool success) internal override returns (bytes memory sig) {
-        console.log("Owner :", owner);
-        console.log("Code :");
-        console.logBytes(address(kernel).code);
         if (!success) {
             hash = keccak256(abi.encodePacked(hash));
         }

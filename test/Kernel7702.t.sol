@@ -1,8 +1,10 @@
 pragma solidity ^0.8.0;
 
-import "./Kernel.t.sol";
+import {KernelTest} from "./Kernel.t.sol";
+import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
 import {Lib4337} from "src/lib/Lib4337.sol";
 import {Kernel7702} from "src/Kernel7702.sol";
+import {Kernel} from "src/Kernel.sol";
 
 contract Kernel7702Test is KernelTest {
     address owner;

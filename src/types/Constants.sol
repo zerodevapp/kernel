@@ -1,6 +1,6 @@
 pragma solidity ^0.8.0;
 
-import "./Types.sol";
+import {CallType, ValidationType, ValidationData} from "./Types.sol";
 
 // Default CallType
 CallType constant CALLTYPE_SINGLE = CallType.wrap(0x00);

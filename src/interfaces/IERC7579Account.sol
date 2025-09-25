@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.21;
 
-import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
-
 struct Execution {
     address target;
     uint256 value;

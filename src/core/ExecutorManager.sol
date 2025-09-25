@@ -1,8 +1,7 @@
 pragma solidity ^0.8.0;
 
-import "../types/Types.sol";
-import "../types/Constants.sol";
-import "../interfaces/IERC7579Modules.sol";
+import {EXECUTOR_MANAGER_STORAGE_SLOT} from "../types/Constants.sol";
+import {IExecutor, IHook} from "../interfaces/IERC7579Modules.sol";
 
 contract ExecutorManager {
     error NotExecutor();
