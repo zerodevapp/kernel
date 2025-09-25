@@ -25,10 +25,12 @@ import {
     UnauthorizedCallData,
     InvalidSelector,
     InvalidInitialization,
-    InstallSignatureVerificationFailed
+    InstallSignatureVerificationFailed,
+    InvalidDataLength,
+    InvalidRootValidation
 } from "./types/Error.sol";
 import {Received} from "./types/Events.sol";
-import {VALIDATION_TYPE_ROOT} from "./types/Constants.sol";
+import {VALIDATION_TYPE_ROOT, VALIDATION_TYPE_PERMISSION, VALIDATION_TYPE_VALIDATOR} from "./types/Constants.sol";
 import {ValidationStorage, ValidationInfo} from "./types/Structs.sol";
 
 abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {

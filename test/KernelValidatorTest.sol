@@ -72,9 +72,23 @@ abstract contract KernelValidatorTest is KernelTestBase {
             internalData: abi.encodePacked(permissionId),
             moduleData: hex""
         });
-        kernel.installModule(false, 0, packages, enableSig(0, true, false, packages, _rootSignHash));
 
-        kernel.setRoot(ValidationId.wrap(bytes20(address(newValidator))));
+        kernel.setRoot(packages, false, hex"");
+    }
+
+    function test_change_root_remove_previous_validator() external unitTest {
+        vm.skip(is7702);
+        vm.skip(isImmutable);
+        Install[] memory packages = new Install[](2);
+        packages[0] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
+        packages[1] = Install({
+            moduleType: 5,
+            module: address(policy),
+            internalData: abi.encodePacked(permissionId),
+            moduleData: hex""
+        });
+
+        kernel.setRoot(packages, true, hex"");
     }
 
     function test_install_validator() external unitTest {

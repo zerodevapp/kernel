@@ -40,6 +40,7 @@ abstract contract KernelTestBase is Test {
     KernelHelper helper;
 
     bool is7702;
+    bool isImmutable;
 
     modifier unitTest() {
         vm.startPrank(address(ep));
