@@ -9,6 +9,7 @@ import {InvalidSelector} from "src/types/Error.sol";
 
 abstract contract KernelSelectorTest is KernelTestBase {
     function test_install_selector_call() external unitTest {
+        address Caller = makeAddr("Caller");
         assertTrue(kernel.supportsModule(3));
         kernel.installModule(
             3,
@@ -17,10 +18,14 @@ abstract contract KernelSelectorTest is KernelTestBase {
                 hex"deadbeef", abi.encodePacked(MockFallback.fallbackFunction.selector, bytes1(0x00), address(1))
             )
         );
+        vm.stopPrank();
+        vm.startPrank(Caller);
         vm.expectEmit(address(mockFallback));
         emit MockFallback.Foobar();
         uint256 res = MockFallback(address(kernel)).fallbackFunction(10);
+        address caller = mockFallback.caller();
         assertEq(res, 100);
+        assertEq(caller, Caller);
         SelectorManager.SelectorConfig memory c = kernel.selectorConfig(MockFallback.fallbackFunction.selector);
         assertEq(address(c.target), address(mockFallback));
         assertEq(address(c.hook), address(1));
