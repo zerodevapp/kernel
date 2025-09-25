@@ -2,9 +2,24 @@ pragma solidity ^0.8.0;
 
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
 import {IValidator, IPolicy, ISigner, IHook} from "../interfaces/IERC7579Modules.sol";
-import {InvalidRootValidation, ModuleInstallFailed, OccupiedValidationId, ModuleInstallFailed, InvalidPermissionUninstallOrder, InvalidPermissionUninstallOrder, InvalidPermissionId, InvalidValidator} from "../types/Error.sol";
+import {
+    InvalidRootValidation,
+    ModuleInstallFailed,
+    OccupiedValidationId,
+    ModuleInstallFailed,
+    InvalidPermissionUninstallOrder,
+    InvalidPermissionUninstallOrder,
+    InvalidPermissionId,
+    InvalidValidator
+} from "../types/Error.sol";
 import {ValidationId, ValidationType, ValidationMode} from "../types/Types.sol";
-import {VALIDATION_MANAGER_STORAGE_SLOT, VALIDATION_TYPE_ROOT,VALIDATION_TYPE_VALIDATOR,VALIDATION_TYPE_PERMISSION,ERC1271_MAGICVALUE} from "../types/Constants.sol";
+import {
+    VALIDATION_MANAGER_STORAGE_SLOT,
+    VALIDATION_TYPE_ROOT,
+    VALIDATION_TYPE_VALIDATOR,
+    VALIDATION_TYPE_PERMISSION,
+    ERC1271_MAGICVALUE
+} from "../types/Constants.sol";
 import {ValidationStorage, ValidationInfo, Install} from "../types/Structs.sol";
 import {Lib4337} from "../lib/Lib4337.sol";
 

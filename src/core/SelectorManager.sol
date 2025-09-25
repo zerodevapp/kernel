@@ -3,10 +3,7 @@ pragma solidity ^0.8.0;
 
 import {IHook} from "../interfaces/IERC7579Modules.sol";
 import {CallType} from "../types/Types.sol";
-import {
-    SELECTOR_MANAGER_STORAGE_SLOT,
-    CALLTYPE_DELEGATECALL
-} from "../types/Constants.sol";
+import {SELECTOR_MANAGER_STORAGE_SLOT, CALLTYPE_DELEGATECALL} from "../types/Constants.sol";
 import {ModuleInstallFailed} from "../types/Error.sol";
 
 abstract contract SelectorManager {

@@ -8,11 +8,26 @@ import {parseNonce} from "./core/ValidationManager.sol";
 import {ExecutionManager} from "./core/ExecutionManager.sol";
 import {Lib4337} from "./lib/Lib4337.sol";
 import {LibERC7579} from "solady/accounts/LibERC7579.sol";
-import {CallType, ValidationId, ValidationMode, ValidationType, isEnable, isReplayable, isEnableReplayable} from "./types/Types.sol";
-import {NotImplemented,Unauthorized,UnauthorizedCallData, InvalidSelector, InvalidInitialization, InstallSignatureVerificationFailed} from "./types/Error.sol";
+import {
+    CallType,
+    ValidationId,
+    ValidationMode,
+    ValidationType,
+    isEnable,
+    isReplayable,
+    isEnableReplayable
+} from "./types/Types.sol";
+import {
+    NotImplemented,
+    Unauthorized,
+    UnauthorizedCallData,
+    InvalidSelector,
+    InvalidInitialization,
+    InstallSignatureVerificationFailed
+} from "./types/Error.sol";
 import {Received} from "./types/Events.sol";
 import {VALIDATION_TYPE_ROOT} from "./types/Constants.sol";
-import {ValidationStorage, ValidationInfo} from  "./types/Structs.sol";
+import {ValidationStorage, ValidationInfo} from "./types/Structs.sol";
 
 abstract contract Kernel is ModuleManager, ExecutionManager {
     IEntryPoint immutable ENTRYPOINT;
