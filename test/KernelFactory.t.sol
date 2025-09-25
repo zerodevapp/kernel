@@ -24,6 +24,7 @@ import {MockERC721} from "./mock/MockERC721.sol";
 import {MockERC1155} from "./mock/MockERC1155.sol";
 import {MockKernel} from "./mock/MockKernel.sol";
 import {MockCallee} from "./mock/MockCallee.sol";
+import {MockContractETH} from "./mock/MockContractETH.sol";
 import {IHook, IValidator} from "src/interfaces/IERC7579Modules.sol";
 import {CallType} from "src/types/Types.sol";
 import "src/types/Constants.sol";
@@ -32,23 +33,8 @@ import "src/types/Error.sol";
 import "src/types/Events.sol";
 import "src/types/Structs.sol";
 import {KernelTestBase} from "./KernelTestBase.sol";
-import {KernelUserOpTest} from "./KernelUserOpTest.sol";
-import {KernelERC1271Test} from "./KernelERC1271Test.sol";
-import {KernelExecutorTest} from "./KernelExecutorTest.sol";
-import {KernelValidatorTest} from "./KernelValidatorTest.sol";
-import {KernelExecuteTest} from "./KernelExecuteTest.sol";
-import {KernelSelectorTest} from "./KernelSelectorTest.sol";
-import {KernelHookTest} from "./KernelHookTest.sol";
 
-contract KernelTest is
-    KernelUserOpTest,
-    KernelERC1271Test,
-    KernelExecutorTest,
-    KernelValidatorTest,
-    KernelExecuteTest,
-    KernelSelectorTest,
-    KernelHookTest
-{
+contract KernelFactoryTest is KernelTestBase {
     function setUp() external {
         ep = EntryPointLib.deploy();
 
@@ -81,49 +67,59 @@ contract KernelTest is
         vm.stopPrank();
     }
 
-    function test_install_packages_with_signature() external unitTest {
-        Install[] memory packages = new Install[](2);
-        packages[0] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
-        packages[1] = Install({
-            moduleType: 5,
-            module: address(policy),
-            internalData: abi.encodePacked(permissionId),
-            moduleData: hex""
-        });
-        kernel.installModule(false, 0, packages, enableSig(0, true, false, packages, _rootSignHash));
-    }
-
-    function test_install_packages_with_signature_replayable() external unitTest {
-        Install[] memory packages = new Install[](2);
-        packages[0] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
-        packages[1] = Install({
-            moduleType: 5,
-            module: address(policy),
-            internalData: abi.encodePacked(permissionId),
-            moduleData: hex""
-        });
-        kernel.installModule(true, 0, packages, enableSig(0, true, true, packages, _rootSignHash));
-    }
-
-    function test_upgradeTo() external unitTest {
+    function test_deploy_root_validator() external unitTest {
         vm.skip(is7702);
-        KernelUUPS newTemplate = new KernelUUPS(ep);
-        KernelUUPS(payable(address(kernel))).upgradeToAndCall(address(newTemplate), hex"");
-        bytes32 impl = vm.load(address(kernel), ERC1967_IMPLEMENTATION_SLOT);
-        assertEq(address(uint160(uint256(impl))), address(newTemplate));
+        Install[] memory pkgs = new Install[](1);
+        pkgs[0] =
+            Install({moduleType: 1, module: address(rootValidator), moduleData: rootValidatorData, internalData: hex""});
+        vm.startSnapshotGas("Mock - deploy()");
+        Kernel k = factory.deploy(pkgs, 1);
+        vm.stopSnapshotGas();
     }
 
-    function test_install_invalid() external unitTest {
-        MockHook mockHook = new MockHook();
-        vm.expectRevert(NotImplemented.selector);
-        kernel.installModule(10, address(mockHook), abi.encode(hex"", ""));
-        vm.expectRevert(NotImplemented.selector);
-        kernel.isModuleInstalled(10, address(mockHook), abi.encodePacked(permissionId));
+    function test_deploy_root_permission() external unitTest {
+        Install[] memory pkgs = new Install[](2);
+        pkgs[0] = Install({
+            moduleType: 5,
+            module: address(policy),
+            internalData: abi.encodePacked(permissionId),
+            moduleData: hex""
+        });
+        pkgs[1] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
+        Kernel k = factory.deploy(pkgs, 1);
+        assertEq(k.accountId(), "kernel.v0.4");
+        assertEq(k.registry(), address(0));
     }
 
-    function test_uninstall_invalid() external unitTest {
-        MockHook mockHook = new MockHook();
-        vm.expectRevert(NotImplemented.selector);
-        kernel.uninstallModule(10, address(mockHook), abi.encode(hex"", ""));
+    function test_deploy_root_fail_invalid_root() external unitTest {
+        Install[] memory pkgs = new Install[](2);
+        pkgs[0] = Install({moduleType: 2, module: address(executor), internalData: hex"", moduleData: hex""});
+        pkgs[1] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
+        vm.expectRevert(InvalidRootValidation.selector);
+        Kernel k = factory.deploy(pkgs, 1);
+    }
+
+    function test_deploy_existing() external {
+        vm.skip(is7702);
+        Install[] memory pkgs = new Install[](1);
+        pkgs[0] =
+            Install({moduleType: 1, module: address(rootValidator), moduleData: rootValidatorData, internalData: hex""});
+        Kernel k = factory.deploy(pkgs, 1);
+        assertEq(address(k), address(factory.deploy(pkgs, 1)));
+    }
+
+    function test_deploy_with_call() external unitTest {
+        vm.skip(is7702);
+        Install[] memory initPkgs = new Install[](1);
+        initPkgs[0] =
+            Install({moduleType: 1, module: address(rootValidator), moduleData: rootValidatorData, internalData: hex""});
+        Install[] memory pkgs = new Install[](1);
+        pkgs[0] = Install({moduleType: 1, module: address(newValidator), moduleData: hex"", internalData: hex""});
+        kernel = Kernel(payable(factory.getAddress(initPkgs, 1)));
+        bytes memory sig = enableSig(0, true, false, pkgs, _rootSignHash);
+        Kernel k = factory.deployWithCall(initPkgs, 1, abi.encodeWithSelector(0xa706cd33, false, 0, pkgs, sig));
+        assertEq(address(k), address(kernel));
+        ValidationInfo memory vInfo = k.validationInfo(ValidationId.wrap(bytes20(address(newValidator))));
+        assertTrue(vInfo.vType == VALIDATION_TYPE_VALIDATOR);
     }
 }
