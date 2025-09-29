@@ -109,4 +109,15 @@ contract KernelTest is
         vm.expectRevert(NotImplemented.selector);
         kernel.uninstallModule(10, address(mockHook), abi.encode(hex"", ""));
     }
+
+    function test_supports_module() external unitTest {
+        assertFalse(kernel.supportsModule(0));
+        assertTrue(kernel.supportsModule(1));
+        assertTrue(kernel.supportsModule(2));
+        assertTrue(kernel.supportsModule(3));
+        assertTrue(kernel.supportsModule(4));
+        assertTrue(kernel.supportsModule(5));
+        assertTrue(kernel.supportsModule(6));
+        assertFalse(kernel.supportsModule(7));
+    }
 }
