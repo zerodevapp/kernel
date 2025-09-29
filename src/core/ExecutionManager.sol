@@ -4,7 +4,7 @@ import {LibERC7579} from "solady/accounts/LibERC7579.sol";
 import {InvalidExecType, InvalidCallType} from "../types/Error.sol";
 
 abstract contract ExecutionManager {
-    function _execute(bytes32 mode, bytes calldata executionData) internal returns(bytes[] memory) {
+    function _execute(bytes32 mode, bytes calldata executionData) internal returns (bytes[] memory) {
         bytes1 callType = LibERC7579.getCallType(mode);
         bytes1 execType = LibERC7579.getExecType(mode);
         function() onRevert;
@@ -29,7 +29,10 @@ abstract contract ExecutionManager {
         return executeFunction(executionData, onRevert);
     }
 
-    function _executeCall(bytes calldata executionData, function() onRevert) internal returns(bytes[] memory results){
+    function _executeCall(bytes calldata executionData, function() onRevert)
+        internal
+        returns (bytes[] memory results)
+    {
         (address target, uint256 value, bytes calldata data) = LibERC7579.decodeSingle(executionData);
         bool success = _call(target, value, data);
         if (!success) {
@@ -39,7 +42,10 @@ abstract contract ExecutionManager {
         results[0] = _getReturn();
     }
 
-    function _executeDelegateCall(bytes calldata executionData, function() onRevert) internal returns(bytes[] memory results){
+    function _executeDelegateCall(bytes calldata executionData, function() onRevert)
+        internal
+        returns (bytes[] memory results)
+    {
         (address delegate, bytes calldata data) = LibERC7579.decodeDelegate(executionData);
         bool success = _delegateCall(delegate, data);
         if (!success) {
@@ -49,7 +55,10 @@ abstract contract ExecutionManager {
         results[0] = _getReturn();
     }
 
-    function _executeBatchCall(bytes calldata executionData, function() onRevert) internal returns(bytes[] memory results){
+    function _executeBatchCall(bytes calldata executionData, function() onRevert)
+        internal
+        returns (bytes[] memory results)
+    {
         bytes32[] calldata pointers = LibERC7579.decodeBatch(executionData);
         uint256 length = pointers.length;
         results = new bytes[](length);

@@ -84,7 +84,12 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         }
     }
 
-    function isValidSignature(bytes32 hash, bytes calldata signature) public view override(ERC1271, IERC7579Account) returns(bytes4) {
+    function isValidSignature(bytes32 hash, bytes calldata signature)
+        public
+        view
+        override(ERC1271, IERC7579Account)
+        returns (bytes4)
+    {
         return ERC1271.isValidSignature(hash, signature);
     }
 
@@ -151,12 +156,20 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         _execute(mode, executionData);
     }
 
-    function executeFromExecutor(bytes32 mode, bytes calldata executionData) external payable returns (bytes[] memory returnData){
+    function executeFromExecutor(bytes32 mode, bytes calldata executionData)
+        external
+        payable
+        returns (bytes[] memory returnData)
+    {
         _verifyExecutionData(mode, executionData);
         return _executeFromExecutor(mode, executionData);
     }
 
-    function _executeFromExecutor(bytes32 mode, bytes calldata executionData) internal executorHook returns(bytes[] memory retyrbData) {
+    function _executeFromExecutor(bytes32 mode, bytes calldata executionData)
+        internal
+        executorHook
+        returns (bytes[] memory retyrbData)
+    {
         return _execute(mode, executionData);
     }
 
@@ -259,7 +272,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         emit Received(msg.sender, msg.value);
     }
 
-    function supportsExecutionMode(bytes32 mode) external override pure returns (bool) {
+    function supportsExecutionMode(bytes32 mode) external pure override returns (bool) {
         bytes1 callType = LibERC7579.getCallType(mode);
         bytes1 execType = LibERC7579.getExecType(mode);
         if (!(execType == LibERC7579.EXECTYPE_DEFAULT || execType == LibERC7579.EXECTYPE_TRY)) {
@@ -276,7 +289,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         return true;
     }
 
-    function supportsModule(uint256 moduleTypeId) external override pure returns (bool) {
+    function supportsModule(uint256 moduleTypeId) external pure override returns (bool) {
         return moduleTypeId < 7;
     }
 

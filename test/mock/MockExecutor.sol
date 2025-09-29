@@ -27,7 +27,7 @@ contract MockExecutor is IExecutor {
 
     function sudoDoExec(IERC7579Account account, bytes32 mode, bytes calldata executionCalldata) external payable {
         bytes[] memory results = account.executeFromExecutor(mode, executionCalldata);
-        for(uint256 i = 0; i<results.length; i++) {
+        for (uint256 i = 0; i < results.length; i++) {
             emit Results(i, results[i]);
         }
     }

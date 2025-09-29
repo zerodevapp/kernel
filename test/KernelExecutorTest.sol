@@ -49,7 +49,6 @@ abstract contract KernelExecutorTest is KernelTestBase {
         assertEq(callee.bar(), 1);
     }
 
-
     function test_execute_batch_from_executor() external unitTestExecutor {
         Call[] memory calls = new Call[](2);
         calls[0] = Call({to: address(callee), value: 0, data: abi.encodeWithSelector(MockCallee.foo.selector)});

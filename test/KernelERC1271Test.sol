@@ -5,10 +5,11 @@ import {ERC1271_MAGICVALUE, ERC1271_INVALID} from "src/types/Constants.sol";
 import {KernelTestBase} from "./KernelTestBase.sol";
 
 abstract contract KernelERC1271Test is KernelTestBase {
-    modifier erc1271Test {
+    modifier erc1271Test() {
         vm.txGasPrice(1);
         _;
     }
+
     function test_erc7739() public erc1271Test {
         assertEq(
             kernel.isValidSignature(0x7739773977397739773977397739773977397739773977397739773977397739, ""),
@@ -97,7 +98,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
         assertEq(ret, ERC1271_INVALID);
     }
 
-    function test_erc1271_permission() external unitTest erc1271Test{
+    function test_erc1271_permission() external unitTest erc1271Test {
         bytes32 messageHash = keccak256("Hello world");
         (bytes32 contentsHash, bytes memory sig) =
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _permissionSignHash, false, true);
