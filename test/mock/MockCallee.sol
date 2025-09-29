@@ -20,4 +20,8 @@ contract MockCallee {
     function forceRevert() external {
         revert Haha();
     }
+
+    function ret(bytes memory dat) external pure returns(bytes memory) {
+        return dat;
+    }
 }

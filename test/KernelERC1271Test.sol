@@ -5,14 +5,18 @@ import {ERC1271_MAGICVALUE, ERC1271_INVALID} from "src/types/Constants.sol";
 import {KernelTestBase} from "./KernelTestBase.sol";
 
 abstract contract KernelERC1271Test is KernelTestBase {
-    function test_erc7739() public {
+    modifier erc1271Test {
+        vm.txGasPrice(1);
+        _;
+    }
+    function test_erc7739() public erc1271Test {
         assertEq(
             kernel.isValidSignature(0x7739773977397739773977397739773977397739773977397739773977397739, ""),
             bytes4(0x77390001)
         );
     }
 
-    function test_erc1271_root() external unitTest {
+    function test_erc1271_root() external unitTest erc1271Test {
         bytes32 messageHash = keccak256("Hello world");
         (bytes32 contentsHash, bytes memory sig) =
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _rootSignHash, false, true);
@@ -20,7 +24,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
         assertEq(ret, ERC1271_MAGICVALUE);
     }
 
-    function test_erc1271_fail_invalid() external unitTest {
+    function test_erc1271_fail_invalid() external unitTest erc1271Test {
         bytes32 messageHash = keccak256("Hello world");
         (bytes32 contentsHash, bytes memory sig) =
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _rootSignHash, false, true);
@@ -29,7 +33,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
         assertEq(ret, ERC1271_INVALID);
     }
 
-    function test_erc1271_root_fail() external unitTest {
+    function test_erc1271_root_fail() external unitTest erc1271Test {
         bytes32 messageHash = keccak256("Hello world");
         (bytes32 contentsHash, bytes memory sig) =
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _rootSignHash, false, false);
@@ -37,7 +41,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
         assertEq(ret, ERC1271_INVALID);
     }
 
-    function test_erc1271_root_personal_sign() external unitTest {
+    function test_erc1271_root_personal_sign() external unitTest erc1271Test {
         bytes32 messageHash = keccak256("Hello world");
         bytes32 personalHash = _toErc1271HashPersonalSign(messageHash);
         bytes memory sig = _rootSignHash(personalHash, true);
@@ -45,7 +49,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
         assertEq(ret, ERC1271_MAGICVALUE);
     }
 
-    function test_erc1271_root_personal_sign_fail() external unitTest {
+    function test_erc1271_root_personal_sign_fail() external unitTest erc1271Test {
         bytes32 messageHash = keccak256("Hello world");
         bytes32 personalHash = _toErc1271HashPersonalSign(messageHash);
         bytes memory sig = _rootSignHash(personalHash, false);
@@ -53,7 +57,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
         assertEq(ret, ERC1271_INVALID);
     }
 
-    function test_erc1271_validator() external unitTest {
+    function test_erc1271_validator() external unitTest erc1271Test {
         bytes32 messageHash = keccak256("Hello world");
         (bytes32 contentsHash, bytes memory sig) =
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _validatorSignHash, false, true);
@@ -64,7 +68,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
         assertEq(ret, ERC1271_MAGICVALUE);
     }
 
-    function test_erc1271_validator_fail() external unitTest {
+    function test_erc1271_validator_fail() external unitTest erc1271Test {
         bytes32 messageHash = keccak256("Hello world");
         (bytes32 contentsHash, bytes memory sig) =
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _validatorSignHash, false, false);
@@ -75,7 +79,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
         assertEq(ret, ERC1271_INVALID);
     }
 
-    function test_erc1271_validator_personal_sign() external unitTest {
+    function test_erc1271_validator_personal_sign() external unitTest erc1271Test {
         bytes32 messageHash = keccak256("Hello world");
         bytes32 personalHash = _toErc1271HashPersonalSign(messageHash);
         bytes memory sig = _validatorSignHash(personalHash, true);
@@ -84,7 +88,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
         assertEq(ret, ERC1271_MAGICVALUE);
     }
 
-    function test_erc1271_validator_personal_sign_fail() external unitTest {
+    function test_erc1271_validator_personal_sign_fail() external unitTest erc1271Test {
         bytes32 messageHash = keccak256("Hello world");
         bytes32 personalHash = _toErc1271HashPersonalSign(messageHash);
         bytes memory sig = _validatorSignHash(personalHash, false);
@@ -93,7 +97,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
         assertEq(ret, ERC1271_INVALID);
     }
 
-    function test_erc1271_permission() external unitTest {
+    function test_erc1271_permission() external unitTest erc1271Test{
         bytes32 messageHash = keccak256("Hello world");
         (bytes32 contentsHash, bytes memory sig) =
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _permissionSignHash, false, true);
@@ -103,7 +107,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
         assertEq(ret, ERC1271_MAGICVALUE);
     }
 
-    function test_erc1271_permission_fail() external unitTest {
+    function test_erc1271_permission_fail() external unitTest erc1271Test {
         bytes32 messageHash = keccak256("Hello world");
         (bytes32 contentsHash, bytes memory sig) =
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _permissionSignHash, false, false);
@@ -113,7 +117,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
         assertEq(ret, ERC1271_INVALID);
     }
 
-    function test_erc1271_permission_personal_sign() external unitTest {
+    function test_erc1271_permission_personal_sign() external unitTest erc1271Test {
         bytes32 messageHash = keccak256("Hello world");
         bytes32 personalHash = _toErc1271HashPersonalSign(messageHash);
         bytes memory sig = _permissionSignHash(personalHash, true);
@@ -123,7 +127,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
         assertEq(ret, ERC1271_MAGICVALUE);
     }
 
-    function test_erc1271_permission_personal_sign_fail() external unitTest {
+    function test_erc1271_permission_personal_sign_fail() external unitTest erc1271Test {
         bytes32 messageHash = keccak256("Hello world");
         bytes32 personalHash = _toErc1271HashPersonalSign(messageHash);
         bytes memory sig = _permissionSignHash(personalHash, false);

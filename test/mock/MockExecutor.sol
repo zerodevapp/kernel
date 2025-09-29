@@ -7,6 +7,8 @@ import {IERC7579Account} from "src/interfaces/IERC7579Account.sol";
 contract MockExecutor is IExecutor {
     mapping(address => bytes) public data;
 
+    event Results(uint256 index, bytes result);
+
     function onInstall(bytes calldata _data) external payable override {
         data[msg.sender] = _data;
     }
@@ -24,6 +26,9 @@ contract MockExecutor is IExecutor {
     }
 
     function sudoDoExec(IERC7579Account account, bytes32 mode, bytes calldata executionCalldata) external payable {
-        account.executeFromExecutor(mode, executionCalldata);
+        bytes[] memory results = account.executeFromExecutor(mode, executionCalldata);
+        for(uint256 i = 0; i<results.length; i++) {
+            emit Results(i, results[i]);
+        }
     }
 }
