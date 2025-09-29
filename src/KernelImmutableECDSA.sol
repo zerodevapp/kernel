@@ -25,7 +25,7 @@ contract KernelImmutableECDSA is KernelUUPS {
         return false;
     }
 
-    function _initialize(Install[] calldata packages) internal override initializer {
+    function _initialize(Install[] calldata packages) internal override {
         _install(packages);
     }
 }
