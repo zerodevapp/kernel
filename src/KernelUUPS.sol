@@ -10,7 +10,7 @@ contract KernelUUPS is Kernel, UUPSUpgradeable, Initializable {
     constructor(IEntryPoint _entryPoint) Kernel(_entryPoint) {
         _disableInitializers();
     }
-    
+
     function initialize(Install[] calldata packages) external override initializer {
         require(!_initialized(), InvalidInitialization());
         // this is initialize
@@ -22,7 +22,7 @@ contract KernelUUPS is Kernel, UUPSUpgradeable, Initializable {
         _onlyEntryPointOrSelf();
     }
 
-    function _statefulInitializeCheck() internal view override returns(bool) {
+    function _statefulInitializeCheck() internal view override returns (bool) {
         return super._statefulInitializeCheck();
     }
 }
