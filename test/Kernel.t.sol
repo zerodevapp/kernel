@@ -33,10 +33,12 @@ contract KernelTest is
     KernelSelectorTest,
     KernelHookTest
 {
+    KernelUUPS uups;
+
     function setUp() external {
         ep = EntryPointLib.deploy();
 
-        KernelUUPS uups = new KernelUUPS(ep);
+        uups = new KernelUUPS(ep);
         KernelImmutableECDSA immutableEcdsa = new KernelImmutableECDSA(ep);
         factory = new KernelFactory(uups, immutableEcdsa);
         helper = new KernelHelper();
@@ -50,6 +52,15 @@ contract KernelTest is
         permissionId = bytes20(keccak256(abi.encodePacked("Hello world")));
         vm.txGasPrice(1);
         _initialize();
+    }
+
+    function test_implementation_revert_on_initialize() external {
+        rootValidator = new MockValidator();
+        rootValidatorData = hex"";
+        Install[] memory pkgs = new Install[](1);
+        pkgs[0] = Install({moduleType: 1, module: address(rootValidator), moduleData: hex"", internalData: hex""});
+        vm.expectRevert();
+        uups.initialize(pkgs);
     }
 
     function _initialize() internal virtual override {
