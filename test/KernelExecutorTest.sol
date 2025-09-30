@@ -9,7 +9,6 @@ import {MockKernel} from "./mock/MockKernel.sol";
 import {KernelTestBase} from "./KernelTestBase.sol";
 
 abstract contract KernelExecutorTest is KernelTestBase {
-
     function test_execute_from_executor_fail_not_executor() external {
         address notExecutor = makeAddr("not executor");
         vm.startPrank(notExecutor);
