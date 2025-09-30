@@ -6,7 +6,7 @@ import {ExecutorManager} from "./ExecutorManager.sol";
 import {HookManager} from "./HookManager.sol";
 import {SelectorManager} from "./SelectorManager.sol";
 import {ERC1271} from "../lib/ERC1271.sol";
-import {InvalidNonce, NotImplemented} from "../types/Error.sol";
+import {InvalidNonce, NotImplemented, Unauthorized} from "../types/Error.sol";
 import {ModuleInstalled, ModuleUninstalled} from "../types/Events.sol";
 import {Install, Call, InstallAndExecute} from "../types/Structs.sol";
 import {ValidationId} from "../types/Types.sol";
@@ -23,6 +23,7 @@ struct ModuleStorage {
 abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManager, SelectorManager, ERC1271 {
     modifier executorHook() {
         IHook hook = _executorConfig(IExecutor(msg.sender)).hook;
+        require(address(hook) != address(0), Unauthorized());
         bytes memory hookData = _preHook(hook, msg.data);
         _;
         _postHook(hook, hookData);
