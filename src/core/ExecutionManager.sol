@@ -69,6 +69,7 @@ abstract contract ExecutionManager {
                 if (!success) {
                     onRevert();
                 }
+                results[i] = _getReturn();
             }
         }
     }

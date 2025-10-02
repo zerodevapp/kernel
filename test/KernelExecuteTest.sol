@@ -126,4 +126,24 @@ abstract contract KernelExecuteTest is KernelTestBase {
         bytes memory actual = abi.decode(ret[0], (bytes));
         assertEq(keccak256(actual), keccak256(data));
     }
+
+    function test_execute_from_executor_return_data_batch() external {
+        bytes memory data = hex"deadbeef";
+        Call[] memory calls = new Call[](5);
+        for (uint256 i = 0; i < calls.length; i++) {
+            calls[i] = Call({
+                to: address(callee),
+                value: uint256(0),
+                data: abi.encodeWithSelector(MockCallee.ret.selector, abi.encodePacked(hex"deadbeef", bytes1(uint8(i))))
+            });
+        }
+        vm.startPrank(executor);
+        bytes[] memory ret = kernel.executeFromExecutor(bytes32(bytes1(0x01)), abi.encode(calls));
+        assertEq(ret.length, 5);
+        for (uint256 i = 0; i < calls.length; i++) {
+            assertEq(
+                keccak256(abi.encodePacked(hex"deadbeef", bytes1(uint8(i)))), keccak256(abi.decode(ret[i], (bytes)))
+            );
+        }
+    }
 }
