@@ -279,6 +279,7 @@ abstract contract ValidationManager {
         } else {
             revert InvalidRootValidation();
         }
+        require(ValidationId.unwrap(vId) != bytes20(0), InvalidRootValidation());
         _setRoot(vId);
     }
 
