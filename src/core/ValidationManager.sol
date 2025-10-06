@@ -279,11 +279,15 @@ abstract contract ValidationManager {
         } else {
             revert InvalidRootValidation();
         }
-        require(ValidationId.unwrap(vId) != bytes20(0), InvalidRootValidation());
         _setRoot(vId);
     }
 
+    function _fallbackValidatorAvailable() internal pure virtual returns(bool) {
+        return false;
+    }
+
     function _setRoot(ValidationId vId) internal {
+        require(ValidationId.unwrap(vId) != bytes20(0) || _fallbackValidatorAvailable(), InvalidRootValidation());
         ValidationStorage storage $ = _validationStorage();
         $.root = vId;
     }
