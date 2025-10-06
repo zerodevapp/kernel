@@ -282,7 +282,7 @@ abstract contract ValidationManager {
         _setRoot(vId);
     }
 
-    function _fallbackValidatorAvailable() internal pure virtual returns(bool) {
+    function _fallbackValidatorAvailable() internal pure virtual returns (bool) {
         return false;
     }
 

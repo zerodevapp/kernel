@@ -15,7 +15,7 @@ contract Kernel7702 is Kernel {
         return true;
     }
 
-    function _fallbackValidatorAvailable() internal pure override returns(bool) {
+    function _fallbackValidatorAvailable() internal pure override returns (bool) {
         return true;
     }
 }
