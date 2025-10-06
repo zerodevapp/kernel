@@ -12,7 +12,6 @@ contract KernelUUPS is Kernel, UUPSUpgradeable, Initializable {
     }
 
     function initialize(Install[] calldata packages) external override initializer {
-        require(!_initialized(), InvalidInitialization());
         // this is initialize
         // require first package to be the root validator
         _initialize(packages);
@@ -20,9 +19,5 @@ contract KernelUUPS is Kernel, UUPSUpgradeable, Initializable {
 
     function _authorizeUpgrade(address) internal override {
         _onlyEntryPointOrSelf();
-    }
-
-    function _statefulInitializeCheck() internal view override returns (bool) {
-        return super._statefulInitializeCheck();
     }
 }
