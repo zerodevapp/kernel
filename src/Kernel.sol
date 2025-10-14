@@ -161,7 +161,6 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         payable
         returns (bytes[] memory returnData)
     {
-        _verifyExecutionData(mode, executionData);
         return _executeFromExecutor(mode, executionData);
     }
 
