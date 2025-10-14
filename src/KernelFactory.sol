@@ -6,6 +6,8 @@ import {KernelImmutableECDSA} from "./KernelImmutableECDSA.sol";
 import {LibClone} from "solady/utils/LibClone.sol";
 
 contract KernelFactory {
+    error InvalidSigner();
+
     KernelUUPS public immutable UUPS;
     KernelImmutableECDSA public immutable IMMUTABLE_ECDSA;
 
