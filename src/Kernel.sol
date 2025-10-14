@@ -289,8 +289,8 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         return true;
     }
 
-    function supportsModule(uint256 moduleTypeId) external pure override returns (bool) {
-        return moduleTypeId < 7;
+    function supportsModule(uint256 moduleTypeId) external pure returns (bool) {
+        return moduleTypeId < 7 && moduleTypeId != 0;
     }
 
     function isModuleInstalled(uint256 moduleTypeId, address module, bytes calldata additionalContext)
