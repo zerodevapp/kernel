@@ -14,4 +14,8 @@ contract Kernel7702 is Kernel {
     function _statelessInitializeCheck() internal view override returns (bool) {
         return true;
     }
+
+    function _fallbackValidatorAvailable() internal pure override returns (bool) {
+        return true;
+    }
 }
