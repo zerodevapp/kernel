@@ -22,6 +22,7 @@ contract KernelImmutableECDSATest is KernelTest {
         vm.startPrank(address(ep));
         kernel.installModule(2, executor, abi.encode(hex"", ""));
         vm.stopPrank();
+        isImmutable = true;
     }
 
     function _rootSignUserOp(PackedUserOperation memory op, bool success, bool replay)

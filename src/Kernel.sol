@@ -2,8 +2,8 @@ pragma solidity ^0.8.0;
 
 import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
-import {IExecutor, IHook} from "./interfaces/IERC7579Modules.sol";
 import {IERC7579Account} from "./interfaces/IERC7579Account.sol";
+import {IValidator, IExecutor, IHook, IModule} from "./interfaces/IERC7579Modules.sol";
 import {ModuleManager, Install} from "./core/ModuleManager.sol";
 import {parseNonce} from "./core/ValidationManager.sol";
 import {ExecutionManager} from "./core/ExecutionManager.sol";
@@ -25,10 +25,12 @@ import {
     UnauthorizedCallData,
     InvalidSelector,
     InvalidInitialization,
-    InstallSignatureVerificationFailed
+    InstallSignatureVerificationFailed,
+    InvalidDataLength,
+    InvalidRootValidation
 } from "./types/Error.sol";
 import {Received} from "./types/Events.sol";
-import {VALIDATION_TYPE_ROOT} from "./types/Constants.sol";
+import {VALIDATION_TYPE_ROOT, VALIDATION_TYPE_PERMISSION, VALIDATION_TYPE_VALIDATOR} from "./types/Constants.sol";
 import {ValidationStorage, ValidationInfo} from "./types/Structs.sol";
 
 abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
@@ -247,6 +249,52 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
             imdf := initData.offset
         }
         _uninstallModule(moduleType, module, imdf.installData, imdf.internalData);
+    }
+
+    struct PermissionUninstallData {
+        bytes[] uninstallData;
+    }
+
+    // we are going to let array of pkgs to be installed and use first one as root
+    function setRoot(Install[] calldata pkg, bool removeCurrent, bytes calldata uninstallData) external payable {
+        _onlyEntryPointOrSelf();
+        ValidationId currentRoot = _validationStorage().root;
+        if (removeCurrent) {
+            ValidationId vId = _validationStorage().root;
+            ValidationInfo memory vInfo = _validationStorage().vInfo[vId];
+            if (vInfo.vType == VALIDATION_TYPE_VALIDATOR) {
+                (bool success,) = address(ValidationId.unwrap(vId)).call(
+                    abi.encodeWithSelector(IModule.onUninstall.selector, uninstallData)
+                );
+                _uninstallValidator(
+                    address(ValidationId.unwrap(vId)),
+                    // passing in uninstallData here to use calldata, but it's never used
+                    uninstallData,
+                    success
+                );
+            } else if (vInfo.vType == VALIDATION_TYPE_PERMISSION) {
+                PermissionUninstallData calldata data;
+                assembly {
+                    data := uninstallData.offset
+                }
+                bytes[] calldata uninstallDataArr = data.uninstallData;
+                require(uninstallDataArr.length == vInfo.policies.length + 1, InvalidDataLength());
+                // uninstall policies first
+                for (uint256 i = 0; i < vInfo.policies.length; i++) {
+                    vInfo.policies[i].call(abi.encodeWithSelector(IModule.onUninstall.selector, uninstallDataArr[i]));
+                    _uninstallPolicyWithVid(vInfo.policies[i], vId);
+                }
+
+                vInfo.signer.call(
+                    abi.encodeWithSelector(IModule.onUninstall.selector, uninstallDataArr[uninstallDataArr.length - 1])
+                );
+                _uninstallSignerWithVid(vInfo.signer, vId);
+            } else {
+                revert InvalidRootValidation();
+            }
+        }
+        _install(pkg);
+        _setRoot(pkg[0]);
     }
 
     function setRoot(ValidationId vId) external payable {

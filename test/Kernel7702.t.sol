@@ -59,9 +59,8 @@ contract Kernel7702Test is KernelTest {
             internalData: abi.encodePacked(permissionId),
             moduleData: hex""
         });
-        kernel.installModule(false, 0, packages, enableSig(0, true, false, packages, _rootSignHash));
 
-        kernel.setRoot(ValidationId.wrap(bytes20(address(newValidator))));
+        kernel.setRoot(packages, false, hex"");
 
         kernel.setRoot(ValidationId.wrap(bytes20(0)));
     }

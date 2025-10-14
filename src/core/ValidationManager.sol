@@ -129,6 +129,10 @@ abstract contract ValidationManager {
 
     function _uninstallPolicy(address _policy, bytes calldata _internalData, bool _uninstallSuccess) internal {
         ValidationId vId = ValidationId.wrap(bytes20(_internalData[0:20]));
+        _uninstallPolicyWithVid(_policy, vId);
+    }
+
+    function _uninstallPolicyWithVid(address _policy, ValidationId vId) internal {
         ValidationInfo storage $ = _validationStorage().vInfo[vId];
         $ = _validationStorage().vInfo[vId];
         unchecked {
@@ -142,6 +146,10 @@ abstract contract ValidationManager {
 
     function _uninstallSigner(address _signer, bytes calldata _internalData, bool _uninstallSuccess) internal {
         ValidationId vId = ValidationId.wrap(bytes20(_internalData[0:20]));
+        _uninstallSignerWithVid(_signer, vId);
+    }
+
+    function _uninstallSignerWithVid(address _signer, ValidationId vId) internal {
         ValidationInfo storage $ = _validationStorage().vInfo[vId];
         require($.policies.length == 0, InvalidPermissionUninstallOrder());
         require($.signer == _signer, InvalidPermissionId());
@@ -186,9 +194,9 @@ abstract contract ValidationManager {
         }
         ValidationInfo storage vInfo = _validationStorage().vInfo[vId];
         if (vInfo.vType == VALIDATION_TYPE_VALIDATOR) {
-            IValidator validator = IValidator(address(ValidationId.unwrap(vId))); // TODO: add permission support;
-            validationData = validator.isValidSignatureWithSender(requester, /*NOTE: fix this */ _hash, _signature)
-                == ERC1271_MAGICVALUE ? 0 : 1;
+            IValidator validator = IValidator(address(ValidationId.unwrap(vId)));
+            validationData =
+                validator.isValidSignatureWithSender(requester, _hash, _signature) == ERC1271_MAGICVALUE ? 0 : 1;
         } else if (vInfo.vType == VALIDATION_TYPE_PERMISSION) {
             return _verifySignaturePermission(vId, vInfo, requester, _hash, _signature);
         } else {
