@@ -3,10 +3,12 @@ pragma solidity ^0.8.0;
 import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
 import {IExecutor, IHook} from "./interfaces/IERC7579Modules.sol";
+import {IERC7579Account} from "./interfaces/IERC7579Account.sol";
 import {ModuleManager, Install} from "./core/ModuleManager.sol";
 import {parseNonce} from "./core/ValidationManager.sol";
 import {ExecutionManager} from "./core/ExecutionManager.sol";
 import {Lib4337} from "./lib/Lib4337.sol";
+import {ERC1271} from "./lib/ERC1271.sol";
 import {LibERC7579} from "solady/accounts/LibERC7579.sol";
 import {
     CallType,
@@ -29,7 +31,7 @@ import {Received} from "./types/Events.sol";
 import {VALIDATION_TYPE_ROOT} from "./types/Constants.sol";
 import {ValidationStorage, ValidationInfo} from "./types/Structs.sol";
 
-abstract contract Kernel is ModuleManager, ExecutionManager {
+abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
     IEntryPoint immutable ENTRYPOINT;
 
     function _onlyEntryPointOrSelf() internal {
@@ -80,6 +82,15 @@ abstract contract Kernel is ModuleManager, ExecutionManager {
                 //ignore failure (its EntryPoint's job to verify, not account.)
             }
         }
+    }
+
+    function isValidSignature(bytes32 hash, bytes calldata signature)
+        public
+        view
+        override(ERC1271, IERC7579Account)
+        returns (bytes4)
+    {
+        return ERC1271.isValidSignature(hash, signature);
     }
 
     function _processUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash)
@@ -145,13 +156,21 @@ abstract contract Kernel is ModuleManager, ExecutionManager {
         _execute(mode, executionData);
     }
 
-    function executeFromExecutor(bytes32 mode, bytes calldata executionData) external payable {
+    function executeFromExecutor(bytes32 mode, bytes calldata executionData)
+        external
+        payable
+        returns (bytes[] memory returnData)
+    {
         _verifyExecutionData(mode, executionData);
-        _executeFromExecutor(mode, executionData);
+        return _executeFromExecutor(mode, executionData);
     }
 
-    function _executeFromExecutor(bytes32 mode, bytes calldata executionData) internal executorHook {
-        _execute(mode, executionData);
+    function _executeFromExecutor(bytes32 mode, bytes calldata executionData)
+        internal
+        executorHook
+        returns (bytes[] memory retyrbData)
+    {
+        return _execute(mode, executionData);
     }
 
     function _fallback() internal returns (bytes memory res) {
@@ -213,7 +232,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager {
         _setValidNonceFrom(seq);
     }
 
-    function installModule(uint256 moduleType, address module, bytes calldata initData) external payable {
+    function installModule(uint256 moduleType, address module, bytes calldata initData) external payable override {
         _onlyEntryPointOrSelf();
         InstallModuleDataFormat calldata imdf;
         assembly {
@@ -222,7 +241,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager {
         _installModule(moduleType, module, imdf.installData, imdf.internalData);
     }
 
-    function uninstallModule(uint256 moduleType, address module, bytes calldata initData) external payable {
+    function uninstallModule(uint256 moduleType, address module, bytes calldata initData) external payable override {
         _onlyEntryPointOrSelf();
         InstallModuleDataFormat calldata imdf;
         assembly {
@@ -253,7 +272,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager {
         emit Received(msg.sender, msg.value);
     }
 
-    function supportsExecutionMode(bytes32 mode) external pure returns (bool) {
+    function supportsExecutionMode(bytes32 mode) external pure override returns (bool) {
         bytes1 callType = LibERC7579.getCallType(mode);
         bytes1 execType = LibERC7579.getExecType(mode);
         if (!(execType == LibERC7579.EXECTYPE_DEFAULT || execType == LibERC7579.EXECTYPE_TRY)) {
@@ -270,13 +289,14 @@ abstract contract Kernel is ModuleManager, ExecutionManager {
         return true;
     }
 
-    function supportsModule(uint256 moduleTypeId) external pure returns (bool) {
+    function supportsModule(uint256 moduleTypeId) external pure override returns (bool) {
         return moduleTypeId < 7;
     }
 
     function isModuleInstalled(uint256 moduleTypeId, address module, bytes calldata additionalContext)
         external
         view
+        override
         returns (bool)
     {
         if (moduleTypeId == 1) {
@@ -307,7 +327,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager {
         }
     }
 
-    function accountId() external pure returns (string memory accountImplementationId) {
+    function accountId() external pure override returns (string memory accountImplementationId) {
         return "kernel.v0.4";
     }
 }

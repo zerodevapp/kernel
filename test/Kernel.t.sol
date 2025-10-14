@@ -48,7 +48,6 @@ contract KernelTest is
         policy = new MockPolicy();
         signer = new MockSigner();
         permissionId = bytes20(keccak256(abi.encodePacked("Hello world")));
-        vm.txGasPrice(1);
         _initialize();
     }
 

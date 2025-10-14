@@ -44,7 +44,7 @@ contract Kernel7702Test is KernelTest {
         return abi.encodePacked(r, s, v);
     }
 
-    function test_erc1271() external {
+    function test_erc1271() external erc1271Test {
         bytes32 hash = bytes32(vm.randomBytes(32));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, hash);
         kernel.isValidSignature(hash, abi.encodePacked(r, s, v));

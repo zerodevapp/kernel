@@ -4,7 +4,7 @@ import {LibERC7579} from "solady/accounts/LibERC7579.sol";
 import {InvalidExecType, InvalidCallType} from "../types/Error.sol";
 
 abstract contract ExecutionManager {
-    function _execute(bytes32 mode, bytes calldata executionData) internal {
+    function _execute(bytes32 mode, bytes calldata executionData) internal returns (bytes[] memory) {
         bytes1 callType = LibERC7579.getCallType(mode);
         bytes1 execType = LibERC7579.getExecType(mode);
         function() onRevert;
@@ -16,7 +16,7 @@ abstract contract ExecutionManager {
             revert InvalidExecType();
         }
 
-        function(bytes calldata, function()) executeFunction;
+        function(bytes calldata, function()) returns(bytes[] memory) executeFunction;
         if (callType == LibERC7579.CALLTYPE_SINGLE) {
             executeFunction = _executeCall;
         } else if (callType == LibERC7579.CALLTYPE_BATCH) {
@@ -26,29 +26,42 @@ abstract contract ExecutionManager {
         } else {
             revert InvalidCallType();
         }
-        executeFunction(executionData, onRevert);
+        return executeFunction(executionData, onRevert);
     }
 
-    function _executeCall(bytes calldata executionData, function() onRevert) internal {
+    function _executeCall(bytes calldata executionData, function() onRevert)
+        internal
+        returns (bytes[] memory results)
+    {
         (address target, uint256 value, bytes calldata data) = LibERC7579.decodeSingle(executionData);
         bool success = _call(target, value, data);
         if (!success) {
             onRevert();
         }
+        results = new bytes[](1);
+        results[0] = _getReturn();
     }
 
-    function _executeDelegateCall(bytes calldata executionData, function() onRevert) internal {
+    function _executeDelegateCall(bytes calldata executionData, function() onRevert)
+        internal
+        returns (bytes[] memory results)
+    {
         (address delegate, bytes calldata data) = LibERC7579.decodeDelegate(executionData);
         bool success = _delegateCall(delegate, data);
         if (!success) {
             onRevert();
         }
+        results = new bytes[](1);
+        results[0] = _getReturn();
     }
 
-    function _executeBatchCall(bytes calldata executionData, function() onRevert) internal {
+    function _executeBatchCall(bytes calldata executionData, function() onRevert)
+        internal
+        returns (bytes[] memory results)
+    {
         bytes32[] calldata pointers = LibERC7579.decodeBatch(executionData);
         uint256 length = pointers.length;
-        bytes[] memory result = new bytes[](length);
+        results = new bytes[](length);
         unchecked {
             for (uint256 i; i < length; i++) {
                 (address target, uint256 value, bytes calldata data) = LibERC7579.getExecution(pointers, i);
@@ -56,6 +69,7 @@ abstract contract ExecutionManager {
                 if (!success) {
                     onRevert();
                 }
+                results[i] = _getReturn();
             }
         }
     }
