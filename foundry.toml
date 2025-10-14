@@ -7,4 +7,10 @@ optimizer = true
 run = 200
 evm_version = 'prague'
 
+extra_output = ["storageLayout"]
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
+
+[invariant]
+runs = 1000
+depth = 1000
+

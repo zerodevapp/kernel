@@ -5,6 +5,8 @@ import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOper
 import {Lib4337} from "src/lib/Lib4337.sol";
 import {Kernel7702} from "src/Kernel7702.sol";
 import {Kernel} from "src/Kernel.sol";
+import {Install} from "src/types/Structs.sol";
+import {ValidationId} from "src/types/Types.sol";
 
 contract Kernel7702Test is KernelTest {
     address owner;
@@ -42,9 +44,25 @@ contract Kernel7702Test is KernelTest {
         return abi.encodePacked(r, s, v);
     }
 
-    function test_erc1271() external {
+    function test_erc1271() external erc1271Test {
         bytes32 hash = bytes32(vm.randomBytes(32));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, hash);
         kernel.isValidSignature(hash, abi.encodePacked(r, s, v));
+    }
+
+    function test_change_root_check_vId_0() external unitTest {
+        Install[] memory packages = new Install[](2);
+        packages[0] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
+        packages[1] = Install({
+            moduleType: 5,
+            module: address(policy),
+            internalData: abi.encodePacked(permissionId),
+            moduleData: hex""
+        });
+        kernel.installModule(false, 0, packages, enableSig(0, true, false, packages, _rootSignHash));
+
+        kernel.setRoot(ValidationId.wrap(bytes20(address(newValidator))));
+
+        kernel.setRoot(ValidationId.wrap(bytes20(0)));
     }
 }

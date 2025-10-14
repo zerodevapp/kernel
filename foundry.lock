@@ -1,0 +1,14 @@
+{
+  "lib/solady": {
+    "rev": "b609a9c79ce541c2beca7a7d247665e7c93942a3"
+  },
+  "lib/account-abstraction": {
+    "branch": {
+      "name": "develop",
+      "rev": "cc3893bcaf2272c163ce89d5eb9eadb8e6b52db7"
+    }
+  },
+  "lib/forge-std": {
+    "rev": "f46d8301cf732f4f83846565aa475628265e51e0"
+  }
+}
