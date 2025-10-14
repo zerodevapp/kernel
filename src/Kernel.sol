@@ -55,7 +55,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         bytes userOpSignature;
     }
 
-    function initialize(Install[] calldata packages) external {
+    function initialize(Install[] calldata packages) external virtual {
         require(!_initialized(), InvalidInitialization());
         // this is initialize
         // require first package to be the root validator
