@@ -34,11 +34,22 @@ function parseNonce(uint256 nonce) pure returns (ValidationMode vMode, Validatio
 
 abstract contract ValidationManager {
     ValidationId transient installingPermission;
-    IHook transient validationHook;
 
     function root() external view returns (ValidationId) {
         ValidationStorage storage $ = _validationStorage();
         return $.root;
+    }
+
+    function _validationHook(bytes32 userOpHash) internal view returns (IHook hook) {
+        assembly {
+            hook := tload(userOpHash)
+        }
+    }
+
+    function _setValidationHook(bytes32 userOpHash, IHook hook) internal {
+        assembly {
+            tstore(userOpHash, hook)
+        }
     }
 
     function validationInfo(ValidationId vId) external view returns (ValidationInfo memory) {

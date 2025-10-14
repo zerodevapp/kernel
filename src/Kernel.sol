@@ -115,7 +115,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager {
                     && $.allowed[vId][bytes4(userOp.callData[4:])],
                 UnauthorizedCallData()
             );
-            validationHook = IHook($.vInfo[vId].hook);
+            _setValidationHook(userOpHash, IHook($.vInfo[vId].hook));
         } else {
             require(vType == VALIDATION_TYPE_ROOT || $.allowed[vId][bytes4(userOp.callData)], UnauthorizedCallData());
         }
@@ -129,7 +129,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager {
     /// execution
     function executeUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash) external payable {
         _onlyEntryPointOrSelf();
-        bytes memory context = _preHook(validationHook, userOp.callData[4:]);
+        bytes memory context = _preHook(_validationHook(userOpHash), userOp.callData[4:]);
         (bool success, bytes memory ret) = address(this).delegatecall(userOp.callData[4:]);
         // propagete the revert message
         if (!success) {
@@ -137,7 +137,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager {
                 revert(add(ret, 0x20), mload(ret))
             }
         }
-        _postHook(validationHook, context);
+        _postHook(_validationHook(userOpHash), context);
     }
 
     function execute(bytes32 mode, bytes calldata executionData) external payable {
