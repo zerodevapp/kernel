@@ -9,7 +9,7 @@ import {parseNonce} from "./core/ValidationManager.sol";
 import {ExecutionManager} from "./core/ExecutionManager.sol";
 import {Lib4337} from "./lib/Lib4337.sol";
 import {ERC1271} from "./lib/ERC1271.sol";
-import {getValidator, getPermissionId, validatorToIdentifier, permissionToIdentifier} from "./lib/Utils.sol";
+import {getType, getValidator, getPermissionId, validatorToIdentifier, permissionToIdentifier} from "./lib/Utils.sol";
 
 import {LibERC7579} from "solady/accounts/LibERC7579.sol";
 import {
@@ -264,8 +264,9 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         ValidationId currentRoot = _validationStorage().root;
         if (removeCurrent) {
             ValidationId vId = _validationStorage().root;
+            ValidationType vType = getType(vId);
             ValidationInfo memory vInfo = _validationStorage().vInfo[vId];
-            if (vInfo.vType == VALIDATION_TYPE_VALIDATOR) {
+            if (vType == VALIDATION_TYPE_VALIDATOR) {
                 (bool success,) =
                     address(getValidator(vId)).call(abi.encodeWithSelector(IModule.onUninstall.selector, uninstallData));
                 _uninstallValidator(
@@ -274,7 +275,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
                     uninstallData,
                     success
                 );
-            } else if (vInfo.vType == VALIDATION_TYPE_PERMISSION) {
+            } else if (vType == VALIDATION_TYPE_PERMISSION) {
                 PermissionUninstallData calldata data;
                 assembly {
                     data := uninstallData.offset
@@ -350,7 +351,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
     {
         if (moduleTypeId == 1) {
             ValidationId vId = validatorToIdentifier(IValidator(module));
-            return !(_validationStorage().vInfo[vId].vType == VALIDATION_TYPE_ROOT);
+            return _validationStorage().vInfo[vId].hook != address(0);
         } else if (moduleTypeId == 2) {
             return address(_executorConfig(IExecutor(module)).hook) != address(0);
         } else if (moduleTypeId == 3) {

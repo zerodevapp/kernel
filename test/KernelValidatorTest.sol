@@ -8,9 +8,6 @@ import {KernelTestBase} from "./KernelTestBase.sol";
 import {InvalidNonce} from "src/types/Error.sol";
 import {getValidator, getPermissionId, validatorToIdentifier, permissionToIdentifier} from "src/lib/Utils.sol";
 import {
-    VALIDATION_TYPE_ROOT,
-    VALIDATION_TYPE_VALIDATOR,
-    VALIDATION_TYPE_PERMISSION,
     ERC1271_MAGICVALUE
 } from "src/types/Constants.sol";
 
@@ -99,7 +96,7 @@ abstract contract KernelValidatorTest is KernelTestBase {
         ValidationId vId = validatorToIdentifier(newValidator);
         kernel.installModule(1, address(newValidator), abi.encode(hex"deadbeef", hex""));
         ValidationInfo memory vInfo = kernel.validationInfo(vId);
-        assertTrue(vInfo.vType == VALIDATION_TYPE_VALIDATOR);
+        assertTrue(vInfo.hook == address(1));
         bytes4 ret = kernel.isValidSignature(
             keccak256("Hello world"),
             abi.encodePacked(bytes1(0x01), newValidator, _validatorSignHash(keccak256("Hello world"), true))
@@ -112,10 +109,10 @@ abstract contract KernelValidatorTest is KernelTestBase {
         ValidationId vId = validatorToIdentifier(newValidator);
         kernel.installModule(1, address(newValidator), abi.encode(hex"deadbeef", hex""));
         ValidationInfo memory vInfo = kernel.validationInfo(vId);
-        assertTrue(vInfo.vType == VALIDATION_TYPE_VALIDATOR);
+        assertTrue(vInfo.hook == address(1));
         kernel.uninstallModule(1, address(newValidator), abi.encode(hex"deadbeef", hex""));
         vInfo = kernel.validationInfo(vId);
-        assertTrue(vInfo.vType == VALIDATION_TYPE_ROOT);
+        assertTrue(vInfo.hook == address(0));
     }
 
     function test_install_permission() external unitTest {
@@ -123,7 +120,7 @@ abstract contract KernelValidatorTest is KernelTestBase {
         assertTrue(kernel.supportsModule(6));
         ValidationId vId = permissionToIdentifier(permissionId);
         ValidationInfo memory vInfo = kernel.validationInfo(vId);
-        assertTrue(vInfo.vType == VALIDATION_TYPE_ROOT);
+        assertTrue(vInfo.hook == address(0));
         assertFalse(kernel.isModuleInstalled(5, address(policy), abi.encodePacked(permissionId)));
         assertFalse(kernel.isModuleInstalled(6, address(signer), abi.encodePacked(permissionId)));
         kernel.installModule(5, address(policy), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
@@ -146,10 +143,10 @@ abstract contract KernelValidatorTest is KernelTestBase {
         ValidationInfo memory vInfo = kernel.validationInfo(vId);
         console.log("ValidationId : ");
         console.logBytes21(ValidationId.unwrap(vId));
-        assertTrue(vInfo.vType == VALIDATION_TYPE_ROOT);
+        assertTrue(vInfo.hook == address(0));
         kernel.installModule(5, address(mock), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
         vInfo = kernel.validationInfo(vId);
-        assertTrue(vInfo.vType == VALIDATION_TYPE_PERMISSION);
+        assertTrue(vInfo.hook == address(1));
         assertTrue(kernel.isModuleInstalled(5, address(mock), abi.encodePacked(permissionId)));
     }
 
@@ -157,13 +154,13 @@ abstract contract KernelValidatorTest is KernelTestBase {
         MockPolicy mock = new MockPolicy();
         ValidationId vId = permissionToIdentifier(permissionId);
         ValidationInfo memory vInfo = kernel.validationInfo(vId);
-        assertTrue(vInfo.vType == VALIDATION_TYPE_ROOT);
+        assertTrue(vInfo.hook == address(0));
         kernel.installModule(5, address(mock), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
         vInfo = kernel.validationInfo(vId);
-        assertTrue(vInfo.vType == VALIDATION_TYPE_PERMISSION);
+        assertTrue(vInfo.hook == address(1));
         kernel.uninstallModule(5, address(mock), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
         vInfo = kernel.validationInfo(vId);
-        assertTrue(vInfo.vType == VALIDATION_TYPE_ROOT);
+        assertTrue(vInfo.hook == address(0));
     }
 
     function test_install_signer() external unitTest {
@@ -171,10 +168,10 @@ abstract contract KernelValidatorTest is KernelTestBase {
         MockSigner mock = new MockSigner();
         ValidationId vId = permissionToIdentifier(permissionId);
         ValidationInfo memory vInfo = kernel.validationInfo(vId);
-        assertTrue(vInfo.vType == VALIDATION_TYPE_ROOT);
+        assertTrue(vInfo.hook == address(0));
         kernel.installModule(6, address(mock), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
         vInfo = kernel.validationInfo(vId);
-        assertTrue(vInfo.vType == VALIDATION_TYPE_PERMISSION);
+        assertTrue(vInfo.hook == address(1));
         assertTrue(kernel.isModuleInstalled(6, address(mock), abi.encodePacked(permissionId)));
     }
 
@@ -188,14 +185,14 @@ abstract contract KernelValidatorTest is KernelTestBase {
         console.log("ValidationId : ");
         console.logBytes21(ValidationId.unwrap(vId));
         ValidationInfo memory vInfo = kernel.validationInfo(vId);
-        assertTrue(vInfo.vType == VALIDATION_TYPE_ROOT);
+        assertTrue(vInfo.hook == address(0));
         kernel.installModule(6, address(mock), abi.encode(hex"deadbeef", abi.encodePacked(pId)));
         vInfo = kernel.validationInfo(vId);
-        assertTrue(vInfo.vType == VALIDATION_TYPE_PERMISSION);
+        assertTrue(vInfo.hook == address(1));
         assertTrue(vInfo.signer == address(mock));
         kernel.uninstallModule(6, address(mock), abi.encode(hex"deadbeef", abi.encodePacked(pId)));
         vInfo = kernel.validationInfo(vId);
-        assertTrue(vInfo.vType == VALIDATION_TYPE_ROOT);
+        assertTrue(vInfo.hook == address(0));
         assertTrue(vInfo.signer == address(0));
     }
 }

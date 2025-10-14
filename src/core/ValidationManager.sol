@@ -22,7 +22,7 @@ import {
 } from "../types/Constants.sol";
 import {ValidationStorage, ValidationInfo, Install} from "../types/Structs.sol";
 import {Lib4337} from "../lib/Lib4337.sol";
-import {getValidator, getPermissionId, validatorToIdentifier, permissionToIdentifier} from "../lib/Utils.sol";
+import {getType, getValidator, getPermissionId, validatorToIdentifier, permissionToIdentifier} from "../lib/Utils.sol";
 import {console} from "forge-std/console.sol";
 
 function parseNonce(uint256 nonce) pure returns (ValidationMode vMode, ValidationType vType, ValidationId vId) {
@@ -70,6 +70,7 @@ abstract contract ValidationManager {
 
         // if _internalData is empty, skip the initialization
         if (_internalData.length == 0) {
+            $.vInfo[vId].hook = address(1);
             return;
         }
         // if not, first 20 bytes is the hook address
@@ -89,8 +90,7 @@ abstract contract ValidationManager {
         require(_installSuccess, ModuleInstallFailed());
         ValidationStorage storage $ = _validationStorage();
         ValidationId vId = validatorToIdentifier(IValidator(_validator));
-        require($.vInfo[vId].vType == VALIDATION_TYPE_ROOT, OccupiedValidationId());
-        $.vInfo[vId].vType = VALIDATION_TYPE_VALIDATOR;
+        require($.vInfo[vId].hook == address(0), OccupiedValidationId());
         _initializeValidation(vId, _internalData);
     }
 
@@ -114,9 +114,8 @@ abstract contract ValidationManager {
         $ = _validationStorage().vInfo[vId];
         if (installingPermission == ValidationId.wrap(bytes21(0))) {
             require(vId != ValidationId.wrap(bytes21(0)), "invalid validationId");
-            require($.vType == ValidationType.wrap(0x00), "already taken");
+            require($.hook == address(0), "already taken");
             installingPermission = vId;
-            $.vType = VALIDATION_TYPE_PERMISSION;
             _initializeValidation(vId, _internalData[4:]);
         } else {
             require(installingPermission == vId, "permissionId should be consistent");
@@ -126,7 +125,7 @@ abstract contract ValidationManager {
     function _uninstallValidator(address _validator, bytes calldata _internalData, bool _uninstallSuccess) internal {
         ValidationStorage storage $ = _validationStorage();
         ValidationId vId = validatorToIdentifier(IValidator(_validator));
-        $.vInfo[vId].vType = VALIDATION_TYPE_ROOT;
+        $.vInfo[vId].hook = address(0);
     }
 
     function _uninstallPolicy(address _policy, bytes calldata _internalData, bool _uninstallSuccess) internal {
@@ -142,7 +141,7 @@ abstract contract ValidationManager {
             $.policies.pop();
         }
         if ($.signer == address(0)) {
-            $.vType = VALIDATION_TYPE_ROOT;
+            $.hook = address(0);
         }
     }
 
@@ -156,7 +155,7 @@ abstract contract ValidationManager {
         require($.policies.length == 0, InvalidPermissionUninstallOrder());
         require($.signer == _signer, InvalidPermissionId());
         $.signer = address(0);
-        $.vType = VALIDATION_TYPE_ROOT;
+        $.hook = address(0);
     }
 
     function _checkValidation(ValidationType vType, ValidationId vId)
@@ -168,15 +167,14 @@ abstract contract ValidationManager {
         )
     {
         ValidationStorage storage $ = _validationStorage();
-        if (vType == VALIDATION_TYPE_ROOT || $.vInfo[vId].vType == VALIDATION_TYPE_ROOT) {
+        if (vType == VALIDATION_TYPE_ROOT) {
             v = $.root;
             if (ValidationId.unwrap(v) == bytes21(0)) {
                 return (v, _validateUserOpFallback);
             }
-            vType = $.vInfo[v].vType;
+            vType = getType(v);
         } else {
             v = vId;
-            require($.vInfo[vId].vType == vType, InvalidValidator());
         }
 
         if (vType == VALIDATION_TYPE_PERMISSION) {
@@ -195,11 +193,12 @@ abstract contract ValidationManager {
             return _verifyFallbackSignature(_hash, _signature) ? 0 : 1;
         }
         ValidationInfo storage vInfo = _validationStorage().vInfo[vId];
-        if (vInfo.vType == VALIDATION_TYPE_VALIDATOR) {
+        ValidationType vType = getType(vId);
+        if (vType == VALIDATION_TYPE_VALIDATOR) {
             IValidator validator = getValidator(vId);
             validationData =
                 validator.isValidSignatureWithSender(requester, _hash, _signature) == ERC1271_MAGICVALUE ? 0 : 1;
-        } else if (vInfo.vType == VALIDATION_TYPE_PERMISSION) {
+        } else if (vType == VALIDATION_TYPE_PERMISSION) {
             return _verifySignaturePermission(vId, vInfo, requester, _hash, _signature);
         } else {
             return 1;

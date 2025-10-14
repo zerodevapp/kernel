@@ -105,6 +105,6 @@ contract KernelFactoryTest is KernelTestBase {
         assertEq(address(k), address(kernel));
         ValidationInfo memory vInfo =
             k.validationInfo(ValidationId.wrap(bytes21(abi.encodePacked(bytes1(0x01), bytes20(address(newValidator))))));
-        assertTrue(vInfo.vType == VALIDATION_TYPE_VALIDATOR);
+        assertTrue(vInfo.hook == address(1));
     }
 }
