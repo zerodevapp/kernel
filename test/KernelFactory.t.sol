@@ -9,7 +9,7 @@ import {KernelUUPS} from "src/KernelUUPS.sol";
 import {KernelImmutableECDSA} from "src/KernelImmutableECDSA.sol";
 import {Install, ValidationInfo} from "src/types/Structs.sol";
 import {VALIDATION_TYPE_VALIDATOR} from "src/types/Constants.sol";
-import {ValidationId} from "src/types/Types.sol";
+import {ValidationId, PermissionId} from "src/types/Types.sol";
 import {MockFallback} from "./mock/MockFallback.sol";
 import {MockValidator} from "./mock/MockValidator.sol";
 import {MockPolicy} from "./mock/MockPolicy.sol";
@@ -33,7 +33,7 @@ contract KernelFactoryTest is KernelTestBase {
         beneficiary = payable(makeAddr("Beneficiary"));
         policy = new MockPolicy();
         signer = new MockSigner();
-        permissionId = bytes20(keccak256(abi.encodePacked("Hello world")));
+        permissionId = PermissionId.wrap(bytes4(keccak256(abi.encodePacked("Hello world"))));
         vm.txGasPrice(1);
         _initialize();
     }
@@ -103,7 +103,8 @@ contract KernelFactoryTest is KernelTestBase {
         bytes memory sig = enableSig(0, true, false, pkgs, _rootSignHash);
         Kernel k = factory.deployWithCall(initPkgs, 1, abi.encodeWithSelector(0xa706cd33, false, 0, pkgs, sig));
         assertEq(address(k), address(kernel));
-        ValidationInfo memory vInfo = k.validationInfo(ValidationId.wrap(bytes20(address(newValidator))));
+        ValidationInfo memory vInfo =
+            k.validationInfo(ValidationId.wrap(bytes21(abi.encodePacked(bytes1(0x01), bytes20(address(newValidator))))));
         assertTrue(vInfo.vType == VALIDATION_TYPE_VALIDATOR);
     }
 }

@@ -20,7 +20,9 @@ function isEnableReplayable(ValidationMode vMode) pure returns (bool replayable)
     return ValidationMode.unwrap(vMode) & bytes1(0x04) != 0;
 }
 
-type ValidationId is bytes20;
+type ValidationId is bytes21;
+
+type PermissionId is bytes4;
 
 type ValidationType is bytes1;
 

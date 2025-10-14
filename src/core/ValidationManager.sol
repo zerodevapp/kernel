@@ -12,7 +12,7 @@ import {
     InvalidPermissionId,
     InvalidValidator
 } from "../types/Error.sol";
-import {ValidationId, ValidationType, ValidationMode} from "../types/Types.sol";
+import {ValidationId, PermissionId, ValidationType, ValidationMode} from "../types/Types.sol";
 import {
     VALIDATION_MANAGER_STORAGE_SLOT,
     VALIDATION_TYPE_ROOT,
@@ -22,6 +22,8 @@ import {
 } from "../types/Constants.sol";
 import {ValidationStorage, ValidationInfo, Install} from "../types/Structs.sol";
 import {Lib4337} from "../lib/Lib4337.sol";
+import {getValidator, getPermissionId, validatorToIdentifier, permissionToIdentifier} from "../lib/Utils.sol";
+import {console} from "forge-std/console.sol";
 
 function parseNonce(uint256 nonce) pure returns (ValidationMode vMode, ValidationType vType, ValidationId vId) {
     // 2bytes mode (1byte currentMode, 1byte type)
@@ -29,7 +31,7 @@ function parseNonce(uint256 nonce) pure returns (ValidationMode vMode, Validatio
     // 1byte mode | 1byte type | 20bytes vId | 2byte nonceKey | 8byte nonce == 32bytes
     vMode = ValidationMode.wrap(bytes1(bytes32(nonce)));
     vType = ValidationType.wrap(bytes1(bytes32(nonce << 8)));
-    vId = ValidationId.wrap(bytes20(bytes32(nonce << 16)));
+    vId = ValidationId.wrap(bytes21(bytes32(nonce << 8)));
 }
 
 abstract contract ValidationManager {
@@ -86,7 +88,7 @@ abstract contract ValidationManager {
     function _installValidator(address _validator, bytes calldata _internalData, bool _installSuccess) internal {
         require(_installSuccess, ModuleInstallFailed());
         ValidationStorage storage $ = _validationStorage();
-        ValidationId vId = ValidationId.wrap(bytes20(_validator));
+        ValidationId vId = validatorToIdentifier(IValidator(_validator));
         require($.vInfo[vId].vType == VALIDATION_TYPE_ROOT, OccupiedValidationId());
         $.vInfo[vId].vType = VALIDATION_TYPE_VALIDATOR;
         _initializeValidation(vId, _internalData);
@@ -100,7 +102,7 @@ abstract contract ValidationManager {
     function _installSigner(address _signer, bytes calldata _internalData, bool _installSuccess) internal {
         ValidationInfo storage $ = _checkPermissionInstall(_internalData, _installSuccess);
         $.signer = _signer;
-        installingPermission = ValidationId.wrap(bytes20(0));
+        installingPermission = ValidationId.wrap(bytes21(0));
     }
 
     function _checkPermissionInstall(bytes calldata _internalData, bool _installSuccess)
@@ -108,14 +110,14 @@ abstract contract ValidationManager {
         returns (ValidationInfo storage $)
     {
         require(_installSuccess, ModuleInstallFailed());
-        ValidationId vId = ValidationId.wrap(bytes20(_internalData[0:20]));
+        ValidationId vId = permissionToIdentifier(PermissionId.wrap(bytes4(_internalData[0:4])));
         $ = _validationStorage().vInfo[vId];
-        if (installingPermission == ValidationId.wrap(bytes20(0))) {
-            require(vId != ValidationId.wrap(bytes20(0)), "invalid validationId");
+        if (installingPermission == ValidationId.wrap(bytes21(0))) {
+            require(vId != ValidationId.wrap(bytes21(0)), "invalid validationId");
             require($.vType == ValidationType.wrap(0x00), "already taken");
             installingPermission = vId;
             $.vType = VALIDATION_TYPE_PERMISSION;
-            _initializeValidation(vId, _internalData[20:]);
+            _initializeValidation(vId, _internalData[4:]);
         } else {
             require(installingPermission == vId, "permissionId should be consistent");
         }
@@ -123,12 +125,12 @@ abstract contract ValidationManager {
 
     function _uninstallValidator(address _validator, bytes calldata _internalData, bool _uninstallSuccess) internal {
         ValidationStorage storage $ = _validationStorage();
-        ValidationId vId = ValidationId.wrap(bytes20(_validator));
+        ValidationId vId = validatorToIdentifier(IValidator(_validator));
         $.vInfo[vId].vType = VALIDATION_TYPE_ROOT;
     }
 
     function _uninstallPolicy(address _policy, bytes calldata _internalData, bool _uninstallSuccess) internal {
-        ValidationId vId = ValidationId.wrap(bytes20(_internalData[0:20]));
+        ValidationId vId = permissionToIdentifier(PermissionId.wrap(bytes4(_internalData[0:4])));
         _uninstallPolicyWithVid(_policy, vId);
     }
 
@@ -145,7 +147,7 @@ abstract contract ValidationManager {
     }
 
     function _uninstallSigner(address _signer, bytes calldata _internalData, bool _uninstallSuccess) internal {
-        ValidationId vId = ValidationId.wrap(bytes20(_internalData[0:20]));
+        ValidationId vId = permissionToIdentifier(PermissionId.wrap(bytes4(_internalData[0:4])));
         _uninstallSignerWithVid(_signer, vId);
     }
 
@@ -168,7 +170,7 @@ abstract contract ValidationManager {
         ValidationStorage storage $ = _validationStorage();
         if (vType == VALIDATION_TYPE_ROOT || $.vInfo[vId].vType == VALIDATION_TYPE_ROOT) {
             v = $.root;
-            if (ValidationId.unwrap(v) == bytes20(0)) {
+            if (ValidationId.unwrap(v) == bytes21(0)) {
                 return (v, _validateUserOpFallback);
             }
             vType = $.vInfo[v].vType;
@@ -189,12 +191,12 @@ abstract contract ValidationManager {
         view
         returns (uint256 validationData)
     {
-        if (ValidationId.unwrap(vId) == bytes20(0)) {
+        if (ValidationId.unwrap(vId) == bytes21(0)) {
             return _verifyFallbackSignature(_hash, _signature) ? 0 : 1;
         }
         ValidationInfo storage vInfo = _validationStorage().vInfo[vId];
         if (vInfo.vType == VALIDATION_TYPE_VALIDATOR) {
-            IValidator validator = IValidator(address(ValidationId.unwrap(vId)));
+            IValidator validator = getValidator(vId);
             validationData =
                 validator.isValidSignatureWithSender(requester, _hash, _signature) == ERC1271_MAGICVALUE ? 0 : 1;
         } else if (vInfo.vType == VALIDATION_TYPE_PERMISSION) {
@@ -216,7 +218,7 @@ abstract contract ValidationManager {
             assembly {
                 permissionSig := _signature.offset
             }
-            bytes32 paddedVId = bytes32(ValidationId.unwrap(vId));
+            bytes32 paddedVId = bytes32(PermissionId.unwrap(getPermissionId(vId)));
             for (uint256 i = 0; i < vInfo.policies.length; i++) {
                 IPolicy policy = IPolicy(vInfo.policies[i]);
                 validationData = Lib4337.intersectValidationData(
@@ -249,9 +251,9 @@ abstract contract ValidationManager {
         bytes calldata userOpSignature
     ) internal returns (uint256 validationData) {
         // NOTE: removed permission for now, adding back after testing is done
-        address validator = address(ValidationId.unwrap(vId));
+        IValidator validator = getValidator(vId);
         op.signature = userOpSignature;
-        return IValidator(validator).validateUserOp(op, opHash);
+        return validator.validateUserOp(op, opHash);
     }
 
     struct PermissionSignature {
@@ -270,7 +272,7 @@ abstract contract ValidationManager {
             assembly {
                 permissionSig := userOpSignature.offset
             }
-            bytes32 paddedVId = bytes32(ValidationId.unwrap(vId));
+            bytes32 paddedVId = bytes32(PermissionId.unwrap(getPermissionId(vId)));
             for (uint256 i = 0; i < vInfo.policies.length; i++) {
                 IPolicy policy = IPolicy(vInfo.policies[i]);
                 op.signature = permissionSig.signatures[i];
@@ -292,9 +294,9 @@ abstract contract ValidationManager {
     function _setRoot(Install calldata pkg) internal {
         ValidationId vId;
         if (pkg.moduleType == 1) {
-            vId = ValidationId.wrap(bytes20(pkg.module));
+            vId = validatorToIdentifier(IValidator(address(bytes20(pkg.module))));
         } else if (pkg.moduleType == 5 || pkg.moduleType == 6) {
-            vId = ValidationId.wrap(bytes20(pkg.internalData[0:20]));
+            vId = permissionToIdentifier(PermissionId.wrap(bytes4(pkg.internalData[0:4])));
         } else {
             revert InvalidRootValidation();
         }
@@ -306,7 +308,7 @@ abstract contract ValidationManager {
     }
 
     function _setRoot(ValidationId vId) internal {
-        require(ValidationId.unwrap(vId) != bytes20(0) || _fallbackValidatorAvailable(), InvalidRootValidation());
+        require(ValidationId.unwrap(vId) != bytes21(0) || _fallbackValidatorAvailable(), InvalidRootValidation());
         ValidationStorage storage $ = _validationStorage();
         $.root = vId;
     }

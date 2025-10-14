@@ -9,10 +9,13 @@ import {parseNonce} from "./core/ValidationManager.sol";
 import {ExecutionManager} from "./core/ExecutionManager.sol";
 import {Lib4337} from "./lib/Lib4337.sol";
 import {ERC1271} from "./lib/ERC1271.sol";
+import {getValidator, getPermissionId, validatorToIdentifier, permissionToIdentifier} from "./lib/Utils.sol";
+
 import {LibERC7579} from "solady/accounts/LibERC7579.sol";
 import {
     CallType,
     ValidationId,
+    PermissionId,
     ValidationMode,
     ValidationType,
     isEnable,
@@ -263,11 +266,10 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
             ValidationId vId = _validationStorage().root;
             ValidationInfo memory vInfo = _validationStorage().vInfo[vId];
             if (vInfo.vType == VALIDATION_TYPE_VALIDATOR) {
-                (bool success,) = address(ValidationId.unwrap(vId)).call(
-                    abi.encodeWithSelector(IModule.onUninstall.selector, uninstallData)
-                );
+                (bool success,) =
+                    address(getValidator(vId)).call(abi.encodeWithSelector(IModule.onUninstall.selector, uninstallData));
                 _uninstallValidator(
-                    address(ValidationId.unwrap(vId)),
+                    address(getValidator(vId)),
                     // passing in uninstallData here to use calldata, but it's never used
                     uninstallData,
                     success
@@ -347,7 +349,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         returns (bool)
     {
         if (moduleTypeId == 1) {
-            ValidationId vId = ValidationId.wrap(bytes20(module));
+            ValidationId vId = validatorToIdentifier(IValidator(module));
             return !(_validationStorage().vInfo[vId].vType == VALIDATION_TYPE_ROOT);
         } else if (moduleTypeId == 2) {
             return address(_executorConfig(IExecutor(module)).hook) != address(0);
@@ -357,7 +359,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         } else if (moduleTypeId == 4) {
             return _hookStorage().enabled[module];
         } else if (moduleTypeId == 5) {
-            ValidationId vId = ValidationId.wrap(bytes20(additionalContext));
+            ValidationId vId = permissionToIdentifier(PermissionId.wrap(bytes4(additionalContext)));
             ValidationInfo storage $ = _validationStorage().vInfo[vId];
             for (uint256 i = 0; i < $.policies.length; i++) {
                 if ($.policies[i] == module) {
@@ -366,7 +368,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
             }
             return false;
         } else if (moduleTypeId == 6) {
-            ValidationId vId = ValidationId.wrap(bytes20(additionalContext));
+            ValidationId vId = permissionToIdentifier(PermissionId.wrap(bytes4(additionalContext)));
             ValidationInfo storage $ = _validationStorage().vInfo[vId];
             return $.signer == module;
         } else {

@@ -6,6 +6,7 @@ via_ir = false # make this true
 optimizer = true
 run = 200
 evm_version = 'prague'
+solc_version = '0.8.30'
 
 extra_output = ["storageLayout"]
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

@@ -31,7 +31,7 @@ contract KernelECDSATest is KernelTest {
 
         ValidationId vId = kernel.root();
 
-        assertEq(ValidationId.unwrap(vId), bytes20(address(rootValidator)));
+        assertEq(ValidationId.unwrap(vId), bytes21(abi.encodePacked(bytes1(0x01), address(rootValidator))));
 
         ValidationInfo memory info = kernel.validationInfo(vId);
     }

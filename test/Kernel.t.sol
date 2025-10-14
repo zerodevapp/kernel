@@ -23,6 +23,7 @@ import {KernelValidatorTest} from "./KernelValidatorTest.sol";
 import {KernelExecuteTest} from "./KernelExecuteTest.sol";
 import {KernelSelectorTest} from "./KernelSelectorTest.sol";
 import {KernelHookTest} from "./KernelHookTest.sol";
+import {PermissionId} from "src/types/Types.sol";
 
 contract KernelTest is
     KernelUserOpTest,
@@ -49,7 +50,7 @@ contract KernelTest is
         beneficiary = payable(makeAddr("Beneficiary"));
         policy = new MockPolicy();
         signer = new MockSigner();
-        permissionId = bytes20(keccak256(abi.encodePacked("Hello world")));
+        permissionId = PermissionId.wrap(bytes4(keccak256(abi.encodePacked("Hello world"))));
         _initialize();
     }
 

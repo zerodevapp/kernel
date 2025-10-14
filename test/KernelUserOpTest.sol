@@ -5,6 +5,7 @@ import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOper
 import {Kernel} from "src/Kernel.sol";
 import {MockCallee} from "./mock/MockCallee.sol";
 import {KernelTestBase} from "./KernelTestBase.sol";
+import {PermissionId} from "src/types/Types.sol";
 
 abstract contract KernelUserOpTest is KernelTestBase {
     function test_executeuserop_root() external entryPointTest {
@@ -187,7 +188,7 @@ abstract contract KernelUserOpTest is KernelTestBase {
         PackedUserOperation[] memory ops = new PackedUserOperation[](1);
         ops[0] = PackedUserOperation({
             sender: address(kernel),
-            nonce: encodeNonce(false, false, false, bytes1(0x02), permissionId),
+            nonce: encodeNonce(false, false, false, bytes1(0x02), PermissionId.unwrap(permissionId)),
             initCode: hex"",
             callData: abi.encodeWithSelector(
                 Kernel.execute.selector, bytes32(0), abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
@@ -208,7 +209,7 @@ abstract contract KernelUserOpTest is KernelTestBase {
         PackedUserOperation[] memory ops = new PackedUserOperation[](1);
         ops[0] = PackedUserOperation({
             sender: address(kernel),
-            nonce: encodeNonce(false, true, false, bytes1(0x02), permissionId),
+            nonce: encodeNonce(false, true, false, bytes1(0x02), PermissionId.unwrap(permissionId)),
             initCode: hex"",
             callData: abi.encodeWithSelector(
                 Kernel.execute.selector, bytes32(0), abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
@@ -231,7 +232,7 @@ abstract contract KernelUserOpTest is KernelTestBase {
         PackedUserOperation[] memory ops = new PackedUserOperation[](1);
         ops[0] = PackedUserOperation({
             sender: address(kernel),
-            nonce: encodeNonce(false, true, false, bytes1(0x02), permissionId),
+            nonce: encodeNonce(false, true, false, bytes1(0x02), PermissionId.unwrap(permissionId)),
             initCode: hex"",
             callData: abi.encodeWithSelector(
                 Kernel.execute.selector, bytes32(0), abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
@@ -253,7 +254,7 @@ abstract contract KernelUserOpTest is KernelTestBase {
         PackedUserOperation[] memory ops = new PackedUserOperation[](1);
         ops[0] = PackedUserOperation({
             sender: address(kernel),
-            nonce: encodeNonce(false, true, false, bytes1(0x02), permissionId),
+            nonce: encodeNonce(false, true, false, bytes1(0x02), PermissionId.unwrap(permissionId)),
             initCode: hex"",
             callData: abi.encodeWithSelector(
                 Kernel.execute.selector, bytes32(0), abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
@@ -275,7 +276,7 @@ abstract contract KernelUserOpTest is KernelTestBase {
         PackedUserOperation[] memory ops = new PackedUserOperation[](1);
         ops[0] = PackedUserOperation({
             sender: address(kernel),
-            nonce: encodeNonce(false, true, false, bytes1(0x02), permissionId),
+            nonce: encodeNonce(false, true, false, bytes1(0x02), PermissionId.unwrap(permissionId)),
             initCode: hex"",
             callData: abi.encodeWithSelector(
                 Kernel.execute.selector, bytes32(0), abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
