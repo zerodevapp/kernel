@@ -297,6 +297,11 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         _setRoot(pkg[0]);
     }
 
+    function setRoot(ValidationId vId) external payable {
+        _onlyEntryPointOrSelf();
+        _setRoot(vId);
+    }
+
     // NOTE : this ONLY allows root signature, for now
     function installModule(bool replayable, uint256 nonce, Install[] calldata packages, bytes calldata signature)
         external
