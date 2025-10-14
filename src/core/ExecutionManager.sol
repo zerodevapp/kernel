@@ -80,12 +80,11 @@ abstract contract ExecutionManager {
 
     function _onRevertSilent() internal {}
 
-    function _call(address target, uint256 value, bytes calldata callData) internal returns (bool success) {
+    function _call(address target, uint256 value, bytes memory callData) internal returns (bool success) {
         /// @solidity memory-safe-assembly
         assembly {
-            let ptr := mload(0x40)
-            calldatacopy(ptr, callData.offset, callData.length)
-            success := call(gas(), target, value, ptr, callData.length, codesize(), 0x00)
+            let len := mload(callData)
+            success := call(gas(), target, value, add(callData, 0x20), len, codesize(), 0x00)
         }
     }
 

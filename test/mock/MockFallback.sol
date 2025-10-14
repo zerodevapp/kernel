@@ -25,6 +25,8 @@ contract MockFallback is IFallback {
 
     Callee public callee;
 
+    address public caller;
+
     constructor() {
         callee = new Callee();
     }
@@ -50,6 +52,7 @@ contract MockFallback is IFallback {
     }
 
     function fallbackFunction(uint256 v) external returns (uint256) {
+        caller = address(bytes20(msg.data[msg.data.length - 20:]));
         require(v < 100, Limit());
         emit Foobar();
         return v * v;

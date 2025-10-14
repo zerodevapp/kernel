@@ -183,7 +183,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager {
 
         bool success;
         if ($.callType == CallType.wrap(bytes1(0x00))) {
-            success = _call($.target, 0, msg.data);
+            success = _call($.target, 0, abi.encodePacked(msg.data, msg.sender));
         } else if ($.callType == CallType.wrap(bytes1(0xff))) {
             success = _delegateCall($.target, msg.data);
         }
