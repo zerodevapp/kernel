@@ -6,6 +6,8 @@ import {KernelImmutableECDSA} from "./KernelImmutableECDSA.sol";
 import {LibClone} from "solady/utils/LibClone.sol";
 
 contract KernelFactory {
+    error InvalidSigner();
+
     KernelUUPS public immutable UUPS;
     KernelImmutableECDSA public immutable IMMUTABLE_ECDSA;
 
@@ -75,6 +77,7 @@ contract KernelFactory {
         payable
         returns (Kernel)
     {
+        require(signer != address(0), InvalidSigner());
         bytes32 salt = keccak256(abi.encode(initialPackages, nonce));
         (, address account) =
             LibClone.createDeterministicERC1967(address(IMMUTABLE_ECDSA), abi.encodePacked(signer), salt);
@@ -90,6 +93,7 @@ contract KernelFactory {
         uint256 nonce,
         bytes calldata extraCall
     ) external payable returns (Kernel) {
+        require(signer != address(0), InvalidSigner());
         bytes32 salt = keccak256(abi.encode(initialPackages, nonce));
         (, address account) =
             LibClone.createDeterministicERC1967(address(IMMUTABLE_ECDSA), abi.encodePacked(signer), salt);
