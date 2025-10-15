@@ -15,7 +15,6 @@ import {MockERC721} from "./mock/MockERC721.sol";
 import {MockERC1155} from "./mock/MockERC1155.sol";
 import {MockCallee} from "./mock/MockCallee.sol";
 import {MockContractETH} from "./mock/MockContractETH.sol";
-import {MockKernel} from "./mock/MockKernel.sol";
 import {MockHook} from "./mock/MockHook.sol";
 import {IValidator} from "src/interfaces/IERC7579Modules.sol";
 import {console} from "forge-std/console.sol";
@@ -134,7 +133,6 @@ abstract contract KernelTestBase is Test {
         function(bytes32, bool) internal returns(bytes memory) signEnable
     ) internal returns (bytes memory sig) {
         bytes32 digest = helper.installDigest(address(kernel), replayable, nonce, packages);
-        MockKernel mockKernel = new MockKernel(ep);
 
         if (!is7702) {
             //vm.store(address(kernel), ERC1967_IMPLEMENTATION_SLOT, bytes32(uint256(uint160(address(mockKernel)))));

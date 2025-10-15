@@ -11,7 +11,7 @@ contract KernelUUPS is Kernel, UUPSUpgradeable, Initializable {
         _disableInitializers();
     }
 
-    function initialize(Install[] calldata packages) external override initializer {
+    function initialize(Install[] calldata packages) external payable override initializer {
         // this is initialize
         // require first package to be the root validator
         _initialize(packages);

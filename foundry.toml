@@ -6,7 +6,7 @@ via_ir = false # make this true
 optimizer = true
 isolate = true
 
-run = 100000
+run = 200000
 evm_version = 'prague'
 solc_version = '0.8.30'
 

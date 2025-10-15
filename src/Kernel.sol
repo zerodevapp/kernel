@@ -60,7 +60,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         bytes userOpSignature;
     }
 
-    function initialize(Install[] calldata packages) external virtual {
+    function initialize(Install[] calldata packages) external payable virtual {
         require(!_initialized(), InvalidInitialization());
         // this is initialize
         // require first package to be the root validator
@@ -308,14 +308,14 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
 
     // NOTE : this ONLY allows root signature, for now
     function installModule(bool replayable, uint256 nonce, Install[] calldata packages, bytes calldata signature)
-        external
+        external payable
     {
         // if 7702 or already initialized, use root signature to install module
         require(_verifyInstallSignature(replayable, nonce, packages, signature), InstallSignatureVerificationFailed());
         _install(packages);
     }
     
-    function installModule(Install[] calldata packages) external {
+    function installModule(Install[] calldata packages) external payable {
         _onlyEntryPointOrSelf();
         _install(packages);
     }
