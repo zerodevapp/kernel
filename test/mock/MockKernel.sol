@@ -2,9 +2,7 @@ pragma solidity ^0.8.0;
 
 import {IEntryPoint, Kernel} from "src/Kernel.sol";
 import {Call, Install, InstallAndExecute} from "src/types/Structs.sol";
-import {
-    InvalidInitialization
-} from "src/types/Error.sol";
+import {InvalidInitialization} from "src/types/Error.sol";
 
 // NOTE: this is not for real usecase, just a contract to deploy for test checks
 contract MockKernel is Kernel {

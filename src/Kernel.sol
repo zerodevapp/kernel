@@ -36,6 +36,7 @@ import {Received} from "./types/Events.sol";
 import {VALIDATION_TYPE_ROOT, VALIDATION_TYPE_PERMISSION, VALIDATION_TYPE_VALIDATOR} from "./types/Constants.sol";
 import {ValidationStorage, ValidationInfo} from "./types/Structs.sol";
 import "forge-std/console.sol";
+
 abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
     IEntryPoint immutable ENTRYPOINT;
 
@@ -308,13 +309,14 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
 
     // NOTE : this ONLY allows root signature, for now
     function installModule(bool replayable, uint256 nonce, Install[] calldata packages, bytes calldata signature)
-        external payable
+        external
+        payable
     {
         // if 7702 or already initialized, use root signature to install module
         require(_verifyInstallSignature(replayable, nonce, packages, signature), InstallSignatureVerificationFailed());
         _install(packages);
     }
-    
+
     function installModule(Install[] calldata packages) external payable {
         _onlyEntryPointOrSelf();
         _install(packages);

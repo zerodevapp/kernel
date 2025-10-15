@@ -36,6 +36,7 @@ function parseNonce(uint256 nonce) pure returns (ValidationMode vMode, Validatio
 
 abstract contract ValidationManager {
     error InvalidVid(ValidationId vId);
+
     ValidationId transient installingPermission;
 
     function _hookEnabled(IHook _hook) internal view virtual returns (bool);

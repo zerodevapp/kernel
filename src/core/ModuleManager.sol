@@ -55,7 +55,7 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         }
         return (uint256(key) << 64) + seq;
     }
-    
+
     function _hookEnabled(IHook _hook) internal view override(ValidationManager, HookManager) returns (bool) {
         return HookManager._hookEnabled(_hook);
     }
@@ -176,7 +176,7 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
                 _installModule(pkg.moduleType, pkg.module, pkg.moduleData, pkg.internalData);
             }
         }
-        
+
         require(
             ValidationId.unwrap(installingPermission) == bytes21(0)
                 || _validationStorage().vInfo[installingPermission].signer != address(0),

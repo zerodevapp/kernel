@@ -8,7 +8,7 @@ abstract contract HookManager {
     struct HookStorage {
         mapping(address => bool) enabled;
     }
-    
+
     function _hookEnabled(IHook _hook) internal view virtual returns (bool) {
         return _hookStorage().enabled[address(_hook)];
     }

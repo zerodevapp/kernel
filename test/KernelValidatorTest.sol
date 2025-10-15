@@ -181,7 +181,8 @@ abstract contract KernelValidatorTest is KernelTestBase {
         ValidationInfo memory vInfo = kernel.validationInfo(vId);
         assertTrue(vInfo.hook == address(0));
         bytes4 ret = kernel.isValidSignature(
-            keccak256("Hello world"), abi.encodePacked(bytes1(0x01), newValidator, _validatorSignHash(keccak256("Hello world"), true))
+            keccak256("Hello world"),
+            abi.encodePacked(bytes1(0x01), newValidator, _validatorSignHash(keccak256("Hello world"), true))
         );
         assertEq(ret, ERC1271_MAGICVALUE);
         assertTrue(kernel.isModuleInstalled(1, address(newValidator), hex""));
@@ -196,7 +197,8 @@ abstract contract KernelValidatorTest is KernelTestBase {
         ValidationInfo memory vInfo = kernel.validationInfo(vId);
         assertTrue(vInfo.hook == address(0));
         bytes4 ret = kernel.isValidSignature(
-            keccak256("Hello world"), abi.encodePacked(bytes1(0x01), newValidator, _validatorSignHash(keccak256("Hello world"), true))
+            keccak256("Hello world"),
+            abi.encodePacked(bytes1(0x01), newValidator, _validatorSignHash(keccak256("Hello world"), true))
         );
         assertEq(ret, ERC1271_MAGICVALUE);
         assertTrue(kernel.isModuleInstalled(1, address(newValidator), hex""));
@@ -213,7 +215,8 @@ abstract contract KernelValidatorTest is KernelTestBase {
         ValidationInfo memory vInfo = kernel.validationInfo(vId);
         assertTrue(vInfo.hook == address(0));
         bytes4 ret = kernel.isValidSignature(
-            keccak256("Hello world"), abi.encodePacked(bytes1(0x01), newValidator, _validatorSignHash(keccak256("Hello world"), true))
+            keccak256("Hello world"),
+            abi.encodePacked(bytes1(0x01), newValidator, _validatorSignHash(keccak256("Hello world"), true))
         );
         assertEq(ret, ERC1271_MAGICVALUE);
         assertTrue(kernel.isModuleInstalled(1, address(newValidator), hex""));
@@ -234,7 +237,8 @@ abstract contract KernelValidatorTest is KernelTestBase {
         ValidationInfo memory vInfo = kernel.validationInfo(vId);
         assertTrue(vInfo.hook == address(0));
         bytes4 ret = kernel.isValidSignature(
-            keccak256("Hello world"), abi.encodePacked(bytes1(0x01), newValidator, _validatorSignHash(keccak256("Hello world"), true))
+            keccak256("Hello world"),
+            abi.encodePacked(bytes1(0x01), newValidator, _validatorSignHash(keccak256("Hello world"), true))
         );
         assertEq(ret, ERC1271_MAGICVALUE);
         assertTrue(kernel.isModuleInstalled(1, address(newValidator), hex""));
