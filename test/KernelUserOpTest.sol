@@ -6,6 +6,7 @@ import {Kernel} from "src/Kernel.sol";
 import {MockCallee} from "./mock/MockCallee.sol";
 import {KernelTestBase} from "./KernelTestBase.sol";
 import {PermissionId} from "src/types/Types.sol";
+import {validatorToIdentifier} from "src/lib/Utils.sol";
 
 abstract contract KernelUserOpTest is KernelTestBase {
     function test_executeuserop_root() external entryPointTest {
@@ -137,7 +138,12 @@ abstract contract KernelUserOpTest is KernelTestBase {
         );
         ep.handleOps(ops, beneficiary);
         assertEq(callee.bar(), 1);
+        assertEq(kernel.validationInfo(validatorToIdentifier(newValidator)).hook, address(1));
     }
+
+    function test_userop_validator_hook_failed_prehook() external entryPointTest {}
+
+    function test_userop_validator_hook_failed_posthook() external entryPointTest {}
 
     function test_userop_validator_aa24_enable_fail_wrong_signature() external entryPointTest {
         PackedUserOperation[] memory ops = new PackedUserOperation[](1);

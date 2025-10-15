@@ -62,14 +62,20 @@ contract KernelFactoryTest is KernelTestBase {
     }
 
     function test_deploy_root_permission() external unitTest {
-        Install[] memory pkgs = new Install[](2);
+        Install[] memory pkgs = new Install[](3);
         pkgs[0] = Install({
             moduleType: 5,
             module: address(policy),
             internalData: abi.encodePacked(permissionId),
             moduleData: hex""
         });
-        pkgs[1] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
+        pkgs[1] = Install({
+            moduleType: 6,
+            module: address(signer),
+            internalData: abi.encodePacked(permissionId),
+            moduleData: hex""
+        });
+        pkgs[2] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
         Kernel k = factory.deploy(pkgs, 1);
         assertEq(k.accountId(), "kernel.v0.4");
         assertEq(k.registry(), address(0));

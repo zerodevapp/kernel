@@ -35,7 +35,7 @@ import {
 import {Received} from "./types/Events.sol";
 import {VALIDATION_TYPE_ROOT, VALIDATION_TYPE_PERMISSION, VALIDATION_TYPE_VALIDATOR} from "./types/Constants.sol";
 import {ValidationStorage, ValidationInfo} from "./types/Structs.sol";
-
+import "forge-std/console.sol";
 abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
     IEntryPoint immutable ENTRYPOINT;
 
@@ -119,13 +119,14 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
                 sig := signature.offset
             }
             validationData = _verifyInstallSignatureRaw(enableReplayable, sig.nonce, sig.packages, sig.enableSignature);
+            console.log("Enable :");
             _install(sig.packages);
             signature = sig.userOpSignature;
         }
         ValidationStorage storage $ = _validationStorage();
 
         // check if the call data is allowed by the validationId
-        if ($.vInfo[vId].hook != address(0)) {
+        if ($.vInfo[vId].hook > address(1)) {
             require(
                 bytes4(userOp.callData[0:4]) == this.executeUserOp.selector
                     && $.allowed[vId][bytes4(userOp.callData[4:])],
@@ -172,7 +173,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
     function _executeFromExecutor(bytes32 mode, bytes calldata executionData)
         internal
         executorHook
-        returns (bytes[] memory retyrbData)
+        returns (bytes[] memory returnData)
     {
         return _execute(mode, executionData);
     }
@@ -311,6 +312,11 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
     {
         // if 7702 or already initialized, use root signature to install module
         require(_verifyInstallSignature(replayable, nonce, packages, signature), InstallSignatureVerificationFailed());
+        _install(packages);
+    }
+    
+    function installModule(Install[] calldata packages) external {
+        _onlyEntryPointOrSelf();
         _install(packages);
     }
 

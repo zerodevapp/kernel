@@ -16,6 +16,7 @@ import {MockERC1155} from "./mock/MockERC1155.sol";
 import {MockCallee} from "./mock/MockCallee.sol";
 import {MockContractETH} from "./mock/MockContractETH.sol";
 import {MockKernel} from "./mock/MockKernel.sol";
+import {MockHook} from "./mock/MockHook.sol";
 import {IValidator} from "src/interfaces/IERC7579Modules.sol";
 import {console} from "forge-std/console.sol";
 import {Received} from "src/types/Events.sol";
@@ -35,6 +36,7 @@ abstract contract KernelTestBase is Test {
     address payable beneficiary;
     MockPolicy policy;
     MockSigner signer;
+    MockHook hook;
     PermissionId permissionId;
     uint256 permissionRevertIndex;
     KernelHelper helper;

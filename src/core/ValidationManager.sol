@@ -10,7 +10,8 @@ import {
     InvalidPermissionUninstallOrder,
     InvalidPermissionUninstallOrder,
     InvalidPermissionId,
-    InvalidValidator
+    InvalidValidator,
+    NotInstalled
 } from "../types/Error.sol";
 import {ValidationId, PermissionId, ValidationType, ValidationMode} from "../types/Types.sol";
 import {
@@ -23,7 +24,6 @@ import {
 import {ValidationStorage, ValidationInfo, Install} from "../types/Structs.sol";
 import {Lib4337} from "../lib/Lib4337.sol";
 import {getType, getValidator, getPermissionId, validatorToIdentifier, permissionToIdentifier} from "../lib/Utils.sol";
-import {console} from "forge-std/console.sol";
 
 function parseNonce(uint256 nonce) pure returns (ValidationMode vMode, ValidationType vType, ValidationId vId) {
     // 2bytes mode (1byte currentMode, 1byte type)
@@ -35,7 +35,10 @@ function parseNonce(uint256 nonce) pure returns (ValidationMode vMode, Validatio
 }
 
 abstract contract ValidationManager {
+    error InvalidVid(ValidationId vId);
     ValidationId transient installingPermission;
+
+    function _hookEnabled(IHook _hook) internal view virtual returns (bool);
 
     function root() external view returns (ValidationId) {
         ValidationStorage storage $ = _validationStorage();
@@ -75,7 +78,8 @@ abstract contract ValidationManager {
         }
         // if not, first 20 bytes is the hook address
         address hook = address(bytes20(_internalData[0:20]));
-        $.vInfo[vId].hook = hook;
+        require(hook == address(0) || hook == address(1) || _hookEnabled(IHook(hook)), NotInstalled());
+        $.vInfo[vId].hook = hook == address(0) ? address(1) : hook;
         _internalData = _internalData[20:];
 
         // then the rest is the allowed selectors
@@ -114,7 +118,6 @@ abstract contract ValidationManager {
         $ = _validationStorage().vInfo[vId];
         if (installingPermission == ValidationId.wrap(bytes21(0))) {
             require(vId != ValidationId.wrap(bytes21(0)), "invalid validationId");
-            require($.hook == address(0), "already taken");
             installingPermission = vId;
             _initializeValidation(vId, _internalData[4:]);
         } else {
@@ -176,6 +179,9 @@ abstract contract ValidationManager {
         } else {
             v = vId;
         }
+
+        ValidationInfo storage info = _validationStorage().vInfo[v];
+        require(info.hook > address(0), InvalidVid(v));
 
         if (vType == VALIDATION_TYPE_PERMISSION) {
             validateUserOp = _validateUserOpPermission;
