@@ -9,6 +9,10 @@ abstract contract HookManager {
         mapping(address => bool) enabled;
     }
 
+    function _hookEnabled(IHook _hook) internal view virtual returns (bool) {
+        return _hookStorage().enabled[address(_hook)];
+    }
+
     function _hookStorage() internal pure returns (HookStorage storage hs) {
         bytes32 slot = HOOK_MANAGER_STORAGE_SLOT;
         assembly {

@@ -2,7 +2,6 @@ pragma solidity ^0.8.0;
 
 import {SelectorManager} from "src/core/SelectorManager.sol";
 import {MockFallback} from "./mock/MockFallback.sol";
-import {MockHook} from "./mock/MockHook.sol";
 import {CallType} from "src/types/Types.sol";
 import {KernelTestBase} from "./KernelTestBase.sol";
 import {InvalidSelector} from "src/types/Error.sol";
@@ -36,13 +35,12 @@ abstract contract KernelSelectorTest is KernelTestBase {
     }
 
     function test_install_selector_call_withhook() external unitTest {
-        MockHook mockHook = new MockHook();
-        kernel.installModule(4, address(mockHook), abi.encode(hex"", ""));
+        kernel.installModule(4, address(hook), abi.encode(hex"", ""));
         kernel.installModule(
             3,
             address(mockFallback),
             abi.encode(
-                hex"deadbeef", abi.encodePacked(MockFallback.fallbackFunction.selector, bytes1(0x00), address(mockHook))
+                hex"deadbeef", abi.encodePacked(MockFallback.fallbackFunction.selector, bytes1(0x00), address(hook))
             )
         );
         vm.expectEmit(address(mockFallback));
@@ -51,7 +49,7 @@ abstract contract KernelSelectorTest is KernelTestBase {
         assertEq(res, 100);
         SelectorManager.SelectorConfig memory c = kernel.selectorConfig(MockFallback.fallbackFunction.selector);
         assertEq(address(c.target), address(mockFallback));
-        assertEq(address(c.hook), address(mockHook));
+        assertEq(address(c.hook), address(hook));
         assertTrue(c.callType == CallType.wrap(bytes1(0x00)));
     }
 

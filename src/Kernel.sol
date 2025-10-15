@@ -9,10 +9,13 @@ import {parseNonce} from "./core/ValidationManager.sol";
 import {ExecutionManager} from "./core/ExecutionManager.sol";
 import {Lib4337} from "./lib/Lib4337.sol";
 import {ERC1271} from "./lib/ERC1271.sol";
+import {getType, getValidator, getPermissionId, validatorToIdentifier, permissionToIdentifier} from "./lib/Utils.sol";
+
 import {LibERC7579} from "solady/accounts/LibERC7579.sol";
 import {
     CallType,
     ValidationId,
+    PermissionId,
     ValidationMode,
     ValidationType,
     isEnable,
@@ -32,6 +35,7 @@ import {
 import {Received} from "./types/Events.sol";
 import {VALIDATION_TYPE_ROOT, VALIDATION_TYPE_PERMISSION, VALIDATION_TYPE_VALIDATOR} from "./types/Constants.sol";
 import {ValidationStorage, ValidationInfo} from "./types/Structs.sol";
+import "forge-std/console.sol";
 
 abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
     IEntryPoint immutable ENTRYPOINT;
@@ -57,7 +61,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         bytes userOpSignature;
     }
 
-    function initialize(Install[] calldata packages) external virtual {
+    function initialize(Install[] calldata packages) external payable virtual {
         require(!_initialized(), InvalidInitialization());
         // this is initialize
         // require first package to be the root validator
@@ -116,13 +120,14 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
                 sig := signature.offset
             }
             validationData = _verifyInstallSignatureRaw(enableReplayable, sig.nonce, sig.packages, sig.enableSignature);
+            console.log("Enable :");
             _install(sig.packages);
             signature = sig.userOpSignature;
         }
         ValidationStorage storage $ = _validationStorage();
 
         // check if the call data is allowed by the validationId
-        if ($.vInfo[vId].hook != address(0)) {
+        if ($.vInfo[vId].hook > address(1)) {
             require(
                 bytes4(userOp.callData[0:4]) == this.executeUserOp.selector
                     && $.allowed[vId][bytes4(userOp.callData[4:])],
@@ -169,7 +174,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
     function _executeFromExecutor(bytes32 mode, bytes calldata executionData)
         internal
         executorHook
-        returns (bytes[] memory retyrbData)
+        returns (bytes[] memory returnData)
     {
         return _execute(mode, executionData);
     }
@@ -261,18 +266,18 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         ValidationId currentRoot = _validationStorage().root;
         if (removeCurrent) {
             ValidationId vId = _validationStorage().root;
+            ValidationType vType = getType(vId);
             ValidationInfo memory vInfo = _validationStorage().vInfo[vId];
-            if (vInfo.vType == VALIDATION_TYPE_VALIDATOR) {
-                (bool success,) = address(ValidationId.unwrap(vId)).call(
-                    abi.encodeWithSelector(IModule.onUninstall.selector, uninstallData)
-                );
+            if (vType == VALIDATION_TYPE_VALIDATOR) {
+                (bool success,) =
+                    address(getValidator(vId)).call(abi.encodeWithSelector(IModule.onUninstall.selector, uninstallData));
                 _uninstallValidator(
-                    address(ValidationId.unwrap(vId)),
+                    address(getValidator(vId)),
                     // passing in uninstallData here to use calldata, but it's never used
                     uninstallData,
                     success
                 );
-            } else if (vInfo.vType == VALIDATION_TYPE_PERMISSION) {
+            } else if (vType == VALIDATION_TYPE_PERMISSION) {
                 PermissionUninstallData calldata data;
                 assembly {
                     data := uninstallData.offset
@@ -305,9 +310,15 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
     // NOTE : this ONLY allows root signature, for now
     function installModule(bool replayable, uint256 nonce, Install[] calldata packages, bytes calldata signature)
         external
+        payable
     {
         // if 7702 or already initialized, use root signature to install module
         require(_verifyInstallSignature(replayable, nonce, packages, signature), InstallSignatureVerificationFailed());
+        _install(packages);
+    }
+
+    function installModule(Install[] calldata packages) external payable {
+        _onlyEntryPointOrSelf();
         _install(packages);
     }
 
@@ -347,8 +358,8 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         returns (bool)
     {
         if (moduleTypeId == 1) {
-            ValidationId vId = ValidationId.wrap(bytes20(module));
-            return !(_validationStorage().vInfo[vId].vType == VALIDATION_TYPE_ROOT);
+            ValidationId vId = validatorToIdentifier(IValidator(module));
+            return _validationStorage().vInfo[vId].hook != address(0);
         } else if (moduleTypeId == 2) {
             return address(_executorConfig(IExecutor(module)).hook) != address(0);
         } else if (moduleTypeId == 3) {
@@ -357,7 +368,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         } else if (moduleTypeId == 4) {
             return _hookStorage().enabled[module];
         } else if (moduleTypeId == 5) {
-            ValidationId vId = ValidationId.wrap(bytes20(additionalContext));
+            ValidationId vId = permissionToIdentifier(PermissionId.wrap(bytes4(additionalContext)));
             ValidationInfo storage $ = _validationStorage().vInfo[vId];
             for (uint256 i = 0; i < $.policies.length; i++) {
                 if ($.policies[i] == module) {
@@ -366,7 +377,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
             }
             return false;
         } else if (moduleTypeId == 6) {
-            ValidationId vId = ValidationId.wrap(bytes20(additionalContext));
+            ValidationId vId = permissionToIdentifier(PermissionId.wrap(bytes4(additionalContext)));
             ValidationInfo storage $ = _validationStorage().vInfo[vId];
             return $.signer == module;
         } else {

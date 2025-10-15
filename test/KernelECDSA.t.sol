@@ -31,7 +31,7 @@ contract KernelECDSATest is KernelTest {
 
         ValidationId vId = kernel.root();
 
-        assertEq(ValidationId.unwrap(vId), bytes20(address(rootValidator)));
+        assertEq(ValidationId.unwrap(vId), bytes21(abi.encodePacked(bytes1(0x01), address(rootValidator))));
 
         ValidationInfo memory info = kernel.validationInfo(vId);
     }
@@ -54,11 +54,17 @@ contract KernelECDSATest is KernelTest {
     }
 
     function test_change_root_check_vId_0() external unitTest {
-        Install[] memory packages = new Install[](2);
+        Install[] memory packages = new Install[](3);
         packages[0] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
         packages[1] = Install({
             moduleType: 5,
             module: address(policy),
+            internalData: abi.encodePacked(permissionId),
+            moduleData: hex""
+        });
+        packages[2] = Install({
+            moduleType: 6,
+            module: address(signer),
             internalData: abi.encodePacked(permissionId),
             moduleData: hex""
         });

@@ -1,6 +1,6 @@
 pragma solidity ^0.8.0;
 
-import {IHook, IExecutor, IModule} from "../interfaces/IERC7579Modules.sol";
+import {IHook, IExecutor, IModule, IValidator} from "../interfaces/IERC7579Modules.sol";
 import {ValidationManager} from "./ValidationManager.sol";
 import {ExecutorManager} from "./ExecutorManager.sol";
 import {HookManager} from "./HookManager.sol";
@@ -9,10 +9,16 @@ import {ERC1271} from "../lib/ERC1271.sol";
 import {InvalidNonce, NotImplemented, Unauthorized} from "../types/Error.sol";
 import {ModuleInstalled, ModuleUninstalled} from "../types/Events.sol";
 import {Install, Call, InstallAndExecute} from "../types/Structs.sol";
-import {ValidationId} from "../types/Types.sol";
+import {ValidationId, ValidationType, PermissionId} from "../types/Types.sol";
 import {calldataKeccak} from "../lib/Utils.sol";
 import {Lib4337} from "../lib/Lib4337.sol";
-import {MODULE_MANAGER_STORAGE_SLOT} from "../types/Constants.sol";
+import {getValidator, getPermissionId, validatorToIdentifier, permissionToIdentifier} from "../lib/Utils.sol";
+import {
+    MODULE_MANAGER_STORAGE_SLOT,
+    VALIDATION_TYPE_ROOT,
+    VALIDATION_TYPE_VALIDATOR,
+    VALIDATION_TYPE_PERMISSION
+} from "../types/Constants.sol";
 
 struct ModuleStorage {
     address registry; // Note : not used on vanila kernel but saving the storage slot for future usage
@@ -50,6 +56,10 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         return (uint256(key) << 64) + seq;
     }
 
+    function _hookEnabled(IHook _hook) internal view override(ValidationManager, HookManager) returns (bool) {
+        return HookManager._hookEnabled(_hook);
+    }
+
     function _initialized() internal view virtual returns (bool) {
         return _statelessInitializeCheck() || _statefulInitializeCheck();
     }
@@ -74,11 +84,19 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         override
         returns (bool)
     {
-        ValidationId vId = ValidationId.wrap(bytes20(signature[0:20]));
-        if (vId == ValidationId.wrap(bytes20(0))) {
+        ValidationType vType = ValidationType.wrap(bytes1(signature[0]));
+        ValidationId vId;
+        if (vType == VALIDATION_TYPE_ROOT) {
             vId = _validationStorage().root;
+            signature = signature[1:];
+        } else if (vType == VALIDATION_TYPE_VALIDATOR) {
+            vId = validatorToIdentifier(IValidator(address(bytes20(signature[1:21]))));
+            signature = signature[21:];
+        } else if (vType == VALIDATION_TYPE_PERMISSION) {
+            vId = permissionToIdentifier(PermissionId.wrap(bytes4(signature[1:5])));
+            signature = signature[5:];
         }
-        uint256 validationData = _verifySignature(vId, msg.sender, hash, signature[20:]);
+        uint256 validationData = _verifySignature(vId, msg.sender, hash, signature);
         return Lib4337.checkValidation(validationData);
     }
 
@@ -158,6 +176,12 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
                 _installModule(pkg.moduleType, pkg.module, pkg.moduleData, pkg.internalData);
             }
         }
+
+        require(
+            ValidationId.unwrap(installingPermission) == bytes21(0)
+                || _validationStorage().vInfo[installingPermission].signer != address(0),
+            "Permission Install not finished"
+        );
     }
 
     function _install(

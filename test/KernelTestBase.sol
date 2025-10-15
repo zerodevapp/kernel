@@ -15,12 +15,12 @@ import {MockERC721} from "./mock/MockERC721.sol";
 import {MockERC1155} from "./mock/MockERC1155.sol";
 import {MockCallee} from "./mock/MockCallee.sol";
 import {MockContractETH} from "./mock/MockContractETH.sol";
-import {MockKernel} from "./mock/MockKernel.sol";
+import {MockHook} from "./mock/MockHook.sol";
 import {IValidator} from "src/interfaces/IERC7579Modules.sol";
 import {console} from "forge-std/console.sol";
 import {Received} from "src/types/Events.sol";
 import {Install} from "src/types/Structs.sol";
-import {ValidationMode} from "src/types/Types.sol";
+import {ValidationMode, PermissionId} from "src/types/Types.sol";
 
 abstract contract KernelTestBase is Test {
     IEntryPoint ep;
@@ -35,7 +35,8 @@ abstract contract KernelTestBase is Test {
     address payable beneficiary;
     MockPolicy policy;
     MockSigner signer;
-    bytes20 permissionId;
+    MockHook hook;
+    PermissionId permissionId;
     uint256 permissionRevertIndex;
     KernelHelper helper;
 
@@ -101,10 +102,10 @@ abstract contract KernelTestBase is Test {
         signatures[0] = hex"dead";
         signatures[1] = hex"beef";
         if (success || permissionRevertIndex != 0) {
-            policy.sudoSetValidSig(address(kernel), permissionId, hex"dead");
+            policy.sudoSetValidSig(address(kernel), PermissionId.unwrap(permissionId), hex"dead");
         }
         if (success || permissionRevertIndex != 1) {
-            signer.sudoSetValidSig(address(kernel), permissionId, hex"beef");
+            signer.sudoSetValidSig(address(kernel), PermissionId.unwrap(permissionId), hex"beef");
         }
 
         return abi.encode(signatures);
@@ -115,10 +116,10 @@ abstract contract KernelTestBase is Test {
         signatures[0] = hex"dead";
         signatures[1] = hex"beef";
         if (success || permissionRevertIndex != 0) {
-            policy.sudoSetPass(address(kernel), permissionId, true);
+            policy.sudoSetPass(address(kernel), PermissionId.unwrap(permissionId), true);
         }
         if (success || permissionRevertIndex != 1) {
-            signer.sudoSetPass(address(kernel), permissionId, true);
+            signer.sudoSetPass(address(kernel), PermissionId.unwrap(permissionId), true);
         }
 
         return abi.encode(signatures);
@@ -132,7 +133,6 @@ abstract contract KernelTestBase is Test {
         function(bytes32, bool) internal returns(bytes memory) signEnable
     ) internal returns (bytes memory sig) {
         bytes32 digest = helper.installDigest(address(kernel), replayable, nonce, packages);
-        MockKernel mockKernel = new MockKernel(ep);
 
         if (!is7702) {
             //vm.store(address(kernel), ERC1967_IMPLEMENTATION_SLOT, bytes32(uint256(uint160(address(mockKernel)))));

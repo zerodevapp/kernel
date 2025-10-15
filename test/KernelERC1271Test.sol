@@ -21,7 +21,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
         bytes32 messageHash = keccak256("Hello world");
         (bytes32 contentsHash, bytes memory sig) =
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _rootSignHash, false, true);
-        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes20(0), sig));
+        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0), sig));
         assertEq(ret, ERC1271_MAGICVALUE);
     }
 
@@ -38,7 +38,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
         bytes32 messageHash = keccak256("Hello world");
         (bytes32 contentsHash, bytes memory sig) =
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _rootSignHash, false, false);
-        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes20(0), sig));
+        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0), sig));
         assertEq(ret, ERC1271_INVALID);
     }
 
@@ -46,7 +46,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
         bytes32 messageHash = keccak256("Hello world");
         bytes32 personalHash = _toErc1271HashPersonalSign(messageHash);
         bytes memory sig = _rootSignHash(personalHash, true);
-        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes20(0), sig));
+        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0), sig));
         assertEq(ret, ERC1271_MAGICVALUE);
     }
 
@@ -54,7 +54,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
         bytes32 messageHash = keccak256("Hello world");
         bytes32 personalHash = _toErc1271HashPersonalSign(messageHash);
         bytes memory sig = _rootSignHash(personalHash, false);
-        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes20(0), sig));
+        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0), sig));
         assertEq(ret, ERC1271_INVALID);
     }
 
@@ -64,7 +64,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _validatorSignHash, false, true);
         kernel.installModule(1, address(newValidator), abi.encode(hex"", hex""));
         bytes4 ret = kernel.isValidSignature(
-            _toContentsHash(contentsHash), abi.encodePacked(bytes20(address(newValidator)), sig)
+            _toContentsHash(contentsHash), abi.encodePacked(bytes1(0x01), bytes20(address(newValidator)), sig)
         );
         assertEq(ret, ERC1271_MAGICVALUE);
     }
@@ -75,7 +75,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _validatorSignHash, false, false);
         kernel.installModule(1, address(newValidator), abi.encode(hex"", hex""));
         bytes4 ret = kernel.isValidSignature(
-            _toContentsHash(contentsHash), abi.encodePacked(bytes20(address(newValidator)), sig)
+            _toContentsHash(contentsHash), abi.encodePacked(bytes1(0x01), bytes20(address(newValidator)), sig)
         );
         assertEq(ret, ERC1271_INVALID);
     }
@@ -85,7 +85,8 @@ abstract contract KernelERC1271Test is KernelTestBase {
         bytes32 personalHash = _toErc1271HashPersonalSign(messageHash);
         bytes memory sig = _validatorSignHash(personalHash, true);
         kernel.installModule(1, address(newValidator), abi.encode(hex"", hex""));
-        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes20(address(newValidator)), sig));
+        bytes4 ret =
+            kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0x01), bytes20(address(newValidator)), sig));
         assertEq(ret, ERC1271_MAGICVALUE);
     }
 
@@ -94,7 +95,8 @@ abstract contract KernelERC1271Test is KernelTestBase {
         bytes32 personalHash = _toErc1271HashPersonalSign(messageHash);
         bytes memory sig = _validatorSignHash(personalHash, false);
         kernel.installModule(1, address(newValidator), abi.encode(hex"", hex""));
-        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes20(address(newValidator)), sig));
+        bytes4 ret =
+            kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0x01), bytes20(address(newValidator)), sig));
         assertEq(ret, ERC1271_INVALID);
     }
 
@@ -104,7 +106,8 @@ abstract contract KernelERC1271Test is KernelTestBase {
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _permissionSignHash, false, true);
         kernel.installModule(5, address(policy), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
         kernel.installModule(6, address(signer), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
-        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(permissionId, sig));
+        bytes4 ret =
+            kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0x02), permissionId, sig));
         assertEq(ret, ERC1271_MAGICVALUE);
     }
 
@@ -114,7 +117,8 @@ abstract contract KernelERC1271Test is KernelTestBase {
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _permissionSignHash, false, false);
         kernel.installModule(5, address(policy), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
         kernel.installModule(6, address(signer), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
-        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(permissionId, sig));
+        bytes4 ret =
+            kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0x02), permissionId, sig));
         assertEq(ret, ERC1271_INVALID);
     }
 
@@ -124,7 +128,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
         bytes memory sig = _permissionSignHash(personalHash, true);
         kernel.installModule(5, address(policy), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
         kernel.installModule(6, address(signer), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
-        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(permissionId, sig));
+        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0x02), permissionId, sig));
         assertEq(ret, ERC1271_MAGICVALUE);
     }
 

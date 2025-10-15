@@ -23,6 +23,7 @@ import {KernelValidatorTest} from "./KernelValidatorTest.sol";
 import {KernelExecuteTest} from "./KernelExecuteTest.sol";
 import {KernelSelectorTest} from "./KernelSelectorTest.sol";
 import {KernelHookTest} from "./KernelHookTest.sol";
+import {PermissionId} from "src/types/Types.sol";
 
 contract KernelTest is
     KernelUserOpTest,
@@ -49,7 +50,8 @@ contract KernelTest is
         beneficiary = payable(makeAddr("Beneficiary"));
         policy = new MockPolicy();
         signer = new MockSigner();
-        permissionId = bytes20(keccak256(abi.encodePacked("Hello world")));
+        hook = new MockHook();
+        permissionId = PermissionId.wrap(bytes4(keccak256(abi.encodePacked("Hello world"))));
         _initialize();
     }
 
@@ -76,7 +78,7 @@ contract KernelTest is
     }
 
     function test_install_packages_with_signature() external unitTest {
-        Install[] memory packages = new Install[](2);
+        Install[] memory packages = new Install[](3);
         packages[0] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
         packages[1] = Install({
             moduleType: 5,
@@ -84,15 +86,27 @@ contract KernelTest is
             internalData: abi.encodePacked(permissionId),
             moduleData: hex""
         });
+        packages[2] = Install({
+            moduleType: 6,
+            module: address(signer),
+            internalData: abi.encodePacked(permissionId),
+            moduleData: hex""
+        });
         kernel.installModule(false, 0, packages, enableSig(0, true, false, packages, _rootSignHash));
     }
 
     function test_install_packages_with_signature_replayable() external unitTest {
-        Install[] memory packages = new Install[](2);
+        Install[] memory packages = new Install[](3);
         packages[0] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
         packages[1] = Install({
             moduleType: 5,
             module: address(policy),
+            internalData: abi.encodePacked(permissionId),
+            moduleData: hex""
+        });
+        packages[2] = Install({
+            moduleType: 6,
+            module: address(signer),
             internalData: abi.encodePacked(permissionId),
             moduleData: hex""
         });
@@ -108,17 +122,15 @@ contract KernelTest is
     }
 
     function test_install_invalid() external unitTest {
-        MockHook mockHook = new MockHook();
         vm.expectRevert(NotImplemented.selector);
-        kernel.installModule(10, address(mockHook), abi.encode(hex"", ""));
+        kernel.installModule(10, address(hook), abi.encode(hex"", ""));
         vm.expectRevert(NotImplemented.selector);
-        kernel.isModuleInstalled(10, address(mockHook), abi.encodePacked(permissionId));
+        kernel.isModuleInstalled(10, address(hook), abi.encodePacked(permissionId));
     }
 
     function test_uninstall_invalid() external unitTest {
-        MockHook mockHook = new MockHook();
         vm.expectRevert(NotImplemented.selector);
-        kernel.uninstallModule(10, address(mockHook), abi.encode(hex"", ""));
+        kernel.uninstallModule(10, address(hook), abi.encode(hex"", ""));
     }
 
     function test_supports_module() external unitTest {
