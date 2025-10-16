@@ -7,6 +7,8 @@ import {MockCallee} from "./mock/MockCallee.sol";
 import {KernelTestBase} from "./KernelTestBase.sol";
 import {PermissionId} from "src/types/Types.sol";
 import {validatorToIdentifier} from "src/lib/Utils.sol";
+import {SimpleAccount} from "account-abstraction/accounts/SimpleAccount.sol";
+import {SimpleAccountFactory} from "account-abstraction/accounts/SimpleAccountFactory.sol";
 
 abstract contract KernelUserOpTest is KernelTestBase {
     function test_executeuserop_root() external entryPointTest {
@@ -33,6 +35,36 @@ abstract contract KernelUserOpTest is KernelTestBase {
         vm.startPrank(address(ep));
         kernel.executeUserOp(ops[0], keccak256("hello world"));
         vm.stopPrank();
+        assertEq(callee.bar(), 1);
+    }
+
+    function test_userop_simple_account_compare() external entryPointTest {
+        (address simpleOwner, uint256 simpleKey) = makeAddrAndKey("SimpleOwner");
+        SimpleAccountFactory factory = new SimpleAccountFactory(ep);
+        vm.startPrank(address(ep.senderCreator()));
+        SimpleAccount account = factory.createAccount(simpleOwner, 0);
+        vm.stopPrank();
+        vm.deal(address(account), 1e18);
+        PackedUserOperation[] memory ops = new PackedUserOperation[](1);
+        ops[0] = PackedUserOperation({
+            sender: address(account),
+            nonce: 0,
+            initCode: hex"",
+            callData: abi.encodeWithSelector(
+                account.execute.selector, address(callee), uint256(0), abi.encodePacked(MockCallee.foo.selector)
+            ),
+            accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
+            preVerificationGas: 1000000,
+            gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
+            paymasterAndData: hex"",
+            signature: hex""
+        });
+        bytes32 userOpHash = ep.getUserOpHash(ops[0]);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(simpleKey, userOpHash);
+        ops[0].signature = abi.encodePacked(r,s,v);
+        vm.startSnapshotGas("Simple - foo()");
+        ep.handleOps(ops, beneficiary);
+        vm.stopSnapshotGas();
         assertEq(callee.bar(), 1);
     }
 
