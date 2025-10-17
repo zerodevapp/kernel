@@ -20,6 +20,13 @@ checksum = "305f34048fe928dacefb31a61baecae18eed43959f892d6a1b428eb46bb6afc9"
 integrity = "8ffcb24a9c6089aef86df243251501b42928ace5cacfa3e47bb17e521ae67a1b"
 
 [[dependencies]]
+name = "forge-std"
+version = "1.11.0"
+url = "https://soldeer-revisions.s3.amazonaws.com/forge-std/1_11_0_09-10-2025_06:23:22_forge-std-1.11.zip"
+checksum = "0290ef84c693dc9086f98f6a9b4a69dc5c2b6aa1cfe10a989bd1def1a456c099"
+integrity = "84aa7d32f8c7329468cf16f31f0f74e68072e634fdbde98f3bb00c6b136103b2"
+
+[[dependencies]]
 name = "solady"
 version = "0.1.26"
 url = "https://soldeer-revisions.s3.amazonaws.com/solady/0_1_26_25-08-2025_15:30:06_solady.zip"
