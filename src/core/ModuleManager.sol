@@ -82,22 +82,28 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         internal
         view
         override
-        returns (bool)
+        returns (bool result)
     {
-        ValidationType vType = ValidationType.wrap(bytes1(signature[0]));
-        ValidationId vId;
-        if (vType == VALIDATION_TYPE_ROOT) {
-            vId = _validationStorage().root;
-            signature = signature[1:];
-        } else if (vType == VALIDATION_TYPE_VALIDATOR) {
-            vId = validatorToIdentifier(IValidator(address(bytes20(signature[1:21]))));
-            signature = signature[21:];
-        } else if (vType == VALIDATION_TYPE_PERMISSION) {
-            vId = permissionToIdentifier(PermissionId.wrap(bytes4(signature[1:5])));
-            signature = signature[5:];
+        // check if fallback signature is allowed
+        if (_erc1271RawAllowed()) {
+            result = _verifyFallbackSignature(hash, signature);
         }
-        uint256 validationData = _verifySignature(vId, msg.sender, hash, signature);
-        return Lib4337.checkValidation(validationData);
+        if (!result) {
+            ValidationType vType = ValidationType.wrap(bytes1(signature[0]));
+            ValidationId vId;
+            if (vType == VALIDATION_TYPE_ROOT) {
+                vId = _validationStorage().root;
+                signature = signature[1:];
+            } else if (vType == VALIDATION_TYPE_VALIDATOR) {
+                vId = validatorToIdentifier(IValidator(address(bytes20(signature[1:21]))));
+                signature = signature[21:];
+            } else if (vType == VALIDATION_TYPE_PERMISSION) {
+                vId = permissionToIdentifier(PermissionId.wrap(bytes4(signature[1:5])));
+                signature = signature[5:];
+            }
+            uint256 validationData = _verifySignature(vId, msg.sender, hash, signature);
+            result = Lib4337.checkValidation(validationData);
+        }
     }
 
     function _installHash(Install[] calldata packages) internal pure returns (bytes32) {
