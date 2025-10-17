@@ -1,8 +1,8 @@
 [profile.default]
 src = "src"
 out = "out"
-libs = ["lib"]
-via_ir = false # make this true
+libs = ["lib", "dependencies"]
+via_ir = true # make this true
 optimizer = true
 isolate = true
 
@@ -16,4 +16,10 @@ extra_output = ["storageLayout"]
 [invariant]
 runs = 1000
 depth = 1000
+
+[dependencies]
+solady = "0.1.26"
+eth-infinitism-account-abstraction = "0.8.0"
+"@openzeppelin-contracts" = "5.4.0"
+a16z-halmos-cheatcodes = "6da4e692c357ba6d641a2e677a28298cac9f76ab"
 

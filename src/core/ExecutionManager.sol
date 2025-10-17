@@ -16,7 +16,7 @@ abstract contract ExecutionManager {
             revert InvalidExecType();
         }
 
-        function(bytes calldata, function()) returns(bytes[] memory) executeFunction;
+        function(bytes calldata, function()) returns (bytes[] memory) executeFunction;
         if (callType == LibERC7579.CALLTYPE_SINGLE) {
             executeFunction = _executeCall;
         } else if (callType == LibERC7579.CALLTYPE_BATCH) {
@@ -29,10 +29,7 @@ abstract contract ExecutionManager {
         return executeFunction(executionData, onRevert);
     }
 
-    function _executeCall(bytes calldata executionData, function() onRevert)
-        internal
-        returns (bytes[] memory results)
-    {
+    function _executeCall(bytes calldata executionData, function() onRevert) internal returns (bytes[] memory results) {
         (address target, uint256 value, bytes calldata data) = LibERC7579.decodeSingle(executionData);
         bool success = _call(target, value, data);
         if (!success) {

@@ -18,4 +18,8 @@ contract Kernel7702 is Kernel {
     function _fallbackValidatorAvailable() internal pure override returns (bool) {
         return true;
     }
+
+    function _erc1271RawAllowed() internal pure override returns (bool) {
+        return true;
+    }
 }

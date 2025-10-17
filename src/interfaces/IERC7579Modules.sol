@@ -52,10 +52,7 @@ interface IValidator is IModule {
      * @param userOpHash The hash of the user operation to be validated
      * @return return value according to ERC-4337
      */
-    function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash)
-        external
-        payable
-        returns (uint256);
+    function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash) external payable returns (uint256);
 
     /**
      * Validator can be used for ERC-1271 validation
@@ -92,8 +89,12 @@ interface ISigner is IModule {
         external
         payable
         returns (uint256);
-    function checkSignature(bytes32 id, address sender, bytes32 hash, bytes calldata sig)
+    function checkSignature(bytes32 id, address sender, bytes32 hash, bytes calldata sig) external view returns (bytes4);
+}
+
+interface IStatelessValidator is IValidator {
+    function validateSignatureWithData(bytes32 hash, bytes calldata signature, bytes calldata data)
         external
         view
-        returns (bytes4);
+        returns (bool);
 }

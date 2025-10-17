@@ -149,7 +149,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
         bytes32 hash,
         bytes memory contentsType,
         bytes memory contentsName,
-        function(bytes32, bool) returns(bytes memory) signFn,
+        function(bytes32, bool) returns (bytes memory) signFn,
         bool isExplicit,
         bool success
     ) internal returns (bytes32 contentsHash, bytes memory sig) {

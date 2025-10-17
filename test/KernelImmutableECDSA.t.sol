@@ -46,16 +46,10 @@ contract KernelImmutableECDSATest is KernelTest {
         Install[] memory packages = new Install[](3);
         packages[0] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
         packages[1] = Install({
-            moduleType: 5,
-            module: address(policy),
-            internalData: abi.encodePacked(permissionId),
-            moduleData: hex""
+            moduleType: 5, module: address(policy), internalData: abi.encodePacked(permissionId), moduleData: hex""
         });
         packages[2] = Install({
-            moduleType: 6,
-            module: address(signer),
-            internalData: abi.encodePacked(permissionId),
-            moduleData: hex""
+            moduleType: 6, module: address(signer), internalData: abi.encodePacked(permissionId), moduleData: hex""
         });
         kernel.installModule(false, 0, packages, enableSig(0, true, false, packages, _rootSignHash));
 

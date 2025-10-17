@@ -240,7 +240,7 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         bytes calldata signature
     ) internal returns (uint256 validationData) {
         ValidationId vId = _validationStorage().root;
-        function(bytes32) internal view returns(bytes32) hashTypedData =
+        function(bytes32) internal view returns (bytes32) hashTypedData =
             replayable ? _hashTypedDataSansChainId : _hashTypedData;
         require(_checkNonce(_nonce), InvalidNonce());
         bytes32 digest = hashTypedData(

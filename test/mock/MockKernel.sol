@@ -13,7 +13,7 @@ contract MockKernel is Kernel {
         view
         returns (bytes32)
     {
-        function(bytes32) internal view returns(bytes32) hashTypedData =
+        function(bytes32) internal view returns (bytes32) hashTypedData =
             opData.replayable ? _hashTypedDataSansChainId : _hashTypedData;
         bytes32 digest = hashTypedData(
             keccak256(
@@ -36,7 +36,7 @@ contract MockKernel is Kernel {
         view
         returns (bytes32)
     {
-        function(bytes32) internal view returns(bytes32) hashTypedData =
+        function(bytes32) internal view returns (bytes32) hashTypedData =
             replayable ? _hashTypedDataSansChainId : _hashTypedData;
         bytes32 digest = hashTypedData(
             keccak256(

@@ -18,8 +18,12 @@ contract KernelFactory {
 
     function checkInitialized(address account, bytes calldata initData) external view returns (bool) {
         bytes4 selector = bytes4(initData[0:4]);
-        ( /*replayable*/ , /*nonce*/, Install[] memory packages, /*sig*/ ) =
-            abi.decode(initData, (bool, uint256, Install[], bytes));
+        (
+
+            /*replayable*/,
+            /*nonce*/,
+            Install[] memory packages, /*sig*/
+        ) = abi.decode(initData, (bool, uint256, Install[], bytes));
 
         // naively check if the package has been installed, does not guarantee if proper internalData is used
         for (uint256 i = 0; i < packages.length; i++) {

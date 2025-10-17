@@ -1,0 +1,29 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "SignerRSA",
+  "sourceName": "contracts/utils/cryptography/signers/SignerRSA.sol",
+  "abi": [
+    {
+      "inputs": [],
+      "name": "signer",
+      "outputs": [
+        {
+          "internalType": "bytes",
+          "name": "e",
+          "type": "bytes"
+        },
+        {
+          "internalType": "bytes",
+          "name": "n",
+          "type": "bytes"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x",
+  "deployedBytecode": "0x",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

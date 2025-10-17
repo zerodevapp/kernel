@@ -1,0 +1,45 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "SignerP256",
+  "sourceName": "contracts/utils/cryptography/signers/SignerP256.sol",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "qx",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "qy",
+          "type": "bytes32"
+        }
+      ],
+      "name": "SignerP256InvalidPublicKey",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "signer",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "qx",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "qy",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x",
+  "deployedBytecode": "0x",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

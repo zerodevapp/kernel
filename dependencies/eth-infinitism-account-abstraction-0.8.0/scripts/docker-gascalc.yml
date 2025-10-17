@@ -1,0 +1,23 @@
+services:
+  test:
+    image: node:18
+    container_name: gascalc
+    depends_on:
+      - localgeth
+    volumes:
+      - ..:/app
+    working_dir: /app
+    restart: "no"
+    environment:
+      - HARDHAT_NETWORK=localgeth
+    command: "yarn mocha-gascalc"
+
+  localgeth:
+    ports: [ '8545:8545' ]
+    image: ethereum/client-go:release-1.14
+    # image: dtr22/geth7702
+    command: |
+          --verbosity 1
+          --http -http.addr 0.0.0.0 --http.api 'eth,net,web3,debug' --http.port 8545 
+          --http.vhosts '*,localhost,host.docker.internal'
+          --dev --rpc.allow-unprotected-txs 

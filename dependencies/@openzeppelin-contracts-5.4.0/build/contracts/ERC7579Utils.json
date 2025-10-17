@@ -1,0 +1,116 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "ERC7579Utils",
+  "sourceName": "contracts/account/utils/draft-ERC7579Utils.sol",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "moduleTypeId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "address",
+          "name": "module",
+          "type": "address"
+        }
+      ],
+      "name": "ERC7579AlreadyInstalledModule",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "ERC7579DecodingError",
+      "type": "error"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "moduleTypeId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "address",
+          "name": "module",
+          "type": "address"
+        }
+      ],
+      "name": "ERC7579MismatchedModuleTypeId",
+      "type": "error"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "moduleTypeId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "address",
+          "name": "module",
+          "type": "address"
+        }
+      ],
+      "name": "ERC7579UninstalledModule",
+      "type": "error"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "CallType",
+          "name": "callType",
+          "type": "bytes1"
+        }
+      ],
+      "name": "ERC7579UnsupportedCallType",
+      "type": "error"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "ExecType",
+          "name": "execType",
+          "type": "bytes1"
+        }
+      ],
+      "name": "ERC7579UnsupportedExecType",
+      "type": "error"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "moduleTypeId",
+          "type": "uint256"
+        }
+      ],
+      "name": "ERC7579UnsupportedModuleType",
+      "type": "error"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "batchExecutionIndex",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "bytes",
+          "name": "returndata",
+          "type": "bytes"
+        }
+      ],
+      "name": "ERC7579TryExecuteFail",
+      "type": "event"
+    }
+  ],
+  "bytecode": "0x60556032600b8282823980515f1a607314602657634e487b7160e01b5f525f60045260245ffd5b305f52607381538281f3fe730000000000000000000000000000000000000000301460806040525f5ffdfea2646970667358221220db3a72b9c30031607ba89d7eb8369ee2e926ab5d5c33a06523b63949a7fe2a4264736f6c634300081b0033",
+  "deployedBytecode": "0x730000000000000000000000000000000000000000301460806040525f5ffdfea2646970667358221220db3a72b9c30031607ba89d7eb8369ee2e926ab5d5c33a06523b63949a7fe2a4264736f6c634300081b0033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

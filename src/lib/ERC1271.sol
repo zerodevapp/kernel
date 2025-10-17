@@ -40,16 +40,6 @@ abstract contract ERC1271 is EIP712 {
         }
     }
 
-    /// @dev Returns whether the `msg.sender` is considered safe, such
-    /// that we don't need to use the nested EIP-712 workflow.
-    /// Override to return true for more callers.
-    /// See: https://mirror.xyz/curiousapple.eth/pFqAdW2LiJ-6S4sg_u1z08k4vK6BCJ33LcyXpnNb8yU
-    function _erc1271CallerIsSafe() internal view virtual returns (bool) {
-        // The canonical `MulticallerWithSigner` at 0x000000000000D9ECebf3C23529de49815Dac1c4c
-        // is known to include the account in the hash to be signed.
-        return msg.sender == 0x000000000000D9ECebf3C23529de49815Dac1c4c;
-    }
-
     /// @dev Returns whether the `hash` and `signature` are valid.
     /// Override if you need non-ECDSA logic.
     function _erc1271IsValidSignatureNowCalldata(bytes32 hash, bytes calldata signature)
@@ -78,21 +68,18 @@ abstract contract ERC1271 is EIP712 {
 
     /// @dev Returns whether the `signature` is valid for the `hash.
     function _erc1271IsValidSignature(bytes32 hash, bytes calldata signature) internal view virtual returns (bool) {
-        return _erc1271IsValidSignatureViaSafeCaller(hash, signature)
-            || _erc1271IsValidSignatureViaNestedEIP712(hash, signature)
-            || _erc1271IsValidSignatureViaNestedEIP712Replayable(hash, signature)
-            || _erc1271IsValidSignatureViaRPC(hash, signature);
+        return _erc1271Raw(hash, signature) || _erc1271IsValidSignatureViaNestedEIP712(hash, signature)
+            || _erc1271IsValidSignatureViaNestedEIP712Replayable(hash, signature);
     }
 
     /// @dev Performs the signature validation without nested EIP-712 if the caller is
     /// a safe caller. A safe caller must include the address of this account in the hash.
-    function _erc1271IsValidSignatureViaSafeCaller(bytes32 hash, bytes calldata signature)
-        internal
-        view
-        virtual
-        returns (bool result)
-    {
-        if (_erc1271CallerIsSafe()) result = _erc1271IsValidSignatureNowCalldata(hash, signature);
+    function _erc1271Raw(bytes32 hash, bytes calldata signature) internal view virtual returns (bool result) {
+        if (_erc1271RawAllowed()) result = _erc1271IsValidSignatureNowCalldata(hash, signature);
+    }
+
+    function _erc1271RawAllowed() internal view virtual returns (bool result) {
+        return false;
     }
 
     /// @dev ERC1271 signature validation (Nested EIP-712 workflow).
@@ -269,7 +256,7 @@ abstract contract ERC1271 is EIP712 {
         uint256 t = uint256(uint160(address(this)));
         // Forces the compiler to pop the variables after the scope, avoiding stack-too-deep.
         if (t != uint256(0)) {
-            (, string memory name, string memory version, /*chainId*/, address verifyingContract, bytes32 salt,) =
+            (, string memory name, string memory version,/*chainId*/, address verifyingContract, bytes32 salt,) =
                 eip712Domain();
             /// @solidity memory-safe-assembly
             assembly {
@@ -344,45 +331,5 @@ abstract contract ERC1271 is EIP712 {
         }
         if (t == uint256(0)) hash = _hashTypedData(hash); // `PersonalSign` workflow.
         result = _erc1271IsValidSignatureNowCalldata(hash, signature);
-    }
-
-    /// @dev Performs the signature validation without nested EIP-712 to allow for easy sign ins.
-    /// This function must always return false or revert if called on-chain.
-    /// forge-lint: disable-next-line(mixed-case-function)
-    function _erc1271IsValidSignatureViaRPC(bytes32 hash, bytes calldata signature)
-        internal
-        view
-        virtual
-        returns (bool result)
-    {
-        // Non-zero gasprice is a heuristic to check if a call is on-chain,
-        // but we can't fully depend on it because it can be manipulated.
-        // See: https://x.com/NoahCitron/status/1580359718341484544
-        if (tx.gasprice == uint256(0)) {
-            /// @solidity memory-safe-assembly
-            assembly {
-                mstore(gasprice(), gasprice())
-                // See: https://gist.github.com/Vectorized/3c9b63524d57492b265454f62d895f71
-                let b := 0x000000000000378eDCD5B5B0A24f5342d8C10485 // Basefee contract,
-                pop(staticcall(0xffff, b, codesize(), gasprice(), gasprice(), 0x20))
-                // If `gasprice < basefee`, the call cannot be on-chain, and we can skip the gas burn.
-                if iszero(mload(gasprice())) {
-                    let m := mload(0x40) // Cache the free memory pointer.
-                    mstore(gasprice(), 0x1626ba7e) // `isValidSignature(bytes32,bytes)`.
-                    mstore(0x20, b) // Recycle `b` to denote if we need to burn gas.
-                    mstore(0x40, 0x40)
-                    let gasToBurn := or(add(0xffff, gaslimit()), gaslimit())
-                    // Burns gas computationally efficiently. Also, requires that `gas > gasToBurn`.
-                    if or(eq(hash, b), lt(gas(), gasToBurn)) { invalid() }
-                    // Make a call to this with `b`, efficiently burning the gas provided.
-                    // No valid transaction can consume more than the gaslimit.
-                    // See: https://ethereum.github.io/yellowpaper/paper.pdf
-                    // Most RPCs perform calls with a gas budget greater than the gaslimit.
-                    pop(staticcall(gasToBurn, address(), 0x1c, 0x64, gasprice(), gasprice()))
-                    mstore(0x40, m) // Restore the free memory pointer.
-                }
-            }
-            result = _erc1271IsValidSignatureNowCalldata(hash, signature);
-        }
     }
 }
