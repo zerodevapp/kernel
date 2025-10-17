@@ -6,7 +6,7 @@ Kernel is a smart contract account that is:
 - Modular (supports [ERC-7579 plugins](https://eips.ethereum.org/EIPS/eip-7579)).
 - [Highly gas-efficient](https://github.com/zerodevapp/aa-benchmark).
 
-Kernel is also a winner of [the inaugural Ethereum AA grant](https://erc4337.mirror.xyz/hRn_41cef8oKn44ZncN9pXvY3VID6LZOtpLlktXYtmA).  At the time of writing, [Kernel is the most widely used modular smart account.](https://www.bundlebear.com/factories/all).
+Kernel is also a winner of [the inaugural Ethereum AA grant](https://erc4337.mirror.xyz/hRn_41cef8oKn44ZncN9pXvY3VID6LZOtpLlktXYtmA).  At the time of writing, [Kernel is the most widely used modular smart account.](https://www.bundlebear.com).
 
 ## SDKs
 
