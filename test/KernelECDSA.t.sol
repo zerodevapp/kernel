@@ -17,10 +17,7 @@ contract KernelECDSATest is KernelTest {
         rootValidatorData = abi.encodePacked(owner);
         Install[] memory pkgs = new Install[](1);
         pkgs[0] = Install({
-            moduleType: 1,
-            module: address(rootValidator),
-            moduleData: abi.encodePacked(owner),
-            internalData: hex""
+            moduleType: 1, module: address(rootValidator), moduleData: abi.encodePacked(owner), internalData: hex""
         });
         kernel = factory.deploy(pkgs, 0);
         vm.deal(address(kernel), 1e18);
@@ -57,16 +54,10 @@ contract KernelECDSATest is KernelTest {
         Install[] memory packages = new Install[](3);
         packages[0] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
         packages[1] = Install({
-            moduleType: 5,
-            module: address(policy),
-            internalData: abi.encodePacked(permissionId),
-            moduleData: hex""
+            moduleType: 5, module: address(policy), internalData: abi.encodePacked(permissionId), moduleData: hex""
         });
         packages[2] = Install({
-            moduleType: 6,
-            module: address(signer),
-            internalData: abi.encodePacked(permissionId),
-            moduleData: hex""
+            moduleType: 6, module: address(signer), internalData: abi.encodePacked(permissionId), moduleData: hex""
         });
         kernel.installModule(false, 0, packages, enableSig(0, true, false, packages, _rootSignHash));
 

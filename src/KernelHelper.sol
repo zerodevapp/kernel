@@ -17,7 +17,7 @@ contract KernelHelper {
         view
         returns (bytes32 digest)
     {
-        function(address, bytes32) internal view returns(bytes32) hashTypedData =
+        function(address, bytes32) internal view returns (bytes32) hashTypedData =
             replayable ? _hashTypedDataSansChainId : _hashTypedData;
         digest = hashTypedData(
             kernel,
@@ -39,7 +39,7 @@ contract KernelHelper {
         Call[] calldata calls,
         InstallAndExecute calldata opData
     ) external returns (bytes32) {
-        function(address, bytes32) internal view returns(bytes32) hashTypedData =
+        function(address, bytes32) internal view returns (bytes32) hashTypedData =
             opData.replayable ? _hashTypedDataSansChainId : _hashTypedData;
         bytes32 digest = hashTypedData(
             kernel,

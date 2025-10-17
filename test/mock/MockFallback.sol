@@ -69,10 +69,11 @@ contract MockFallback is IFallback {
     function setData(uint256 value) external {
         valueStored = value;
         if (isExecutor) {
-            IERC7579Account(msg.sender).executeFromExecutor(
-                bytes32(0),
-                abi.encodePacked(address(callee), uint256(0), abi.encodeWithSelector(Callee.calleeTest.selector))
-            );
+            IERC7579Account(msg.sender)
+                .executeFromExecutor(
+                    bytes32(0),
+                    abi.encodePacked(address(callee), uint256(0), abi.encodeWithSelector(Callee.calleeTest.selector))
+                );
         }
     }
 }

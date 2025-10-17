@@ -1,0 +1,32 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "MerkleTree",
+  "sourceName": "contracts/utils/structs/MerkleTree.sol",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "index",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "length",
+          "type": "uint256"
+        }
+      ],
+      "name": "MerkleTreeUpdateInvalidIndex",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "MerkleTreeUpdateInvalidProof",
+      "type": "error"
+    }
+  ],
+  "bytecode": "0x60556032600b8282823980515f1a607314602657634e487b7160e01b5f525f60045260245ffd5b305f52607381538281f3fe730000000000000000000000000000000000000000301460806040525f5ffdfea26469706673582212202fc450c5e904dd178a603a417f4fc5838696b0bae01426625cbe6713c0652c2764736f6c634300081b0033",
+  "deployedBytecode": "0x730000000000000000000000000000000000000000301460806040525f5ffdfea26469706673582212202fc450c5e904dd178a603a417f4fc5838696b0bae01426625cbe6713c0652c2764736f6c634300081b0033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

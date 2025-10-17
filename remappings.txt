@@ -1,7 +1,9 @@
-@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/
-account-abstraction/=lib/account-abstraction/contracts/
+@openzeppelin-contracts-5.4.0/=dependencies/@openzeppelin-contracts-5.4.0/
+@openzeppelin/contracts/=dependencies/@openzeppelin-contracts-5.4.0/
+a16z-halmos-cheatcodes-6da4e692c357ba6d641a2e677a28298cac9f76ab/=dependencies/a16z-halmos-cheatcodes-6da4e692c357ba6d641a2e677a28298cac9f76ab/
+account-abstraction/=dependencies/eth-infinitism-account-abstraction-0.8.0/contracts/
 erc4626-tests/=lib/openzeppelin-contracts/lib/erc4626-tests/
-forge-std/=lib/forge-std/src/
-halmos-cheatcodes/=lib/halmos-cheatcodes/src/
-openzeppelin-contracts/=lib/openzeppelin-contracts/
-solady/=lib/solady/src/
+forge-std/=dependencies/forge-std-1.11.0/src/
+halmos-cheatcodes/=dependencies/a16z-halmos-cheatcodes-6da4e692c357ba6d641a2e677a28298cac9f76ab/src/
+openzeppelin-contracts/==dependencies/@openzeppelin-contracts-5.4.0/
+solady/=dependencies/solady-0.1.26/src/

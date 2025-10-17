@@ -7,6 +7,7 @@ import {Kernel7702} from "src/Kernel7702.sol";
 import {Kernel} from "src/Kernel.sol";
 import {Install} from "src/types/Structs.sol";
 import {ValidationId} from "src/types/Types.sol";
+import {ERC1271_MAGICVALUE} from "src/types/Constants.sol";
 
 contract Kernel7702Test is KernelTest {
     address owner;
@@ -44,26 +45,21 @@ contract Kernel7702Test is KernelTest {
         return abi.encodePacked(r, s, v);
     }
 
-    function test_erc1271() external erc1271Test {
+    function test_erc1271() external /*erc1271Test*/  {
         bytes32 hash = bytes32(vm.randomBytes(32));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, hash);
-        kernel.isValidSignature(hash, abi.encodePacked(r, s, v));
+        (bytes4 ret) = kernel.isValidSignature(hash, abi.encodePacked(r, s, v));
+        assertEq(ret, ERC1271_MAGICVALUE);
     }
 
     function test_change_root_check_vId_0() external unitTest {
         Install[] memory packages = new Install[](3);
         packages[0] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
         packages[1] = Install({
-            moduleType: 5,
-            module: address(policy),
-            internalData: abi.encodePacked(permissionId),
-            moduleData: hex""
+            moduleType: 5, module: address(policy), internalData: abi.encodePacked(permissionId), moduleData: hex""
         });
         packages[2] = Install({
-            moduleType: 6,
-            module: address(signer),
-            internalData: abi.encodePacked(permissionId),
-            moduleData: hex""
+            moduleType: 6, module: address(signer), internalData: abi.encodePacked(permissionId), moduleData: hex""
         });
 
         kernel.setRoot(packages, false, hex"");

@@ -130,7 +130,7 @@ abstract contract KernelTestBase is Test {
         bool enableSuccess,
         bool replayable,
         Install[] memory packages,
-        function(bytes32, bool) internal returns(bytes memory) signEnable
+        function(bytes32, bool) internal returns (bytes memory) signEnable
     ) internal returns (bytes memory sig) {
         bytes32 digest = helper.installDigest(address(kernel), replayable, nonce, packages);
 
@@ -147,7 +147,7 @@ abstract contract KernelTestBase is Test {
         uint256 nonce,
         bool enableSuccess,
         bool replayable,
-        function(bytes32, bool) internal returns(bytes memory) signEnable,
+        function(bytes32, bool) internal returns (bytes memory) signEnable,
         bytes memory userOpSig
     ) internal returns (bytes memory sig) {
         Install[] memory packages = new Install[](1);
@@ -167,7 +167,7 @@ abstract contract KernelTestBase is Test {
         uint256 nonce,
         bool enableSuccess,
         bool replayable,
-        function(bytes32, bool) internal returns(bytes memory) signEnable,
+        function(bytes32, bool) internal returns (bytes memory) signEnable,
         bytes memory userOpSig
     ) internal returns (bytes memory sig) {
         Install[] memory packages = new Install[](2);
@@ -178,10 +178,7 @@ abstract contract KernelTestBase is Test {
             internalData: abi.encodePacked(permissionId, address(0), selector)
         });
         packages[1] = Install({
-            moduleType: 6,
-            module: address(signer),
-            moduleData: hex"",
-            internalData: abi.encodePacked(permissionId)
+            moduleType: 6, module: address(signer), moduleData: hex"", internalData: abi.encodePacked(permissionId)
         });
 
         sig = abi.encode(

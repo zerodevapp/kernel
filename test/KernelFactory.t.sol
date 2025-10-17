@@ -54,8 +54,9 @@ contract KernelFactoryTest is KernelTestBase {
     function test_deploy_root_validator() external unitTest {
         vm.skip(is7702);
         Install[] memory pkgs = new Install[](1);
-        pkgs[0] =
-            Install({moduleType: 1, module: address(rootValidator), moduleData: rootValidatorData, internalData: hex""});
+        pkgs[0] = Install({
+            moduleType: 1, module: address(rootValidator), moduleData: rootValidatorData, internalData: hex""
+        });
         vm.startSnapshotGas("Mock - deploy()");
         Kernel k = factory.deploy(pkgs, 1);
         vm.stopSnapshotGas();
@@ -64,16 +65,10 @@ contract KernelFactoryTest is KernelTestBase {
     function test_deploy_root_permission() external unitTest {
         Install[] memory pkgs = new Install[](3);
         pkgs[0] = Install({
-            moduleType: 5,
-            module: address(policy),
-            internalData: abi.encodePacked(permissionId),
-            moduleData: hex""
+            moduleType: 5, module: address(policy), internalData: abi.encodePacked(permissionId), moduleData: hex""
         });
         pkgs[1] = Install({
-            moduleType: 6,
-            module: address(signer),
-            internalData: abi.encodePacked(permissionId),
-            moduleData: hex""
+            moduleType: 6, module: address(signer), internalData: abi.encodePacked(permissionId), moduleData: hex""
         });
         pkgs[2] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
         Kernel k = factory.deploy(pkgs, 1);
@@ -92,8 +87,9 @@ contract KernelFactoryTest is KernelTestBase {
     function test_deploy_existing() external {
         vm.skip(is7702);
         Install[] memory pkgs = new Install[](1);
-        pkgs[0] =
-            Install({moduleType: 1, module: address(rootValidator), moduleData: rootValidatorData, internalData: hex""});
+        pkgs[0] = Install({
+            moduleType: 1, module: address(rootValidator), moduleData: rootValidatorData, internalData: hex""
+        });
         Kernel k = factory.deploy(pkgs, 1);
         assertEq(address(k), address(factory.deploy(pkgs, 1)));
     }
@@ -101,16 +97,18 @@ contract KernelFactoryTest is KernelTestBase {
     function test_deploy_with_call() external unitTest {
         vm.skip(is7702);
         Install[] memory initPkgs = new Install[](1);
-        initPkgs[0] =
-            Install({moduleType: 1, module: address(rootValidator), moduleData: rootValidatorData, internalData: hex""});
+        initPkgs[0] = Install({
+            moduleType: 1, module: address(rootValidator), moduleData: rootValidatorData, internalData: hex""
+        });
         Install[] memory pkgs = new Install[](1);
         pkgs[0] = Install({moduleType: 1, module: address(newValidator), moduleData: hex"", internalData: hex""});
         kernel = Kernel(payable(factory.getAddress(initPkgs, 1)));
         bytes memory sig = enableSig(0, true, false, pkgs, _rootSignHash);
         Kernel k = factory.deployWithCall(initPkgs, 1, abi.encodeWithSelector(0xa706cd33, false, 0, pkgs, sig));
         assertEq(address(k), address(kernel));
-        ValidationInfo memory vInfo =
-            k.validationInfo(ValidationId.wrap(bytes21(abi.encodePacked(bytes1(0x01), bytes20(address(newValidator))))));
+        ValidationInfo memory vInfo = k.validationInfo(
+            ValidationId.wrap(bytes21(abi.encodePacked(bytes1(0x01), bytes20(address(newValidator)))))
+        );
         assertTrue(vInfo.hook == address(1));
     }
 }

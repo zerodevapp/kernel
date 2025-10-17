@@ -167,7 +167,8 @@ abstract contract ValidationManager {
         view
         returns (
             ValidationId v,
-            function(ValidationId, bytes32, PackedUserOperation memory, bytes calldata) internal returns(uint256) validateUserOp
+            function(ValidationId, bytes32, PackedUserOperation memory, bytes calldata)
+                internal returns (uint256) validateUserOp
         )
     {
         ValidationStorage storage $ = _validationStorage();
@@ -234,9 +235,12 @@ abstract contract ValidationManager {
             }
             validationData = Lib4337.intersectValidationData(
                 validationData,
-                ISigner(vInfo.signer).checkSignature(
-                    paddedVId, requester, _hash, permissionSig.signatures[permissionSig.signatures.length - 1]
-                ) == ERC1271_MAGICVALUE ? 0 : 1
+                ISigner(vInfo.signer)
+                        .checkSignature(
+                            paddedVId, requester, _hash, permissionSig.signatures[permissionSig.signatures.length - 1]
+                        ) == ERC1271_MAGICVALUE
+                    ? 0
+                    : 1
             );
         }
     }

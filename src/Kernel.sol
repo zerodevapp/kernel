@@ -109,7 +109,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         ValidationMode vMode;
         ValidationType vType;
         ValidationId vId;
-        function(ValidationId, bytes32, PackedUserOperation memory, bytes calldata) returns(uint256) validateUserOpFn;
+        function(ValidationId, bytes32, PackedUserOperation memory, bytes calldata) returns (uint256) validateUserOpFn;
         (vMode, vType, vId) = parseNonce(userOp.nonce);
 
         bytes calldata signature = userOp.signature;
@@ -127,17 +127,17 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         ValidationStorage storage $ = _validationStorage();
 
         // check if the call data is allowed by the validationId
-        if ($.vInfo[vId].hook > address(1)) {
+        if (
+            vType == VALIDATION_TYPE_ROOT
+                || ($.allowed[vId][bytes4(userOp.callData)] && $.vInfo[vId].hook == address(1))
+        ) {} else {
             require(
                 bytes4(userOp.callData[0:4]) == this.executeUserOp.selector
                     && $.allowed[vId][bytes4(userOp.callData[4:])],
                 UnauthorizedCallData()
             );
             _setValidationHook(userOpHash, IHook($.vInfo[vId].hook));
-        } else {
-            require(vType == VALIDATION_TYPE_ROOT || $.allowed[vId][bytes4(userOp.callData)], UnauthorizedCallData());
         }
-
         (vId, validateUserOpFn) = _checkValidation(vType, vId);
         bytes32 opHash = isReplayable(vMode) ? Lib4337.chainAgnosticUserOpHash(msg.sender, userOp) : userOpHash;
         validationData =
@@ -290,9 +290,12 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
                     _uninstallPolicyWithVid(vInfo.policies[i], vId);
                 }
 
-                vInfo.signer.call(
-                    abi.encodeWithSelector(IModule.onUninstall.selector, uninstallDataArr[uninstallDataArr.length - 1])
-                );
+                vInfo.signer
+                    .call(
+                        abi.encodeWithSelector(
+                            IModule.onUninstall.selector, uninstallDataArr[uninstallDataArr.length - 1]
+                        )
+                    );
                 _uninstallSignerWithVid(vInfo.signer, vId);
             } else {
                 revert InvalidRootValidation();
@@ -336,12 +339,8 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         if (!(execType == LibERC7579.EXECTYPE_DEFAULT || execType == LibERC7579.EXECTYPE_TRY)) {
             return false;
         }
-        if (
-            !(
-                callType == LibERC7579.CALLTYPE_SINGLE || callType == LibERC7579.CALLTYPE_BATCH
-                    || callType == LibERC7579.CALLTYPE_DELEGATECALL
-            )
-        ) {
+        if (!(callType == LibERC7579.CALLTYPE_SINGLE || callType == LibERC7579.CALLTYPE_BATCH
+                    || callType == LibERC7579.CALLTYPE_DELEGATECALL)) {
             return false;
         }
         return true;

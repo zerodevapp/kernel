@@ -9,8 +9,37 @@ import {PermissionId} from "src/types/Types.sol";
 import {validatorToIdentifier} from "src/lib/Utils.sol";
 import {SimpleAccount} from "account-abstraction/accounts/SimpleAccount.sol";
 import {SimpleAccountFactory} from "account-abstraction/accounts/SimpleAccountFactory.sol";
+import {LibBytes} from "solady/utils/LibBytes.sol";
 
 abstract contract KernelUserOpTest is KernelTestBase {
+    error Result(uint256 gas);
+
+    function estimateUserOpGasLimit(PackedUserOperation memory op) internal returns (uint128, uint128) {
+        try this.simulateEntrypointCall(op) {}
+        catch (bytes memory err) {
+            bytes32 data = LibBytes.load(err, 4);
+            return (uint128(bytes16(data)), uint128(uint256(data)));
+        }
+        return (0, 0);
+    }
+
+    function simulateEntrypointCall(PackedUserOperation calldata op) external {
+        bytes32 hash = ep.getUserOpHash(op);
+        vm.startPrank(address(ep));
+        uint256 gas = gasleft();
+        Kernel(payable(op.sender)).validateUserOp(op, hash, 1);
+        gas = gas - gasleft();
+        vm.stopPrank();
+        uint128 vgl = uint128(gas) + 30000;
+        vm.startPrank(address(ep));
+        gas = gasleft();
+        (bool success,) = op.sender.call(op.callData);
+        gas = gas - gasleft();
+        vm.stopPrank();
+        uint128 egl = uint128(gas) + 30000;
+        revert Result(uint256(bytes32(abi.encodePacked(uint128(vgl), uint128(egl)))));
+    }
+
     function test_executeuserop_root() external entryPointTest {
         PackedUserOperation[] memory ops = new PackedUserOperation[](1);
         ops[0] = PackedUserOperation({
@@ -26,11 +55,13 @@ abstract contract KernelUserOpTest is KernelTestBase {
                 )
             ),
             accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
-            preVerificationGas: 1000000,
+            preVerificationGas: 0,
             gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
             paymasterAndData: hex"",
             signature: hex""
         });
+        (uint128 vgl, uint128 egl) = estimateUserOpGasLimit(ops[0]);
+        ops[0].accountGasLimits = bytes32(abi.encodePacked(uint128(vgl), uint128(egl)));
         ops[0].signature = _rootSignUserOp(ops[0], true, false);
         vm.startPrank(address(ep));
         kernel.executeUserOp(ops[0], keccak256("hello world"));
@@ -53,18 +84,24 @@ abstract contract KernelUserOpTest is KernelTestBase {
             callData: abi.encodeWithSelector(
                 account.execute.selector, address(callee), uint256(0), abi.encodePacked(MockCallee.foo.selector)
             ),
-            accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
-            preVerificationGas: 1000000,
+            accountGasLimits: bytes32(abi.encodePacked(uint128(100000), uint128(100000))),
+            preVerificationGas: 0,
             gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
             paymasterAndData: hex"",
             signature: hex""
         });
         bytes32 userOpHash = ep.getUserOpHash(ops[0]);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(simpleKey, userOpHash);
-        ops[0].signature = abi.encodePacked(r,s,v);
-        vm.startSnapshotGas("Simple - foo()");
+        ops[0].signature = abi.encodePacked(r, s, v);
+        (uint128 vgl, uint128 egl) = estimateUserOpGasLimit(ops[0]);
+        ops[0].accountGasLimits = bytes32(abi.encodePacked(uint128(vgl), uint128(egl)));
+        userOpHash = ep.getUserOpHash(ops[0]);
+        (v, r, s) = vm.sign(simpleKey, userOpHash);
+        ops[0].signature = abi.encodePacked(r, s, v);
+        uint256 bal = ep.balanceOf(address(account)) + address(account).balance;
         ep.handleOps(ops, beneficiary);
-        vm.stopSnapshotGas();
+        uint256 used = bal - (ep.balanceOf(address(account)) + address(account).balance);
+        vm.snapshotValue("Simple - foo()", used);
         assertEq(callee.bar(), 1);
     }
 
@@ -75,18 +112,24 @@ abstract contract KernelUserOpTest is KernelTestBase {
             nonce: encodeNonce(false, false, false, bytes1(0), bytes20(0)),
             initCode: hex"",
             callData: abi.encodeWithSelector(
-                Kernel.execute.selector, bytes32(0), abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
+                Kernel.execute.selector,
+                bytes32(0),
+                abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
             ),
             accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
-            preVerificationGas: 1000000,
+            preVerificationGas: 0,
             gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
             paymasterAndData: hex"",
             signature: hex""
         });
         ops[0].signature = _rootSignUserOp(ops[0], true, false);
-        vm.startSnapshotGas("Root - foo()");
+        (uint128 vgl, uint128 egl) = estimateUserOpGasLimit(ops[0]);
+        ops[0].accountGasLimits = bytes32(abi.encodePacked(uint128(vgl), uint128(egl)));
+        ops[0].signature = _rootSignUserOp(ops[0], true, false);
+        uint256 bal = ep.balanceOf(address(kernel)) + address(kernel).balance;
         ep.handleOps(ops, beneficiary);
-        vm.stopSnapshotGas();
+        uint256 used = bal - (ep.balanceOf(address(kernel)) + address(kernel).balance);
+        vm.snapshotValue("Root - foo()", used);
         assertEq(callee.bar(), 1);
     }
 
@@ -97,7 +140,9 @@ abstract contract KernelUserOpTest is KernelTestBase {
             nonce: encodeNonce(true, false, false, bytes1(0), bytes20(0)),
             initCode: hex"",
             callData: abi.encodeWithSelector(
-                Kernel.execute.selector, bytes32(0), abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
+                Kernel.execute.selector,
+                bytes32(0),
+                abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
             ),
             accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
             preVerificationGas: 1000000,
@@ -117,7 +162,9 @@ abstract contract KernelUserOpTest is KernelTestBase {
             nonce: encodeNonce(false, false, false, bytes1(0x00), bytes20(0)),
             initCode: hex"",
             callData: abi.encodeWithSelector(
-                Kernel.execute.selector, bytes32(0), abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
+                Kernel.execute.selector,
+                bytes32(0),
+                abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
             ),
             accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
             preVerificationGas: 1000000,
@@ -137,7 +184,9 @@ abstract contract KernelUserOpTest is KernelTestBase {
             nonce: encodeNonce(false, false, false, bytes1(0x01), bytes20(address(newValidator))),
             initCode: hex"",
             callData: abi.encodeWithSelector(
-                Kernel.execute.selector, bytes32(0), abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
+                Kernel.execute.selector,
+                bytes32(0),
+                abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
             ),
             accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
             preVerificationGas: 1000000,
@@ -157,7 +206,9 @@ abstract contract KernelUserOpTest is KernelTestBase {
             nonce: encodeNonce(false, true, false, bytes1(0x01), bytes20(address(newValidator))),
             initCode: hex"",
             callData: abi.encodeWithSelector(
-                Kernel.execute.selector, bytes32(0), abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
+                Kernel.execute.selector,
+                bytes32(0),
+                abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
             ),
             accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
             preVerificationGas: 1000000,
@@ -184,7 +235,9 @@ abstract contract KernelUserOpTest is KernelTestBase {
             nonce: encodeNonce(false, true, false, bytes1(0x01), bytes20(address(newValidator))),
             initCode: hex"",
             callData: abi.encodeWithSelector(
-                Kernel.execute.selector, bytes32(0), abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
+                Kernel.execute.selector,
+                bytes32(0),
+                abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
             ),
             accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
             preVerificationGas: 1000000,
@@ -206,7 +259,9 @@ abstract contract KernelUserOpTest is KernelTestBase {
             nonce: encodeNonce(false, true, false, bytes1(0x01), bytes20(address(newValidator))),
             initCode: hex"",
             callData: abi.encodeWithSelector(
-                Kernel.execute.selector, bytes32(0), abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
+                Kernel.execute.selector,
+                bytes32(0),
+                abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
             ),
             accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
             preVerificationGas: 1000000,
@@ -229,7 +284,9 @@ abstract contract KernelUserOpTest is KernelTestBase {
             nonce: encodeNonce(false, false, false, bytes1(0x02), PermissionId.unwrap(permissionId)),
             initCode: hex"",
             callData: abi.encodeWithSelector(
-                Kernel.execute.selector, bytes32(0), abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
+                Kernel.execute.selector,
+                bytes32(0),
+                abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
             ),
             accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
             preVerificationGas: 1000000,
@@ -250,7 +307,9 @@ abstract contract KernelUserOpTest is KernelTestBase {
             nonce: encodeNonce(false, true, false, bytes1(0x02), PermissionId.unwrap(permissionId)),
             initCode: hex"",
             callData: abi.encodeWithSelector(
-                Kernel.execute.selector, bytes32(0), abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
+                Kernel.execute.selector,
+                bytes32(0),
+                abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
             ),
             accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
             preVerificationGas: 1000000,
@@ -273,7 +332,9 @@ abstract contract KernelUserOpTest is KernelTestBase {
             nonce: encodeNonce(false, true, false, bytes1(0x02), PermissionId.unwrap(permissionId)),
             initCode: hex"",
             callData: abi.encodeWithSelector(
-                Kernel.execute.selector, bytes32(0), abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
+                Kernel.execute.selector,
+                bytes32(0),
+                abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
             ),
             accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
             preVerificationGas: 1000000,
@@ -295,7 +356,9 @@ abstract contract KernelUserOpTest is KernelTestBase {
             nonce: encodeNonce(false, true, false, bytes1(0x02), PermissionId.unwrap(permissionId)),
             initCode: hex"",
             callData: abi.encodeWithSelector(
-                Kernel.execute.selector, bytes32(0), abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
+                Kernel.execute.selector,
+                bytes32(0),
+                abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
             ),
             accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
             preVerificationGas: 1000000,
@@ -317,7 +380,9 @@ abstract contract KernelUserOpTest is KernelTestBase {
             nonce: encodeNonce(false, true, false, bytes1(0x02), PermissionId.unwrap(permissionId)),
             initCode: hex"",
             callData: abi.encodeWithSelector(
-                Kernel.execute.selector, bytes32(0), abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
+                Kernel.execute.selector,
+                bytes32(0),
+                abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
             ),
             accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
             preVerificationGas: 1000000,
