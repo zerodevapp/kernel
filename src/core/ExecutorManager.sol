@@ -2,17 +2,10 @@ pragma solidity ^0.8.0;
 
 import {EXECUTOR_MANAGER_STORAGE_SLOT} from "../types/Constants.sol";
 import {IExecutor, IHook} from "../interfaces/IERC7579Modules.sol";
+import {ExecutorStorage, ExecutorConfig} from "../types/Structs.sol";
 
 contract ExecutorManager {
     error NotExecutor();
-
-    struct ExecutorConfig {
-        IHook hook; // address(1) : hook not required, address(0) : validator not installed
-    }
-
-    struct ExecutorStorage {
-        mapping(IExecutor => ExecutorConfig) executorConfig;
-    }
 
     function _executorStorage() internal view returns (ExecutorStorage storage $) {
         assembly {

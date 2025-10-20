@@ -34,7 +34,14 @@ import {
 } from "./types/Error.sol";
 import {Received} from "./types/Events.sol";
 import {VALIDATION_TYPE_ROOT, VALIDATION_TYPE_PERMISSION, VALIDATION_TYPE_VALIDATOR} from "./types/Constants.sol";
-import {ValidationStorage, ValidationInfo} from "./types/Structs.sol";
+import {
+    ValidationStorage,
+    ValidationInfo,
+    EnableModeSignature,
+    SelectorConfig,
+    InstallModuleDataFormat,
+    PermissionUninstallData
+} from "./types/Structs.sol";
 import "forge-std/console.sol";
 
 abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
@@ -51,14 +58,6 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
     function _domainNameAndVersion() internal pure override returns (string memory name, string memory version) {
         name = "Kernel";
         version = "0.4.0";
-    }
-
-    /// authentication
-    struct EnableModeSignature {
-        uint256 nonce;
-        Install[] packages;
-        bytes enableSignature;
-        bytes userOpSignature;
     }
 
     function initialize(Install[] calldata packages) external payable virtual {
@@ -120,7 +119,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
                 sig := signature.offset
             }
             validationData = _verifyInstallSignatureRaw(enableReplayable, sig.nonce, sig.packages, sig.enableSignature);
-            console.log("Enable :");
+            _checkAndIncrementNonce(sig.nonce);
             _install(sig.packages);
             signature = sig.userOpSignature;
         }
@@ -222,12 +221,6 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         }
     }
 
-    /// management
-    struct InstallModuleDataFormat {
-        bytes installData;
-        bytes internalData;
-    }
-
     function setNonce(uint192 nonceKey, uint64 seq) external payable {
         _onlyEntryPointOrSelf();
         _setNonce(nonceKey, seq);
@@ -254,10 +247,6 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
             imdf := initData.offset
         }
         _uninstallModule(moduleType, module, imdf.installData, imdf.internalData);
-    }
-
-    struct PermissionUninstallData {
-        bytes[] uninstallData;
     }
 
     // we are going to let array of pkgs to be installed and use first one as root

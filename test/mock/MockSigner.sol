@@ -25,7 +25,7 @@ contract MockSigner is ISigner {
     function onUninstall(bytes calldata) external payable override {}
 
     function isModuleType(uint256 moduleTypeId) external pure override returns (bool) {
-        if (moduleTypeId == 7) {
+        if (moduleTypeId == 6) {
             return true;
         } else {
             return false;
@@ -50,6 +50,20 @@ contract MockSigner is ISigner {
             return 0x1626ba7e;
         } else {
             return 0xffffffff;
+        }
+    }
+
+    function validateSignatureWithDataWithSender(
+        address sender,
+        bytes32 hash,
+        bytes calldata signature,
+        bytes calldata data
+    ) external view returns (bool) {
+        bytes4 id = bytes4(signature);
+        if (pass[msg.sender][id] == true) {
+            return true;
+        } else {
+            return false;
         }
     }
 }

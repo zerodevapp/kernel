@@ -1,30 +1,38 @@
 pragma solidity ^0.8.0;
 
-import {IHook, IExecutor, IModule, IValidator} from "../interfaces/IERC7579Modules.sol";
+import {IHook, IExecutor, IModule, IValidator, IStatelessValidatorWithSender} from "../interfaces/IERC7579Modules.sol";
 import {ValidationManager} from "./ValidationManager.sol";
 import {ExecutorManager} from "./ExecutorManager.sol";
 import {HookManager} from "./HookManager.sol";
 import {SelectorManager} from "./SelectorManager.sol";
 import {ERC1271} from "../lib/ERC1271.sol";
-import {InvalidNonce, NotImplemented, Unauthorized} from "../types/Error.sol";
+import {InvalidValidationType, InvalidNonce, InvalidValidator, NotImplemented, Unauthorized} from "../types/Error.sol";
 import {ModuleInstalled, ModuleUninstalled} from "../types/Events.sol";
-import {Install, Call, InstallAndExecute} from "../types/Structs.sol";
-import {ValidationId, ValidationType, PermissionId} from "../types/Types.sol";
+import {
+    Install,
+    Call,
+    InstallAndExecute,
+    EnableModeSignature,
+    ModuleStorage,
+    PermissionSignature
+} from "../types/Structs.sol";
+import {
+    ValidationId,
+    ValidationMode,
+    ValidationType,
+    PermissionId,
+    isEnable,
+    isEnableReplayable
+} from "../types/Types.sol";
 import {calldataKeccak} from "../lib/Utils.sol";
 import {Lib4337} from "../lib/Lib4337.sol";
-import {getValidator, getPermissionId, validatorToIdentifier, permissionToIdentifier} from "../lib/Utils.sol";
+import {getType, getValidator, getPermissionId, validatorToIdentifier, permissionToIdentifier} from "../lib/Utils.sol";
 import {
     MODULE_MANAGER_STORAGE_SLOT,
     VALIDATION_TYPE_ROOT,
     VALIDATION_TYPE_VALIDATOR,
     VALIDATION_TYPE_PERMISSION
 } from "../types/Constants.sol";
-
-struct ModuleStorage {
-    address registry; // Note : not used on vanila kernel but saving the storage slot for future usage
-    uint64 nonceValidFrom;
-    mapping(uint192 key => uint64) nonce;
-}
 
 abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManager, SelectorManager, ERC1271 {
     modifier executorHook() {
@@ -89,19 +97,40 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
             result = _verifyFallbackSignature(hash, signature);
         }
         if (!result) {
-            ValidationType vType = ValidationType.wrap(bytes1(signature[0]));
+            ValidationMode vMode = ValidationMode.wrap(bytes1(signature[0]));
+            ValidationType vType = ValidationType.wrap(bytes1(signature[1]));
             ValidationId vId;
             if (vType == VALIDATION_TYPE_ROOT) {
                 vId = _validationStorage().root;
-                signature = signature[1:];
+                signature = signature[2:];
             } else if (vType == VALIDATION_TYPE_VALIDATOR) {
-                vId = validatorToIdentifier(IValidator(address(bytes20(signature[1:21]))));
-                signature = signature[21:];
+                vId = validatorToIdentifier(IValidator(address(bytes20(signature[2:22]))));
+                signature = signature[22:];
             } else if (vType == VALIDATION_TYPE_PERMISSION) {
-                vId = permissionToIdentifier(PermissionId.wrap(bytes4(signature[1:5])));
-                signature = signature[5:];
+                vId = permissionToIdentifier(PermissionId.wrap(bytes4(signature[2:6])));
+                signature = signature[6:];
+            } else {
+                revert InvalidValidationType();
             }
-            uint256 validationData = _verifySignature(vId, msg.sender, hash, signature);
+            uint256 validationData;
+            if (isEnable(vMode)) {
+                require(vType != VALIDATION_TYPE_ROOT, InvalidValidationType());
+                bool enableReplayable = isEnableReplayable(vMode);
+                EnableModeSignature calldata sig;
+                assembly {
+                    sig := signature.offset
+                }
+                if (!Lib4337.checkValidation(
+                        _verifyInstallSignatureRaw(enableReplayable, sig.nonce, sig.packages, sig.enableSignature)
+                    )) {
+                    // if enable sig is invalid, short circuit
+                    return false;
+                }
+                _checkNonce(sig.nonce);
+                return _verifyStatelessSignature(sig.packages, vId, hash, sig.userOpSignature);
+            } else {
+                validationData = _verifySignature(vId, msg.sender, hash, signature);
+            }
             result = Lib4337.checkValidation(validationData);
         }
     }
@@ -217,6 +246,7 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         bytes calldata signature
     ) internal returns (bool success) {
         uint256 validationData = _verifyInstallSignatureRaw(replayable, _nonce, packages, signature);
+        _checkAndIncrementNonce(_nonce);
         return Lib4337.checkValidation(validationData);
     }
 
@@ -230,7 +260,7 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         _moduleStorage().nonce[nonceKey] = seq;
     }
 
-    function _checkNonce(uint256 _nonce) internal virtual returns (bool) {
+    function _checkAndIncrementNonce(uint256 _nonce) internal virtual returns (bool) {
         uint192 key = uint192(_nonce >> 64);
         uint64 seq = uint64(_nonce);
         if (_moduleStorage().nonceValidFrom > _moduleStorage().nonce[key]) {
@@ -239,12 +269,21 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         return _moduleStorage().nonce[key]++ == seq;
     }
 
+    function _checkNonce(uint256 _nonce) internal view virtual returns (bool) {
+        uint192 key = uint192(_nonce >> 64);
+        uint64 seq = uint64(_nonce);
+        if (_moduleStorage().nonceValidFrom > _moduleStorage().nonce[key]) {
+            return seq == _moduleStorage().nonceValidFrom;
+        }
+        return _moduleStorage().nonce[key] == seq;
+    }
+
     function _verifyInstallSignatureRaw(
         bool replayable,
         uint256 _nonce,
         Install[] calldata packages,
         bytes calldata signature
-    ) internal returns (uint256 validationData) {
+    ) internal view returns (uint256 validationData) {
         ValidationId vId = _validationStorage().root;
         function(bytes32) internal view returns (bytes32) hashTypedData =
             replayable ? _hashTypedDataSansChainId : _hashTypedData;
@@ -261,5 +300,57 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
             )
         );
         return _verifySignature(vId, address(this), digest, signature);
+    }
+
+    function _verifyStatelessSignature(
+        Install[] calldata packages,
+        ValidationId vId,
+        bytes32 hash,
+        bytes calldata signature
+    ) internal view returns (bool) {
+        ValidationType vType = getType(vId);
+        if (vType == VALIDATION_TYPE_VALIDATOR) {
+            IValidator validator = getValidator(vId);
+            uint256 i;
+            for (i; i < packages.length; i++) {
+                Install calldata pkg = packages[i];
+                if (pkg.moduleType == 1 && pkg.module == address(validator)) {
+                    break;
+                }
+            }
+            if (packages.length == i) {
+                revert InvalidValidator();
+            }
+            return IStatelessValidatorWithSender(address(validator))
+                .validateSignatureWithDataWithSender(msg.sender, hash, signature, packages[i].moduleData);
+        } else if (vType == VALIDATION_TYPE_PERMISSION) {
+            PermissionId pId = getPermissionId(vId);
+            PermissionSignature calldata permissionSig;
+            assembly {
+                permissionSig := signature.offset
+            }
+            uint256 sigIdx;
+            for (uint256 i; i < packages.length; i++) {
+                Install calldata pkg = packages[i];
+                if (PermissionId.wrap(bytes4(pkg.internalData)) == pId) {
+                    if (sigIdx == permissionSig.signatures.length - 1) {
+                        require(pkg.moduleType == 6, "last signature should be signer");
+                        require(IModule(pkg.module).isModuleType(6), "last signature should be signer");
+                    }
+                    bool res = IStatelessValidatorWithSender(pkg.module)
+                        .validateSignatureWithDataWithSender(
+                            msg.sender, hash, abi.encodePacked(pId, permissionSig.signatures[sigIdx]), pkg.moduleData
+                        );
+                    if (!res) {
+                        return false;
+                    }
+                    sigIdx++;
+                }
+            }
+            require(sigIdx == permissionSig.signatures.length, "signature arr mismatch");
+            return true;
+        } else {
+            revert InvalidValidationType();
+        }
     }
 }

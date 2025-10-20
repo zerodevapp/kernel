@@ -5,18 +5,9 @@ import {IHook} from "../interfaces/IERC7579Modules.sol";
 import {CallType} from "../types/Types.sol";
 import {SELECTOR_MANAGER_STORAGE_SLOT, CALLTYPE_DELEGATECALL} from "../types/Constants.sol";
 import {ModuleInstallFailed} from "../types/Error.sol";
+import {SelectorConfig, SelectorStorage} from "../types/Structs.sol";
 
 abstract contract SelectorManager {
-    struct SelectorConfig {
-        IHook hook; // 20 bytes for hook address
-        address target; // 20 bytes target will be fallback module, called with call
-        CallType callType;
-    }
-
-    struct SelectorStorage {
-        mapping(bytes4 => SelectorConfig) selectorConfig;
-    }
-
     function selectorConfig(bytes4 selector) external view returns (SelectorConfig memory) {
         return _selectorConfig(selector);
     }

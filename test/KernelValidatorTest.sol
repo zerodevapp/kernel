@@ -168,7 +168,9 @@ abstract contract KernelValidatorTest is KernelTestBase {
         assertTrue(vInfo.hook == address(0));
         bytes4 ret = kernel.isValidSignature(
             keccak256("Hello world"),
-            abi.encodePacked(bytes1(0x01), newValidator, _validatorSignHash(keccak256("Hello world"), true))
+            abi.encodePacked(
+                bytes1(0x00), bytes1(0x01), newValidator, _validatorSignHash(keccak256("Hello world"), true)
+            )
         );
         assertEq(ret, ERC1271_MAGICVALUE);
         assertTrue(kernel.isModuleInstalled(1, address(newValidator), hex""));
@@ -184,7 +186,9 @@ abstract contract KernelValidatorTest is KernelTestBase {
         assertTrue(vInfo.hook == address(0));
         bytes4 ret = kernel.isValidSignature(
             keccak256("Hello world"),
-            abi.encodePacked(bytes1(0x01), newValidator, _validatorSignHash(keccak256("Hello world"), true))
+            abi.encodePacked(
+                bytes1(0x00), bytes1(0x01), newValidator, _validatorSignHash(keccak256("Hello world"), true)
+            )
         );
         assertEq(ret, ERC1271_MAGICVALUE);
         assertTrue(kernel.isModuleInstalled(1, address(newValidator), hex""));
@@ -202,7 +206,9 @@ abstract contract KernelValidatorTest is KernelTestBase {
         assertTrue(vInfo.hook == address(0));
         bytes4 ret = kernel.isValidSignature(
             keccak256("Hello world"),
-            abi.encodePacked(bytes1(0x01), newValidator, _validatorSignHash(keccak256("Hello world"), true))
+            abi.encodePacked(
+                bytes1(0x00), bytes1(0x01), newValidator, _validatorSignHash(keccak256("Hello world"), true)
+            )
         );
         assertEq(ret, ERC1271_MAGICVALUE);
         assertTrue(kernel.isModuleInstalled(1, address(newValidator), hex""));
@@ -224,7 +230,9 @@ abstract contract KernelValidatorTest is KernelTestBase {
         assertTrue(vInfo.hook == address(0));
         bytes4 ret = kernel.isValidSignature(
             keccak256("Hello world"),
-            abi.encodePacked(bytes1(0x01), newValidator, _validatorSignHash(keccak256("Hello world"), true))
+            abi.encodePacked(
+                bytes1(0x00), bytes1(0x01), newValidator, _validatorSignHash(keccak256("Hello world"), true)
+            )
         );
         assertEq(ret, ERC1271_MAGICVALUE);
         assertTrue(kernel.isModuleInstalled(1, address(newValidator), hex""));
@@ -279,7 +287,9 @@ abstract contract KernelValidatorTest is KernelTestBase {
         kernel.installModule(pkgs);
         bytes4 ret = kernel.isValidSignature(
             keccak256("Hello world"),
-            abi.encodePacked(bytes1(0x02), permissionId, _permissionSignHash(keccak256("Hello world"), true))
+            abi.encodePacked(
+                bytes1(0x00), bytes1(0x02), permissionId, _permissionSignHash(keccak256("Hello world"), true)
+            )
         );
         assertEq(ret, ERC1271_MAGICVALUE);
         assertTrue(kernel.isModuleInstalled(5, address(policy), abi.encodePacked(permissionId)));
@@ -313,7 +323,9 @@ abstract contract KernelValidatorTest is KernelTestBase {
         kernel.installModule(pkgs);
         bytes4 ret = kernel.isValidSignature(
             keccak256("Hello world"),
-            abi.encodePacked(bytes1(0x02), permissionId, _permissionSignHash(keccak256("Hello world"), true))
+            abi.encodePacked(
+                bytes1(0x00), bytes1(0x02), permissionId, _permissionSignHash(keccak256("Hello world"), true)
+            )
         );
         assertEq(ret, ERC1271_MAGICVALUE);
         assertTrue(kernel.isModuleInstalled(5, address(policy), abi.encodePacked(permissionId)));

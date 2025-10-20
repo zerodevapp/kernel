@@ -5,6 +5,7 @@ import {MockFallback} from "./mock/MockFallback.sol";
 import {CallType} from "src/types/Types.sol";
 import {KernelTestBase} from "./KernelTestBase.sol";
 import {InvalidSelector} from "src/types/Error.sol";
+import {SelectorConfig} from "src/types/Structs.sol";
 
 abstract contract KernelSelectorTest is KernelTestBase {
     function test_install_selector_call() external unitTest {
@@ -25,7 +26,7 @@ abstract contract KernelSelectorTest is KernelTestBase {
         address caller = mockFallback.caller();
         assertEq(res, 100);
         assertEq(caller, Caller);
-        SelectorManager.SelectorConfig memory c = kernel.selectorConfig(MockFallback.fallbackFunction.selector);
+        SelectorConfig memory c = kernel.selectorConfig(MockFallback.fallbackFunction.selector);
         assertEq(address(c.target), address(mockFallback));
         assertEq(address(c.hook), address(1));
         assertTrue(c.callType == CallType.wrap(bytes1(0x00)));
@@ -47,7 +48,7 @@ abstract contract KernelSelectorTest is KernelTestBase {
         emit MockFallback.Foobar();
         uint256 res = MockFallback(address(kernel)).fallbackFunction(10);
         assertEq(res, 100);
-        SelectorManager.SelectorConfig memory c = kernel.selectorConfig(MockFallback.fallbackFunction.selector);
+        SelectorConfig memory c = kernel.selectorConfig(MockFallback.fallbackFunction.selector);
         assertEq(address(c.target), address(mockFallback));
         assertEq(address(c.hook), address(hook));
         assertTrue(c.callType == CallType.wrap(bytes1(0x00)));
@@ -65,7 +66,7 @@ abstract contract KernelSelectorTest is KernelTestBase {
         emit MockFallback.Foobar();
         uint256 res = MockFallback(address(kernel)).fallbackFunction(10);
         assertEq(res, 100);
-        SelectorManager.SelectorConfig memory c = kernel.selectorConfig(MockFallback.fallbackFunction.selector);
+        SelectorConfig memory c = kernel.selectorConfig(MockFallback.fallbackFunction.selector);
         assertEq(address(c.target), address(mockFallback));
         assertEq(address(c.hook), address(1));
         assertTrue(c.callType == CallType.wrap(bytes1(0x00)));

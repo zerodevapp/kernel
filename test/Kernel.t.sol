@@ -65,6 +65,7 @@ contract KernelTest is
     }
 
     function _initialize() internal virtual override {
+        isMock = true;
         rootValidator = new MockValidator();
         rootValidatorData = hex"";
         Install[] memory pkgs = new Install[](1);

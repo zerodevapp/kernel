@@ -3,12 +3,9 @@ pragma solidity ^0.8.0;
 import {IHook} from "../interfaces/IERC7579Modules.sol";
 import {HOOK_MANAGER_STORAGE_SLOT} from "../types/Constants.sol";
 import {ModuleInstallFailed} from "../types/Error.sol";
+import {HookStorage} from "../types/Structs.sol";
 
 abstract contract HookManager {
-    struct HookStorage {
-        mapping(address => bool) enabled;
-    }
-
     function _hookEnabled(IHook _hook) internal view virtual returns (bool) {
         return _hookStorage().enabled[address(_hook)];
     }

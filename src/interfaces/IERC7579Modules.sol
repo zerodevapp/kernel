@@ -98,3 +98,12 @@ interface IStatelessValidator is IValidator {
         view
         returns (bool);
 }
+
+interface IStatelessValidatorWithSender is IModule {
+    function validateSignatureWithDataWithSender(
+        address sender,
+        bytes32 hash,
+        bytes calldata signature,
+        bytes calldata data
+    ) external view returns (bool);
+}

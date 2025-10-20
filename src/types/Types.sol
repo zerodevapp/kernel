@@ -48,10 +48,16 @@ function packValidationData(ValidAfter validAfter, ValidUntil validUntil) pure r
 }
 
 using {vTypeEqual as ==} for ValidationType global;
+using {notVTypeEqual as !=} for ValidationType global;
 using {eqCallType as ==} for CallType global;
 using {notEqCallType as !=} for CallType global;
 using {vIdentifierNotEqual as !=} for ValidationId global;
 using {vIdentifierEqual as ==} for ValidationId global;
+using {pIdEqual as ==} for PermissionId global;
+
+function pIdEqual(PermissionId a, PermissionId b) pure returns (bool) {
+    return PermissionId.unwrap(a) == PermissionId.unwrap(b);
+}
 
 function vIdentifierEqual(ValidationId a, ValidationId b) pure returns (bool) {
     return ValidationId.unwrap(a) == ValidationId.unwrap(b);
@@ -71,4 +77,8 @@ function notEqCallType(CallType a, CallType b) pure returns (bool) {
 
 function vTypeEqual(ValidationType a, ValidationType b) pure returns (bool) {
     return ValidationType.unwrap(a) == ValidationType.unwrap(b);
+}
+
+function notVTypeEqual(ValidationType a, ValidationType b) pure returns (bool) {
+    return ValidationType.unwrap(a) != ValidationType.unwrap(b);
 }

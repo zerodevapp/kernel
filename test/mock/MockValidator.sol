@@ -66,6 +66,15 @@ contract MockValidator is IValidator, IHook {
         }
     }
 
+    function validateSignatureWithDataWithSender(
+        address sender,
+        bytes32 hash,
+        bytes calldata signature,
+        bytes calldata data
+    ) external view returns (bool) {
+        return success;
+    }
+
     function preCheck(address msgSender, uint256 value, bytes calldata msgData)
         external
         payable
