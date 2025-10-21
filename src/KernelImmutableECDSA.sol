@@ -12,17 +12,7 @@ contract KernelImmutableECDSA is KernelUUPS {
     function _verifyFallbackSignature(bytes32 hash, bytes calldata sig) internal view override returns (bool) {
         address signer = address(uint160(bytes20(LibClone.argsOnERC1967(address(this), 0, 20))));
 
-        if (ECDSA.tryRecoverCalldata(hash, sig) == signer) {
-            return true;
-        }
-        if (ECDSA.tryRecoverCalldata(ECDSA.toEthSignedMessageHash(hash), sig) == signer) {
-            return true;
-        }
-        return false;
-    }
-
-    function _statelessInitializeCheck() internal view override returns (bool) {
-        return false;
+        return ECDSA.tryRecoverCalldata(hash, sig) == signer;
     }
 
     function _fallbackValidatorAvailable() internal pure override returns (bool) {

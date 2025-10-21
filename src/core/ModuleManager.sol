@@ -6,16 +6,16 @@ import {ExecutorManager} from "./ExecutorManager.sol";
 import {HookManager} from "./HookManager.sol";
 import {SelectorManager} from "./SelectorManager.sol";
 import {ERC1271} from "../lib/ERC1271.sol";
-import {InvalidValidationType, InvalidNonce, InvalidValidator, NotImplemented, Unauthorized} from "../types/Error.sol";
-import {ModuleInstalled, ModuleUninstalled} from "../types/Events.sol";
 import {
-    Install,
-    Call,
-    InstallAndExecute,
-    EnableModeSignature,
-    ModuleStorage,
-    PermissionSignature
-} from "../types/Structs.sol";
+    InvalidValidationType,
+    InvalidNonce,
+    InvalidValidator,
+    InvalidPermissionId,
+    NotImplemented,
+    Unauthorized
+} from "../types/Error.sol";
+import {ModuleInstalled, ModuleUninstalled} from "../types/Events.sol";
+import {Install, EnableModeSignature, ModuleStorage, PermissionSignature} from "../types/Structs.sol";
 import {
     ValidationId,
     ValidationMode,
@@ -24,15 +24,17 @@ import {
     isEnable,
     isEnableReplayable
 } from "../types/Types.sol";
-import {calldataKeccak} from "../lib/Utils.sol";
 import {Lib4337} from "../lib/Lib4337.sol";
 import {getType, getValidator, getPermissionId, validatorToIdentifier, permissionToIdentifier} from "../lib/Utils.sol";
 import {
     MODULE_MANAGER_STORAGE_SLOT,
     VALIDATION_TYPE_ROOT,
     VALIDATION_TYPE_VALIDATOR,
-    VALIDATION_TYPE_PERMISSION
+    VALIDATION_TYPE_PERMISSION,
+    INSTALL_PACKAGES_STRUCT_HASH,
+    INSTALL_STRUCT_HASH
 } from "../types/Constants.sol";
+import {EfficientHashLib} from "solady/utils/EfficientHashLib.sol";
 
 abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManager, SelectorManager, ERC1271 {
     modifier executorHook() {
@@ -68,17 +70,17 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         return HookManager._hookEnabled(_hook);
     }
 
-    function _initialized() internal view virtual returns (bool) {
-        return _statelessInitializeCheck() || _statefulInitializeCheck();
-    }
+    //    function _initialized() internal view virtual returns (bool) {
+    //        return _statelessInitializeCheck() || _statefulInitializeCheck();
+    //    }
 
-    function _statelessInitializeCheck() internal view virtual returns (bool) {
-        return bytes3(address(this).code) == bytes3(0xef0100);
-    }
-
-    function _statefulInitializeCheck() internal view virtual returns (bool) {
-        return ValidationId.unwrap(_validationStorage().root) != bytes20(0);
-    }
+    //    function _statelessInitializeCheck() internal view virtual returns (bool) {
+    //        return bytes3(address(this).code) == bytes3(0xef0100);
+    //    }
+    //
+    //    function _statefulInitializeCheck() internal view virtual returns (bool) {
+    //        return ValidationId.unwrap(_validationStorage().root) != bytes20(0);
+    //    }
 
     function _moduleStorage() internal pure returns (ModuleStorage storage $) {
         assembly {
@@ -136,22 +138,24 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
     }
 
     function _installHash(Install[] calldata packages) internal pure returns (bytes32) {
-        bytes32[] memory packageHashes = new bytes32[](packages.length);
+        bytes32[] memory buffer = EfficientHashLib.malloc(packages.length);
         unchecked {
             for (uint256 i = 0; i < packages.length; i++) {
                 Install calldata pkg = packages[i];
-                packageHashes[i] = keccak256(
-                    abi.encode(
-                        keccak256("Install(uint256 moduleType,address module,bytes moduleData,bytes internalData)"),
+                EfficientHashLib.set(
+                    buffer,
+                    i,
+                    EfficientHashLib.hash(
+                        uint256(INSTALL_STRUCT_HASH),
                         pkg.moduleType,
-                        pkg.module,
-                        calldataKeccak(pkg.moduleData),
-                        calldataKeccak(pkg.internalData)
+                        uint256(uint160(pkg.module)),
+                        uint256(EfficientHashLib.hashCalldata(pkg.moduleData)),
+                        uint256(EfficientHashLib.hashCalldata(pkg.internalData))
                     )
                 );
             }
         }
-        return keccak256(abi.encodePacked(packageHashes));
+        return EfficientHashLib.hash(buffer);
     }
 
     function _installModule(uint256 moduleType, address module, bytes calldata moduleData, bytes calldata internalData)
@@ -261,7 +265,9 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
     }
 
     function _checkAndIncrementNonce(uint256 _nonce) internal virtual returns (bool) {
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint192 key = uint192(_nonce >> 64);
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint64 seq = uint64(_nonce);
         if (_moduleStorage().nonceValidFrom > _moduleStorage().nonce[key]) {
             _moduleStorage().nonce[key] = _moduleStorage().nonceValidFrom;
@@ -270,7 +276,9 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
     }
 
     function _checkNonce(uint256 _nonce) internal view virtual returns (bool) {
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint192 key = uint192(_nonce >> 64);
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint64 seq = uint64(_nonce);
         if (_moduleStorage().nonceValidFrom > _moduleStorage().nonce[key]) {
             return seq == _moduleStorage().nonceValidFrom;
@@ -288,17 +296,8 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         function(bytes32) internal view returns (bytes32) hashTypedData =
             replayable ? _hashTypedDataSansChainId : _hashTypedData;
         require(_checkNonce(_nonce), InvalidNonce());
-        bytes32 digest = hashTypedData(
-            keccak256(
-                abi.encode(
-                    keccak256(
-                        "InstallPackages(uint256 nonce,Install[] packages)Install(uint256 moduleType,address module,bytes moduleData,bytes internalData)"
-                    ),
-                    _nonce,
-                    _installHash(packages)
-                )
-            )
-        );
+        bytes32 digest =
+            hashTypedData(EfficientHashLib.hash(INSTALL_PACKAGES_STRUCT_HASH, bytes32(_nonce), _installHash(packages)));
         return _verifySignature(vId, address(this), digest, signature);
     }
 
@@ -339,7 +338,10 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
                     }
                     bool res = IStatelessValidatorWithSender(pkg.module)
                         .validateSignatureWithDataWithSender(
-                            msg.sender, hash, abi.encodePacked(pId, permissionSig.signatures[sigIdx]), pkg.moduleData
+                            msg.sender,
+                            hash,
+                            permissionSig.signatures[sigIdx],
+                            pkg.moduleData // NOTE: not passing the permissionId as stateless does not need any permissionId
                         );
                     if (!res) {
                         return false;
@@ -347,7 +349,7 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
                     sigIdx++;
                 }
             }
-            require(sigIdx == permissionSig.signatures.length, "signature arr mismatch");
+            require(sigIdx == permissionSig.signatures.length, InvalidPermissionId());
             return true;
         } else {
             revert InvalidValidationType();

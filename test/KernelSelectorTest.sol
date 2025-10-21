@@ -1,6 +1,5 @@
 pragma solidity ^0.8.0;
 
-import {SelectorManager} from "src/core/SelectorManager.sol";
 import {MockFallback} from "./mock/MockFallback.sol";
 import {CallType} from "src/types/Types.sol";
 import {KernelTestBase} from "./KernelTestBase.sol";
@@ -9,7 +8,7 @@ import {SelectorConfig} from "src/types/Structs.sol";
 
 abstract contract KernelSelectorTest is KernelTestBase {
     function test_install_selector_call() external unitTest {
-        address Caller = makeAddr("Caller");
+        address newCaller = makeAddr("Caller");
         assertTrue(kernel.supportsModule(3));
         kernel.installModule(
             3,
@@ -19,13 +18,13 @@ abstract contract KernelSelectorTest is KernelTestBase {
             )
         );
         vm.stopPrank();
-        vm.startPrank(Caller);
+        vm.startPrank(newCaller);
         vm.expectEmit(address(mockFallback));
         emit MockFallback.Foobar();
         uint256 res = MockFallback(address(kernel)).fallbackFunction(10);
         address caller = mockFallback.caller();
         assertEq(res, 100);
-        assertEq(caller, Caller);
+        assertEq(caller, newCaller);
         SelectorConfig memory c = kernel.selectorConfig(MockFallback.fallbackFunction.selector);
         assertEq(address(c.target), address(mockFallback));
         assertEq(address(c.hook), address(1));

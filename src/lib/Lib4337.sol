@@ -72,21 +72,26 @@ library Lib4337 {
                 return preValidationData | validationRes;
             }
         }
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint48 validUntil1 = uint48(preValidationData >> 160);
         if (validUntil1 == 0) {
             validUntil1 = type(uint48).max;
         }
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint48 validUntil2 = uint48(validationRes >> 160);
         if (validUntil2 == 0) {
             validUntil2 = type(uint48).max;
         }
         resValidationData = ((validUntil1 > validUntil2) ? uint256(validUntil2) << 160 : uint256(validUntil1) << 160);
 
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint48 validAfter1 = uint48(preValidationData >> 208);
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint48 validAfter2 = uint48(validationRes >> 208);
 
         resValidationData |= ((validAfter1 < validAfter2) ? uint256(validAfter2) << 208 : uint256(validAfter1) << 208);
 
+        // forge-lint: disable-next-line(unsafe-typecast)
         resValidationData |= uint160(preValidationData) == 1 ? 1 : uint160(validationRes);
     }
 }

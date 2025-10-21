@@ -71,7 +71,7 @@ abstract contract ExecutionManager {
         }
     }
 
-    function _getReturn() internal returns (bytes memory result) {
+    function _getReturn() internal pure returns (bytes memory result) {
         assembly {
             result := mload(0x40)
             mstore(result, returndatasize()) // Store the length.
@@ -81,7 +81,7 @@ abstract contract ExecutionManager {
         }
     }
 
-    function _onRevertThrow() internal {
+    function _onRevertThrow() internal pure {
         assembly {
             // Bubble up the revert if the call reverts.
             returndatacopy(0x00, 0x00, returndatasize())
@@ -89,7 +89,7 @@ abstract contract ExecutionManager {
         }
     }
 
-    function _onRevertSilent() internal {}
+    function _onRevertSilent() internal pure {}
 
     function _call(address target, uint256 value, bytes memory callData) internal returns (bool success) {
         /// @solidity memory-safe-assembly

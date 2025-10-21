@@ -128,12 +128,12 @@ abstract contract KernelExecuteTest is KernelTestBase {
     }
 
     function test_execute_from_executor_return_data_batch() external {
-        bytes memory data = hex"deadbeef";
         Call[] memory calls = new Call[](5);
         for (uint256 i = 0; i < calls.length; i++) {
             calls[i] = Call({
                 to: address(callee),
                 value: uint256(0),
+                // forge-lint: disable-next-line(unsafe-typecast)
                 data: abi.encodeWithSelector(MockCallee.ret.selector, abi.encodePacked(hex"deadbeef", bytes1(uint8(i))))
             });
         }
@@ -142,7 +142,9 @@ abstract contract KernelExecuteTest is KernelTestBase {
         assertEq(ret.length, 5);
         for (uint256 i = 0; i < calls.length; i++) {
             assertEq(
-                keccak256(abi.encodePacked(hex"deadbeef", bytes1(uint8(i)))), keccak256(abi.decode(ret[i], (bytes)))
+                // forge-lint: disable-next-line(unsafe-typecast)
+                keccak256(abi.encodePacked(hex"deadbeef", bytes1(uint8(i)))),
+                keccak256(abi.decode(ret[i], (bytes)))
             );
         }
     }

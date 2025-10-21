@@ -7,16 +7,9 @@ import {MockPolicy} from "./mock/MockPolicy.sol";
 import {MockSigner} from "./mock/MockSigner.sol";
 import {MockCallee} from "./mock/MockCallee.sol";
 import {KernelTestBase} from "./KernelTestBase.sol";
-import {InvalidNonce, NotInstalled} from "src/types/Error.sol";
-import {
-    VALIDATION_TYPE_ROOT,
-    VALIDATION_TYPE_VALIDATOR,
-    VALIDATION_TYPE_PERMISSION,
-    ERC1271_MAGICVALUE
-} from "src/types/Constants.sol";
+import {InvalidRootValidation, InvalidNonce, NotInstalled} from "src/types/Error.sol";
+import {ERC1271_MAGICVALUE} from "src/types/Constants.sol";
 import {permissionToIdentifier} from "src/lib/Utils.sol";
-
-import {console} from "forge-std/console.sol";
 
 abstract contract KernelValidatorTest is KernelTestBase {
     function _sendUserOpValidator(bool success, bool useHook) internal {
@@ -160,6 +153,48 @@ abstract contract KernelValidatorTest is KernelTestBase {
         kernel.setRoot(ValidationId.wrap(bytes20(address(newValidator))));
     }
 
+    function test_change_root_pkgs() external unitTest {
+        Install[] memory packages = new Install[](3);
+        packages[0] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
+        packages[1] = Install({
+            moduleType: 5, module: address(policy), internalData: abi.encodePacked(permissionId), moduleData: hex""
+        });
+        packages[2] = Install({
+            moduleType: 6, module: address(signer), internalData: abi.encodePacked(permissionId), moduleData: hex""
+        });
+
+        kernel.setRoot(packages, false, hex"");
+    }
+
+    function test_change_root_pkgs_remove_current() external unitTest {
+        vm.skip(is7702 || isImmutable);
+        Install[] memory packages = new Install[](3);
+        packages[0] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
+        packages[1] = Install({
+            moduleType: 5, module: address(policy), internalData: abi.encodePacked(permissionId), moduleData: hex""
+        });
+        packages[2] = Install({
+            moduleType: 6, module: address(signer), internalData: abi.encodePacked(permissionId), moduleData: hex""
+        });
+
+        kernel.setRoot(packages, true, hex"");
+    }
+
+    function test_change_root_pkgs_remove_current_fail_7702_or_immutable() external unitTest {
+        vm.skip(!is7702 && !isImmutable);
+        Install[] memory packages = new Install[](3);
+        packages[0] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
+        packages[1] = Install({
+            moduleType: 5, module: address(policy), internalData: abi.encodePacked(permissionId), moduleData: hex""
+        });
+        packages[2] = Install({
+            moduleType: 6, module: address(signer), internalData: abi.encodePacked(permissionId), moduleData: hex""
+        });
+
+        vm.expectRevert(InvalidRootValidation.selector);
+        kernel.setRoot(packages, true, hex"");
+    }
+
     function test_install_validator() external unitTest {
         assertTrue(kernel.supportsModule(1));
         ValidationId vId = ValidationId.wrap(bytes20(address(newValidator)));
@@ -243,7 +278,6 @@ abstract contract KernelValidatorTest is KernelTestBase {
     function test_install_validator_with_hook_notinstalled() external unitTest {
         assertTrue(kernel.supportsModule(4));
         assertTrue(kernel.supportsModule(1));
-        ValidationId vId = ValidationId.wrap(bytes20(address(newValidator)));
         vm.expectRevert(NotInstalled.selector);
         kernel.installModule(
             1,

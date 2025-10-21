@@ -17,7 +17,7 @@ contract KernelUUPS is Kernel, UUPSUpgradeable, Initializable {
         _initialize(packages);
     }
 
-    function _authorizeUpgrade(address) internal override {
+    function _authorizeUpgrade(address) internal view override {
         _onlyEntryPointOrSelf();
     }
 }

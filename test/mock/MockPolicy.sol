@@ -9,6 +9,7 @@ contract MockPolicy is IPolicy {
     mapping(address => mapping(bytes32 => bool)) public pass;
     mapping(address => bytes) public installData;
     mapping(address => mapping(bytes32 => bytes)) public sig;
+    bool success;
 
     function onInstall(bytes calldata data) external payable override {
         installData[msg.sender] = data;
@@ -21,6 +22,7 @@ contract MockPolicy is IPolicy {
     }
 
     function sudoSetPass(address _wallet, bytes32 _id, bool _pass) external payable {
+        success = _pass;
         pass[_wallet][_id] = _pass;
     }
 
@@ -50,17 +52,11 @@ contract MockPolicy is IPolicy {
         return pass[msg.sender][id] ? 0 : 1;
     }
 
-    function validateSignatureWithDataWithSender(
-        address sender,
-        bytes32 hash,
-        bytes calldata signature,
-        bytes calldata data
-    ) external view returns (bool) {
-        bytes4 id = bytes4(signature);
-        if (pass[msg.sender][id] == true) {
-            return true;
-        } else {
-            return false;
-        }
+    function validateSignatureWithDataWithSender(address, bytes32, bytes calldata signature, bytes calldata)
+        external
+        view
+        returns (bool)
+    {
+        return success;
     }
 }

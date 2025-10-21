@@ -27,6 +27,7 @@ contract KernelImmutableECDSATest is KernelTest {
 
     function _rootSignUserOp(PackedUserOperation memory op, bool success, bool replay)
         internal
+        view
         override
         returns (bytes memory sig)
     {
@@ -34,7 +35,7 @@ contract KernelImmutableECDSATest is KernelTest {
         return _rootSignHash(hash, success);
     }
 
-    function _rootSignHash(bytes32 hash, bool success) internal override returns (bytes memory sig) {
+    function _rootSignHash(bytes32 hash, bool success) internal view override returns (bytes memory sig) {
         if (!success) {
             hash = keccak256(abi.encodePacked(hash));
         }

@@ -4,6 +4,7 @@ import {Kernel, Install} from "./Kernel.sol";
 import {KernelUUPS} from "./KernelUUPS.sol";
 import {KernelImmutableECDSA} from "./KernelImmutableECDSA.sol";
 import {LibClone} from "solady/utils/LibClone.sol";
+import {EfficientHashLib} from "solady/utils/EfficientHashLib.sol";
 
 contract KernelFactory {
     error InvalidSigner();
@@ -17,7 +18,6 @@ contract KernelFactory {
     }
 
     function checkInitialized(address account, bytes calldata initData) external view returns (bool) {
-        bytes4 selector = bytes4(initData[0:4]);
         (
 
             /*replayable*/,
@@ -43,7 +43,7 @@ contract KernelFactory {
 
     // Kernel UUPS
     function deploy(Install[] calldata initialPackages, uint256 nonce) external payable returns (Kernel) {
-        bytes32 salt = keccak256(abi.encode(initialPackages, nonce));
+        bytes32 salt = _calculateSalt(initialPackages, nonce);
         (bool deployed, address account) = LibClone.createDeterministicERC1967(msg.value, address(UUPS), salt);
         Kernel k = Kernel(payable(account));
         if (deployed) {
@@ -58,7 +58,7 @@ contract KernelFactory {
         payable
         returns (Kernel)
     {
-        bytes32 salt = keccak256(abi.encode(initialPackages, nonce));
+        bytes32 salt = _calculateSalt(initialPackages, nonce);
         (bool deployed, address account) = LibClone.createDeterministicERC1967(msg.value, address(UUPS), salt);
         Kernel k = Kernel(payable(account));
         if (!deployed) {
@@ -70,7 +70,7 @@ contract KernelFactory {
     }
 
     function getAddress(Install[] calldata initialPackages, uint256 nonce) public view virtual returns (address) {
-        bytes32 salt = keccak256(abi.encode(initialPackages, nonce));
+        bytes32 salt = _calculateSalt(initialPackages, nonce);
         return LibClone.predictDeterministicAddressERC1967(address(UUPS), salt, address(this));
     }
 
@@ -82,11 +82,13 @@ contract KernelFactory {
         returns (Kernel)
     {
         require(signer != address(0), InvalidSigner());
-        bytes32 salt = keccak256(abi.encode(initialPackages, nonce));
-        (, address account) =
+        bytes32 salt = _calculateSalt(initialPackages, nonce);
+        (bool deployed, address account) =
             LibClone.createDeterministicERC1967(address(IMMUTABLE_ECDSA), abi.encodePacked(signer), salt);
         Kernel k = Kernel(payable(account));
-        k.initialize(initialPackages);
+        if (!deployed) {
+            k.initialize(initialPackages);
+        }
         return k;
     }
 
@@ -98,11 +100,13 @@ contract KernelFactory {
         bytes calldata extraCall
     ) external payable returns (Kernel) {
         require(signer != address(0), InvalidSigner());
-        bytes32 salt = keccak256(abi.encode(initialPackages, nonce));
-        (, address account) =
+        bytes32 salt = _calculateSalt(initialPackages, nonce);
+        (bool deployed, address account) =
             LibClone.createDeterministicERC1967(address(IMMUTABLE_ECDSA), abi.encodePacked(signer), salt);
         Kernel k = Kernel(payable(account));
-        k.initialize(initialPackages);
+        if (!deployed) {
+            k.initialize(initialPackages);
+        }
         (bool success,) = address(k).call(extraCall);
         require(success, "call failed");
         return k;
@@ -115,9 +119,30 @@ contract KernelFactory {
         virtual
         returns (address)
     {
-        bytes32 salt = keccak256(abi.encode(initialPackages, nonce));
+        bytes32 salt = _calculateSalt(initialPackages, nonce);
         return LibClone.predictDeterministicAddressERC1967(
             address(IMMUTABLE_ECDSA), abi.encodePacked(signer), salt, address(this)
         );
+    }
+
+    function _calculateSalt(Install[] calldata initialPackages, uint256 nonce) internal pure returns (bytes32) {
+        unchecked {
+            bytes32[] memory buffer = EfficientHashLib.malloc(initialPackages.length + 1);
+            EfficientHashLib.set(buffer, 0, nonce);
+            for (uint256 i = 1; i < buffer.length; i++) {
+                Install calldata pkg = initialPackages[i - 1];
+                EfficientHashLib.set(
+                    buffer,
+                    i,
+                    EfficientHashLib.hash(
+                        bytes32(pkg.moduleType),
+                        bytes32(uint256(uint160(pkg.module))),
+                        EfficientHashLib.hashCalldata(pkg.moduleData),
+                        EfficientHashLib.hashCalldata(pkg.internalData)
+                    )
+                );
+            }
+            return EfficientHashLib.hash(buffer);
+        }
     }
 }

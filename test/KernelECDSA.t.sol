@@ -4,7 +4,7 @@ import {KernelTest} from "./Kernel.t.sol";
 import {Lib4337} from "src/lib/Lib4337.sol";
 import {ECDSAValidator} from "./mock/ECDSAValidator.sol";
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
-import {Install, ValidationInfo} from "src/types/Structs.sol";
+import {Install} from "src/types/Structs.sol";
 import {ValidationId} from "src/types/Types.sol";
 
 contract KernelECDSATest is KernelTest {
@@ -29,12 +29,11 @@ contract KernelECDSATest is KernelTest {
         ValidationId vId = kernel.root();
 
         assertEq(ValidationId.unwrap(vId), bytes21(abi.encodePacked(bytes1(0x01), address(rootValidator))));
-
-        ValidationInfo memory info = kernel.validationInfo(vId);
     }
 
     function _rootSignUserOp(PackedUserOperation memory op, bool success, bool replay)
         internal
+        view
         override
         returns (bytes memory sig)
     {
@@ -42,7 +41,7 @@ contract KernelECDSATest is KernelTest {
         return _rootSignHash(hash, success);
     }
 
-    function _rootSignHash(bytes32 hash, bool success) internal override returns (bytes memory sig) {
+    function _rootSignHash(bytes32 hash, bool success) internal view override returns (bytes memory sig) {
         if (!success) {
             hash = keccak256(abi.encodePacked(hash));
         }

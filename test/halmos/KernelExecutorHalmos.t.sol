@@ -21,35 +21,35 @@ contract KernelExecutorHalmos is SymTest, Test {
         vm.stopPrank();
     }
 
-    function check_execute_from_executor_return0() external {
-        execute_from_executor(0);
+    function checkExecuteFromExecutorReturn0() external {
+        _executeFromExecutor(0);
     }
 
-    function check_execute_from_executor_return8() external {
-        execute_from_executor(8);
+    function checkExecuteFromExecutorReturn8() external {
+        _executeFromExecutor(8);
     }
 
-    function check_execute_from_executor_return32() external {
-        execute_from_executor(32);
+    function checkExecuteFromExecutorReturn32() external {
+        _executeFromExecutor(32);
     }
 
-    function check_execute_from_executor_return64() external {
-        execute_from_executor(64);
+    function checkExecuteFromExecutorReturn64() external {
+        _executeFromExecutor(64);
     }
 
-    function check_execute_from_executor_return256() external {
-        execute_from_executor(256);
+    function checkExecuteFromExecutorReturn256() external {
+        _executeFromExecutor(256);
     }
 
-    function check_execute_from_executor_return1024() external {
-        execute_from_executor(1024);
+    function checkExecuteFromExecutorReturn1024() external {
+        _executeFromExecutor(1024);
     }
 
-    function check_execute_from_executor_return4096() external {
-        execute_from_executor(4096);
+    function checkExecuteFromExecutorReturn4096() external {
+        _executeFromExecutor(4096);
     }
 
-    function execute_from_executor(uint256 length) internal {
+    function _executeFromExecutor(uint256 length) internal {
         bytes memory data = svm.createBytes(length, "data");
         vm.startPrank(executor);
         bytes[] memory ret = kernel.executeFromExecutor(

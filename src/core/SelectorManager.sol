@@ -34,7 +34,7 @@ abstract contract SelectorManager {
         $.hook = IHook(hook);
     }
 
-    function _uninstallSelector(address _module, bytes calldata _internalData, bool _uninstallSuccess) internal {
+    function _uninstallSelector(address, bytes calldata _internalData, bool) internal {
         bytes4 selector = bytes4(_internalData[0:4]);
         SelectorConfig storage $ = _selectorConfig(selector);
         $.target = address(0);

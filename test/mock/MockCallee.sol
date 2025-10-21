@@ -17,7 +17,7 @@ contract MockCallee {
         data = "lorem ipsum";
     }
 
-    function forceRevert() external {
+    function forceRevert() external pure {
         revert Haha();
     }
 

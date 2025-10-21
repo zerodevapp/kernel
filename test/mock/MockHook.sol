@@ -24,7 +24,7 @@ contract MockHook is IHook {
         return data[smartAccount].length > 0;
     }
 
-    function preCheck(address msgSender, uint256 value, bytes calldata msgData)
+    function preCheck(address msgSender, uint256, bytes calldata msgData)
         external
         payable
         override

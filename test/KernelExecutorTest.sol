@@ -1,11 +1,9 @@
 pragma solidity ^0.8.0;
 
 import {LibERC7579} from "solady/accounts/LibERC7579.sol";
-import {Install, Call, InstallAndExecute} from "src/types/Structs.sol";
-import {ERC1967_IMPLEMENTATION_SLOT} from "src/types/Constants.sol";
+import {Call} from "src/types/Structs.sol";
 import {MockExecutor} from "./mock/MockExecutor.sol";
 import {MockCallee} from "./mock/MockCallee.sol";
-import {MockKernel} from "./mock/MockKernel.sol";
 import {KernelTestBase} from "./KernelTestBase.sol";
 
 abstract contract KernelExecutorTest is KernelTestBase {

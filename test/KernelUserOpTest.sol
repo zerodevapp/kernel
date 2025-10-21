@@ -18,6 +18,7 @@ abstract contract KernelUserOpTest is KernelTestBase {
         try this.simulateEntrypointCall(op) {}
         catch (bytes memory err) {
             bytes32 data = LibBytes.load(err, 4);
+            // forge-lint: disable-next-line(unsafe-typecast)
             return (uint128(bytes16(data)), uint128(uint256(data)));
         }
         return (0, 0);
@@ -30,12 +31,15 @@ abstract contract KernelUserOpTest is KernelTestBase {
         Kernel(payable(op.sender)).validateUserOp(op, hash, 1);
         gas = gas - gasleft();
         vm.stopPrank();
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint128 vgl = uint128(gas) + 30000;
         vm.startPrank(address(ep));
         gas = gasleft();
         (bool success,) = op.sender.call(op.callData);
         gas = gas - gasleft();
+        require(success, "Call Failed");
         vm.stopPrank();
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint128 egl = uint128(gas) + 30000;
         revert Result(uint256(bytes32(abi.encodePacked(uint128(vgl), uint128(egl)))));
     }
@@ -395,6 +399,28 @@ abstract contract KernelUserOpTest is KernelTestBase {
             Kernel.execute.selector, 0, true, false, _rootSignHash, _permissionSignUserOp(ops[0], false, false)
         );
         vm.expectRevert(abi.encodeWithSelector(IEntryPoint.FailedOp.selector, 0, "AA24 signature error"));
+        ep.handleOps(ops, beneficiary);
+    }
+
+    function test_userop_invalid_type() external entryPointTest {
+        PackedUserOperation[] memory ops = new PackedUserOperation[](1);
+        ops[0] = PackedUserOperation({
+            sender: address(kernel),
+            nonce: encodeNonce(false, false, false, bytes1(0x03), bytes20(0)),
+            initCode: hex"",
+            callData: abi.encodeWithSelector(
+                Kernel.execute.selector,
+                bytes32(0),
+                abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
+            ),
+            accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
+            preVerificationGas: 1000000,
+            gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
+            paymasterAndData: hex"",
+            signature: hex""
+        });
+        ops[0].signature = _rootSignUserOp(ops[0], true, false);
+        vm.expectRevert();
         ep.handleOps(ops, beneficiary);
     }
 }

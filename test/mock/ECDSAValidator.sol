@@ -81,13 +81,13 @@ contract ECDSAValidator is IValidator, IStatelessValidatorWithSender {
         return ERC1271_MAGICVALUE;
     }
 
-    function validateSignatureWithDataWithSender(
-        address sender,
-        bytes32 hash,
-        bytes calldata signature,
-        bytes calldata data
-    ) external view returns (bool) {
+    function validateSignatureWithDataWithSender(address, bytes32 hash, bytes calldata signature, bytes calldata data)
+        external
+        view
+        returns (bool)
+    {
         require(data.length == 20, "Invalid Data Length");
+        // forge-lint: disable-next-line(unsafe-typecast)
         address owner = address(bytes20(data));
         return owner == ECDSA.tryRecoverCalldata(hash, signature);
     }

@@ -30,6 +30,7 @@ contract Kernel7702Test is KernelTest {
 
     function _rootSignUserOp(PackedUserOperation memory op, bool success, bool replay)
         internal
+        view
         override
         returns (bytes memory sig)
     {
@@ -37,7 +38,7 @@ contract Kernel7702Test is KernelTest {
         return _rootSignHash(hash, success);
     }
 
-    function _rootSignHash(bytes32 hash, bool success) internal override returns (bytes memory sig) {
+    function _rootSignHash(bytes32 hash, bool success) internal view override returns (bytes memory sig) {
         if (!success) {
             hash = keccak256(abi.encodePacked(hash));
         }
@@ -51,7 +52,7 @@ contract Kernel7702Test is KernelTest {
         assertEq(ret, ERC1271_MAGICVALUE);
     }
 
-    function test_7702_unwrapped_erc1271_offchain(bytes32 hash) external {
+    function test_7702_unwrapped_erc1271_offchain(bytes32 hash) external view {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, hash);
         (bytes4 ret) = kernel.isValidSignature(hash, abi.encodePacked(r, s, v));
         assertEq(ret, ERC1271_MAGICVALUE);
