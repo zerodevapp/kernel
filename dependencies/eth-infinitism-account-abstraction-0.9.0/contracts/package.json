@@ -1,0 +1,29 @@
+{
+  "name": "@account-abstraction/contracts",
+  "description": "Account Abstraction (EIP 4337) contracts",
+  "version": "0.9.0",
+  "scripts": {
+    "prepack": "../scripts/prepack-contracts-package.sh",
+    "postpack": "../scripts/postpack-contracts-package.sh"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eth-infinitism/account-abstraction"
+  },
+  "keywords": [
+    "solidity",
+    "ethereum",
+    "smart",
+    "contracts",
+    "account-abstraction",
+    "erc-4337"
+  ],
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/eth-infinitism/account-abstraction/issues"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.1.0",
+    "@uniswap/v3-periphery": "^1.4.3"
+  }
+}

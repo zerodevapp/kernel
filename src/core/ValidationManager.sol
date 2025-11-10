@@ -226,9 +226,9 @@ abstract contract ValidationManager {
             validationData = Lib4337.intersectValidationData(
                 validationData,
                 ISigner(vInfo.signer)
-                        .checkSignature(
-                            paddedVId, requester, _hash, permissionSig.signatures[permissionSig.signatures.length - 1]
-                        ) == ERC1271_MAGICVALUE
+                    .checkSignature(
+                        paddedVId, requester, _hash, permissionSig.signatures[permissionSig.signatures.length - 1]
+                    ) == ERC1271_MAGICVALUE
                     ? 0
                     : 1
             );

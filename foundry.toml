@@ -19,7 +19,7 @@ depth = 1000
 
 [dependencies]
 solady = "0.1.26"
-eth-infinitism-account-abstraction = "0.8.0"
+eth-infinitism-account-abstraction = { version = "0.9.0", git = "https://github.com/eth-infinitism/account-abstraction.git", branch = "release-v09" }
 "@openzeppelin-contracts" = "5.4.0"
 a16z-halmos-cheatcodes = "6da4e692c357ba6d641a2e677a28298cac9f76ab"
 forge-std = "1.11.0"

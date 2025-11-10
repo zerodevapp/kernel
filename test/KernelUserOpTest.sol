@@ -103,7 +103,9 @@ abstract contract KernelUserOpTest is KernelTestBase {
         (v, r, s) = vm.sign(simpleKey, userOpHash);
         ops[0].signature = abi.encodePacked(r, s, v);
         uint256 bal = ep.balanceOf(address(account)) + address(account).balance;
+        vm.startPrank(beneficiary, beneficiary);
         ep.handleOps(ops, beneficiary);
+        vm.stopPrank();
         uint256 used = bal - (ep.balanceOf(address(account)) + address(account).balance);
         vm.snapshotValue("Simple - foo()", used);
         assertEq(callee.bar(), 1);
@@ -131,7 +133,9 @@ abstract contract KernelUserOpTest is KernelTestBase {
         ops[0].accountGasLimits = bytes32(abi.encodePacked(uint128(vgl), uint128(egl)));
         ops[0].signature = _rootSignUserOp(ops[0], true, false);
         uint256 bal = ep.balanceOf(address(kernel)) + address(kernel).balance;
+        vm.startPrank(beneficiary, beneficiary);
         ep.handleOps(ops, beneficiary);
+        vm.stopPrank();
         uint256 used = bal - (ep.balanceOf(address(kernel)) + address(kernel).balance);
         vm.snapshotValue("Root - foo()", used);
         assertEq(callee.bar(), 1);
@@ -155,7 +159,9 @@ abstract contract KernelUserOpTest is KernelTestBase {
             signature: hex""
         });
         ops[0].signature = _rootSignUserOp(ops[0], true, true);
+        vm.startPrank(beneficiary, beneficiary);
         ep.handleOps(ops, beneficiary);
+        vm.stopPrank();
         assertEq(callee.bar(), 1);
     }
 
@@ -177,8 +183,10 @@ abstract contract KernelUserOpTest is KernelTestBase {
             signature: hex""
         });
         ops[0].signature = _rootSignUserOp(ops[0], false, false);
+        vm.startPrank(beneficiary, beneficiary);
         vm.expectRevert(abi.encodeWithSelector(IEntryPoint.FailedOp.selector, 0, "AA24 signature error"));
         ep.handleOps(ops, beneficiary);
+        vm.stopPrank();
     }
 
     function test_userop_validator_aa24_notinstalled() external entryPointTest {
@@ -199,8 +207,10 @@ abstract contract KernelUserOpTest is KernelTestBase {
             signature: hex""
         });
         ops[0].signature = _validatorSignUserOp(ops[0], true, false);
+        vm.startPrank(beneficiary, beneficiary);
         vm.expectRevert();
         ep.handleOps(ops, beneficiary);
+        vm.stopPrank();
     }
 
     function test_userop_validator_enable() external entryPointTest {
@@ -223,7 +233,9 @@ abstract contract KernelUserOpTest is KernelTestBase {
         ops[0].signature = encodeEnableValidatorSignature(
             Kernel.execute.selector, 0, true, false, _rootSignHash, _validatorSignUserOp(ops[0], true, false)
         );
+        vm.startPrank(beneficiary, beneficiary);
         ep.handleOps(ops, beneficiary);
+        vm.stopPrank();
         assertEq(callee.bar(), 1);
         assertEq(kernel.validationInfo(validatorToIdentifier(newValidator)).hook, address(1));
     }
@@ -252,8 +264,10 @@ abstract contract KernelUserOpTest is KernelTestBase {
         ops[0].signature = encodeEnableValidatorSignature(
             Kernel.execute.selector, 0, false, false, _rootSignHash, _validatorSignUserOp(ops[0], true, false)
         );
+        vm.startPrank(beneficiary, beneficiary);
         vm.expectRevert(abi.encodeWithSelector(IEntryPoint.FailedOp.selector, 0, "AA24 signature error"));
         ep.handleOps(ops, beneficiary);
+        vm.stopPrank();
     }
 
     function test_userop_validator_aa24_validation_failed() external entryPointTest {
@@ -277,8 +291,10 @@ abstract contract KernelUserOpTest is KernelTestBase {
         ops[0].signature = encodeEnableValidatorSignature(
             Kernel.execute.selector, 0, true, false, _rootSignHash, _validatorSignUserOp(ops[0], false, false)
         );
+        vm.startPrank(beneficiary, beneficiary);
         vm.expectRevert(abi.encodeWithSelector(IEntryPoint.FailedOp.selector, 0, "AA24 signature error"));
         ep.handleOps(ops, beneficiary);
+        vm.stopPrank();
     }
 
     function test_userop_permission_aa24_notinstalled() external entryPointTest {
@@ -300,8 +316,10 @@ abstract contract KernelUserOpTest is KernelTestBase {
         });
         ops[0].signature = _permissionSignUserOp(ops[0], true, false);
         //vm.expectRevert(abi.encodeWithSelector(IEntryPoint.FailedOp.selector, 0, "AA24 signature error"));
+        vm.startPrank(beneficiary, beneficiary);
         vm.expectRevert();
         ep.handleOps(ops, beneficiary);
+        vm.stopPrank();
     }
 
     function test_userop_permission_enable() external entryPointTest {
@@ -325,7 +343,9 @@ abstract contract KernelUserOpTest is KernelTestBase {
         ops[0].signature = encodeEnablePermissionSignature(
             Kernel.execute.selector, 0, true, false, _rootSignHash, _permissionSignUserOp(ops[0], true, false)
         );
+        vm.startPrank(beneficiary, beneficiary);
         ep.handleOps(ops, beneficiary);
+        vm.stopPrank();
         assertEq(callee.bar(), 1);
     }
 
@@ -349,8 +369,10 @@ abstract contract KernelUserOpTest is KernelTestBase {
         ops[0].signature = encodeEnablePermissionSignature(
             Kernel.execute.selector, 0, false, false, _rootSignHash, _permissionSignUserOp(ops[0], true, false)
         );
+        vm.startPrank(beneficiary, beneficiary);
         vm.expectRevert(abi.encodeWithSelector(IEntryPoint.FailedOp.selector, 0, "AA24 signature error"));
         ep.handleOps(ops, beneficiary);
+        vm.stopPrank();
     }
 
     function test_userop_permission_aa24_policy_failed() external entryPointTest {
@@ -373,8 +395,10 @@ abstract contract KernelUserOpTest is KernelTestBase {
         ops[0].signature = encodeEnablePermissionSignature(
             Kernel.execute.selector, 0, true, false, _rootSignHash, _permissionSignUserOp(ops[0], false, false)
         );
+        vm.startPrank(beneficiary, beneficiary);
         vm.expectRevert(abi.encodeWithSelector(IEntryPoint.FailedOp.selector, 0, "AA24 signature error"));
         ep.handleOps(ops, beneficiary);
+        vm.stopPrank();
     }
 
     function test_userop_permission_aa24_signer_validation_failed() external entryPointTest {
@@ -398,8 +422,10 @@ abstract contract KernelUserOpTest is KernelTestBase {
         ops[0].signature = encodeEnablePermissionSignature(
             Kernel.execute.selector, 0, true, false, _rootSignHash, _permissionSignUserOp(ops[0], false, false)
         );
+        vm.startPrank(beneficiary, beneficiary);
         vm.expectRevert(abi.encodeWithSelector(IEntryPoint.FailedOp.selector, 0, "AA24 signature error"));
         ep.handleOps(ops, beneficiary);
+        vm.stopPrank();
     }
 
     function test_userop_invalid_type() external entryPointTest {
@@ -420,7 +446,9 @@ abstract contract KernelUserOpTest is KernelTestBase {
             signature: hex""
         });
         ops[0].signature = _rootSignUserOp(ops[0], true, false);
+        vm.startPrank(beneficiary, beneficiary);
         vm.expectRevert();
         ep.handleOps(ops, beneficiary);
+        vm.stopPrank();
     }
 }

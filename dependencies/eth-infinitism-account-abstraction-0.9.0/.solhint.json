@@ -1,0 +1,19 @@
+{
+  "extends": "solhint:recommended",
+  "rules": {
+    "compiler-version": ["error", ">=0.8.28"],
+    "explicit-types": ["warn", "explicit"],
+    "function-max-lines": "off",
+    "gas-increment-by-one": "off",
+    "gas-indexed-events": "off",
+    "gas-strict-inequalities": "off",
+    "immutable-vars-naming": ["off"],
+    "no-global-import": "off",
+    "use-natspec": "off",
+    "func-visibility": [
+      "off", {
+        "ignoreConstructors": true
+      }
+    ]
+  }
+}

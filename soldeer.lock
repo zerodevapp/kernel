@@ -14,10 +14,9 @@ integrity = "d61b6628a05317095546185bf5bd4037050fc2a9c7db23c54cc398a618266ea4"
 
 [[dependencies]]
 name = "eth-infinitism-account-abstraction"
-version = "0.8.0"
-url = "https://soldeer-revisions.s3.amazonaws.com/eth-infinitism-account-abstraction/0_8_0_24-03-2025_13:49:05_eth-infinitism-account-abstraction-0.8.zip"
-checksum = "305f34048fe928dacefb31a61baecae18eed43959f892d6a1b428eb46bb6afc9"
-integrity = "8ffcb24a9c6089aef86df243251501b42928ace5cacfa3e47bb17e521ae67a1b"
+version = "0.9.0"
+git = "https://github.com/eth-infinitism/account-abstraction.git"
+rev = "86fcd84cf7263fe384d61d078ee747b16e69a496"
 
 [[dependencies]]
 name = "forge-std"

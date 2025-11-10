@@ -1,12 +1,26 @@
 # Kernel v4 Audit Changelog
 
-**Commit Range:** `ff20f6c` to `25e51e1` (HEAD)
-**Date Range:** October 14, 2025 - October 22, 2025
+**Commit Range:** `ff20f6c` to `3e72921` (HEAD)
+**Date Range:** October 14, 2025 - November 6, 2025
 **Files Changed:** 21 files in `src/` (+625, -500 lines)
 
 ---
 
 ## Added Features
+
+### EntryPoint v0.9 Support
+Added support for ERC-4337 EntryPoint version 0.9.
+- Updated account-abstraction dependency from v0.8.0 to v0.9.0 (branch: release-v09)
+- Updated EntryPoint deployment bytecode constant in test utilities
+- Modified test suite to include `vm.startPrank(beneficiary, beneficiary)` calls before `ep.handleOps()` for v0.9 compatibility
+- Updated remappings to support both v0.8.0 and v0.9.0 dependencies
+- Gas snapshot updates reflecting v0.9 optimizations (reduced gas costs across all test scenarios)
+- **Breaking Change:** UserOperation hash calculation has been changed in EntryPoint v0.9
+- **Files:** `foundry.toml`, `remappings.txt`, `soldeer.lock`, `test/utils/EntryPointLib.sol`, `test/KernelUserOpTest.sol`, `test/KernelValidatorTest.sol`
+- **EntryPoint Address:** `0x43370900c8de573dB349BEd8DD53b4Ebd3Cce709`
+- **Commits:** 977ca07, aa91ef1, 110c7af, 3e72921
+- **Note:** The module type ID was updated from 8 to 10 for `MODULE_TYPE_STATELESS_VALIDATOR_WITH_SENDER` as part of this upgrade
+- you can find the release docs in [here](https://docs.google.com/document/d/1RKkKZsP1eYkOoBEkzJ1vWRK_bcWXaewoGPzawMjsleM/edit?usp=drivesdk), please do note that this document is not in public yet
 
 ### Staker Contract (`src/Staker.sol`) - NEW
 Factory staking management contract for ERC-4337 EntryPoint compliance.
