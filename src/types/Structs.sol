@@ -17,6 +17,7 @@ struct Uninstall {
 }
 
 struct ValidationInfo {
+    uint32 nonce;
     address hook;
     address signer;
     address[] policies;
@@ -25,7 +26,7 @@ struct ValidationInfo {
 struct ValidationStorage {
     ValidationId root;
     mapping(ValidationId vId => ValidationInfo) vInfo;
-    mapping(ValidationId vId => mapping(bytes4 selector => bool)) allowed;
+    mapping(ValidationId vId => mapping(bytes4 selector => uint32)) allowed;
 }
 
 struct Call {
