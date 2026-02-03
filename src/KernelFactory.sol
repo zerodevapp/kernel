@@ -29,22 +29,6 @@ contract KernelFactory {
         return k;
     }
 
-    function deployWithCall(Install[] calldata initialPackages, uint256 nonce, bytes calldata extraCall)
-        external
-        payable
-        returns (Kernel)
-    {
-        bytes32 salt = _calculateSalt(initialPackages, nonce);
-        (bool deployed, address account) = LibClone.createDeterministicERC1967(msg.value, address(UUPS), salt);
-        Kernel k = Kernel(payable(account));
-        if (!deployed) {
-            k.initialize(initialPackages);
-        }
-        (bool success,) = address(k).call(extraCall);
-        require(success, "call failed");
-        return k;
-    }
-
     function getAddress(Install[] calldata initialPackages, uint256 nonce) public view virtual returns (address) {
         bytes32 salt = _calculateSalt(initialPackages, nonce);
         return LibClone.predictDeterministicAddressERC1967(address(UUPS), salt, address(this));
@@ -65,26 +49,6 @@ contract KernelFactory {
         if (!deployed) {
             k.initialize(initialPackages);
         }
-        return k;
-    }
-
-    /// forge-lint: disable-next-line(mixed-case-function)
-    function deployECDSAWithCall(
-        address signer,
-        Install[] calldata initialPackages,
-        uint256 nonce,
-        bytes calldata extraCall
-    ) external payable returns (Kernel) {
-        require(signer != address(0), InvalidSigner());
-        bytes32 salt = _calculateSalt(initialPackages, nonce);
-        (bool deployed, address account) =
-            LibClone.createDeterministicERC1967(address(IMMUTABLE_ECDSA), abi.encodePacked(signer), salt);
-        Kernel k = Kernel(payable(account));
-        if (!deployed) {
-            k.initialize(initialPackages);
-        }
-        (bool success,) = address(k).call(extraCall);
-        require(success, "call failed");
         return k;
     }
 
