@@ -11,6 +11,7 @@ import {
     InvalidNonce,
     InvalidValidator,
     InvalidPermissionId,
+    InvalidSignature,
     NotImplemented,
     Unauthorized
 } from "../types/Error.sol";
@@ -331,6 +332,7 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
             assembly {
                 permissionSig := signature.offset
             }
+            require(permissionSig.signatures.length > 0, InvalidSignature());
             uint256 sigIdx;
             for (uint256 i; i < packages.length; i++) {
                 Install calldata pkg = packages[i];
