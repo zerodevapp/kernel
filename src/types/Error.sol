@@ -30,6 +30,7 @@ error InvalidPermissionId();
 error InvalidNonce();
 error InvalidInitialization();
 error InvalidDataLength();
+error CannotUninstallRoot();
 error InvalidSignature();
 error InvalidVid(ValidationId vId);
 

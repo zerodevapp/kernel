@@ -9,6 +9,7 @@ import {
     ModuleInstallFailed,
     InvalidPermissionUninstallOrder,
     InvalidPermissionId,
+    CannotUninstallRoot,
     InvalidVid,
     InvalidDataLength,
     NotInstalled
@@ -133,10 +134,16 @@ abstract contract ValidationManager {
         }
     }
 
+    function _uninstallValidation(ValidationId _vId) internal {
+        ValidationStorage storage $ = _validationStorage();
+        require($.root != _vId, CannotUninstallRoot());
+        $.vInfo[_vId].hook = address(0);
+    }
+
     function _uninstallValidator(address _validator, bytes calldata, bool) internal {
         ValidationStorage storage $ = _validationStorage();
         ValidationId vId = validatorToIdentifier(IValidator(_validator));
-        $.vInfo[vId].hook = address(0);
+        _uninstallValidation(vId);
     }
 
     function _uninstallPolicy(address _policy, bytes calldata _internalData, bool) internal {
@@ -146,18 +153,16 @@ abstract contract ValidationManager {
 
     function _uninstallPolicyWithVid(address _policy, ValidationId vId) internal {
         ValidationInfo storage $ = _validationStorage().vInfo[vId];
-        $ = _validationStorage().vInfo[vId];
         unchecked {
             require($.policies[$.policies.length - 1] == _policy, InvalidPermissionUninstallOrder());
             $.policies.pop();
-        }
-        if ($.signer == address(0)) {
-            $.hook = address(0);
         }
     }
 
     function _uninstallSigner(address _signer, bytes calldata _internalData, bool) internal {
         ValidationId vId = permissionToIdentifier(PermissionId.wrap(bytes4(_internalData[0:4])));
+        ValidationInfo storage $ = _validationStorage().vInfo[vId];
+        require($.policies.length == 0, InvalidPermissionUninstallOrder());
         _uninstallSignerWithVid(_signer, vId);
     }
 
@@ -166,7 +171,7 @@ abstract contract ValidationManager {
         require($.policies.length == 0, InvalidPermissionUninstallOrder());
         require($.signer == _signer, InvalidPermissionId());
         $.signer = address(0);
-        $.hook = address(0);
+        _uninstallValidation(vId);
     }
 
     function _checkValidation(ValidationType vType, ValidationId vId)
