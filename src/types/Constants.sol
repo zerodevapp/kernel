@@ -45,5 +45,5 @@ uint256 constant SIG_VALIDATION_SUCCESS_UINT = 0;
 bytes32 constant INSTALL_PACKAGES_STRUCT_HASH = 0x633d6810f7f4053622dad4c187707d9c3cd7f57b8b68943473d3437060aefc6d;
 //keccak256("Install(uint256 moduleType,address module,bytes moduleData,bytes internalData)"),
 bytes32 constant INSTALL_STRUCT_HASH = 0x50c63c739a5f8d2e99954b3d4c7008fcdcef795a1b755ab9287372b01d6ac239;
-//ApproveFactory(address factory,bool approval)
-bytes32 constant APPROVE_FACTORY_STRUCT_HASH = 0x5f5d54a660883657f2f36565a4221ea47582afba62e38479852d3078c781c6e2;
+//ApproveFactory(address factory,bool approval,uint256 nonce)
+bytes32 constant APPROVE_FACTORY_STRUCT_HASH = 0xefd04fcbcf7166a7a34d3a97718e39af7d5bac9fe12232a5041ce5fbe04fe44d;

@@ -54,7 +54,9 @@ contract StakerTest is Test {
     function test_approve_with_sig() external {
         address factory = makeAddr("factory");
         address addr = address(staker);
-        bytes32 structHash = EfficientHashLib.hash(uint256(APPROVE_FACTORY_STRUCT_HASH), uint256(uint160(factory)), 1);
+        bytes32 structHash = EfficientHashLib.hash(
+            uint256(APPROVE_FACTORY_STRUCT_HASH), uint256(uint160(factory)), 1, staker.nonces(factory)
+        );
         bytes32 digest;
         string memory name = "Staker";
         string memory version = "0.0.1";
@@ -76,6 +78,10 @@ contract StakerTest is Test {
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
 
+        assertEq(staker.nonces(factory), 0);
+        staker.approveFactoryWithSignature(factory, true, abi.encodePacked(r, s, v));
+        assertEq(staker.nonces(factory), 1);
+        vm.expectRevert();
         staker.approveFactoryWithSignature(factory, true, abi.encodePacked(r, s, v));
     }
 

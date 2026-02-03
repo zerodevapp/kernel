@@ -9,6 +9,7 @@ import {APPROVE_FACTORY_STRUCT_HASH} from "./types/Constants.sol";
 
 contract Staker is Ownable, EIP712 {
     mapping(address => bool) public approved;
+    mapping(address => uint256) public nonces;
 
     error NotApprovedFactory();
     error DeployFailed();
@@ -39,9 +40,12 @@ contract Staker is Ownable, EIP712 {
         // {
         //   factory: address,
         //   approval: bool,
+        //   nonce: uint256,
         // }
         bytes32 digest = _hashTypedDataSansChainId(
-            EfficientHashLib.hash(uint256(APPROVE_FACTORY_STRUCT_HASH), uint256(uint160(_factory)), approval ? 1 : 0)
+            EfficientHashLib.hash(
+                uint256(APPROVE_FACTORY_STRUCT_HASH), uint256(uint160(_factory)), approval ? 1 : 0, nonces[_factory]++
+            )
         );
         require(owner() == ECDSA.tryRecoverCalldata(digest, signature), "InvalidSignature");
         approved[_factory] = approval;
