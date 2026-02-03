@@ -19,7 +19,11 @@ uint256 constant MODULE_TYPE_POLICY = 5;
 uint256 constant MODULE_TYPE_SIGNER = 6;
 uint256 constant MODULE_TYPE_STATELESS_VALIDATOR_WITH_SENDER = 10;
 
+// note : ROOT == FALLBACK, they do indicate same value but to have different meanings in different context
+// FALLBACK - usually used when using 7702 validation logic
+// ROOT - mostly used when identifying that you are using root validation on userOp.nonce
 ValidationType constant VALIDATION_TYPE_ROOT = ValidationType.wrap(0x00);
+ValidationType constant VALIDATION_TYPE_FALLBACK = ValidationType.wrap(0x00);
 ValidationType constant VALIDATION_TYPE_VALIDATOR = ValidationType.wrap(0x01);
 ValidationType constant VALIDATION_TYPE_PERMISSION = ValidationType.wrap(0x02);
 

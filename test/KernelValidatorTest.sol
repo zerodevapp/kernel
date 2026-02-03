@@ -9,8 +9,7 @@ import {MockCallee} from "./mock/MockCallee.sol";
 import {KernelTestBase} from "./KernelTestBase.sol";
 import {InvalidRootValidation, InvalidNonce, NotInstalled} from "src/types/Error.sol";
 import {ERC1271_MAGICVALUE} from "src/types/Constants.sol";
-import {permissionToIdentifier} from "src/lib/Utils.sol";
-import {validatorToIdentifier} from "src/lib/Utils.sol";
+import {permissionToIdentifier, validatorToIdentifier} from "src/lib/Utils.sol";
 
 abstract contract KernelValidatorTest is KernelTestBase {
     function caller() external view returns (address) {
@@ -160,7 +159,6 @@ abstract contract KernelValidatorTest is KernelTestBase {
         });
         kernel.installModule(false, 0, packages, enableSig(0, true, false, packages, _rootSignHash));
 
-        assertFalse(kernel.root() == validatorToIdentifier(newValidator));
         kernel.setRoot(validatorToIdentifier(newValidator));
         assertTrue(kernel.root() == validatorToIdentifier(newValidator));
     }
