@@ -267,10 +267,13 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
                 require(uninstallDataArr.length == vInfo.policies.length + 1, InvalidDataLength());
                 // uninstall policies first
                 // NOTE : success is not checked on purpose as we are focusing on removing not actually calling onUninstall
-                for (uint256 i = 0; i < vInfo.policies.length; i++) {
-                    // forge-lint: disable-next-line(unchecked-call)
-                    vInfo.policies[i].call(abi.encodeWithSelector(IModule.onUninstall.selector, uninstallDataArr[i]));
-                    _uninstallPolicyWithVid(vInfo.policies[i], vId);
+                unchecked {
+                    for (uint256 i = vInfo.policies.length; i > 0; i--) {
+                        // forge-lint: disable-next-line(unchecked-call)
+                        vInfo.policies[i
+                                - 1].call(abi.encodeWithSelector(IModule.onUninstall.selector, uninstallDataArr[i - 1]));
+                        _uninstallPolicyWithVid(vInfo.policies[i - 1], vId);
+                    }
                 }
 
                 // forge-lint: disable-next-line(unchecked-call)

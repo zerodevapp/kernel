@@ -8,7 +8,6 @@ import {
     OccupiedValidationId,
     ModuleInstallFailed,
     InvalidPermissionUninstallOrder,
-    InvalidPermissionUninstallOrder,
     InvalidPermissionId,
     NotInstalled
 } from "../types/Error.sol";

@@ -10,6 +10,7 @@ import {KernelTestBase} from "./KernelTestBase.sol";
 import {InvalidRootValidation, InvalidNonce, NotInstalled} from "src/types/Error.sol";
 import {ERC1271_MAGICVALUE} from "src/types/Constants.sol";
 import {permissionToIdentifier} from "src/lib/Utils.sol";
+import {validatorToIdentifier} from "src/lib/Utils.sol";
 
 abstract contract KernelValidatorTest is KernelTestBase {
     function _sendUserOpValidator(bool success, bool useHook) internal {
@@ -154,7 +155,9 @@ abstract contract KernelValidatorTest is KernelTestBase {
         });
         kernel.installModule(false, 0, packages, enableSig(0, true, false, packages, _rootSignHash));
 
-        kernel.setRoot(ValidationId.wrap(bytes20(address(newValidator))));
+        assertFalse(kernel.root() == validatorToIdentifier(newValidator));
+        kernel.setRoot(validatorToIdentifier(newValidator));
+        assertTrue(kernel.root() == validatorToIdentifier(newValidator));
     }
 
     function test_change_root_pkgs() external unitTest {
@@ -167,7 +170,9 @@ abstract contract KernelValidatorTest is KernelTestBase {
             moduleType: 6, module: address(signer), internalData: abi.encodePacked(permissionId), moduleData: hex""
         });
 
+        assertFalse(kernel.root() == validatorToIdentifier(newValidator));
         kernel.setRoot(packages, false, hex"");
+        assertTrue(kernel.root() == validatorToIdentifier(newValidator));
     }
 
     function test_change_root_pkgs_remove_current() external unitTest {
@@ -181,7 +186,49 @@ abstract contract KernelValidatorTest is KernelTestBase {
             moduleType: 6, module: address(signer), internalData: abi.encodePacked(permissionId), moduleData: hex""
         });
 
+        assertFalse(kernel.root() == validatorToIdentifier(newValidator));
         kernel.setRoot(packages, true, hex"");
+        assertTrue(kernel.root() == validatorToIdentifier(newValidator));
+    }
+
+    function test_change_root_pkgs_current_permission() external unitTest {
+        MockPolicy mockPolicy1 = new MockPolicy();
+        MockPolicy mockPolicy2 = new MockPolicy();
+        MockPolicy mockPolicy3 = new MockPolicy();
+        MockPolicy mockPolicy4 = new MockPolicy();
+
+        Install[] memory packages = new Install[](3);
+        packages[0] = Install({
+            moduleType: 5, module: address(policy), internalData: abi.encodePacked(permissionId), moduleData: hex""
+        });
+        packages[1] = Install({
+            moduleType: 5, module: address(mockPolicy1), internalData: abi.encodePacked(permissionId), moduleData: hex""
+        });
+        packages[2] = Install({
+            moduleType: 6, module: address(signer), internalData: abi.encodePacked(permissionId), moduleData: hex""
+        });
+
+        assertFalse(kernel.root() == permissionToIdentifier(permissionId));
+        kernel.setRoot(packages, false, hex"");
+        assertTrue(kernel.root() == permissionToIdentifier(permissionId));
+
+        packages[0] = Install({
+            moduleType: 5, module: address(policy), internalData: abi.encodePacked(hex"efefefef"), moduleData: hex""
+        });
+        packages[1] = Install({
+            moduleType: 5,
+            module: address(mockPolicy1),
+            internalData: abi.encodePacked(hex"efefefef"),
+            moduleData: hex""
+        });
+        packages[2] = Install({
+            moduleType: 6, module: address(signer), internalData: abi.encodePacked(hex"efefefef"), moduleData: hex""
+        });
+
+        bytes[] memory empty = new bytes[](3);
+
+        kernel.setRoot(packages, true, abi.encode(empty));
+        assertTrue(kernel.root() == permissionToIdentifier(PermissionId.wrap(bytes4(0xefefefef))));
     }
 
     function test_change_root_pkgs_remove_current_fail_7702_or_immutable() external unitTest {
