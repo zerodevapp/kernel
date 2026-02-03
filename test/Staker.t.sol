@@ -18,6 +18,22 @@ contract MockFactory {
     function fail() external returns (address) {
         revert Foo();
     }
+
+    function successWithValue() external payable returns (address) {
+        return address(this);
+    }
+}
+
+contract MockFactoryWithBalance {
+    function deploy() external payable returns (address) {
+        return address(this);
+    }
+
+    function getBalance() external view returns (uint256) {
+        return address(this).balance;
+    }
+
+    receive() external payable {}
 }
 
 contract StakerTest is Test {
@@ -181,5 +197,155 @@ contract StakerTest is Test {
         assertEq(info.staked, false);
         assertEq(uint256(info.stake), 0);
         assertEq(recipient.balance, 1e18);
+    }
+
+    function test_deploy_with_value() external {
+        MockFactoryWithBalance factory = new MockFactoryWithBalance();
+        vm.startPrank(owner);
+        staker.approveFactory(address(factory), true);
+        vm.stopPrank();
+
+        uint256 depositValue = 1 ether;
+        vm.deal(address(this), depositValue);
+        staker.deployWithFactory{value: depositValue}(
+            address(factory), abi.encodeWithSelector(MockFactoryWithBalance.deploy.selector)
+        );
+        assertEq(factory.getBalance(), depositValue);
+    }
+
+    function test_revoke_factory_approval() external {
+        address factory = makeAddr("factory");
+        vm.startPrank(owner);
+        staker.approveFactory(factory, true);
+        assertEq(staker.approved(factory), true);
+
+        staker.approveFactory(factory, false);
+        assertEq(staker.approved(factory), false);
+        vm.stopPrank();
+    }
+
+    function test_deploy_after_revoke_fails() external {
+        MockFactory factory = new MockFactory();
+        vm.startPrank(owner);
+        staker.approveFactory(address(factory), true);
+        staker.approveFactory(address(factory), false);
+        vm.stopPrank();
+
+        vm.expectRevert(Staker.NotApprovedFactory.selector);
+        staker.deployWithFactory(address(factory), abi.encodeWithSelector(MockFactory.success.selector));
+    }
+
+    function test_approve_factory_not_owner() external {
+        address factory = makeAddr("factory");
+        address notOwner = makeAddr("notOwner");
+        vm.startPrank(notOwner);
+        vm.expectRevert();
+        staker.approveFactory(factory, true);
+        vm.stopPrank();
+    }
+
+    function test_stake_not_owner() external {
+        address notOwner = makeAddr("notOwner");
+        vm.deal(notOwner, 10e18);
+        vm.startPrank(notOwner);
+        vm.expectRevert();
+        staker.stake{value: 1e18}(ep, 86400);
+        vm.stopPrank();
+    }
+
+    function test_unlock_stake_not_owner() external {
+        vm.deal(owner, 10e18);
+        vm.startPrank(owner);
+        staker.stake{value: 1e18}(ep, 86400);
+        vm.stopPrank();
+
+        address notOwner = makeAddr("notOwner");
+        vm.startPrank(notOwner);
+        vm.expectRevert();
+        staker.unlockStake(ep);
+        vm.stopPrank();
+    }
+
+    function test_withdraw_stake_not_owner() external {
+        vm.deal(owner, 10e18);
+        vm.startPrank(owner);
+        staker.stake{value: 1e18}(ep, 86400);
+        staker.unlockStake(ep);
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + 86401);
+        address notOwner = makeAddr("notOwner");
+        address payable recipient = payable(makeAddr("Recipient"));
+        vm.startPrank(notOwner);
+        vm.expectRevert();
+        staker.withdrawStake(ep, recipient);
+        vm.stopPrank();
+    }
+
+    function test_approve_with_invalid_sig() external {
+        address factory = makeAddr("factory");
+        (, uint256 wrongKey) = makeAddrAndKey("WrongSigner");
+
+        address addr = address(staker);
+        bytes32 structHash = EfficientHashLib.hash(
+            uint256(APPROVE_FACTORY_STRUCT_HASH), uint256(uint160(factory)), 1, staker.nonces(factory)
+        );
+        bytes32 digest;
+        string memory name = "Staker";
+        string memory version = "0.0.1";
+        /// @solidity memory-safe-assembly
+        assembly {
+            let m := mload(0x40)
+            mstore(0x00, _DOMAIN_TYPEHASH_SANS_CHAIN_ID)
+            mstore(0x20, keccak256(add(name, 0x20), mload(name)))
+            mstore(0x40, keccak256(add(version, 0x20), mload(version)))
+            mstore(0x60, addr)
+            mstore(0x20, keccak256(0x00, 0x80))
+            mstore(0x00, 0x1901)
+            mstore(0x40, structHash)
+            digest := keccak256(0x1e, 0x42)
+            mstore(0x40, m)
+            mstore(0x60, 0)
+        }
+
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(wrongKey, digest);
+
+        vm.expectRevert("InvalidSignature");
+        staker.approveFactoryWithSignature(factory, true, abi.encodePacked(r, s, v));
+    }
+
+    function test_revoke_with_sig() external {
+        address factory = makeAddr("factory");
+        vm.startPrank(owner);
+        staker.approveFactory(factory, true);
+        vm.stopPrank();
+        assertEq(staker.approved(factory), true);
+
+        address addr = address(staker);
+        bytes32 structHash = EfficientHashLib.hash(
+            uint256(APPROVE_FACTORY_STRUCT_HASH), uint256(uint160(factory)), 0, staker.nonces(factory)
+        );
+        bytes32 digest;
+        string memory name = "Staker";
+        string memory version = "0.0.1";
+        /// @solidity memory-safe-assembly
+        assembly {
+            let m := mload(0x40)
+            mstore(0x00, _DOMAIN_TYPEHASH_SANS_CHAIN_ID)
+            mstore(0x20, keccak256(add(name, 0x20), mload(name)))
+            mstore(0x40, keccak256(add(version, 0x20), mload(version)))
+            mstore(0x60, addr)
+            mstore(0x20, keccak256(0x00, 0x80))
+            mstore(0x00, 0x1901)
+            mstore(0x40, structHash)
+            digest := keccak256(0x1e, 0x42)
+            mstore(0x40, m)
+            mstore(0x60, 0)
+        }
+
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
+
+        staker.approveFactoryWithSignature(factory, false, abi.encodePacked(r, s, v));
+        assertEq(staker.approved(factory), false);
     }
 }

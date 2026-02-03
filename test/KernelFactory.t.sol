@@ -90,4 +90,40 @@ contract KernelFactoryTest is KernelTestBase {
         Kernel k = factory.deploy(pkgs, 1);
         assertEq(address(k), address(factory.deploy(pkgs, 1)));
     }
+
+    function test_deploy_with_value() external {
+        vm.skip(is7702);
+        Install[] memory pkgs = new Install[](1);
+        pkgs[0] = Install({
+            moduleType: 1, module: address(rootValidator), moduleData: rootValidatorData, internalData: hex""
+        });
+        uint256 depositValue = 1 ether;
+        vm.deal(address(this), depositValue);
+        Kernel k = factory.deploy{value: depositValue}(pkgs, 2);
+        assertEq(address(k).balance, depositValue);
+    }
+
+    function test_deploy_existing_with_value() external {
+        vm.skip(is7702);
+        Install[] memory pkgs = new Install[](1);
+        pkgs[0] = Install({
+            moduleType: 1, module: address(rootValidator), moduleData: rootValidatorData, internalData: hex""
+        });
+        // First deploy
+        factory.deploy(pkgs, 3);
+        // Second deploy with value to same address
+        uint256 depositValue = 1 ether;
+        vm.deal(address(this), depositValue);
+        Kernel k = factory.deploy{value: depositValue}(pkgs, 3);
+        assertEq(address(k).balance, depositValue);
+    }
+
+    function test_get_address() external view {
+        Install[] memory pkgs = new Install[](1);
+        pkgs[0] = Install({
+            moduleType: 1, module: address(rootValidator), moduleData: rootValidatorData, internalData: hex""
+        });
+        address predicted = factory.getAddress(pkgs, 0);
+        assertEq(predicted, address(kernel));
+    }
 }

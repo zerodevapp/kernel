@@ -44,7 +44,7 @@ contract KernelFactory {
         require(signer != address(0), InvalidSigner());
         bytes32 salt = _calculateSalt(initialPackages, nonce);
         (bool deployed, address account) =
-            LibClone.createDeterministicERC1967(address(IMMUTABLE_ECDSA), abi.encodePacked(signer), salt);
+            LibClone.createDeterministicERC1967(msg.value, address(IMMUTABLE_ECDSA), abi.encodePacked(signer), salt);
         Kernel k = Kernel(payable(account));
         if (!deployed) {
             k.initialize(initialPackages);

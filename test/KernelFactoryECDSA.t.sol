@@ -73,4 +73,35 @@ contract KernelFactoryECDSATest is KernelTestBase {
         Install[] memory initPkgs = new Install[](0);
         factory.deployECDSA(owner, initPkgs, 0);
     }
+
+    function test_deploy_with_value() external {
+        Install[] memory initPkgs = new Install[](0);
+        uint256 depositValue = 1 ether;
+        vm.deal(address(this), depositValue);
+        Kernel k = factory.deployECDSA{value: depositValue}(owner, initPkgs, 2);
+        assertEq(address(k).balance, depositValue);
+    }
+
+    function test_deploy_existing_with_value() external {
+        Install[] memory initPkgs = new Install[](0);
+        // First deploy
+        factory.deployECDSA(owner, initPkgs, 3);
+        // Second deploy with value to same address
+        uint256 depositValue = 1 ether;
+        vm.deal(address(this), depositValue);
+        Kernel k = factory.deployECDSA{value: depositValue}(owner, initPkgs, 3);
+        assertEq(address(k).balance, depositValue);
+    }
+
+    function test_deploy_invalid_signer() external {
+        Install[] memory initPkgs = new Install[](0);
+        vm.expectRevert(abi.encodeWithSignature("InvalidSigner()"));
+        factory.deployECDSA(address(0), initPkgs, 1);
+    }
+
+    function test_get_ecdsa_address() external view {
+        Install[] memory initPkgs = new Install[](0);
+        address predicted = factory.getECDSAAddress(owner, initPkgs, 0);
+        assertEq(predicted, address(kernel));
+    }
 }

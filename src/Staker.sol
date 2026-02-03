@@ -26,7 +26,7 @@ contract Staker is Ownable, EIP712 {
         if (!approved[factory]) {
             revert NotApprovedFactory();
         }
-        (bool success, bytes memory ret) = factory.call(createData);
+        (bool success, bytes memory ret) = factory.call{value: msg.value}(createData);
         require(success, DeployFailed());
         return abi.decode(ret, (address));
     }
