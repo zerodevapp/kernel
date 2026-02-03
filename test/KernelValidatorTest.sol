@@ -397,13 +397,13 @@ abstract contract KernelValidatorTest is KernelTestBase {
             moduleType: 5,
             module: address(policy),
             moduleData: hex"deadbeef",
-            internalData: abi.encodePacked(permissionId, hook, kernel.execute.selector)
+            internalData: abi.encodePacked(permissionId)
         });
         pkgs[1] = Install({
             moduleType: 6,
             module: address(signer),
             moduleData: hex"deadbeef",
-            internalData: abi.encodePacked(permissionId)
+            internalData: abi.encodePacked(permissionId, hook, kernel.execute.selector)
         });
         kernel.installModule(pkgs);
         bytes4 ret = kernel.isValidSignature(
@@ -435,13 +435,13 @@ abstract contract KernelValidatorTest is KernelTestBase {
             moduleType: 5,
             module: address(policy),
             moduleData: hex"deadbeef",
-            internalData: abi.encodePacked(permissionId, hook, kernel.execute.selector)
+            internalData: abi.encodePacked(permissionId)
         });
         pkgs[1] = Install({
             moduleType: 6,
             module: address(signer),
             moduleData: hex"deadbeef",
-            internalData: abi.encodePacked(permissionId)
+            internalData: abi.encodePacked(permissionId, hook, kernel.execute.selector)
         });
         kernel.installModule(pkgs);
     }
@@ -454,7 +454,8 @@ abstract contract KernelValidatorTest is KernelTestBase {
         assertTrue(vInfo.hook == address(0));
         kernel.installModule(5, address(mock), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
         vInfo = kernel.validationInfo(vId);
-        assertTrue(vInfo.hook == address(1));
+        // it should return address(0) as signer is not installed properly
+        assertTrue(vInfo.hook == address(0));
         assertTrue(kernel.isModuleInstalled(5, address(mock), abi.encodePacked(permissionId)));
     }
 
@@ -465,7 +466,7 @@ abstract contract KernelValidatorTest is KernelTestBase {
         assertTrue(vInfo.hook == address(0));
         kernel.installModule(5, address(mock), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
         vInfo = kernel.validationInfo(vId);
-        assertTrue(vInfo.hook == address(1));
+        assertTrue(vInfo.hook == address(0));
         kernel.uninstallModule(5, address(mock), abi.encode(hex"deadbeef", abi.encodePacked(permissionId)));
         vInfo = kernel.validationInfo(vId);
         assertTrue(vInfo.hook == address(0));
@@ -489,13 +490,13 @@ abstract contract KernelValidatorTest is KernelTestBase {
             moduleType: 5,
             module: address(policy),
             moduleData: hex"deadbeef",
-            internalData: abi.encodePacked(permissionId, address(0), kernel.execute.selector)
+            internalData: abi.encodePacked(permissionId)
         });
         pkgs[1] = Install({
             moduleType: 6,
             module: address(signer),
             moduleData: hex"deadbeef",
-            internalData: abi.encodePacked(permissionId)
+            internalData: abi.encodePacked(permissionId, address(0), kernel.execute.selector)
         });
         kernel.installModule(pkgs);
         MockPolicy mock = new MockPolicy();

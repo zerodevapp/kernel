@@ -166,13 +166,13 @@ abstract contract KernelTestBase is Test {
     ) internal returns (bytes memory sig) {
         Install[] memory packages = new Install[](2);
         packages[0] = Install({
-            moduleType: 5,
-            module: address(policy),
-            moduleData: hex"",
-            internalData: abi.encodePacked(permissionId, address(0), selector)
+            moduleType: 5, module: address(policy), moduleData: hex"", internalData: abi.encodePacked(permissionId)
         });
         packages[1] = Install({
-            moduleType: 6, module: address(signer), moduleData: hex"", internalData: abi.encodePacked(permissionId)
+            moduleType: 6,
+            module: address(signer),
+            moduleData: hex"",
+            internalData: abi.encodePacked(permissionId, address(0), selector)
         });
 
         sig = abi.encode(
