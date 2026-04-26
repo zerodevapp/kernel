@@ -1,0 +1,83 @@
+Kernel_isValidSignature
+├── when hash equals ERC7739_MAGIC_HASH
+│   └── it should return ERC7739 support indicator
+└── when hash is not ERC7739_MAGIC_HASH
+    ├── given the signature mode byte indicates enable mode
+    │   ├── given the validation type is ROOT
+    │   │   └── it should revert with InvalidValidationType error
+    │   ├── given the enable nonce is invalid
+    │   │   └── it should revert with InvalidNonce error
+    │   ├── given the enable signature is invalid
+    │   │   └── it should return ERC1271_INVALID
+    │   └── given the enable signature is valid
+    │       ├── it should install-validate the packages in the signature
+    │       ├── it should continue with stateless signature validation
+    │       ├── given the validator package is missing
+    │       │   └── it should revert with InvalidValidator error
+    │       └── given the permission signatures are inconsistent
+    │           └── it should revert with InvalidPermissionId error
+    ├── given enable mode is replayable
+    │   ├── it should verify the enable signature without chainId
+    │   └── it should allow cross-chain enable mode
+    ├── given enable mode is not replayable
+    │   ├── it should verify the enable signature with chainId
+    │   └── it should fail on different chains
+    ├── given the validation type is ROOT
+    │   ├── given the signature format is TypedDataSign
+    │   │   ├── when the root validator returns valid
+    │   │   │   └── it should return ERC1271_MAGICVALUE
+    │   │   └── when the root validator returns invalid
+    │   │       └── it should return ERC1271_INVALID
+    │   ├── given the signature format is PersonalSign
+    │   │   ├── it should wrap the hash with PersonalSign struct
+    │   │   ├── when the root validator returns valid
+    │   │   │   └── it should return ERC1271_MAGICVALUE
+    │   │   └── when the root validator returns invalid
+    │   │       └── it should return ERC1271_INVALID
+    │   └── given the signature includes domain separator and contents
+    │       └── it should verify the full TypedDataSign structure
+    ├── given the validation type is VALIDATOR
+    │   ├── given the signature format is TypedDataSign
+    │   │   ├── when the validator returns valid
+    │   │   │   └── it should return ERC1271_MAGICVALUE
+    │   │   └── when the validator returns invalid
+    │   │       └── it should return ERC1271_INVALID
+    │   └── given the signature format is PersonalSign
+    │       ├── when the validator returns valid
+    │       │   └── it should return ERC1271_MAGICVALUE
+    │       └── when the validator returns invalid
+    │           └── it should return ERC1271_INVALID
+    ├── given the validation type is PERMISSION
+    │   ├── given the signature format is TypedDataSign
+    │   │   ├── when all policies pass and signer returns valid
+    │   │   │   └── it should return ERC1271_MAGICVALUE
+    │   │   ├── when any policy fails
+    │   │   │   └── it should return ERC1271_INVALID
+    │   │   └── when signer returns invalid
+    │   │       └── it should return ERC1271_INVALID
+    │   └── given the signature format is PersonalSign
+    │       ├── when all policies pass and signer returns valid
+    │       │   └── it should return ERC1271_MAGICVALUE
+    │       └── when any policy or signer fails
+    │           └── it should return ERC1271_INVALID
+    ├── given the validation type is unsupported
+    │   └── it should revert with InvalidValidationType error
+    ├── given the signature is wrapped with ERC6492 sentinel
+    │   └── it should unwrap and validate the inner signature
+    ├── given the signature format is TypedDataSign with explicit contentsName
+    │   ├── when the root validator returns valid
+    │   │   └── it should return ERC1271_MAGICVALUE
+    │   └── when the root validator returns invalid
+    │       └── it should return ERC1271_INVALID
+    ├── given the signature format is replayable TypedDataSign with explicit contentsName
+    │   ├── when the root validator returns valid
+    │   │   └── it should return ERC1271_MAGICVALUE
+    │   └── when the root validator returns invalid
+    │       └── it should return ERC1271_INVALID
+    ├── given the root validation is not set
+    │   └── it should return ERC1271_INVALID via base fallback signature
+    └── given the signature format is replayable TypedDataSign
+        ├── when the root validator returns valid for replayable
+        │   └── it should return ERC1271_MAGICVALUE
+        └── when the root validator returns invalid for replayable
+            └── it should return ERC1271_INVALID

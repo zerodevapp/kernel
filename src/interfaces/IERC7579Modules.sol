@@ -4,9 +4,6 @@ pragma solidity ^0.8.21;
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
 
 interface IModule {
-    error AlreadyInitialized(address smartAccount);
-    error NotInitialized(address smartAccount);
-
     /**
      * @dev This function is called by the smart account during installation of the module
      * @param data arbitrary data that may be required on the module during `onInstall`
@@ -40,8 +37,6 @@ interface IModule {
 }
 
 interface IValidator is IModule {
-    error InvalidTargetAddress(address target);
-
     /**
      * @dev Validates a transaction on behalf of the account.
      *         This function is intended to be called by the MSA during the ERC-4337 validation phase
@@ -90,13 +85,6 @@ interface ISigner is IModule {
         payable
         returns (uint256);
     function checkSignature(bytes32 id, address sender, bytes32 hash, bytes calldata sig) external view returns (bytes4);
-}
-
-interface IStatelessValidator is IValidator {
-    function validateSignatureWithData(bytes32 hash, bytes calldata signature, bytes calldata data)
-        external
-        view
-        returns (bool);
 }
 
 interface IStatelessValidatorWithSender is IModule {

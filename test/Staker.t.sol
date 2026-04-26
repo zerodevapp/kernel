@@ -7,6 +7,8 @@ import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
 import {EntryPointLib} from "./utils/EntryPointLib.sol";
 import {EfficientHashLib} from "solady/utils/EfficientHashLib.sol";
 import {APPROVE_FACTORY_STRUCT_HASH} from "src/types/Constants.sol";
+import {Ownable} from "solady/auth/Ownable.sol";
+import {InvalidSignature, DeployFailed, NotApprovedFactory} from "src/types/Error.sol";
 
 contract MockFactory {
     error Foo();
@@ -97,7 +99,7 @@ contract StakerTest is Test {
         assertEq(staker.nonces(factory), 0);
         staker.approveFactoryWithSignature(factory, true, abi.encodePacked(r, s, v));
         assertEq(staker.nonces(factory), 1);
-        vm.expectRevert();
+        vm.expectRevert(InvalidSignature.selector);
         staker.approveFactoryWithSignature(factory, true, abi.encodePacked(r, s, v));
     }
 
@@ -120,7 +122,7 @@ contract StakerTest is Test {
         vm.stopPrank();
         assertEq(staker.approved(address(factory)), true);
 
-        vm.expectRevert();
+        vm.expectRevert(DeployFailed.selector);
         staker.deployWithFactory(address(factory), abi.encodeWithSelector(MockFactory.fail.selector));
     }
 
@@ -128,7 +130,7 @@ contract StakerTest is Test {
         MockFactory factory = new MockFactory();
         assertEq(staker.approved(address(factory)), false);
 
-        vm.expectRevert();
+        vm.expectRevert(NotApprovedFactory.selector);
         staker.deployWithFactory(address(factory), abi.encodeWithSelector(MockFactory.success.selector));
     }
 
@@ -231,7 +233,7 @@ contract StakerTest is Test {
         staker.approveFactory(address(factory), false);
         vm.stopPrank();
 
-        vm.expectRevert(Staker.NotApprovedFactory.selector);
+        vm.expectRevert(NotApprovedFactory.selector);
         staker.deployWithFactory(address(factory), abi.encodeWithSelector(MockFactory.success.selector));
     }
 
@@ -239,7 +241,7 @@ contract StakerTest is Test {
         address factory = makeAddr("factory");
         address notOwner = makeAddr("notOwner");
         vm.startPrank(notOwner);
-        vm.expectRevert();
+        vm.expectRevert(Ownable.Unauthorized.selector);
         staker.approveFactory(factory, true);
         vm.stopPrank();
     }
@@ -248,7 +250,7 @@ contract StakerTest is Test {
         address notOwner = makeAddr("notOwner");
         vm.deal(notOwner, 10e18);
         vm.startPrank(notOwner);
-        vm.expectRevert();
+        vm.expectRevert(Ownable.Unauthorized.selector);
         staker.stake{value: 1e18}(ep, 86400);
         vm.stopPrank();
     }
@@ -261,7 +263,7 @@ contract StakerTest is Test {
 
         address notOwner = makeAddr("notOwner");
         vm.startPrank(notOwner);
-        vm.expectRevert();
+        vm.expectRevert(Ownable.Unauthorized.selector);
         staker.unlockStake(ep);
         vm.stopPrank();
     }
@@ -277,7 +279,7 @@ contract StakerTest is Test {
         address notOwner = makeAddr("notOwner");
         address payable recipient = payable(makeAddr("Recipient"));
         vm.startPrank(notOwner);
-        vm.expectRevert();
+        vm.expectRevert(Ownable.Unauthorized.selector);
         staker.withdrawStake(ep, recipient);
         vm.stopPrank();
     }
@@ -310,7 +312,7 @@ contract StakerTest is Test {
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(wrongKey, digest);
 
-        vm.expectRevert("InvalidSignature");
+        vm.expectRevert(InvalidSignature.selector);
         staker.approveFactoryWithSignature(factory, true, abi.encodePacked(r, s, v));
     }
 

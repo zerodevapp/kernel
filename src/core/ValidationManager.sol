@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
@@ -6,14 +7,15 @@ import {
     InvalidRootValidation,
     ModuleInstallFailed,
     OccupiedValidationId,
-    ModuleInstallFailed,
     InvalidPermissionUninstallOrder,
     InvalidPermissionId,
     InvalidValidationType,
     CannotUninstallRoot,
     InvalidVid,
     InvalidDataLength,
-    NotInstalled
+    NotInstalled,
+    InvalidPermissionInstall,
+    InvalidSignature
 } from "../types/Error.sol";
 import {ValidationId, PermissionId, ValidationType} from "../types/Types.sol";
 import {
@@ -22,34 +24,56 @@ import {
     VALIDATION_TYPE_VALIDATOR,
     VALIDATION_TYPE_PERMISSION,
     VALIDATION_TYPE_FALLBACK,
-    ERC1271_MAGICVALUE
+    ERC1271_MAGICVALUE,
+    MODULE_TYPE_VALIDATOR,
+    MODULE_TYPE_POLICY,
+    MODULE_TYPE_SIGNER,
+    SIG_VALIDATION_FAILED_UINT,
+    SIG_VALIDATION_SUCCESS_UINT,
+    HOOK_MODULE_NOT_INSTALLED,
+    HOOK_MODULE_INSTALLED_NO_HOOK
 } from "../types/Constants.sol";
 import {PermissionSignature, ValidationStorage, ValidationInfo, Install} from "../types/Structs.sol";
 import {Lib4337} from "../lib/Lib4337.sol";
 import {getType, getValidator, getPermissionId, validatorToIdentifier, permissionToIdentifier} from "../lib/Utils.sol";
 
+/// @title ValidationManager
+/// @author taek <leekt216@gmail.com>
+/// @notice Manages validation identifiers (validators and permissions), root validation, and signature verification.
 abstract contract ValidationManager {
+    /// @dev Tracks the permission being installed within a batch to ensure consistency.
     ValidationId transient installingPermission;
 
     function _hookEnabled(IHook _hook) internal view virtual returns (bool);
 
+    /// @notice Returns the current root validation identifier.
+    /// @return The root ValidationId.
     function root() external view returns (ValidationId) {
         ValidationStorage storage $ = _validationStorage();
         return $.root;
     }
 
+    /// @notice Retrieves the validation hook stored transiently for a given userOp hash.
+    /// @param userOpHash The user operation hash used as the transient storage key.
+    /// @return hook The hook address stored for this userOp.
     function _validationHook(bytes32 userOpHash) internal view returns (IHook hook) {
         assembly {
             hook := tload(userOpHash)
         }
     }
 
+    /// @notice Stores a validation hook in transient storage keyed by the userOp hash.
+    /// @param userOpHash The user operation hash used as the transient storage key.
+    /// @param hook The hook to store.
     function _setValidationHook(bytes32 userOpHash, IHook hook) internal {
         assembly {
             tstore(userOpHash, hook)
         }
     }
 
+    /// @notice Returns the validation info (hook, signer, policies) for a given ValidationId.
+    /// @param vId The validation identifier to query.
+    /// @return The ValidationInfo struct for this identifier.
     function validationInfo(ValidationId vId) external view returns (ValidationInfo memory) {
         ValidationStorage storage $ = _validationStorage();
         return $.vInfo[vId];
@@ -82,36 +106,60 @@ abstract contract ValidationManager {
         return $.allowed[vId][selector] == $.vInfo[vId].nonce;
     }
 
+    /// @notice Initializes a validation's hook and allowed selectors.
+    /// @dev If _internalData is empty, the validation is marked as installed with no hook and no selectors.
+    ///      Otherwise: first 20 bytes = hook address, remaining bytes = packed bytes4 selectors.
+    /// @param vId The validation identifier to initialize.
+    /// @param _internalData The internal configuration data.
     function _initializeValidation(ValidationId vId, bytes calldata _internalData) internal {
         ValidationStorage storage $ = _validationStorage();
-        require($.vInfo[vId].hook == address(0), OccupiedValidationId());
-        // if _internalData is empty, skip the initialization
+        require($.vInfo[vId].hook == HOOK_MODULE_NOT_INSTALLED, OccupiedValidationId());
+        // if _internalData is empty, skip the initialization but increment nonce
+        // to ensure _allowedSelector returns false for any selector (no selectors allowed)
         if (_internalData.length == 0) {
-            $.vInfo[vId].hook = address(1);
+            $.vInfo[vId].hook = HOOK_MODULE_INSTALLED_NO_HOOK;
+            ++$.vInfo[vId].nonce;
             return;
         }
         // if not, first 20 bytes is the hook address
         address hook = address(bytes20(_internalData[0:20]));
-        require(hook == address(0) || hook == address(1) || _hookEnabled(IHook(hook)), NotInstalled());
-        $.vInfo[vId].hook = hook == address(0) ? address(1) : hook;
+        require(
+            hook == HOOK_MODULE_NOT_INSTALLED || hook == HOOK_MODULE_INSTALLED_NO_HOOK || _hookEnabled(IHook(hook)),
+            NotInstalled()
+        );
+        $.vInfo[vId].hook = hook == HOOK_MODULE_NOT_INSTALLED ? HOOK_MODULE_INSTALLED_NO_HOOK : hook;
         _internalData = _internalData[20:];
         // then the rest is the allowed selectors
         _grantAccess(vId, _internalData);
     }
 
+    /// @notice Installs a validator module and initializes its validation storage.
+    /// @param _validator The validator module address.
+    /// @param _internalData Hook address (20 bytes) + packed selectors.
+    /// @param _installSuccess Whether the module's onInstall call succeeded.
     function _installValidator(address _validator, bytes calldata _internalData, bool _installSuccess) internal {
         require(_installSuccess, ModuleInstallFailed());
-        ValidationStorage storage $ = _validationStorage();
         ValidationId vId = validatorToIdentifier(IValidator(_validator));
         _initializeValidation(vId, _internalData);
     }
 
+    /// @notice Installs a policy module for a permission-based validation.
+    /// @dev The first 4 bytes of _internalData must be the PermissionId.
+    /// @param _policy The policy module address.
+    /// @param _internalData PermissionId (4 bytes) prepended to policy-specific data.
+    /// @param _installSuccess Whether the module's onInstall call succeeded.
     function _installPolicy(address _policy, bytes calldata _internalData, bool _installSuccess) internal {
         ValidationInfo storage $ = _checkPermissionInstall(_internalData, _installSuccess);
-        require(_internalData.length == 4, InvalidDataLength());
+        require(_internalData.length >= 4, InvalidDataLength());
         $.policies.push(_policy);
     }
 
+    /// @notice Installs a signer module for a permission-based validation.
+    /// @dev Must be installed after all policies for the same PermissionId. Finalizes the permission by
+    ///      initializing validation and resetting the transient installingPermission.
+    /// @param _signer The signer module address.
+    /// @param _internalData PermissionId (4 bytes) + hook/selectors data for _initializeValidation.
+    /// @param _installSuccess Whether the module's onInstall call succeeded.
     function _installSigner(address _signer, bytes calldata _internalData, bool _installSuccess) internal {
         ValidationInfo storage $ = _checkPermissionInstall(_internalData, _installSuccess);
         ValidationId vId = permissionToIdentifier(PermissionId.wrap(bytes4(_internalData[0:4])));
@@ -120,6 +168,10 @@ abstract contract ValidationManager {
         installingPermission = ValidationId.wrap(bytes21(0));
     }
 
+    /// @notice Validates that a permission install is consistent (same PermissionId within a batch).
+    /// @param _internalData Data with PermissionId in the first 4 bytes.
+    /// @param _installSuccess Whether the module's onInstall call succeeded.
+    /// @return $ The ValidationInfo storage reference for the permission.
     function _checkPermissionInstall(bytes calldata _internalData, bool _installSuccess)
         internal
         returns (ValidationInfo storage $)
@@ -128,31 +180,39 @@ abstract contract ValidationManager {
         ValidationId vId = permissionToIdentifier(PermissionId.wrap(bytes4(_internalData[0:4])));
         $ = _validationStorage().vInfo[vId];
         if (installingPermission == ValidationId.wrap(bytes21(0))) {
-            require(vId != ValidationId.wrap(bytes21(0)), "invalid validationId");
+            require(vId != ValidationId.wrap(bytes21(0)), InvalidPermissionInstall());
             installingPermission = vId;
-            // _initializeValidation(vId, _internalData[4:]);
         } else {
-            require(installingPermission == vId, "permissionId should be consistent");
+            require(installingPermission == vId, InvalidPermissionInstall());
         }
     }
 
+    /// @notice Marks a validation as uninstalled by zeroing its hook. Cannot uninstall root.
+    /// @param _vId The validation identifier to uninstall.
     function _uninstallValidation(ValidationId _vId) internal {
         ValidationStorage storage $ = _validationStorage();
         require($.root != _vId, CannotUninstallRoot());
-        $.vInfo[_vId].hook = address(0);
+        $.vInfo[_vId].hook = HOOK_MODULE_NOT_INSTALLED;
     }
 
+    /// @notice Uninstalls a validator module.
+    /// @param _validator The validator module address.
     function _uninstallValidator(address _validator, bytes calldata, bool) internal {
-        ValidationStorage storage $ = _validationStorage();
         ValidationId vId = validatorToIdentifier(IValidator(_validator));
         _uninstallValidation(vId);
     }
 
+    /// @notice Uninstalls a policy module. Policies must be uninstalled in reverse order (LIFO).
+    /// @param _policy The policy module address.
+    /// @param _internalData Data with PermissionId in the first 4 bytes.
     function _uninstallPolicy(address _policy, bytes calldata _internalData, bool) internal {
         ValidationId vId = permissionToIdentifier(PermissionId.wrap(bytes4(_internalData[0:4])));
         _uninstallPolicyWithVid(_policy, vId);
     }
 
+    /// @notice Removes a policy from a validation's policy array (must be the last element).
+    /// @param _policy The policy address to remove.
+    /// @param vId The validation identifier the policy belongs to.
     function _uninstallPolicyWithVid(address _policy, ValidationId vId) internal {
         ValidationInfo storage $ = _validationStorage().vInfo[vId];
         unchecked {
@@ -161,6 +221,9 @@ abstract contract ValidationManager {
         }
     }
 
+    /// @notice Uninstalls a signer module. All policies must be uninstalled first.
+    /// @param _signer The signer module address.
+    /// @param _internalData Data with PermissionId in the first 4 bytes.
     function _uninstallSigner(address _signer, bytes calldata _internalData, bool) internal {
         ValidationId vId = permissionToIdentifier(PermissionId.wrap(bytes4(_internalData[0:4])));
         ValidationInfo storage $ = _validationStorage().vInfo[vId];
@@ -168,6 +231,9 @@ abstract contract ValidationManager {
         _uninstallSignerWithVid(_signer, vId);
     }
 
+    /// @notice Removes a signer from a validation and marks the validation as uninstalled.
+    /// @param _signer The signer address to remove.
+    /// @param vId The validation identifier the signer belongs to.
     function _uninstallSignerWithVid(address _signer, ValidationId vId) internal {
         ValidationInfo storage $ = _validationStorage().vInfo[vId];
         require($.policies.length == 0, InvalidPermissionUninstallOrder());
@@ -176,6 +242,11 @@ abstract contract ValidationManager {
         _uninstallValidation(vId);
     }
 
+    /// @notice Resolves the validation function based on type. For root type, follows through to the stored root.
+    /// @param vType The validation type from the nonce.
+    /// @param vId The validation identifier from the nonce.
+    /// @return v The resolved ValidationId (may differ from vId if root type).
+    /// @return validateUserOp The validation function pointer to call.
     function _checkValidation(ValidationType vType, ValidationId vId)
         internal
         view
@@ -197,7 +268,7 @@ abstract contract ValidationManager {
         }
 
         ValidationInfo storage info = _validationStorage().vInfo[v];
-        require(info.hook > address(0), InvalidVid(v));
+        require(info.hook > HOOK_MODULE_NOT_INSTALLED, InvalidVid(v));
 
         if (vType == VALIDATION_TYPE_PERMISSION) {
             validateUserOp = _validateUserOpPermission;
@@ -206,28 +277,43 @@ abstract contract ValidationManager {
         }
     }
 
+    /// @notice Verifies a signature against a validation identifier (validator or permission).
+    /// @param vId The validation identifier; bytes21(0) falls through to fallback signer.
+    /// @param requester The address requesting signature verification (passed to modules).
+    /// @param _hash The hash that was signed.
+    /// @param _signature The signature bytes.
+    /// @return validationData Packed validation result (0 = success, 1 = failure).
     function _verifySignature(ValidationId vId, address requester, bytes32 _hash, bytes calldata _signature)
         internal
         view
         returns (uint256 validationData)
     {
         if (ValidationId.unwrap(vId) == bytes21(0)) {
-            return _verifyFallbackSignature(_hash, _signature) ? 0 : 1;
+            return
+                _verifyFallbackSignature(_hash, _signature) ? SIG_VALIDATION_SUCCESS_UINT : SIG_VALIDATION_FAILED_UINT;
         }
         ValidationInfo storage vInfo = _validationStorage().vInfo[vId];
-        require(vInfo.hook > address(0), InvalidVid(vId));
+        require(vInfo.hook > HOOK_MODULE_NOT_INSTALLED, InvalidVid(vId));
         ValidationType vType = getType(vId);
         if (vType == VALIDATION_TYPE_VALIDATOR) {
             IValidator validator = getValidator(vId);
-            validationData =
-                validator.isValidSignatureWithSender(requester, _hash, _signature) == ERC1271_MAGICVALUE ? 0 : 1;
+            validationData = validator.isValidSignatureWithSender(requester, _hash, _signature) == ERC1271_MAGICVALUE
+                ? SIG_VALIDATION_SUCCESS_UINT
+                : SIG_VALIDATION_FAILED_UINT;
         } else if (vType == VALIDATION_TYPE_PERMISSION) {
             return _verifySignaturePermission(vId, vInfo, requester, _hash, _signature);
         } else {
-            return 1;
+            return SIG_VALIDATION_FAILED_UINT;
         }
     }
 
+    /// @notice Verifies a permission-based signature by checking all policies and the signer.
+    /// @param vId The permission ValidationId.
+    /// @param vInfo The validation info containing policies and signer.
+    /// @param requester The address requesting verification.
+    /// @param _hash The hash that was signed.
+    /// @param _signature Encoded as PermissionSignature (array of signatures for each policy + signer).
+    /// @return validationData Intersected validation result from all policies and the signer.
     function _verifySignaturePermission(
         ValidationId vId,
         ValidationInfo storage vInfo,
@@ -240,6 +326,7 @@ abstract contract ValidationManager {
             assembly {
                 permissionSig := _signature.offset
             }
+            require(permissionSig.signatures.length == vInfo.policies.length + 1, InvalidSignature());
             bytes32 paddedVId = bytes32(PermissionId.unwrap(getPermissionId(vId)));
             for (uint256 i = 0; i < vInfo.policies.length; i++) {
                 IPolicy policy = IPolicy(vInfo.policies[i]);
@@ -254,38 +341,38 @@ abstract contract ValidationManager {
                     .checkSignature(
                         paddedVId, requester, _hash, permissionSig.signatures[permissionSig.signatures.length - 1]
                     ) == ERC1271_MAGICVALUE
-                    ? 0
-                    : 1
+                    ? SIG_VALIDATION_SUCCESS_UINT
+                    : SIG_VALIDATION_FAILED_UINT
             );
         }
     }
 
+    /// @notice Validates a userOp using the fallback signer (e.g., EOA for 7702/immutable ECDSA).
     function _validateUserOpFallback(
         ValidationId,
         bytes32 opHash,
         PackedUserOperation memory,
         bytes calldata userOpSignature
     ) internal virtual returns (uint256 validationData) {
-        return _verifyFallbackSignature(opHash, userOpSignature) ? 0 : 1;
+        return _verifyFallbackSignature(opHash, userOpSignature)
+            ? SIG_VALIDATION_SUCCESS_UINT
+            : SIG_VALIDATION_FAILED_UINT;
     }
 
+    /// @notice Validates a userOp using an installed IValidator module.
+    /// @dev Uses a direct interface call so that validator revert reasons propagate to the caller.
     function _validateUserOpValidator(
         ValidationId vId,
         bytes32 opHash,
         PackedUserOperation memory op,
         bytes calldata userOpSignature
     ) internal returns (uint256 validationData) {
-        // NOTE: removed permission for now, adding back after testing is done
         IValidator validator = getValidator(vId);
         op.signature = userOpSignature;
-        //return validator.validateUserOp(op, opHash);
-        (bool success, bytes memory ret) =
-            address(validator).call(abi.encodeCall(IValidator.validateUserOp, (op, opHash)));
-        //validationData = success ? abi.decode(ret, (uint256)) : 1;
-        // forge-lint: disable-next-line(unsafe-typecast)
-        validationData = success ? uint256(bytes32(ret)) : 1;
+        validationData = validator.validateUserOp(op, opHash);
     }
 
+    /// @notice Validates a userOp using a permission (policies + signer).
     function _validateUserOpPermission(
         ValidationId vId,
         bytes32 opHash,
@@ -298,6 +385,7 @@ abstract contract ValidationManager {
             assembly {
                 permissionSig := userOpSignature.offset
             }
+            require(permissionSig.signatures.length == vInfo.policies.length + 1, InvalidSignature());
             bytes32 paddedVId = bytes32(PermissionId.unwrap(getPermissionId(vId)));
             for (uint256 i = 0; i < vInfo.policies.length; ++i) {
                 IPolicy policy = IPolicy(vInfo.policies[i]);
@@ -313,15 +401,18 @@ abstract contract ValidationManager {
         }
     }
 
+    /// @notice Default fallback signature verification; always returns false unless overridden.
     function _verifyFallbackSignature(bytes32, bytes calldata) internal view virtual returns (bool) {
         return false;
     }
 
+    /// @notice Sets the root validation from an Install package (validator, policy, or signer type).
+    /// @param pkg The install package whose module becomes the root.
     function _setRoot(Install calldata pkg) internal {
         ValidationId vId;
-        if (pkg.moduleType == 1) {
-            vId = validatorToIdentifier(IValidator(address(bytes20(pkg.module))));
-        } else if (pkg.moduleType == 5 || pkg.moduleType == 6) {
+        if (pkg.moduleType == MODULE_TYPE_VALIDATOR) {
+            vId = validatorToIdentifier(IValidator(pkg.module));
+        } else if (pkg.moduleType == MODULE_TYPE_POLICY || pkg.moduleType == MODULE_TYPE_SIGNER) {
             vId = permissionToIdentifier(PermissionId.wrap(bytes4(pkg.internalData[0:4])));
         } else {
             revert InvalidRootValidation();
@@ -329,19 +420,27 @@ abstract contract ValidationManager {
         _setRoot(vId);
     }
 
+    /// @notice Returns whether a fallback validator is available. Override in 7702/immutable ECDSA variants.
     function _fallbackValidatorAvailable() internal pure virtual returns (bool) {
         return false;
     }
 
+    /// @notice Sets the root validation to the given ValidationId directly.
+    /// @dev Validates that the id is a valid type and that the validation is installed.
+    /// @param vId The validation identifier to set as root.
     function _setRoot(ValidationId vId) internal {
+        // Check for zero ValidationId first (before type check to get correct error)
+        require(ValidationId.unwrap(vId) != bytes21(0) || _fallbackValidatorAvailable(), InvalidRootValidation());
         ValidationType vType = getType(vId);
         require(
             vType == VALIDATION_TYPE_VALIDATOR || vType == VALIDATION_TYPE_PERMISSION
                 || (_fallbackValidatorAvailable() && vType == VALIDATION_TYPE_FALLBACK),
             InvalidValidationType()
         );
-        require(ValidationId.unwrap(vId) != bytes21(0) || _fallbackValidatorAvailable(), InvalidRootValidation());
         ValidationStorage storage $ = _validationStorage();
+        if (ValidationId.unwrap(vId) != bytes21(0)) {
+            require($.vInfo[vId].hook > HOOK_MODULE_NOT_INSTALLED, InvalidVid(vId));
+        }
         $.root = vId;
     }
 }

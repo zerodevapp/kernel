@@ -1,0 +1,13 @@
+Staker_approveFactoryWithSignature
+├── given the owner is address zero
+│   └── it should revert with InvalidOwner error
+├── given the signature is invalid
+│   ├── it should revert with InvalidSignature error
+│   └── given the signer is wrong but valid ECDSA
+│       └── it should revert with InvalidSignature error
+├── given the nonce has been replayed
+│   └── it should revert with InvalidSignature error
+└── given the signature is valid
+    ├── it should set the factory approval
+    ├── it should allow cross-chain signatures sans chainId
+    └── it should increment the nonce for the factory

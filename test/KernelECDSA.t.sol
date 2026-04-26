@@ -1,11 +1,11 @@
 pragma solidity ^0.8.0;
 
 import {KernelTest} from "./Kernel.t.sol";
-import {Lib4337} from "src/lib/Lib4337.sol";
 import {ECDSAValidator} from "./mock/ECDSAValidator.sol";
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
 import {Install} from "src/types/Structs.sol";
 import {ValidationId} from "src/types/Types.sol";
+import {InvalidRootValidation} from "src/types/Error.sol";
 import {validatorToIdentifier} from "src/lib/Utils.sol";
 
 contract KernelECDSATest is KernelTest {
@@ -38,7 +38,7 @@ contract KernelECDSATest is KernelTest {
         override
         returns (bytes memory sig)
     {
-        bytes32 hash = replay ? Lib4337.chainAgnosticUserOpHash(address(ep), op) : ep.getUserOpHash(op);
+        bytes32 hash = replay ? hashHelper.chainAgnosticUserOpHash(address(ep), op) : ep.getUserOpHash(op);
         return _rootSignHash(hash, success);
     }
 
@@ -63,7 +63,7 @@ contract KernelECDSATest is KernelTest {
 
         kernel.setRoot(validatorToIdentifier(newValidator));
 
-        vm.expectRevert();
+        vm.expectRevert(InvalidRootValidation.selector);
         kernel.setRoot(ValidationId.wrap(bytes21(0)));
     }
 }

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
 import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
@@ -11,7 +12,6 @@ import {ERC1271} from "./lib/ERC1271.sol";
 import {parseNonce, getType, getValidator, validatorToIdentifier, permissionToIdentifier} from "./lib/Utils.sol";
 import {LibERC7579} from "solady/accounts/LibERC7579.sol";
 import {
-    CallType,
     ValidationId,
     PermissionId,
     ValidationMode,
@@ -25,12 +25,29 @@ import {
     Unauthorized,
     UnauthorizedCallData,
     InvalidSelector,
+    InvalidCallType,
     InstallSignatureVerificationFailed,
     InvalidDataLength,
-    InvalidRootValidation
+    InvalidRootValidation,
+    InvalidInitialization,
+    InvalidVid
 } from "./types/Error.sol";
 import {Received} from "./types/Events.sol";
-import {VALIDATION_TYPE_ROOT, VALIDATION_TYPE_PERMISSION, VALIDATION_TYPE_VALIDATOR} from "./types/Constants.sol";
+import {
+    VALIDATION_TYPE_ROOT,
+    VALIDATION_TYPE_PERMISSION,
+    VALIDATION_TYPE_VALIDATOR,
+    CALLTYPE_SINGLE,
+    CALLTYPE_DELEGATECALL,
+    MODULE_TYPE_VALIDATOR,
+    MODULE_TYPE_EXECUTOR,
+    MODULE_TYPE_FALLBACK,
+    MODULE_TYPE_HOOK,
+    MODULE_TYPE_POLICY,
+    MODULE_TYPE_SIGNER,
+    HOOK_MODULE_NOT_INSTALLED,
+    HOOK_MODULE_INSTALLED_NO_HOOK
+} from "./types/Constants.sol";
 import {
     ValidationStorage,
     ValidationInfo,
@@ -40,6 +57,9 @@ import {
     PermissionUninstallData
 } from "./types/Structs.sol";
 
+/// @title Kernel
+/// @author taek <leekt216@gmail.com>
+/// @notice ERC-7579 compliant modular smart account with pluggable validation, execution, and hook modules.
 abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
     IEntryPoint immutable ENTRYPOINT;
 
@@ -56,15 +76,27 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         version = "0.4.0";
     }
 
+    /// @notice Initializes the account with the given module packages. Must be overridden by concrete implementations.
+    /// @param packages The array of module install packages; the first package becomes the root validator.
     function initialize(Install[] calldata packages) external payable virtual;
 
+    /// @notice Internal initialization that installs packages and sets the first as root.
+    /// @param packages The array of module install packages; must be non-empty.
     function _initialize(Install[] calldata packages) internal virtual {
-        require(packages.length > 0);
+        require(packages.length > 0, InvalidInitialization());
         Install calldata root = packages[0];
         _install(packages);
         _setRoot(root);
     }
 
+    /// @notice Validates a UserOperation for ERC-4337 entry point compatibility.
+    /// @dev Parses the nonce to determine validation mode and type, optionally installs modules
+    ///      via enable-mode signatures, then delegates to the appropriate validator.
+    ///      Nonce layout (32 bytes): `[1 byte vMode | 1 byte vType | 20 bytes vId | 2 bytes nonceKey | 8 bytes seq]`.
+    /// @param userOp The packed user operation to validate.
+    /// @param userOpHash The hash of the user operation as computed by the entry point.
+    /// @param missingAccountFunds The amount of funds the account must prefund to the entry point.
+    /// @return validationData Packed validation result: `[20 bytes aggregator | 6 bytes validUntil | 6 bytes validAfter]`.
     function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash, uint256 missingAccountFunds)
         external
         payable
@@ -80,6 +112,10 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         }
     }
 
+    /// @notice ERC-1271 signature validation with nested EIP-712 support (ERC-7739).
+    /// @param hash The hash that was signed.
+    /// @param signature The signature bytes to verify.
+    /// @return The ERC-1271 magic value on success, or 0xffffffff on failure.
     function isValidSignature(bytes32 hash, bytes calldata signature)
         public
         view
@@ -116,10 +152,16 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         }
         ValidationStorage storage $ = _validationStorage();
 
+        // For non-root validation, check if validation exists before checking selectors
+        if (vType != VALIDATION_TYPE_ROOT) {
+            require($.vInfo[vId].hook > HOOK_MODULE_NOT_INSTALLED, InvalidVid(vId));
+        }
+
         // check if the call data is allowed by the validationId
         if (
             vType == VALIDATION_TYPE_ROOT
-                || (_allowedSelector(vId, bytes4(userOp.callData[0:4])) && $.vInfo[vId].hook == address(1))
+                || (_allowedSelector(vId, bytes4(userOp.callData[0:4]))
+                    && $.vInfo[vId].hook == HOOK_MODULE_INSTALLED_NO_HOOK)
         ) {
             // No-op, this is cheaper in gas
         } else {
@@ -136,25 +178,42 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
             Lib4337.intersectValidationData(validationData, validateUserOpFn(vId, opHash, userOp, signature));
     }
 
-    /// execution
+    /// @notice Executes a user operation with validation-hook context.
+    /// @dev Called by the entry point after validateUserOp. Runs pre/post hooks stored transiently
+    ///      and delegatecalls the inner calldata (userOp.callData[4:]).
+    /// @dev SECURITY: The inner calldata (userOp.callData[4:]) is delegatecalled to `address(this)`
+    ///      with no additional selector or target validation. Any function on Kernel (including
+    ///      privileged ones like `installModule`, `setRoot`, `execute`) can be invoked this way.
+    ///      Authorization relies entirely on `validateUserOp` having approved the outer UserOp.
+    /// @param userOp The packed user operation containing the execution calldata.
+    /// @param userOpHash The hash of the user operation, used to retrieve the transient validation hook.
     function executeUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash) external payable {
         _onlyEntryPointOrSelf();
-        bytes memory context = _preHook(_validationHook(userOpHash), userOp.callData[4:]);
+        IHook hook = _validationHook(userOpHash);
+        bytes memory context = _preHook(hook, userOp.callData[4:]);
         (bool success, bytes memory ret) = address(this).delegatecall(userOp.callData[4:]);
-        // propagete the revert message
+        // propagate the revert message
         if (!success) {
             assembly {
                 revert(add(ret, 0x20), mload(ret))
             }
         }
-        _postHook(_validationHook(userOpHash), context);
+        _postHook(hook, context);
     }
 
+    /// @notice Executes a call according to the given ERC-7579 execution mode.
+    /// @param mode The execution mode encoding call type and exec type (see LibERC7579).
+    /// @param executionData The ABI-encoded execution data matching the call type.
     function execute(bytes32 mode, bytes calldata executionData) external payable {
         _onlyEntryPointOrSelf();
         _execute(mode, executionData);
     }
 
+    /// @notice Executes a call on behalf of an installed executor module.
+    /// @dev The calling executor must be installed with a valid hook configuration.
+    /// @param mode The execution mode encoding call type and exec type.
+    /// @param executionData The ABI-encoded execution data matching the call type.
+    /// @return returnData Array of return data from each executed call.
     function executeFromExecutor(bytes32 mode, bytes calldata executionData)
         external
         payable
@@ -171,6 +230,10 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         return _execute(mode, executionData);
     }
 
+    /// @dev SECURITY: When `callType` is `CALLTYPE_DELEGATECALL`, the fallback target executes
+    ///      in Kernel's storage context via `delegatecall`. A malicious or buggy fallback module
+    ///      can overwrite any Kernel storage slot. Only install trusted, audited fallback modules
+    ///      with `CALLTYPE_DELEGATECALL`. Prefer `CALLTYPE_SINGLE` (regular call) when possible.
     function _fallback() internal returns (bytes memory res) {
         /// @solidity memory-safe-assembly
         assembly {
@@ -187,43 +250,49 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
 
         bytes4 selector = bytes4(msg.data[0:4]);
         SelectorConfig storage $ = _selectorConfig(selector);
-        // if the selector is not initialized, revert
-        // if the selector is installed but hook is not set, only entrypoint can call it
-        if ($.target == address(0) || ($.hook == IHook(address(0)) && msg.sender != address(ENTRYPOINT))) {
-            revert InvalidSelector();
-        }
-        bytes memory hookData;
-        // explicitly set to address(1) to skip the hook while allowing anyone to call it
-        if (address($.hook) != address(0) && address($.hook) != address(1)) {
-            hookData = _preHook($.hook, msg.data);
-        }
+        // target must be initialized, and if hook is not set only entrypoint can call it
+        require(
+            $.target != address(0) && ($.hook != IHook(HOOK_MODULE_NOT_INSTALLED) || msg.sender == address(ENTRYPOINT)),
+            InvalidSelector()
+        );
+        bytes memory hookData = _preHook($.hook, msg.data);
 
         bool success;
-        if ($.callType == CallType.wrap(bytes1(0x00))) {
+        if ($.callType == CALLTYPE_SINGLE) {
             success = _call($.target, 0, abi.encodePacked(msg.data, msg.sender));
-        } else if ($.callType == CallType.wrap(bytes1(0xff))) {
+        } else if ($.callType == CALLTYPE_DELEGATECALL) {
             success = _delegateCall($.target, msg.data);
+        } else {
+            revert InvalidCallType();
         }
         if (!success) {
             _onRevertThrow();
         } else {
             res = _getReturn();
         }
-        if (address($.hook) != address(0) && address($.hook) != address(1)) {
-            _postHook($.hook, hookData);
-        }
+        _postHook($.hook, hookData);
     }
 
+    /// @notice Advances the nonce for a given key, invalidating all lower nonce values.
+    /// @param nonceKey The 192-bit nonce key (upper 24 bytes of the 256-bit nonce).
+    /// @param seq The new sequence number; must be greater than the current value.
     function setNonce(uint192 nonceKey, uint64 seq) external payable {
         _onlyEntryPointOrSelf();
         _setNonce(nonceKey, seq);
     }
 
+    /// @notice Advances the global minimum nonce, invalidating all nonces below `seq` across all keys.
+    /// @param seq The new global minimum sequence number; must be greater than the current value.
     function setValidNonceFrom(uint64 seq) external payable {
         _onlyEntryPointOrSelf();
         _setValidNonceFrom(seq);
     }
 
+    /// @notice Installs a single module per ERC-7579.
+    /// @dev The initData is decoded as `InstallModuleDataFormat(bytes installData, bytes internalData)`.
+    /// @param moduleType The module type identifier (1=validator, 2=executor, 3=fallback, 4=hook, 5=policy, 6=signer).
+    /// @param module The address of the module contract to install.
+    /// @param initData ABI-encoded `InstallModuleDataFormat` containing install data and internal configuration.
     function installModule(uint256 moduleType, address module, bytes calldata initData) external payable override {
         _onlyEntryPointOrSelf();
         InstallModuleDataFormat calldata imdf;
@@ -233,6 +302,10 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         _installModule(moduleType, module, imdf.installData, imdf.internalData);
     }
 
+    /// @notice Uninstalls a single module per ERC-7579.
+    /// @param moduleType The module type identifier.
+    /// @param module The address of the module contract to uninstall.
+    /// @param initData ABI-encoded `InstallModuleDataFormat` containing uninstall data and internal configuration.
     function uninstallModule(uint256 moduleType, address module, bytes calldata initData) external payable override {
         _onlyEntryPointOrSelf();
         InstallModuleDataFormat calldata imdf;
@@ -242,10 +315,17 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         _uninstallModule(moduleType, module, imdf.installData, imdf.internalData);
     }
 
-    // we are going to let array of pkgs to be installed and use first one as root
+    /// @notice Installs new modules and sets a new root validator, optionally removing the current one.
+    /// @dev The first package in `pkg` becomes the new root. If `removeCurrent` is true, the old root
+    ///      validator/permission is uninstalled using `uninstallData`.
+    /// @param pkg The array of module install packages; must be non-empty.
+    /// @param removeCurrent Whether to uninstall the current root validator/permission.
+    /// @param uninstallData Data passed to onUninstall for the current root (format depends on root type).
     function setRoot(Install[] calldata pkg, bool removeCurrent, bytes calldata uninstallData) external payable {
         _onlyEntryPointOrSelf();
+        require(pkg.length > 0, InvalidInitialization());
         ValidationId vId = _validationStorage().root;
+        _install(pkg);
         _setRoot(pkg[0]);
         if (removeCurrent) {
             ValidationType vType = getType(vId);
@@ -289,21 +369,29 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
                 revert InvalidRootValidation();
             }
         }
-        _install(pkg);
     }
 
+    /// @notice Sets the root validation directly to an already-installed ValidationId.
+    /// @param vId The ValidationId to set as root (must be an installed validator or permission).
     function setRoot(ValidationId vId) external payable {
         _onlyEntryPointOrSelf();
         _setRoot(vId);
     }
 
-    /// @param selectors parse 4 bytes to get selectors
+    /// @notice Grants a validation access to specific function selectors.
+    /// @param vId The ValidationId to grant selector access to.
+    /// @param selectors Packed bytes4 selectors (length must be a multiple of 4).
     function grantAccess(ValidationId vId, bytes calldata selectors) external payable {
         _onlyEntryPointOrSelf();
         _grantAccess(vId, selectors);
     }
 
-    // NOTE : this ONLY allows root signature, for now
+    /// @notice Installs modules using a root-signed enable-mode signature (no entry point required).
+    /// @dev Verifies the signature against the current root validator, then installs the packages.
+    /// @param replayable If true, the signature is verified without chain ID binding.
+    /// @param nonce The install nonce to prevent replay.
+    /// @param packages The array of module install packages.
+    /// @param signature The root validator's signature over the install digest.
     function installModule(bool replayable, uint256 nonce, Install[] calldata packages, bytes calldata signature)
         external
         payable
@@ -313,6 +401,8 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         _install(packages);
     }
 
+    /// @notice Batch-installs multiple modules from the entry point or self.
+    /// @param packages The array of module install packages.
     function installModule(Install[] calldata packages) external payable {
         _onlyEntryPointOrSelf();
         _install(packages);
@@ -326,6 +416,9 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         emit Received(msg.sender, msg.value);
     }
 
+    /// @notice Returns whether the given execution mode is supported.
+    /// @param mode The ERC-7579 execution mode to check.
+    /// @return True if the mode's call type and exec type are supported.
     function supportsExecutionMode(bytes32 mode) external pure override returns (bool) {
         bytes1 callType = LibERC7579.getCallType(mode);
         bytes1 execType = LibERC7579.getExecType(mode);
@@ -339,28 +432,36 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         return true;
     }
 
+    /// @notice Returns whether the given module type is supported.
+    /// @param moduleTypeId The module type identifier (1-6 are supported).
+    /// @return True if the module type is supported.
     function supportsModule(uint256 moduleTypeId) external pure returns (bool) {
         return moduleTypeId < 7 && moduleTypeId != 0;
     }
 
+    /// @notice Checks whether a specific module is currently installed.
+    /// @param moduleTypeId The module type identifier.
+    /// @param module The module address to check.
+    /// @param additionalContext For fallback modules: the bytes4 selector. For policies/signers: the bytes4 PermissionId.
+    /// @return True if the module is installed for the given type and context.
     function isModuleInstalled(uint256 moduleTypeId, address module, bytes calldata additionalContext)
         external
         view
         override
         returns (bool)
     {
-        if (moduleTypeId == 1) {
+        if (moduleTypeId == MODULE_TYPE_VALIDATOR) {
             ValidationId vId = validatorToIdentifier(IValidator(module));
-            return _validationStorage().vInfo[vId].hook != address(0);
-        } else if (moduleTypeId == 2) {
-            return address(_executorConfig(IExecutor(module)).hook) != address(0);
-        } else if (moduleTypeId == 3) {
+            return _validationStorage().vInfo[vId].hook != HOOK_MODULE_NOT_INSTALLED;
+        } else if (moduleTypeId == MODULE_TYPE_EXECUTOR) {
+            return address(_executorConfig(IExecutor(module)).hook) != HOOK_MODULE_NOT_INSTALLED;
+        } else if (moduleTypeId == MODULE_TYPE_FALLBACK) {
             // forge-lint: disable-next-line(unsafe-typecast)
             bytes4 selector = bytes4(additionalContext);
             return _selectorConfig(selector).target == module;
-        } else if (moduleTypeId == 4) {
+        } else if (moduleTypeId == MODULE_TYPE_HOOK) {
             return _hookStorage().enabled[module];
-        } else if (moduleTypeId == 5) {
+        } else if (moduleTypeId == MODULE_TYPE_POLICY) {
             // forge-lint: disable-next-line(unsafe-typecast)
             ValidationId vId = permissionToIdentifier(PermissionId.wrap(bytes4(additionalContext)));
             ValidationInfo storage $ = _validationStorage().vInfo[vId];
@@ -370,7 +471,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
                 }
             }
             return false;
-        } else if (moduleTypeId == 6) {
+        } else if (moduleTypeId == MODULE_TYPE_SIGNER) {
             // forge-lint: disable-next-line(unsafe-typecast)
             ValidationId vId = permissionToIdentifier(PermissionId.wrap(bytes4(additionalContext)));
             ValidationInfo storage $ = _validationStorage().vInfo[vId];
@@ -380,6 +481,8 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         }
     }
 
+    /// @notice Returns the account implementation identifier per ERC-7579.
+    /// @return accountImplementationId The implementation ID string.
     function accountId() external pure override returns (string memory accountImplementationId) {
         return "kernel.v0.4";
     }

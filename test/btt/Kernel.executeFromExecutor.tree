@@ -1,0 +1,59 @@
+Kernel_executeFromExecutor
+├── when the caller is not an installed executor
+│   └── it should revert with Unauthorized error
+└── when the caller is an installed executor
+    ├── given the execution mode execType is unsupported
+    │   └── it should revert with InvalidExecType error
+    ├── given the executor has a hook configured
+    │   ├── it should call preHook on the executor hook before execution
+    │   ├── given preHook reverts
+    │   │   └── it should propagate the revert
+    │   └── given preHook succeeds
+    │       ├── it should execute the requested operations
+    │       ├── it should call postHook on the executor hook after execution
+    │       ├── given postHook reverts
+    │       │   └── it should propagate the revert
+    │       └── given postHook succeeds
+    │           └── it should return the execution results
+    ├── given the executor has hook set to address1
+    │   ├── it should skip preHook and postHook calls
+    │   └── it should execute the requested operations directly
+    ├── given the execution mode callType is SINGLE
+    │   ├── given the execution mode execType is DEFAULT
+    │   │   ├── when the target call succeeds
+    │   │   │   └── it should return the result in returnData array
+    │   │   └── when the target call reverts
+    │   │       └── it should propagate the revert
+    │   └── given the execution mode execType is TRY
+    │       ├── when the target call succeeds
+    │       │   └── it should return the result in returnData array
+    │       └── when the target call reverts
+    │           ├── it should NOT propagate the revert
+    │           └── it should return empty bytes for the failed call
+    ├── given the execution mode callType is BATCH
+    │   ├── given the execution mode execType is DEFAULT
+    │   │   ├── when all calls succeed
+    │   │   │   └── it should return all results in returnData array
+    │   │   └── when any call reverts
+    │   │       └── it should propagate the revert
+    │   └── given the execution mode execType is TRY
+    │       ├── when all calls succeed
+    │       │   └── it should return all results in returnData array
+    │       └── when any call reverts
+    │           ├── it should NOT propagate the revert
+    │           ├── it should return empty bytes for the failed call
+    │           └── it should continue executing remaining calls
+    ├── given the execution mode callType is DELEGATECALL
+        ├── given the execution mode execType is DEFAULT
+        │   ├── when the delegatecall succeeds
+        │   │   └── it should return the result
+        │   └── when the delegatecall reverts
+        │       └── it should propagate the revert
+        └── given the execution mode execType is TRY
+            ├── when the delegatecall succeeds
+            │   └── it should return the result
+            └── when the delegatecall reverts
+                ├── it should NOT propagate the revert
+                └── it should return empty bytes
+    └── given the execution mode callType is unsupported
+        └── it should revert with InvalidCallType error

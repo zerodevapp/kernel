@@ -20,6 +20,7 @@ import {IValidator} from "src/interfaces/IERC7579Modules.sol";
 import {Received} from "src/types/Events.sol";
 import {Install} from "src/types/Structs.sol";
 import {PermissionId} from "src/types/Types.sol";
+import {ChainAgnosticHashHelper} from "./utils/ChainAgnosticHashHelper.sol";
 
 abstract contract KernelTestBase is Test {
     IEntryPoint ep;
@@ -37,6 +38,7 @@ abstract contract KernelTestBase is Test {
     MockHook hook;
     PermissionId permissionId;
     uint256 permissionRevertIndex;
+    ChainAgnosticHashHelper hashHelper;
 
     bool isMock;
     bool is7702;

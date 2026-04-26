@@ -14,8 +14,8 @@ import {MockPolicy} from "./mock/MockPolicy.sol";
 import {MockSigner} from "./mock/MockSigner.sol";
 import {MockCallee} from "./mock/MockCallee.sol";
 import {KernelTestBase} from "./KernelTestBase.sol";
+import {ChainAgnosticHashHelper} from "./utils/ChainAgnosticHashHelper.sol";
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
-import {Lib4337} from "src/lib/Lib4337.sol";
 
 contract KernelFactoryECDSATest is KernelTestBase {
     function setUp() external {
@@ -31,6 +31,7 @@ contract KernelFactoryECDSATest is KernelTestBase {
         beneficiary = payable(makeAddr("Beneficiary"));
         policy = new MockPolicy();
         signer = new MockSigner();
+        hashHelper = new ChainAgnosticHashHelper();
         permissionId = PermissionId.wrap(bytes4(keccak256(abi.encodePacked("Hello world"))));
         vm.txGasPrice(1);
         _initialize();
@@ -52,7 +53,7 @@ contract KernelFactoryECDSATest is KernelTestBase {
         override
         returns (bytes memory sig)
     {
-        bytes32 hash = replay ? Lib4337.chainAgnosticUserOpHash(address(ep), op) : ep.getUserOpHash(op);
+        bytes32 hash = replay ? hashHelper.chainAgnosticUserOpHash(address(ep), op) : ep.getUserOpHash(op);
         return _rootSignHash(hash, success);
     }
 

@@ -6,7 +6,9 @@ import {Kernel} from "src/Kernel.sol";
 import {MockCallee} from "./mock/MockCallee.sol";
 import {KernelTestBase} from "./KernelTestBase.sol";
 import {PermissionId} from "src/types/Types.sol";
-import {validatorToIdentifier} from "src/lib/Utils.sol";
+import {ValidationId} from "src/types/Types.sol";
+import {InvalidVid} from "src/types/Error.sol";
+import {permissionToIdentifier, validatorToIdentifier} from "src/lib/Utils.sol";
 import {SimpleAccount} from "account-abstraction/accounts/SimpleAccount.sol";
 import {SimpleAccountFactory} from "account-abstraction/accounts/SimpleAccountFactory.sol";
 import {LibBytes} from "solady/utils/LibBytes.sol";
@@ -208,7 +210,14 @@ abstract contract KernelUserOpTest is KernelTestBase {
         });
         ops[0].signature = _validatorSignUserOp(ops[0], true, false);
         vm.startPrank(beneficiary, beneficiary);
-        vm.expectRevert();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IEntryPoint.FailedOpWithRevert.selector,
+                0,
+                "AA23 reverted",
+                abi.encodeWithSelector(InvalidVid.selector, validatorToIdentifier(newValidator))
+            )
+        );
         ep.handleOps(ops, beneficiary);
         vm.stopPrank();
     }
@@ -240,9 +249,79 @@ abstract contract KernelUserOpTest is KernelTestBase {
         assertEq(kernel.validationInfo(validatorToIdentifier(newValidator)).hook, address(1));
     }
 
-    function test_userop_validator_hook_failed_prehook() external entryPointTest {}
+    function test_userop_validator_hook_failed_prehook() external entryPointTest {
+        vm.startPrank(address(ep));
+        kernel.installModule(4, address(hook), abi.encode(hex"", ""));
+        kernel.installModule(
+            1,
+            address(newValidator),
+            abi.encode(hex"deadbeef", abi.encodePacked(address(hook), kernel.execute.selector))
+        );
+        vm.stopPrank();
+        hook.setRevertOnPreHook(true);
 
-    function test_userop_validator_hook_failed_posthook() external entryPointTest {}
+        PackedUserOperation[] memory ops = new PackedUserOperation[](1);
+        ops[0] = PackedUserOperation({
+            sender: address(kernel),
+            nonce: encodeNonce(false, false, false, bytes1(0x01), bytes20(address(newValidator))),
+            initCode: hex"",
+            callData: abi.encodePacked(
+                Kernel.executeUserOp.selector,
+                abi.encodeWithSelector(
+                    Kernel.execute.selector,
+                    bytes32(0),
+                    abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
+                )
+            ),
+            accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
+            preVerificationGas: 1000000,
+            gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
+            paymasterAndData: hex"",
+            signature: hex""
+        });
+        ops[0].signature = _validatorSignUserOp(ops[0], true, false);
+        vm.startPrank(beneficiary, beneficiary);
+        ep.handleOps(ops, beneficiary);
+        vm.stopPrank();
+        assertEq(callee.bar(), 0);
+    }
+
+    function test_userop_validator_hook_failed_posthook() external entryPointTest {
+        vm.startPrank(address(ep));
+        kernel.installModule(4, address(hook), abi.encode(hex"", ""));
+        kernel.installModule(
+            1,
+            address(newValidator),
+            abi.encode(hex"deadbeef", abi.encodePacked(address(hook), kernel.execute.selector))
+        );
+        vm.stopPrank();
+        hook.setRevertOnPostHook(true);
+
+        PackedUserOperation[] memory ops = new PackedUserOperation[](1);
+        ops[0] = PackedUserOperation({
+            sender: address(kernel),
+            nonce: encodeNonce(false, false, false, bytes1(0x01), bytes20(address(newValidator))),
+            initCode: hex"",
+            callData: abi.encodePacked(
+                Kernel.executeUserOp.selector,
+                abi.encodeWithSelector(
+                    Kernel.execute.selector,
+                    bytes32(0),
+                    abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
+                )
+            ),
+            accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
+            preVerificationGas: 1000000,
+            gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
+            paymasterAndData: hex"",
+            signature: hex""
+        });
+        ops[0].signature = _validatorSignUserOp(ops[0], true, false);
+        vm.startPrank(beneficiary, beneficiary);
+        ep.handleOps(ops, beneficiary);
+        vm.stopPrank();
+        assertEq(callee.bar(), 0);
+    }
 
     function test_userop_validator_aa24_enable_fail_wrong_signature() external entryPointTest {
         PackedUserOperation[] memory ops = new PackedUserOperation[](1);
@@ -317,7 +396,14 @@ abstract contract KernelUserOpTest is KernelTestBase {
         ops[0].signature = _permissionSignUserOp(ops[0], true, false);
         //vm.expectRevert(abi.encodeWithSelector(IEntryPoint.FailedOp.selector, 0, "AA24 signature error"));
         vm.startPrank(beneficiary, beneficiary);
-        vm.expectRevert();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IEntryPoint.FailedOpWithRevert.selector,
+                0,
+                "AA23 reverted",
+                abi.encodeWithSelector(InvalidVid.selector, permissionToIdentifier(permissionId))
+            )
+        );
         ep.handleOps(ops, beneficiary);
         vm.stopPrank();
     }
@@ -447,7 +533,16 @@ abstract contract KernelUserOpTest is KernelTestBase {
         });
         ops[0].signature = _rootSignUserOp(ops[0], true, false);
         vm.startPrank(beneficiary, beneficiary);
-        vm.expectRevert();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IEntryPoint.FailedOpWithRevert.selector,
+                0,
+                "AA23 reverted",
+                abi.encodeWithSelector(
+                    InvalidVid.selector, ValidationId.wrap(bytes21(abi.encodePacked(bytes1(0x03), bytes20(0))))
+                )
+            )
+        );
         ep.handleOps(ops, beneficiary);
         vm.stopPrank();
     }

@@ -14,6 +14,7 @@ import {
     ERC1271_MAGICVALUE,
     ERC1271_INVALID
 } from "src/types/Constants.sol";
+import {NotInitialized} from "src/types/Error.sol";
 
 /// forge-lint: disable-next-item(pascal-case-struct)
 struct ECDSAValidatorStorage {

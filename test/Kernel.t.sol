@@ -13,6 +13,8 @@ import {MockPolicy} from "./mock/MockPolicy.sol";
 import {MockSigner} from "./mock/MockSigner.sol";
 import {MockCallee} from "./mock/MockCallee.sol";
 import {NotImplemented} from "src/types/Error.sol";
+import {InvalidInitialization} from "src/types/Error.sol";
+import {InvalidSelector} from "src/types/Error.sol";
 import {Install} from "src/types/Structs.sol";
 import {ERC1967_IMPLEMENTATION_SLOT} from "src/types/Constants.sol";
 import {KernelUserOpTest} from "./KernelUserOpTest.sol";
@@ -22,6 +24,7 @@ import {KernelValidatorTest} from "./KernelValidatorTest.sol";
 import {KernelExecuteTest} from "./KernelExecuteTest.sol";
 import {KernelSelectorTest} from "./KernelSelectorTest.sol";
 import {KernelHookTest} from "./KernelHookTest.sol";
+import {ChainAgnosticHashHelper} from "./utils/ChainAgnosticHashHelper.sol";
 import {PermissionId} from "src/types/Types.sol";
 
 contract KernelTest is
@@ -49,6 +52,7 @@ contract KernelTest is
         policy = new MockPolicy();
         signer = new MockSigner();
         hook = new MockHook();
+        hashHelper = new ChainAgnosticHashHelper();
         permissionId = PermissionId.wrap(bytes4(keccak256(abi.encodePacked("Hello world"))));
         _initialize();
     }
@@ -58,7 +62,7 @@ contract KernelTest is
         rootValidatorData = hex"";
         Install[] memory pkgs = new Install[](1);
         pkgs[0] = Install({moduleType: 1, module: address(rootValidator), moduleData: hex"", internalData: hex""});
-        vm.expectRevert();
+        vm.expectRevert(InvalidInitialization.selector);
         uups.initialize(pkgs);
     }
 
@@ -102,8 +106,12 @@ contract KernelTest is
     }
 
     function test_upgradeTo() external unitTest {
-        vm.skip(is7702);
         KernelUUPS newTemplate = new KernelUUPS(ep);
+        if (is7702) {
+            vm.expectRevert(InvalidSelector.selector);
+            KernelUUPS(payable(address(kernel))).upgradeToAndCall(address(newTemplate), hex"");
+            return;
+        }
         KernelUUPS(payable(address(kernel))).upgradeToAndCall(address(newTemplate), hex"");
         bytes32 impl = vm.load(address(kernel), ERC1967_IMPLEMENTATION_SLOT);
         assertEq(address(uint160(uint256(impl))), address(newTemplate));

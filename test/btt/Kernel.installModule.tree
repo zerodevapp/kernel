@@ -1,0 +1,86 @@
+Kernel_installModule
+├── when the caller is not the EntryPoint
+│   └── when the caller is not the account itself
+│       └── it should revert with Unauthorized error
+└── when the caller is the EntryPoint or self
+    ├── given moduleType is Validator
+    │   ├── given the validator is already installed
+    │   │   └── it should revert with OccupiedValidationId error
+    │   └── given the validator is not installed
+    │       ├── when onInstall reverts or returns false
+    │       │   └── it should revert with ModuleInstallFailed error
+    │       ├── when onInstall succeeds
+    │       │   ├── it should mark the validator as installed
+    │       │   ├── it should set the hook from internalData or address1 if empty
+    │       │   ├── it should parse allowed selectors from internalData
+    │       │   └── it should emit ModuleInstalled event
+    │       └── given internalData contains a hook address
+    │           ├── given the hook is address0 or address1
+    │           │   └── it should set the hook accordingly
+    │           └── given the hook is a contract
+    │               ├── given the hook is enabled
+    │               │   └── it should associate the hook with this validator
+    │               └── given the hook is not enabled
+    │                   └── it should revert with NotInstalled error
+    ├── given moduleType is Executor
+    │   ├── when onInstall reverts
+    │   │   └── it should NOT revert and still mark the executor as installed
+    │   ├── when onInstall succeeds
+    │   │   ├── it should mark the executor as installed
+    │   │   ├── it should set the hook from internalData or address1 if empty
+    │   │   └── it should emit ModuleInstalled event
+    │   └── given internalData contains a hook address
+    │       ├── given the hook is enabled
+    │       │   └── it should associate the hook with this executor
+    │       └── given the hook is not enabled
+    │           └── it should revert with NotInstalled error
+    ├── given moduleType is Fallback
+    │   ├── given the selector is already registered
+    │   │   └── it should overwrite the selector config
+    │   └── given the selector is not registered
+    │       ├── when onInstall reverts and callType is not DELEGATECALL
+    │       │   └── it should revert with ModuleInstallFailed error
+    │       ├── when onInstall reverts and callType is DELEGATECALL
+    │       │   └── it should still register the selector
+    │       └── when onInstall succeeds
+    │           ├── it should register the selector to the fallback handler
+    │           ├── it should set the callType from internalData
+    │           ├── it should set the hook from internalData
+    │           └── it should emit ModuleInstalled event
+    ├── given moduleType is Hook
+    │   ├── when internalData is empty and onInstall reverts
+    │   │   └── it should revert with ModuleInstallFailed error
+    │   └── when internalData is non-empty
+    │       ├── it should enable the hook even if onInstall reverts
+    │       └── it should emit ModuleInstalled event
+    ├── given moduleType is Policy
+    │   ├── it should parse the permissionId from internalData
+    │   ├── when onInstall reverts
+    │   │   └── it should revert with ModuleInstallFailed error
+    │   ├── given extra bytes in internalData beyond permissionId
+    │   │   └── it should succeed because policy does not parse hook from internalData
+    │   ├── given the permissionId changes during a multi-package install
+    │   │   └── it should revert with "permissionId should be consistent"
+    │   └── when onInstall succeeds
+    │       ├── it should append the policy to the permissionId policy list
+    │       └── it should emit ModuleInstalled event
+    ├── given moduleType is Signer
+    │   ├── it should parse the permissionId from internalData
+    │   ├── when onInstall reverts
+    │   │   └── it should revert with ModuleInstallFailed error
+    │   ├── given the hook address in internalData is invalid
+    │   │   └── it should revert with NotInstalled error
+    │   ├── given the permissionId changes during a multi-package install
+    │   │   └── it should revert with "permissionId should be consistent"
+    │   └── when onInstall succeeds
+    │       ├── it should set the signer for the permissionId
+    │       ├── it should clear the installingPermission flag
+    │       └── it should emit ModuleInstalled event
+    ├── given moduleType is unsupported
+    │   └── it should revert with NotImplemented error
+    └── given the Install array overload is called
+        ├── when caller is not EntryPoint or self
+        │   └── it should revert with Unauthorized error
+        ├── when caller is EntryPoint or self
+        │   ├── it should install all modules in the packages array
+        │   └── it should support installing multiple module types in one call

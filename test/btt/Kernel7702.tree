@@ -1,0 +1,36 @@
+Kernel7702_Test
+├── when initialize is called with packages
+│   ├── it should not install any packages
+│   └── it should not revert
+├── when initialize is called multiple times
+│   └── it should not revert on any call
+├── when initialize is called with empty packages
+│   └── it should not revert
+├── when verifyFallbackSignature receives a valid ECDSA signature
+│   └── it should return validation success
+├── when verifyFallbackSignature receives an invalid ECDSA signature
+│   └── it should return validation failed
+├── when verifyFallbackSignature receives a malformed signature
+│   └── it should return validation failed
+├── when verifyFallbackSignature receives a zero length signature
+│   └── it should return validation failed
+├── when fallbackValidatorAvailable is checked
+│   └── it should return true
+├── when erc1271RawAllowed is checked
+│   └── it should return true allowing raw signatures
+├── when isValidSignature receives a valid raw ECDSA signature
+│   └── it should return ERC1271_MAGICVALUE
+├── when isValidSignature receives an invalid raw ECDSA signature
+│   └── it should revert with InvalidValidationType error
+├── when validateUserOp is called with root zero and valid ECDSA signature
+│   └── it should return zero for validation success
+├── when validateUserOp is called with root zero and wrong signer
+│   └── it should return one for validation failure
+├── when validateUserOp is called with root zero and malformed signature
+│   └── it should return one for validation failure
+├── when validateUserOp is called with missingAccountFunds nonzero
+│   └── it should send funds to the entry point
+├── when a validator is installed via direct installModule
+│   └── it should allow validation with the installed validator
+└── when the EOA receives ETH
+    └── it should emit Received event

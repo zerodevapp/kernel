@@ -16,6 +16,7 @@ contract MockFallback is IFallback {
     event Foobar();
 
     error Limit();
+    error FallbackRevert();
 
     mapping(address => bytes) public data;
 
@@ -75,5 +76,14 @@ contract MockFallback is IFallback {
                     abi.encodePacked(address(callee), uint256(0), abi.encodeWithSelector(Callee.calleeTest.selector))
                 );
         }
+    }
+
+    function forceRevert() external pure {
+        revert FallbackRevert();
+    }
+
+    // Simple function that works in both CALL and DELEGATECALL contexts
+    function testFunction() external pure returns (uint256) {
+        return 42;
     }
 }

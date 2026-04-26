@@ -3,6 +3,7 @@
 pragma solidity ^0.8.0;
 
 contract MockAction {
+    error MockActionRevert();
     event MockActionEvent(address here);
 
     function onInstall(bytes calldata data) external payable {}
@@ -15,5 +16,13 @@ contract MockAction {
 
     function doSomething() external {
         emit MockActionEvent(address(this));
+    }
+
+    function doAction() external {
+        emit MockActionEvent(address(this));
+    }
+
+    function doRevertingAction() external pure {
+        revert MockActionRevert();
     }
 }

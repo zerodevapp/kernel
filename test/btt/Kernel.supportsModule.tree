@@ -1,0 +1,17 @@
+Kernel_supportsModule
+├── given moduleTypeId is 0
+│   └── it should return false
+├── given moduleTypeId is 1 Validator
+│   └── it should return true
+├── given moduleTypeId is 2 Executor
+│   └── it should return true
+├── given moduleTypeId is 3 Fallback
+│   └── it should return true
+├── given moduleTypeId is 4 Hook
+│   └── it should return true
+├── given moduleTypeId is 5 Policy
+│   └── it should return true
+├── given moduleTypeId is 6 Signer
+│   └── it should return true
+└── given moduleTypeId is 7 or greater
+    └── it should return false

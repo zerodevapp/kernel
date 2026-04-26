@@ -1,0 +1,23 @@
+Kernel_initialize
+├── given the account has already been initialized
+│   └── it should revert with InvalidInitialization error
+└── given the account has not been initialized
+    ├── when packages array is empty
+    │   └── it should revert with InvalidInitialization error
+    └── when packages array has one or more elements
+        ├── it should install all packages in order
+        ├── given the first package is a validator
+        │   ├── it should set the validator as the root
+        │   ├── it should call onInstall on the validator
+        │   └── it should emit ModuleInstalled and RootChanged events
+        ├── given the first package is a permission
+        │   ├── given there are both policy and signer packages
+        │   │   ├── it should install the policies
+        │   │   ├── it should install the signer
+        │   │   └── it should set the permission as the root
+        │   └── given the permission setup is incomplete
+        │       └── it should revert with "Permission Install not finished"
+        ├── given the first package is not a validator or permission
+        │   └── it should revert with InvalidRootValidation error
+        └── given subsequent packages contain executors hooks or fallbacks
+            └── it should install all modules correctly

@@ -1,0 +1,14 @@
+KernelFactory_deployECDSA
+├── when the ECDSA owner is address zero
+│   └── it should revert with InvalidSigner error
+├── when the address is already deployed for this owner and nonce
+│   ├── it should return the existing account address
+│   └── given msg value is sent to already deployed
+│       └── it should forward the ETH to the existing account
+├── when the ECDSA owner is a valid address and not yet deployed
+│   ├── it should deploy a KernelImmutableECDSA proxy using CREATE2
+│   ├── it should initialize the account with the packages
+│   ├── it should return the deployed account address
+│   └── it should emit KernelDeployed event
+└── when deploying with different signers and same nonce
+    └── it should deploy to different addresses

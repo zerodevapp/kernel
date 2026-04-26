@@ -21,6 +21,14 @@ contract MockCallee {
         revert Haha();
     }
 
+    function revertingFn() external pure {
+        revert("MockCallee: revert");
+    }
+
+    function receiveEth() external payable {
+        // Accept ETH
+    }
+
     function ret(bytes memory dat) external pure returns (bytes memory) {
         return dat;
     }

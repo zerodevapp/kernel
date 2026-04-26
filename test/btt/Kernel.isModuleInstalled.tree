@@ -1,0 +1,33 @@
+Kernel_isModuleInstalled
+├── given moduleTypeId is 1 Validator
+│   ├── given the validator is installed
+│   │   └── it should return true
+│   └── given the validator is not installed
+│       └── it should return false
+├── given moduleTypeId is 2 Executor
+│   ├── given the executor is installed
+│   │   └── it should return true
+│   └── given the executor is not installed
+│       └── it should return false
+├── given moduleTypeId is 3 Fallback
+│   ├── given the selector is registered to the module
+│   │   └── it should return true
+│   └── given the selector is not registered to the module
+│       └── it should return false
+├── given moduleTypeId is 4 Hook
+│   ├── given the hook is enabled
+│   │   └── it should return true
+│   └── given the hook is not enabled
+│       └── it should return false
+├── given moduleTypeId is 5 Policy
+│   ├── given the permissionId has this policy installed
+│   │   └── it should return true
+│   └── given the permissionId does not have this policy
+│       └── it should return false
+├── given moduleTypeId is 6 Signer
+│   ├── given the permissionId has this signer installed
+│   │   └── it should return true
+│   └── given the permissionId does not have this signer
+│       └── it should return false
+└── given moduleTypeId is unsupported
+    └── it should revert with NotImplemented error

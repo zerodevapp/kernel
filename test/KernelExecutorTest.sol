@@ -5,12 +5,13 @@ import {Call} from "src/types/Structs.sol";
 import {MockExecutor} from "./mock/MockExecutor.sol";
 import {MockCallee} from "./mock/MockCallee.sol";
 import {KernelTestBase} from "./KernelTestBase.sol";
+import {Unauthorized} from "src/types/Error.sol";
 
 abstract contract KernelExecutorTest is KernelTestBase {
     function test_execute_from_executor_fail_not_executor() external {
         address notExecutor = makeAddr("not executor");
         vm.startPrank(notExecutor);
-        vm.expectRevert();
+        vm.expectRevert(Unauthorized.selector);
         kernel.executeFromExecutor(
             bytes32(0), abi.encodePacked(address(callee), uint256(0), abi.encodeWithSelector(MockCallee.foo.selector))
         );

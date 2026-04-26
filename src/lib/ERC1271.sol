@@ -2,18 +2,11 @@
 pragma solidity ^0.8.4;
 
 import {EIP712} from "solady/utils/EIP712.sol";
+import {PERSONAL_SIGN_TYPEHASH} from "../types/Constants.sol";
 
 /// @notice ERC1271 mixin with nested EIP-712 approach.
-/// @author Solady (https://github.com/vectorized/solady/blob/main/src/accounts/ERC1271.sol)
+/// @author taek <leekt216@gmail.com>
 abstract contract ERC1271 is EIP712 {
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                         CONSTANTS                          */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
-    /// @dev `keccak256("PersonalSign(bytes prefixed)")`.
-    bytes32 internal constant _PERSONAL_SIGN_TYPEHASH =
-        0x983e65e5148e570cd828ead231ee759a8d7958721a768f93bc4483ba005c32de;
-
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                     ERC1271 OPERATIONS                     */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -197,7 +190,7 @@ abstract contract ERC1271 is EIP712 {
                 // `appendedData.length > signature.length || contentsDescription.length == 0`.
                 if or(xor(keccak256(0x1e, 0x42), hash), or(lt(signature.length, l), iszero(c))) {
                     t := 0 // Set `t` to 0, denoting that we need to `hash = _hashTypedData(hash)`.
-                    mstore(t, _PERSONAL_SIGN_TYPEHASH)
+                    mstore(t, PERSONAL_SIGN_TYPEHASH)
                     mstore(0x20, hash) // Store the `prefixed`.
                     hash := keccak256(t, 0x40) // Compute the `PersonalSign` struct hash.
                     break
@@ -284,7 +277,7 @@ abstract contract ERC1271 is EIP712 {
                 // `appendedData.length > signature.length || contentsDescription.length == 0`.
                 if or(xor(keccak256(0x1e, 0x42), hash), or(lt(signature.length, l), iszero(c))) {
                     t := 0 // Set `t` to 0, denoting that we need to `hash = _hashTypedData(hash)`.
-                    mstore(t, _PERSONAL_SIGN_TYPEHASH)
+                    mstore(t, PERSONAL_SIGN_TYPEHASH)
                     mstore(0x20, hash) // Store the `prefixed`.
                     hash := keccak256(t, 0x40) // Compute the `PersonalSign` struct hash.
                     break

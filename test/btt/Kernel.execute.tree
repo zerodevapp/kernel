@@ -1,0 +1,52 @@
+Kernel_execute
+├── when the caller is not the EntryPoint
+│   └── when the caller is not the account itself
+│       └── it should revert with Unauthorized error
+└── when the caller is the EntryPoint or self
+    ├── given the execution mode execType is unsupported
+    │   └── it should revert with InvalidExecType error
+    ├── given the execution mode callType is SINGLE
+    │   ├── given the execution mode execType is DEFAULT
+    │   │   ├── when the target call succeeds
+    │   │   │   ├── it should return the call result in returnData array
+    │   │   │   └── it should have exactly one element in returnData
+    │   │   └── when the target call reverts
+    │   │       └── it should propagate the revert
+    │   └── given the execution mode execType is TRY
+    │       ├── when the target call succeeds
+    │       │   ├── it should return the call result in returnData array
+    │       │   └── it should have exactly one element in returnData
+    │       └── when the target call reverts
+    │           ├── it should NOT propagate the revert
+    │           └── it should return empty bytes for the failed call
+    ├── given the execution mode callType is BATCH
+    │   ├── given the execution mode execType is DEFAULT
+    │   │   ├── when all target calls succeed
+    │   │   │   ├── it should return all call results in returnData array
+    │   │   │   └── it should have N elements in returnData for N calls
+    │   │   └── when any target call reverts
+    │   │       ├── it should propagate the revert
+    │   │       └── it should NOT execute remaining calls after the failure
+    │   └── given the execution mode execType is TRY
+    │       ├── when all target calls succeed
+    │       │   ├── it should return all call results in returnData array
+    │       │   └── it should have N elements in returnData for N calls
+    │       └── when any target call reverts
+    │           ├── it should NOT propagate the revert
+    │           ├── it should return empty bytes for the failed call
+    │           └── it should continue executing remaining calls
+    ├── given the execution mode callType is DELEGATECALL
+    │   ├── given the execution mode execType is DEFAULT
+    │   │   ├── when the delegatecall succeeds
+    │   │   │   ├── it should return the delegatecall result
+    │   │   │   └── it should execute in the context of the Kernel
+    │   │   └── when the delegatecall reverts
+    │   │       └── it should propagate the revert
+    │   └── given the execution mode execType is TRY
+    │       ├── when the delegatecall succeeds
+    │       │   └── it should return the delegatecall result
+    │       └── when the delegatecall reverts
+    │           ├── it should NOT propagate the revert
+    │           └── it should return empty bytes
+    └── given the execution mode callType is unsupported
+        └── it should revert with InvalidCallType error

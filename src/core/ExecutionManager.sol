@@ -1,9 +1,17 @@
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
 import {LibERC7579} from "solady/accounts/LibERC7579.sol";
 import {InvalidExecType, InvalidCallType} from "../types/Error.sol";
 
+/// @title ExecutionManager
+/// @author taek <leekt216@gmail.com>
+/// @notice Dispatches ERC-7579 execution modes (single, batch, delegatecall) with default/try semantics.
 abstract contract ExecutionManager {
+    /// @notice Executes calldata according to the given ERC-7579 mode.
+    /// @param mode Encodes call type (single/batch/delegatecall) and exec type (default/try).
+    /// @param executionData Encoded execution data matching the call type.
+    /// @return The array of return data from each executed call.
     function _execute(bytes32 mode, bytes calldata executionData) internal returns (bytes[] memory) {
         bytes1 callType = LibERC7579.getCallType(mode);
         bytes1 execType = LibERC7579.getExecType(mode);
@@ -29,6 +37,7 @@ abstract contract ExecutionManager {
         return executeFunction(executionData, onRevert);
     }
 
+    /// @notice Executes a single call (target, value, data).
     function _executeCall(bytes calldata executionData, function() onRevert) internal returns (bytes[] memory results) {
         (address target, uint256 value, bytes calldata data) = LibERC7579.decodeSingle(executionData);
         bool success = _call(target, value, data);
@@ -39,6 +48,7 @@ abstract contract ExecutionManager {
         results[0] = _getReturn();
     }
 
+    /// @notice Executes a delegatecall to a target with the given data.
     function _executeDelegateCall(bytes calldata executionData, function() onRevert)
         internal
         returns (bytes[] memory results)
@@ -52,6 +62,7 @@ abstract contract ExecutionManager {
         results[0] = _getReturn();
     }
 
+    /// @notice Executes a batch of calls sequentially.
     function _executeBatchCall(bytes calldata executionData, function() onRevert)
         internal
         returns (bytes[] memory results)
@@ -71,6 +82,7 @@ abstract contract ExecutionManager {
         }
     }
 
+    /// @notice Copies the return data from the last external call into memory.
     function _getReturn() internal pure returns (bytes memory result) {
         assembly {
             result := mload(0x40)
@@ -81,6 +93,7 @@ abstract contract ExecutionManager {
         }
     }
 
+    /// @notice Bubbles up the revert data from the last failed call (EXECTYPE_DEFAULT behavior).
     function _onRevertThrow() internal pure {
         assembly {
             // Bubble up the revert if the call reverts.
@@ -89,8 +102,10 @@ abstract contract ExecutionManager {
         }
     }
 
+    /// @notice No-op revert handler (EXECTYPE_TRY behavior — swallows the revert).
     function _onRevertSilent() internal pure {}
 
+    /// @notice Low-level call with value.
     function _call(address target, uint256 value, bytes memory callData) internal returns (bool success) {
         /// @solidity memory-safe-assembly
         assembly {
@@ -99,6 +114,7 @@ abstract contract ExecutionManager {
         }
     }
 
+    /// @notice Low-level delegatecall.
     function _delegateCall(address delegate, bytes calldata callData) internal returns (bool success) {
         /// @solidity memory-safe-assembly
         assembly {

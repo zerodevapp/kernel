@@ -1,18 +1,18 @@
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
 import {UserOperationLib} from "account-abstraction/core/UserOperationLib.sol";
 import {Eip7702Support} from "account-abstraction/core/Eip7702Support.sol";
 import {IERC5267} from "../interfaces/IERC5267.sol";
+import {DOMAIN_TYPEHASH_SANS_CHAIN_ID} from "../types/Constants.sol";
 import {ValidityFormatMismatch} from "../types/Error.sol";
 
 library Lib4337 {
     /// @dev Highest bit of uint48, indicates block number mode when set on both validAfter and validUntil
     uint48 internal constant MODE_BIT = 0x800000000000;
-    bytes32 internal constant _DOMAIN_TYPEHASH_SANS_CHAIN_ID =
-        0x91ab3d17e3a50a9d89e63fd30b92be7f5336b03b287bb946787a83a9d62a2766;
 
-    function chainAgnosticUserOpHash(address ep, PackedUserOperation calldata userOp) external view returns (bytes32) {
+    function chainAgnosticUserOpHash(address ep, PackedUserOperation calldata userOp) internal view returns (bytes32) {
         bytes32 overrideInitCodeHash = Eip7702Support._getEip7702InitCodeHashOverride(userOp);
         return _hashTypedDataSansChainId(ep, UserOperationLib.hash(userOp, overrideInitCodeHash));
     }
@@ -46,7 +46,7 @@ library Lib4337 {
         /// @solidity memory-safe-assembly
         assembly {
             let m := mload(0x40) // Load the free memory pointer.
-            mstore(0x00, _DOMAIN_TYPEHASH_SANS_CHAIN_ID)
+            mstore(0x00, DOMAIN_TYPEHASH_SANS_CHAIN_ID)
             mstore(0x20, keccak256(add(name, 0x20), mload(name)))
             mstore(0x40, keccak256(add(version, 0x20), mload(version)))
             mstore(0x60, addr)
@@ -88,7 +88,7 @@ library Lib4337 {
         // Block number format: both validAfter and validUntil have highest bit set
         bool preUsesBlock = _usesBlockNumberFormat(validAfter1, validUntil1);
         bool resUsesBlock = _usesBlockNumberFormat(validAfter2, validUntil2);
-        if (preUsesBlock != resUsesBlock) revert ValidityFormatMismatch();
+        require(preUsesBlock == resUsesBlock, ValidityFormatMismatch());
 
         // Convert validUntil=0 to max (no expiry)
         if (validUntil1 == 0) validUntil1 = type(uint48).max;

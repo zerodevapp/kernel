@@ -15,6 +15,7 @@ import {
 } from "src/types/Error.sol";
 import {MockValidator} from "./mock/MockValidator.sol";
 import {PermissionId} from "src/types/Types.sol";
+import {IValidator} from "src/interfaces/IERC7579Modules.sol";
 import {validatorToIdentifier, permissionToIdentifier} from "src/lib/Utils.sol";
 
 abstract contract KernelERC1271Test is KernelTestBase {
@@ -42,7 +43,7 @@ abstract contract KernelERC1271Test is KernelTestBase {
         bytes32 messageHash = keccak256("Hello world");
         (bytes32 contentsHash, bytes memory sig) =
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _rootSignHash, false, true);
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(InvalidVid.selector, validatorToIdentifier(IValidator(address(this)))));
         kernel.isValidSignature(
             _toContentsHash(contentsHash), abi.encodePacked(bytes1(0), bytes1(0x01), bytes20(address(this)), sig)
         );

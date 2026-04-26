@@ -1,0 +1,72 @@
+Kernel_fallback
+├── when the selector is onERC721Received
+│   └── it should return the selector as magic value
+├── when the selector is onERC1155Received
+│   └── it should return the selector as magic value
+├── when the selector is onERC1155BatchReceived
+│   └── it should return the selector as magic value
+└── when the selector is a custom registered selector
+    ├── given the selector is not registered
+    │   └── it should revert with InvalidSelector error
+    ├── given the selector is registered but hook is address0
+    │   ├── when the caller is not the EntryPoint
+    │   │   └── it should revert with InvalidSelector error
+    │   └── when the caller is the EntryPoint
+    │       ├── given callType is CALL
+    │       │   ├── it should call the target with msgdata plus msgsender
+    │       │   ├── when the target call succeeds
+    │       │   │   └── it should return the call result
+    │       │   └── when the target call reverts
+    │       │       └── it should propagate the revert
+    │       ├── given callType is DELEGATECALL
+    │       │   ├── it should delegatecall the target with msgdata
+    │       │   ├── when the delegatecall succeeds
+    │       │   │   └── it should return the delegatecall result
+    │       │   └── when the delegatecall reverts
+    │       │       └── it should propagate the revert
+    │       └── given callType is unsupported
+    │           └── it should revert with InvalidCallType error
+    ├── given the selector is registered with hook set to address1
+    │   ├── it should skip preHook and postHook
+    │   ├── it should allow any caller
+    │   ├── given callType is CALL
+    │   │   ├── it should call the target with msgdata plus msgsender
+    │   │   ├── when the target call succeeds
+    │   │   │   └── it should return the call result
+    │   │   └── when the target call reverts
+    │   │       └── it should propagate the revert
+    │   ├── given callType is DELEGATECALL
+    │   │   ├── it should delegatecall the target with msgdata
+    │   │   ├── when the delegatecall succeeds
+    │   │   │   └── it should return the delegatecall result
+    │   │   └── when the delegatecall reverts
+    │   │       └── it should propagate the revert
+    │   └── given callType is unsupported
+    │       └── it should revert with InvalidCallType error
+    └── given the selector is registered with a hook contract
+        ├── it should call preHook on the hook with msgdata
+        ├── given preHook reverts
+        │   └── it should propagate the revert
+        └── given preHook succeeds
+            ├── given callType is CALL
+            │   ├── it should call the target with msgdata plus msgsender
+            │   ├── when the target call succeeds
+            │   │   ├── it should call postHook with the context from preHook
+            │   │   ├── given postHook reverts
+            │   │   │   └── it should propagate the revert
+            │   │   └── given postHook succeeds
+            │   │       └── it should return the call result
+            │   └── when the target call reverts
+            │       └── it should propagate the revert and skip postHook
+            ├── given callType is DELEGATECALL
+            │   ├── it should delegatecall the target with msgdata
+            │   ├── when the delegatecall succeeds
+            │   │   ├── it should call postHook with the context from preHook
+            │   │   ├── given postHook reverts
+            │   │   │   └── it should propagate the revert
+            │   │   └── given postHook succeeds
+            │   │       └── it should return the delegatecall result
+            │   └── when the delegatecall reverts
+            │       └── it should propagate the revert and skip postHook
+            └── given callType is unsupported
+                └── it should revert with InvalidCallType error

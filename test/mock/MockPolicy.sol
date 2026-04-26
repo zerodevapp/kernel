@@ -10,6 +10,7 @@ contract MockPolicy is IPolicy {
     mapping(address => bytes) public installData;
     mapping(address => mapping(bytes32 => bytes)) public sig;
     bool success;
+    uint256 public customValidationData;
 
     function onInstall(bytes calldata data) external payable override {
         installData[msg.sender] = data;
@@ -26,6 +27,10 @@ contract MockPolicy is IPolicy {
         pass[_wallet][_id] = _pass;
     }
 
+    function sudoSetValidationData(uint256 _validationData) external {
+        customValidationData = _validationData;
+    }
+
     function isModuleType(uint256 moduleTypeId) external pure override returns (bool) {
         return moduleTypeId == 5;
     }
@@ -40,6 +45,10 @@ contract MockPolicy is IPolicy {
         override
         returns (uint256)
     {
+        // If customValidationData is set, return it (allows testing time bounds intersection)
+        if (customValidationData != 0) {
+            return customValidationData;
+        }
         return keccak256(userOp.signature) == keccak256(sig[msg.sender][id]) ? 0 : 1;
     }
 

@@ -13,7 +13,7 @@ import {MockValidator} from "./mock/MockValidator.sol";
 import {MockPolicy} from "./mock/MockPolicy.sol";
 import {MockSigner} from "./mock/MockSigner.sol";
 import {MockCallee} from "./mock/MockCallee.sol";
-import {InvalidRootValidation} from "src/types/Error.sol";
+import {InvalidRootValidation, ImplementationNotDeployed} from "src/types/Error.sol";
 import {KernelTestBase} from "./KernelTestBase.sol";
 
 contract KernelFactoryTest is KernelTestBase {
@@ -116,6 +116,26 @@ contract KernelFactoryTest is KernelTestBase {
         vm.deal(address(this), depositValue);
         Kernel k = factory.deploy{value: depositValue}(pkgs, 3);
         assertEq(address(k).balance, depositValue);
+    }
+
+    function test_constructor_reverts_when_uups_not_deployed() external {
+        KernelImmutableECDSA immutableEcdsa = new KernelImmutableECDSA(ep);
+        vm.expectRevert(ImplementationNotDeployed.selector);
+        new KernelFactory(KernelUUPS(payable(address(0xdead))), immutableEcdsa);
+    }
+
+    function test_constructor_reverts_when_immutableEcdsa_not_deployed() external {
+        KernelUUPS uups = new KernelUUPS(ep);
+        vm.expectRevert(ImplementationNotDeployed.selector);
+        new KernelFactory(uups, KernelImmutableECDSA(payable(address(0xdead))));
+    }
+
+    function test_constructor_sets_immutables() external {
+        KernelUUPS uups = new KernelUUPS(ep);
+        KernelImmutableECDSA immutableEcdsa = new KernelImmutableECDSA(ep);
+        KernelFactory f = new KernelFactory(uups, immutableEcdsa);
+        assertEq(address(f.UUPS()), address(uups));
+        assertEq(address(f.IMMUTABLE_ECDSA()), address(immutableEcdsa));
     }
 
     function test_get_address() external view {
