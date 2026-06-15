@@ -1,1 +1,0 @@
-ignores: ["@openzeppelin/contracts", "@uniswap/v3-periphery", " @typechain/ethers-v5" ]
