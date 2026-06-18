@@ -410,7 +410,12 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
             uint256 sigIdx;
             for (uint256 i; i < packages.length; i++) {
                 Install calldata pkg = packages[i];
-                if (PermissionId.wrap(bytes4(pkg.internalData)) == pId) {
+                // Restrict matching to policy (5) / signer (6) modules. Otherwise a
+                // package of a different module type (e.g. selector type 3 or hook type 4)
+                // whose internalData happens to start with `pId` would be enrolled into the
+                // permission's signature chain.
+                if (PermissionId.wrap(bytes4(pkg.internalData)) == pId && (pkg.moduleType == 5 || pkg.moduleType == 6))
+                {
                     if (sigIdx == permissionSig.signatures.length - 1) {
                         require(pkg.moduleType == MODULE_TYPE_SIGNER, LastSignatureShouldBeSigner());
                         require(IModule(pkg.module).isModuleType(MODULE_TYPE_SIGNER), LastSignatureShouldBeSigner());

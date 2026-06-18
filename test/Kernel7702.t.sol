@@ -10,6 +10,8 @@ import {ValidationId} from "src/types/Types.sol";
 import {ERC1271_MAGICVALUE} from "src/types/Constants.sol";
 import {ERC1271_INVALID} from "src/types/Constants.sol";
 import {InvalidValidationType} from "src/types/Error.sol";
+import {validatorToIdentifier} from "src/lib/Utils.sol";
+import {IValidator} from "src/interfaces/IERC7579Modules.sol";
 
 contract Kernel7702Harness is Kernel7702 {
     constructor(IEntryPoint _ep) Kernel7702(_ep) {}
@@ -103,6 +105,48 @@ contract Kernel7702Test is KernelTest {
         kernel.setRoot(packages, false, hex"");
 
         kernel.setRoot(ValidationId.wrap(bytes20(0)));
+    }
+
+    /// @notice Regression test for the "require root validation be installed" audit fix:
+    ///         after promoting a custom validator to root, the account must still be
+    ///         able to switch root back to bytes21(0) (the EIP-7702 default fallback)
+    ///         and authenticate userOps with the EOA's plain ECDSA key.
+    /// @dev `_setRoot` only enforces the installed-status check for non-zero ValidationIds;
+    ///      the bytes21(0) path is exempt precisely because the EOA's own key has no
+    ///      install step. This test exercises both the exemption and the post-switch
+    ///      signing path end-to-end.
+    function test_change_root_back_to_7702_default_validator() external unitTest {
+        // 1. Promote a custom validator to root (exercises the install-before-setRoot
+        //    ordering that the audit fix codified).
+        Install[] memory packages = new Install[](1);
+        packages[0] = Install({moduleType: 1, module: address(newValidator), internalData: hex"", moduleData: hex""});
+        kernel.setRoot(packages, false, hex"");
+
+        ValidationId customRoot = validatorToIdentifier(IValidator(address(newValidator)));
+        assertEq(ValidationId.unwrap(kernel.root()), ValidationId.unwrap(customRoot), "custom validator should be root");
+
+        // 2. Switch root back to bytes21(0) -> EIP-7702 fallback (the EOA itself).
+        kernel.setRoot(ValidationId.wrap(bytes21(0)));
+        assertEq(ValidationId.unwrap(kernel.root()), bytes21(0), "root should be cleared back to bytes21(0)");
+
+        // 3. A userOp signed by the EOA's plain ECDSA key on the FALLBACK path
+        //    (vType = 0x00, vId = bytes20(0)) must validate successfully.
+        PackedUserOperation memory op;
+        op.sender = address(kernel);
+        op.nonce = encodeNonce(false, false, false, bytes1(0), bytes20(0));
+        op.callData = abi.encodeWithSelector(kernel.execute.selector, bytes32(0), "");
+        op.accountGasLimits = bytes32(uint256(100000) << 128 | uint256(100000));
+        op.preVerificationGas = 100000;
+        op.gasFees = bytes32(uint256(1) << 128 | uint256(1));
+
+        bytes32 opHash = ep.getUserOpHash(op);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, opHash);
+        op.signature = abi.encodePacked(r, s, v);
+
+        vm.stopPrank();
+        vm.prank(address(ep));
+        uint256 validationData = kernel.validateUserOp(op, opHash, 0);
+        assertEq(validationData, 0, "EIP-7702 default ECDSA validator should accept owner signature");
     }
 
     // ===== Kernel7702.initialize() is a NO-OP =====

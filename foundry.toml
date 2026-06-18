@@ -2,8 +2,16 @@
 src = "src"
 out = "out"
 libs = ["lib", "dependencies"]
-via_ir = false # false is cheaper but need this to lower the contract size
+via_ir = true
 optimizer = true
+# `via_ir = true` + runs=200 produces ~3 KB smaller bytecode for the largest
+# contract (KernelImmutableECDSA: 24,728 B → 21,556 B) compared to the legacy
+# pipeline. The earlier "via_ir is cheaper at runtime but bigger" comment was
+# accurate against older Solidity (0.8.13-ish) but no longer holds with
+# 0.8.33: the IR pipeline outperforms legacy on both size AND runtime gas
+# under the project's contract shape (no inline assembly hot loops, modest
+# control-flow complexity). Restored runs=200 for runtime gas, with comfortable
+# EIP-170 margin (all production contracts ~3 KB under the 24,576 B limit).
 optimizer_runs = 200
 
 evm_version = 'prague'

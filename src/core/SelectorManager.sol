@@ -9,7 +9,7 @@ import {
     HOOK_MODULE_NOT_INSTALLED,
     HOOK_MODULE_INSTALLED_NO_HOOK
 } from "../types/Constants.sol";
-import {ModuleInstallFailed, NotInstalled} from "../types/Error.sol";
+import {ModuleInstallFailed, NotInstalled, InvalidSelectorTarget} from "../types/Error.sol";
 import {SelectorConfig, SelectorStorage} from "../types/Structs.sol";
 
 /// @title SelectorManager
@@ -43,6 +43,7 @@ abstract contract SelectorManager {
     /// @param _internalData Packed selector, call type, and hook address.
     /// @param _installSuccess Whether the module's onInstall call succeeded (required for non-delegatecall).
     function _installSelector(address _module, bytes calldata _internalData, bool _installSuccess) internal {
+        require(_module != address(0), InvalidSelectorTarget());
         CallType callType = CallType.wrap(bytes1(_internalData[4]));
         require(callType == CALLTYPE_DELEGATECALL || _installSuccess, ModuleInstallFailed());
         bytes4 selector = bytes4(_internalData[0:4]);

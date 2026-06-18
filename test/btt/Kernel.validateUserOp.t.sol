@@ -269,7 +269,10 @@ abstract contract Kernel_validateUserOp is BTTModifiers {
         _;
     }
 
-    /// @notice it should revert when validator returns empty data (misconfigured validator)
+    /// @notice it should return SIG_VALIDATION_FAILED when validator returns empty data
+    /// @dev Validator returndata length is checked (must be 32 bytes); any non-conforming
+    ///      response is treated as a validation failure rather than a revert, so a buggy
+    ///      validator cannot DoS the account by reverting in `validateUserOp`.
     function test_WhenValidatorReturnsEmptyData()
         external
         whenTheCallerIsTheEntryPointOrSelf
@@ -302,9 +305,9 @@ abstract contract Kernel_validateUserOp is BTTModifiers {
         });
         bytes32 userOpHash = ep.getUserOpHash(op);
 
-        // Direct interface call reverts on empty return data (ABI decode failure)
-        vm.expectRevert(bytes(""));
-        kernel.validateUserOp(op, userOpHash, 0);
+        // The whenTheCallerIsTheEntryPointOrSelf modifier already pranks address(ep).
+        uint256 validationData = kernel.validateUserOp(op, userOpHash, 0);
+        assertEq(validationData, 1, "empty-returndata validator should yield SIG_VALIDATION_FAILED");
     }
 
     modifier givenTheCallDataSelectorIsInTheAllowedListAndHookIsAddress1() {

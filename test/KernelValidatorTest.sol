@@ -314,6 +314,7 @@ abstract contract KernelValidatorTest is KernelTestBase {
         );
         ValidationInfo memory vInfo = kernel.validationInfo(vId);
         assertTrue(vInfo.hook == address(1));
+        // Non-empty install bumps nonce once via _grantAccess.
         assertEq(vInfo.nonce, 1);
         bytes4 ret = kernel.isValidSignature(
             keccak256("Hello world"),
@@ -328,11 +329,14 @@ abstract contract KernelValidatorTest is KernelTestBase {
 
         kernel.uninstallModule(1, address(newValidator), abi.encode(hex"", hex""));
         vInfo = kernel.validationInfo(vId);
+        // uninstall does not touch nonce; the bump on the next install invalidates
+        // any stale `allowed[vId][sel]` entries from the prior incarnation.
         assertEq(vInfo.nonce, 1);
         kernel.installModule(
             1, address(newValidator), abi.encode(hex"deadbeef", abi.encodePacked(address(0), kernel.setNonce.selector))
         );
         vInfo = kernel.validationInfo(vId);
+        // re-install with non-empty internalData bumps nonce once -> 2.
         assertEq(vInfo.nonce, 2);
 
         _sendUserOpValidator(false, false);

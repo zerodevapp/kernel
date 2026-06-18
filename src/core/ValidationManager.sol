@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
+import {IAccountExecute} from "account-abstraction/interfaces/IAccountExecute.sol";
 import {IValidator, IPolicy, ISigner, IHook} from "../interfaces/IERC7579Modules.sol";
 import {
     InvalidRootValidation,
@@ -9,6 +10,7 @@ import {
     OccupiedValidationId,
     InvalidPermissionUninstallOrder,
     InvalidPermissionId,
+    InvalidSelectorGrant,
     InvalidValidationType,
     CannotUninstallRoot,
     InvalidVid,
@@ -88,6 +90,14 @@ abstract contract ValidationManager {
     /// @dev grant access to selectors
     /// @param vId validationId
     /// @param selectors = abi.encodePacked(bytes4 selectors)
+    /// @dev Defense-in-depth: non-root validations are forbidden from being granted
+    ///      `IAccountExecute.executeUserOp.selector`. The `_processUserOp` fast-path bypasses
+    ///      the inner-selector check and the validation hook setup when the outer call's
+    ///      selector is itself in the allow-list AND no hook is installed -- so allowing a
+    ///      non-root validation to allow-list `executeUserOp` would let it invoke ANY
+    ///      kernel function via `executeUserOp`'s inner delegatecall with no selector check.
+    ///      Root is exempt because it is the unconditional last-resort access path and is
+    ///      already intentionally exempt from selector allow-listing.
     function _grantAccess(ValidationId vId, bytes calldata selectors) internal {
         require(selectors.length % 4 == 0, InvalidDataLength());
         ValidationStorage storage $ = _validationStorage();
@@ -95,6 +105,7 @@ abstract contract ValidationManager {
 
         while (selectors.length >= 4) {
             bytes4 selector = bytes4(selectors[0:4]);
+            require(selector != IAccountExecute.executeUserOp.selector || vId == $.root, InvalidSelectorGrant());
             $.allowed[vId][selector] = nonce;
             selectors = selectors[4:];
         }
@@ -114,8 +125,10 @@ abstract contract ValidationManager {
     function _initializeValidation(ValidationId vId, bytes calldata _internalData) internal {
         ValidationStorage storage $ = _validationStorage();
         require($.vInfo[vId].hook == HOOK_MODULE_NOT_INSTALLED, OccupiedValidationId());
-        // if _internalData is empty, skip the initialization but increment nonce
-        // to ensure _allowedSelector returns false for any selector (no selectors allowed)
+        // if _internalData is empty, skip the initialization but bump the nonce so any
+        // `allowed[vId][sel]` entries from a prior incarnation of this vId (after
+        // uninstall+reinstall) become stale -- giving empty-internalData installs the
+        // same default-deny semantics as the non-empty path (where _grantAccess bumps).
         if (_internalData.length == 0) {
             $.vInfo[vId].hook = HOOK_MODULE_INSTALLED_NO_HOOK;
             ++$.vInfo[vId].nonce;
@@ -129,7 +142,8 @@ abstract contract ValidationManager {
         );
         $.vInfo[vId].hook = hook == HOOK_MODULE_NOT_INSTALLED ? HOOK_MODULE_INSTALLED_NO_HOOK : hook;
         _internalData = _internalData[20:];
-        // then the rest is the allowed selectors
+        // _grantAccess bumps nonce by 1 and writes `allowed[vId][sel] = nonce` for each
+        // selector, so non-empty installs also end with nonce = previous + 1.
         _grantAccess(vId, _internalData);
     }
 
@@ -139,6 +153,10 @@ abstract contract ValidationManager {
     /// @param _installSuccess Whether the module's onInstall call succeeded.
     function _installValidator(address _validator, bytes calldata _internalData, bool _installSuccess) internal {
         require(_installSuccess, ModuleInstallFailed());
+        // Defense-in-depth: require the validator to have code at install time so a
+        // codeless address (whose `staticcall` returns success with empty returndata)
+        // cannot be installed as a validator and then later authorise arbitrary signatures.
+        require(_validator.code.length > 0, ModuleInstallFailed());
         ValidationId vId = validatorToIdentifier(IValidator(_validator));
         _initializeValidation(vId, _internalData);
     }
@@ -369,7 +387,12 @@ abstract contract ValidationManager {
     ) internal returns (uint256 validationData) {
         IValidator validator = getValidator(vId);
         op.signature = userOpSignature;
-        validationData = validator.validateUserOp(op, opHash);
+        (bool success, bytes memory ret) =
+            address(validator).call(abi.encodeCall(IValidator.validateUserOp, (op, opHash)));
+        // Require a properly-encoded `uint256` (32 bytes) return. A codeless / non-conforming
+        // validator returns success with empty returndata, which would otherwise decode to 0
+        // (SIG_VALIDATION_SUCCESS) and authorise any signature.
+        validationData = (success && ret.length == 32) ? abi.decode(ret, (uint256)) : 1;
     }
 
     /// @notice Validates a userOp using a permission (policies + signer).
@@ -427,6 +450,13 @@ abstract contract ValidationManager {
 
     /// @notice Sets the root validation to the given ValidationId directly.
     /// @dev Validates that the id is a valid type and that the validation is installed.
+    ///      On rotation (oldRoot != newRoot, oldRoot non-zero) the old root's nonce is
+    ///      bumped to invalidate any `allowed[oldRoot][*]` selector grants accumulated
+    ///      while it was root. Without this, after rotation the old root becomes a
+    ///      non-root validation whose prior grants -- including potentially
+    ///      `executeUserOp.selector` -- remain active and re-enable the `_processUserOp`
+    ///      fast-path bypass that commit 0921b25 fixed on the grant side. This is the
+    ///      rotation-boundary defense-in-depth counterpart to that fix.
     /// @param vId The validation identifier to set as root.
     function _setRoot(ValidationId vId) internal {
         // Check for zero ValidationId first (before type check to get correct error)
@@ -438,8 +468,16 @@ abstract contract ValidationManager {
             InvalidValidationType()
         );
         ValidationStorage storage $ = _validationStorage();
+        // Require the validation to actually be installed before promoting it to root.
+        // The fallback path (vId == bytes21(0)) is exempt since it has no install step.
         if (ValidationId.unwrap(vId) != bytes21(0)) {
             require($.vInfo[vId].hook > HOOK_MODULE_NOT_INSTALLED, InvalidVid(vId));
+        }
+        // Invalidate stale grants on the previous root when rotating. The first install
+        // (oldRoot zero) and identity rotation (oldRoot == newRoot) are no-ops.
+        ValidationId oldRoot = $.root;
+        if (ValidationId.unwrap(oldRoot) != bytes21(0) && oldRoot != vId) {
+            ++$.vInfo[oldRoot].nonce;
         }
         $.root = vId;
     }

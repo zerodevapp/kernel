@@ -37,7 +37,8 @@ import {
     InvalidOwner,
     InvalidInitialization,
     AlreadyInitialized,
-    NotInitialized
+    NotInitialized,
+    InvalidSelectorTarget
 } from "src/types/Error.sol";
 import {
     HOOK_MODULE_NOT_INSTALLED,
@@ -341,6 +342,24 @@ contract ModuleManagerCoverageTest is Test {
             MODULE_TYPE_FALLBACK,
             address(mockFallback),
             abi.encode(hex"", abi.encodePacked(testSel, bytes1(0x00), fakeHook))
+        );
+    }
+
+    // =========================================================================
+    // InvalidSelectorTarget — fallback install with zero-address module
+    // =========================================================================
+
+    /// @notice Regression: SelectorManager._installSelector must reject `_module == address(0)`
+    ///         at the install boundary. Without this guard the writer silently records a
+    ///         zero-target SelectorConfig that downstream dispatch later rejects with
+    ///         `InvalidSelector`, dropping the caller's intent without feedback.
+    function test_installFallback_WhenModuleIsZeroAddress_ShouldRevertWithInvalidSelectorTarget() public {
+        bytes4 testSel = MockFallback.testFunction.selector;
+
+        vm.prank(address(ep));
+        vm.expectRevert(InvalidSelectorTarget.selector);
+        kernel.installModule(
+            MODULE_TYPE_FALLBACK, address(0), abi.encode(hex"", abi.encodePacked(testSel, bytes1(0xFF), address(1)))
         );
     }
 

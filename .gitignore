@@ -29,3 +29,17 @@ log/
 .envrc
 
 **/.DS_Store
+
+# Certora
+.certora_internal/
+.certora_recent_jobs.json
+.last_confs/
+
+# Kontrol
+.kontrol/
+
+# Claude Code local state
+.claude/
+
+# FV research scratch
+audit/formal-verification-research.html

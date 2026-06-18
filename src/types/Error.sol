@@ -108,3 +108,14 @@ error InvalidTargetAddress(address target);
 
 /// @notice Thrown when intersecting validation data with mismatched validity formats (timestamp vs block number).
 error ValidityFormatMismatch();
+
+/// @notice Thrown when a non-root validation attempts to grant access to a restricted selector
+///         (currently `IAccountExecute.executeUserOp.selector`). Granting `executeUserOp` to a
+///         non-root validation would let it invoke arbitrary kernel functions via the inner
+///         delegatecall, bypassing the selector allow-list.
+error InvalidSelectorGrant();
+
+/// @notice Thrown when a fallback selector install is attempted with the zero address as target.
+///         Downstream dispatch rejects zero-target with `InvalidSelector`, so allowing the write
+///         would silently drop the caller's intent; this enforces the invariant at the install boundary.
+error InvalidSelectorTarget();
