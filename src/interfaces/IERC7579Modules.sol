@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.21;
 
-import {PackedUserOperation} from "./PackedUserOperation.sol";
+import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
 
 interface IModule {
-    error AlreadyInitialized(address smartAccount);
-    error NotInitialized(address smartAccount);
-
     /**
      * @dev This function is called by the smart account during installation of the module
      * @param data arbitrary data that may be required on the module during `onInstall`
@@ -40,8 +37,6 @@ interface IModule {
 }
 
 interface IValidator is IModule {
-    error InvalidTargetAddress(address target);
-
     /**
      * @dev Validates a transaction on behalf of the account.
      *         This function is intended to be called by the MSA during the ERC-4337 validation phase
@@ -52,10 +47,7 @@ interface IValidator is IModule {
      * @param userOpHash The hash of the user operation to be validated
      * @return return value according to ERC-4337
      */
-    function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash)
-        external
-        payable
-        returns (uint256);
+    function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash) external payable returns (uint256);
 
     /**
      * Validator can be used for ERC-1271 validation
@@ -92,8 +84,14 @@ interface ISigner is IModule {
         external
         payable
         returns (uint256);
-    function checkSignature(bytes32 id, address sender, bytes32 hash, bytes calldata sig)
-        external
-        view
-        returns (bytes4);
+    function checkSignature(bytes32 id, address sender, bytes32 hash, bytes calldata sig) external view returns (bytes4);
+}
+
+interface IStatelessValidatorWithSender is IModule {
+    function validateSignatureWithDataWithSender(
+        address sender,
+        bytes32 hash,
+        bytes calldata signature,
+        bytes calldata data
+    ) external view returns (bool);
 }

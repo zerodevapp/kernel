@@ -1,84 +1,15 @@
 // SPDX-License-Identifier: MIT
-
 pragma solidity ^0.8.0;
 
-import {CallType, ExecType, ExecModeSelector} from "./Types.sol";
-import {PassFlag, ValidationMode, ValidationType} from "./Types.sol";
-import {ValidationData} from "./Types.sol";
+import {CallType, ValidationType} from "./Types.sol";
 
-// --- ERC7579 calltypes ---
 // Default CallType
 CallType constant CALLTYPE_SINGLE = CallType.wrap(0x00);
 // Batched CallType
 CallType constant CALLTYPE_BATCH = CallType.wrap(0x01);
-CallType constant CALLTYPE_STATIC = CallType.wrap(0xFE);
 // @dev Implementing delegatecall is OPTIONAL!
 // implement delegatecall with extreme care.
 CallType constant CALLTYPE_DELEGATECALL = CallType.wrap(0xFF);
-
-// --- ERC7579 exectypes ---
-// @dev default behavior is to revert on failure
-// To allow very simple accounts to use mode encoding, the default behavior is to revert on failure
-// Since this is value 0x00, no additional encoding is required for simple accounts
-ExecType constant EXECTYPE_DEFAULT = ExecType.wrap(0x00);
-// @dev account may elect to change execution behavior. For example "try exec" / "allow fail"
-ExecType constant EXECTYPE_TRY = ExecType.wrap(0x01);
-
-// --- ERC7579 mode selector ---
-ExecModeSelector constant EXEC_MODE_DEFAULT = ExecModeSelector.wrap(bytes4(0x00000000));
-
-// --- Kernel permission skip flags ---
-PassFlag constant SKIP_USEROP = PassFlag.wrap(0x0001);
-PassFlag constant SKIP_SIGNATURE = PassFlag.wrap(0x0002);
-
-// --- Kernel validation modes ---
-ValidationMode constant VALIDATION_MODE_DEFAULT = ValidationMode.wrap(0x00);
-ValidationMode constant VALIDATION_MODE_ENABLE = ValidationMode.wrap(0x01);
-ValidationMode constant VALIDATION_MODE_INSTALL = ValidationMode.wrap(0x02);
-
-// --- Kernel validation types ---
-ValidationType constant VALIDATION_TYPE_ROOT = ValidationType.wrap(0x00);
-ValidationType constant VALIDATION_TYPE_7702 = ValidationType.wrap(0x00);
-ValidationType constant VALIDATION_TYPE_VALIDATOR = ValidationType.wrap(0x01);
-ValidationType constant VALIDATION_TYPE_PERMISSION = ValidationType.wrap(0x02);
-
-// --- Kernel Hook constants ---
-address constant HOOK_MODULE_NOT_INSTALLED = address(0);
-address constant HOOK_MODULE_INSTALLED = address(1);
-address constant HOOK_ONLY_ENTRYPOINT = address(0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF);
-
-// --- EIP7702 constants ---
-bytes3 constant EIP7702_PREFIX = bytes3(0xef0100);
-
-// --- storage slots ---
-// bytes32(uint256(keccak256('kernel.v3.selector')) - 1)
-bytes32 constant SELECTOR_MANAGER_STORAGE_SLOT = 0x7c341349a4360fdd5d5bc07e69f325dc6aaea3eb018b3e0ea7e53cc0bb0d6f3b;
-// bytes32(uint256(keccak256('kernel.v3.executor')) - 1)
-bytes32 constant EXECUTOR_MANAGER_STORAGE_SLOT = 0x1bbee3173dbdc223633258c9f337a0fff8115f206d302bea0ed3eac003b68b86;
-// bytes32(uint256(keccak256('kernel.v3.hook')) - 1)
-bytes32 constant HOOK_MANAGER_STORAGE_SLOT = 0x4605d5f70bb605094b2e761eccdc27bed9a362d8612792676bf3fb9b12832ffc;
-// bytes32(uint256(keccak256('kernel.v3.validation')) - 1)
-bytes32 constant VALIDATION_MANAGER_STORAGE_SLOT = 0x7bcaa2ced2a71450ed5a9a1b4848e8e5206dbc3f06011e595f7f55428cc6f84f;
-bytes32 constant ERC1967_IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
-
-bytes32 constant MAGIC_VALUE_SIG_REPLAYABLE = keccak256("kernel.replayable.signature");
-
-// --- Kernel validation nonce incremental size limit ---
-uint32 constant MAX_NONCE_INCREMENT_SIZE = 10;
-
-// -- EIP712 type hash ---
-bytes32 constant ENABLE_TYPE_HASH = 0xb17ab1224aca0d4255ef8161acaf2ac121b8faa32a4b2258c912cc5f8308c505;
-bytes32 constant KERNEL_WRAPPER_TYPE_HASH = 0x1547321c374afde8a591d972a084b071c594c275e36724931ff96c25f2999c83;
-
-// --- ERC constants ---
-// ERC4337 constants
-uint256 constant SIG_VALIDATION_FAILED_UINT = 1;
-uint256 constant SIG_VALIDATION_SUCCESS_UINT = 0;
-ValidationData constant SIG_VALIDATION_FAILED = ValidationData.wrap(SIG_VALIDATION_FAILED_UINT);
-
-// ERC-1271 constants
-bytes4 constant ERC1271_MAGICVALUE = 0x1626ba7e;
-bytes4 constant ERC1271_INVALID = 0xffffffff;
 
 uint256 constant MODULE_TYPE_VALIDATOR = 1;
 uint256 constant MODULE_TYPE_EXECUTOR = 2;
@@ -86,3 +17,47 @@ uint256 constant MODULE_TYPE_FALLBACK = 3;
 uint256 constant MODULE_TYPE_HOOK = 4;
 uint256 constant MODULE_TYPE_POLICY = 5;
 uint256 constant MODULE_TYPE_SIGNER = 6;
+uint256 constant MODULE_TYPE_STATELESS_VALIDATOR_WITH_SENDER = 10;
+
+// note : ROOT == FALLBACK, they do indicate same value but to have different meanings in different context
+// FALLBACK - usually used when using 7702 validation logic
+// ROOT - mostly used when identifying that you are using root validation on userOp.nonce
+ValidationType constant VALIDATION_TYPE_ROOT = ValidationType.wrap(0x00);
+ValidationType constant VALIDATION_TYPE_FALLBACK = ValidationType.wrap(0x00);
+ValidationType constant VALIDATION_TYPE_VALIDATOR = ValidationType.wrap(0x01);
+ValidationType constant VALIDATION_TYPE_PERMISSION = ValidationType.wrap(0x02);
+
+// --- storage slots ---
+///@custom:storage-location bytes32(uint256(keccak256('kernel.v4.selector')) - 1)
+bytes32 constant SELECTOR_MANAGER_STORAGE_SLOT = 0x550d18e77e0b3e646dcc27a9961c73d7867a7c5f6c2c65424629353cdc97dcc0;
+///@custom:storage-location bytes32(uint256(keccak256('kernel.v4.module')) - 1)
+bytes32 constant MODULE_MANAGER_STORAGE_SLOT = 0x9bc558e75ed0a57385e96d6b87fd2864d462eed29668be6fed742168fd90ab0f;
+///@custom:storage-location bytes32(uint256(keccak256('kernel.v4.executor')) - 1)
+bytes32 constant EXECUTOR_MANAGER_STORAGE_SLOT = 0xc98f19fae81314cbf0302e1e3c0554f60c259fab8e2d5d392893489d40eb0045;
+///@custom:storage-location bytes32(uint256(keccak256('kernel.v4.hook'))-1)
+bytes32 constant HOOK_MANAGER_STORAGE_SLOT = 0x5419def70c6ad54339f14ca6da31808409bec8ff0f178491c5b59f0d8276d4d3;
+///@custom:storage-location bytes32(uint256(keccak256('kernel.v4.validation')) - 1)
+bytes32 constant VALIDATION_MANAGER_STORAGE_SLOT = 0xded5d420c407eac3c615e6abe13ab4a0bd7173e5045ea543765b46f0df6e260c;
+///@custom:storage-location bytes32(uint256(keccak256('eip1967.proxy.implementation')) - 1)
+bytes32 constant ERC1967_IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+bytes4 constant ERC1271_MAGICVALUE = 0x1626ba7e;
+bytes4 constant ERC1271_INVALID = 0xffffffff;
+uint256 constant SIG_VALIDATION_FAILED_UINT = 1;
+uint256 constant SIG_VALIDATION_SUCCESS_UINT = 0;
+
+address constant HOOK_MODULE_NOT_INSTALLED = address(0);
+address constant HOOK_MODULE_INSTALLED_NO_HOOK = address(1);
+
+//InstallPackages(uint256 nonce,Install[] packages)Install(uint256 moduleType,address module,bytes moduleData,bytes internalData)
+bytes32 constant INSTALL_PACKAGES_STRUCT_HASH = 0x633d6810f7f4053622dad4c187707d9c3cd7f57b8b68943473d3437060aefc6d;
+//keccak256("Install(uint256 moduleType,address module,bytes moduleData,bytes internalData)"),
+bytes32 constant INSTALL_STRUCT_HASH = 0x50c63c739a5f8d2e99954b3d4c7008fcdcef795a1b755ab9287372b01d6ac239;
+//ApproveFactory(address factory,bool approval,uint256 nonce)
+bytes32 constant APPROVE_FACTORY_STRUCT_HASH = 0xefd04fcbcf7166a7a34d3a97718e39af7d5bac9fe12232a5041ce5fbe04fe44d;
+
+// --- EIP-712 type hashes ---
+/// @dev `keccak256("PersonalSign(bytes prefixed)")`.
+bytes32 constant PERSONAL_SIGN_TYPEHASH = 0x983e65e5148e570cd828ead231ee759a8d7958721a768f93bc4483ba005c32de;
+
+///@custom:struct-hash EIP712Domain(string name,string version,address verifyingContract)
+bytes32 constant DOMAIN_TYPEHASH_SANS_CHAIN_ID = 0x91ab3d17e3a50a9d89e63fd30b92be7f5336b03b287bb946787a83a9d62a2766;

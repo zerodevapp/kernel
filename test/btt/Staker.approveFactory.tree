@@ -1,0 +1,8 @@
+Staker_approveFactory
+├── when the caller is not the owner
+│   └── it should revert with Unauthorized error
+└── when the caller is the owner
+    ├── given the factory is not approved
+    │   └── it should set the factory as approved
+    └── given the factory is already approved
+        └── it should remain approved

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "solady/tokens/ERC1155.sol";
+import {ERC1155} from "solady/tokens/ERC1155.sol";
 
 contract MockERC1155 is ERC1155 {
     function test_ignore() public {}

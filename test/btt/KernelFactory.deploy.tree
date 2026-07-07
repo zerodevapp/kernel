@@ -1,0 +1,17 @@
+KernelFactory_deploy
+├── when the address is already deployed for this initPackages hash and nonce
+│   ├── it should return the existing account address
+│   ├── given msg value is sent
+│   │   └── it should forward the ETH to the existing account
+│   └── given different init data is used after deployment
+│       └── it should still return the same address ignoring new data
+└── when the address is not yet deployed
+    ├── given packages array is empty
+    │   └── it should revert with InvalidRootValidation error
+    ├── given packages array has valid modules
+    │   ├── it should deploy a new KernelUUPS proxy using CREATE2
+    │   ├── it should initialize the account with the packages
+    │   ├── it should return the deployed account address
+    │   └── it should emit KernelDeployed event
+    └── given msg value is sent
+        └── it should fund the deployed account

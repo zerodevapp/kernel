@@ -1,0 +1,109 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "ERC7821",
+  "sourceName": "contracts/account/extensions/draft-ERC7821.sol",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "sender",
+          "type": "address"
+        }
+      ],
+      "name": "AccountUnauthorized",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "ERC7579DecodingError",
+      "type": "error"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "ExecType",
+          "name": "execType",
+          "type": "bytes1"
+        }
+      ],
+      "name": "ERC7579UnsupportedExecType",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "FailedCall",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "OutOfRangeAccess",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "UnsupportedExecutionMode",
+      "type": "error"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "batchExecutionIndex",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "bytes",
+          "name": "returndata",
+          "type": "bytes"
+        }
+      ],
+      "name": "ERC7579TryExecuteFail",
+      "type": "event"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "mode",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes",
+          "name": "executionData",
+          "type": "bytes"
+        }
+      ],
+      "name": "execute",
+      "outputs": [],
+      "stateMutability": "payable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "mode",
+          "type": "bytes32"
+        }
+      ],
+      "name": "supportsExecutionMode",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "result",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x",
+  "deployedBytecode": "0x",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

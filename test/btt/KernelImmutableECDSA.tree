@@ -1,0 +1,31 @@
+KernelImmutableECDSA_Test
+├── when verifyFallbackSignature receives a valid signature from the immutable signer
+│   └── it should return validation success
+├── when verifyFallbackSignature receives a signature from a different signer
+│   └── it should return validation failed
+├── when verifyFallbackSignature receives a malformed signature
+│   └── it should return validation failed
+├── when verifyFallbackSignature receives a zero length signature
+│   └── it should return validation failed
+├── when fallbackValidatorAvailable is checked
+│   └── it should return true
+├── when _initialize is called with empty packages
+│   └── it should not revert and not set root
+├── when _initialize is called with packages
+│   └── it should install packages without requiring root
+├── when _initialize is called with a validator package
+│   └── it should install the validator but not set it as root
+├── when initialize is called for the first time
+│   └── it should succeed and initialize
+├── when initialize is called a second time
+│   └── it should revert with InvalidInitialization
+├── when the immutable signer is read from clone args
+│   └── it should match the signer passed to factory deployECDSA
+├── when isValidSignature is called with immutable signer raw signature
+│   └── it should return ERC1271_MAGICVALUE
+├── when validateUserOp is called with missingAccountFunds nonzero
+│   └── it should send funds to the entry point
+├── when constructor is called
+│   └── it should disable initializers on the implementation
+└── when authorizeUpgrade is called by the entry point
+    └── it should not revert

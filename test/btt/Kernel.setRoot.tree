@@ -1,0 +1,35 @@
+Kernel_setRoot
+├── when caller is not EntryPoint setRoot
+│   └── it should revert with Unauthorized error
+└── when caller is EntryPoint or self setRoot
+    ├── given the overload setRoot with ValidationId is called
+    │   ├── given vId is zero and no fallback validator exists
+    │   │   └── it should revert with InvalidRootValidation error
+    │   ├── given vId corresponds to an installed validator
+    │   │   └── it should set the new root to vId
+    │   └── given vId corresponds to an installed permission
+    │       └── it should set the new root to vId
+    └── given the overload setRoot with Install array is called
+        ├── given packages array is empty
+        │   └── it should revert with InvalidInitialization error
+        ├── given removeCurrent is false
+        │   └── it should install packages and set new root without uninstalling current
+        ├── given removeCurrent is true
+        │   ├── given the current root is a VALIDATOR
+        │   │   └── it should uninstall validator and set new root
+        │   ├── given the current root is a PERMISSION
+        │   │   ├── given uninstallData has incorrect length
+        │   │   │   └── it should revert with InvalidDataLength error
+        │   │   ├── given uninstallData has correct length
+        │   │   │   ├── given policies are not uninstalled in reverse order
+        │   │   │   │   └── it should revert with InvalidPermissionUninstallOrder error
+        │   │   │   └── given policies are uninstalled in reverse order
+        │   │   │       └── it should uninstall permission and set new root
+        │   │   └── given the current root is ROOT type
+        │   │       └── it should revert with InvalidRootValidation error
+        ├── given the first package is not a validator or permission SetRoot
+        │   └── it should revert with InvalidRootValidation error
+        ├── given the first package moduleType is POLICY
+        │   └── it should derive root from permissionId in internalData
+        └── given the first package moduleType is SIGNER
+            └── it should derive root from permissionId in internalData

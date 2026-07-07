@@ -1,0 +1,5 @@
+KernelFactory_getAddress
+└── given any packages and nonce
+    ├── it should return the deterministic address without deploying
+    ├── it should return the same address for the same packages and nonce
+    └── it should return different addresses for different packages or nonces

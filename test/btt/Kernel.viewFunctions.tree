@@ -1,0 +1,10 @@
+Kernel_viewFunctions
+├── when calling validNonceFrom
+│   └── it should return the current validNonceFrom value
+├── when calling nonce
+│   ├── given validNonceFrom is zero
+│   │   └── it should return the current sequence number for the key
+│   └── given validNonceFrom is greater than the sequence
+│       └── it should return validNonceFrom as the sequence
+└── when calling registry
+    └── it should return the registry address

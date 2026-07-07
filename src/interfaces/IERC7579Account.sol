@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.21;
 
-import {CallType, ExecType, ExecMode} from "../utils/ExecLib.sol";
-import {PackedUserOperation} from "./PackedUserOperation.sol";
-
 struct Execution {
     address target;
     uint256 value;
@@ -11,9 +8,6 @@ struct Execution {
 }
 
 interface IERC7579Account {
-    event ModuleInstalled(uint256 moduleTypeId, address module);
-    event ModuleUninstalled(uint256 moduleTypeId, address module);
-
     /**
      * @dev Executes a transaction on behalf of the account.
      *         This function is intended to be called by ERC-4337 EntryPoint.sol
@@ -24,7 +18,7 @@ interface IERC7579Account {
      * @param mode The encoded execution mode of the transaction. See ModeLib.sol for details
      * @param executionCalldata The encoded execution call data
      */
-    function execute(ExecMode mode, bytes calldata executionCalldata) external payable;
+    function execute(bytes32 mode, bytes calldata executionCalldata) external payable;
 
     /**
      * @dev Executes a transaction on behalf of the account.
@@ -36,7 +30,7 @@ interface IERC7579Account {
      * @param mode The encoded execution mode of the transaction. See ModeLib.sol for details
      * @param executionCalldata The encoded execution call data
      */
-    function executeFromExecutor(ExecMode mode, bytes calldata executionCalldata)
+    function executeFromExecutor(bytes32 mode, bytes calldata executionCalldata)
         external
         payable
         returns (bytes[] memory returnData);
@@ -75,7 +69,7 @@ interface IERC7579Account {
      * Function to check if the account supports a certain CallType or ExecType (see ModeLib.sol)
      * @param encodedMode the encoded mode
      */
-    function supportsExecutionMode(ExecMode encodedMode) external view returns (bool);
+    function supportsExecutionMode(bytes32 encodedMode) external view returns (bool);
 
     /**
      * Function to check if the account supports installation of a certain module type Id

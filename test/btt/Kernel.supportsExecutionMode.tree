@@ -1,0 +1,21 @@
+Kernel_supportsExecutionMode
+├── given execType is DEFAULT
+│   ├── given callType is SINGLE
+│   │   └── it should return true
+│   ├── given callType is BATCH
+│   │   └── it should return true
+│   ├── given callType is DELEGATECALL
+│   │   └── it should return true
+│   └── given callType is any other value
+│       └── it should return false
+├── given execType is TRY
+│   ├── given callType is SINGLE
+│   │   └── it should return true
+│   ├── given callType is BATCH
+│   │   └── it should return true
+│   ├── given callType is DELEGATECALL
+│   │   └── it should return true
+│   └── given callType is any other value
+│       └── it should return false
+└── given execType is any other value
+    └── it should return false

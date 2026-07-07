@@ -1,0 +1,33 @@
+[[dependencies]]
+name = "@openzeppelin-contracts"
+version = "5.4.0"
+url = "https://soldeer-revisions.s3.amazonaws.com/@openzeppelin-contracts/5_4_0_19-07-2025_08:59:41_contracts.zip"
+checksum = "3dd38f17610dba4602bd008ee2cb551e51e97d7b4ce04e1ffdf853da832942fa"
+integrity = "4eb0ef219d10ab5a5708adaae1132dc0a93ab6a193378486e842d606c989ff3e"
+
+[[dependencies]]
+name = "a16z-halmos-cheatcodes"
+version = "6da4e692c357ba6d641a2e677a28298cac9f76ab"
+url = "https://soldeer-revisions.s3.amazonaws.com/a16z-halmos-cheatcodes/6da4e692c357ba6d641a2e677a28298cac9f76ab_02-07-2025_18:39:48_a16z-halmos-cheatcodes-6da4e692c357ba6d641a2e677a28298cac9f76ab.zip"
+checksum = "fb56679a5402ee037849e05f1e6d9aec64096d5c0e41e84c5c8d447123dfcb5f"
+integrity = "d61b6628a05317095546185bf5bd4037050fc2a9c7db23c54cc398a618266ea4"
+
+[[dependencies]]
+name = "eth-infinitism-account-abstraction"
+version = "0.9.0"
+git = "https://github.com/eth-infinitism/account-abstraction.git"
+rev = "86fcd84cf7263fe384d61d078ee747b16e69a496"
+
+[[dependencies]]
+name = "forge-std"
+version = "1.11.0"
+url = "https://soldeer-revisions.s3.amazonaws.com/forge-std/1_11_0_09-10-2025_06:23:22_forge-std-1.11.zip"
+checksum = "0290ef84c693dc9086f98f6a9b4a69dc5c2b6aa1cfe10a989bd1def1a456c099"
+integrity = "84aa7d32f8c7329468cf16f31f0f74e68072e634fdbde98f3bb00c6b136103b2"
+
+[[dependencies]]
+name = "solady"
+version = "0.1.26"
+url = "https://soldeer-revisions.s3.amazonaws.com/solady/0_1_26_25-08-2025_15:30:06_solady.zip"
+checksum = "9872ac7cfd32c1eba32800508a1325c49f4a4aa8c6f670454db91971a583e26b"
+integrity = "5da4b5ca9cbad98812a4b75ad528ff34c72a0b84433204be6d1420c81de1d6ff"

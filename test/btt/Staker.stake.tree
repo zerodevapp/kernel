@@ -1,0 +1,9 @@
+Staker_stake
+├── when the caller is not the owner
+│   └── it should revert with Unauthorized error
+└── when the caller is the owner
+    ├── given msg value is zero
+    │   └── it should call addStake with zero value
+    └── given msg value is greater than zero
+        ├── it should call addStake on the EntryPoint
+        └── it should increase the stake by msg value

@@ -2,19 +2,27 @@
 
 pragma solidity ^0.8.0;
 
-import "src/interfaces/IERC7579Modules.sol";
+import {ISigner} from "src/interfaces/IERC7579Modules.sol";
+import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
 
 contract MockSigner is ISigner {
     mapping(address wallet => bytes) public data;
     mapping(address => mapping(bytes32 => bytes)) public sig;
     mapping(address => mapping(bytes32 => bool)) public pass;
+    bool success;
+    uint256 public customValidationData;
 
     function sudoSetValidSig(address _wallet, bytes32 _id, bytes calldata _sig) external payable {
         sig[_wallet][_id] = _sig;
     }
 
     function sudoSetPass(address _wallet, bytes32 _id, bool _flag) external payable {
+        success = _flag;
         pass[_wallet][_id] = _flag;
+    }
+
+    function sudoSetValidationData(uint256 _validationData) external {
+        customValidationData = _validationData;
     }
 
     function onInstall(bytes calldata _data) external payable override {
@@ -24,7 +32,7 @@ contract MockSigner is ISigner {
     function onUninstall(bytes calldata) external payable override {}
 
     function isModuleType(uint256 moduleTypeId) external pure override returns (bool) {
-        if (moduleTypeId == 7) {
+        if (moduleTypeId == 6) {
             return true;
         } else {
             return false;
@@ -41,6 +49,10 @@ contract MockSigner is ISigner {
         override
         returns (uint256)
     {
+        // If customValidationData is set, return it (allows testing time bounds intersection)
+        if (customValidationData != 0) {
+            return customValidationData;
+        }
         return keccak256(userOp.signature) == keccak256(sig[msg.sender][id]) ? 0 : 1;
     }
 
@@ -50,5 +62,13 @@ contract MockSigner is ISigner {
         } else {
             return 0xffffffff;
         }
+    }
+
+    function validateSignatureWithDataWithSender(address, bytes32, bytes calldata signature, bytes calldata)
+        external
+        view
+        returns (bool)
+    {
+        return success;
     }
 }

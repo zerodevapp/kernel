@@ -1,22 +1,35 @@
 pragma solidity ^0.8.0;
 
 contract MockCallee {
-    uint256 public value;
+    uint256 public bar;
+    string public data;
 
-    event MockEvent(address indexed caller, address indexed here);
+    event Lorem();
 
-    function setValue(uint256 _value) public {
-        value = _value;
+    error Haha();
+
+    function foo() external {
+        bar++;
+        emit Lorem();
     }
 
-    function addValue(uint256 _value) public {
-        value += _value;
+    function lorem() external {
+        data = "lorem ipsum";
     }
 
-    function emitEvent(bool shouldFail) public {
-        if (shouldFail) {
-            revert("Hello");
-        }
-        emit MockEvent(msg.sender, address(this));
+    function forceRevert() external pure {
+        revert Haha();
+    }
+
+    function revertingFn() external pure {
+        revert("MockCallee: revert");
+    }
+
+    function receiveEth() external payable {
+        // Accept ETH
+    }
+
+    function ret(bytes memory dat) external pure returns (bytes memory) {
+        return dat;
     }
 }

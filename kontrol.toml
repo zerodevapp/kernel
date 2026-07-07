@@ -1,0 +1,26 @@
+# Kontrol — Kernel v4 KEVM verification
+# Docs: https://docs.runtimeverification.com/kontrol
+#
+# Phase E of FV Round 1 targets property #15 (ERC-1271 nested EIP-712
+# success-branch-only authorisation). This is the assembly-heavy property
+# that Halmos couldn't handle cleanly because of symbolic-bytes calldata
+# manipulation; KEVM semantics handles it natively.
+
+[build]
+foundry-project-root = "."
+verbose = false
+auto-imports = true
+require = []
+
+[prove]
+verbose = false
+# Property #15 has heavy calldata + memory work; allow a deeper search before
+# escalating. Default was 1000.
+max-depth = 5000
+max-iterations = 200
+break-on-calls = false
+workers = 4
+
+[show]
+no-minimize = false
+sort-collections = true

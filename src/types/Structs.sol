@@ -1,67 +1,133 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.23;
+pragma solidity ^0.8.0;
 
-import {ValidationData, PermissionId, PassFlag} from "./Types.sol";
-import {IPolicy} from "../interfaces/IERC7579Modules.sol";
+import {ValidationId, CallType} from "./Types.sol";
+import {IHook, IExecutor} from "../interfaces/IERC7579Modules.sol";
 
-struct Execution {
-    address target;
+/// @notice Describes a module installation: the module type, address, and its data payloads.
+/// @dev The `moduleData` is forwarded to the module's onInstall/onUninstall callback.
+///      The `internalData` configures Kernel-internal state and its format varies by module type:
+///      - Validators (type 1): `[bytes20 hookAddress | bytes4[] allowedSelectors]`
+///      - Executors (type 2): `[bytes20 hookAddress]`
+///      - Fallback/Selectors (type 3): `[bytes4 selector | bytes1 callType | bytes20 hookAddress]`
+///      - Hooks (type 4): ignored (empty OK)
+///      - Policies (type 5): `[bytes4 permissionId | ...]`
+///      - Signers (type 6): `[bytes4 permissionId | bytes20 hookAddress | bytes4[] allowedSelectors]`
+struct Install {
+    /// @dev The module type identifier (1=validator, 2=executor, 3=fallback, 4=hook, 5=policy, 6=signer).
+    uint256 moduleType;
+    /// @dev The module contract address.
+    address module;
+    /// @dev Data forwarded to the module's onInstall callback.
+    bytes moduleData;
+    /// @dev Kernel-internal configuration data (format varies by moduleType, see above).
+    bytes internalData;
+}
+
+/// @notice Stores per-validation state: nonce for selector access, hook, signer, and policies.
+struct ValidationInfo {
+    /// @dev Incremented when selectors are (re)granted; used to invalidate old selector allowances.
+    uint32 nonce;
+    /// @dev The hook address for this validation. address(0) = not installed, address(1) = installed with no hook.
+    address hook;
+    /// @dev The signer module address (only for permission-based validations).
+    address signer;
+    /// @dev Array of policy module addresses (only for permission-based validations).
+    address[] policies;
+}
+
+/// @notice Top-level validation storage holding the root and all validation infos.
+struct ValidationStorage {
+    /// @dev The root validation identifier used for default userOp and signature verification.
+    ValidationId root;
+    /// @dev Maps ValidationId to its ValidationInfo.
+    mapping(ValidationId vId => ValidationInfo) vInfo;
+    /// @dev Maps (ValidationId, selector) to the nonce at which the selector was allowed.
+    mapping(ValidationId vId => mapping(bytes4 selector => uint32)) allowed;
+}
+
+/// @notice A standard call tuple used in batch execution.
+struct Call {
+    /// @dev The target address to call.
+    address to;
+    /// @dev The ETH value to send with the call.
     uint256 value;
-    bytes callData;
+    /// @dev The calldata to send.
+    bytes data;
 }
 
-// === for internal usage ===
-struct PermissionSigMemory {
-    uint8 idx;
-    uint256 length;
-    ValidationData validationData;
-    PermissionId permission;
-    PassFlag flag;
-    IPolicy policy;
-    bytes permSig;
-    address caller;
-    bytes32 digest;
+/// @notice Signature format for enable-mode: installs modules inline during validation.
+struct EnableModeSignature {
+    /// @dev The install nonce for replay protection.
+    uint256 nonce;
+    /// @dev The array of module packages to install.
+    Install[] packages;
+    /// @dev The root validator's signature authorizing the install.
+    bytes enableSignature;
+    /// @dev The actual userOp or ERC-1271 signature (after the enable portion).
+    bytes userOpSignature;
 }
 
-struct PermissionDisableDataFormat {
-    bytes[] data;
+/// @notice Wrapper for the two-part data format used by installModule/uninstallModule.
+struct InstallModuleDataFormat {
+    /// @dev Data forwarded to the module's onInstall/onUninstall callback.
+    bytes installData;
+    /// @dev Kernel-internal configuration data.
+    bytes internalData;
 }
 
-struct PermissionEnableDataFormat {
-    bytes[] data;
+/// @notice Wrapper for permission uninstall data containing per-module uninstall payloads.
+struct PermissionUninstallData {
+    /// @dev Array of uninstall data, one per policy plus one for the signer (length = policies.length + 1).
+    bytes[] uninstallData;
 }
 
-struct UserOpSigEnableDataFormat {
-    bytes validatorData;
-    bytes hookData;
-    bytes selectorData;
-    bytes enableSig;
-    bytes userOpSig;
+/// @notice Fallback selector routing configuration.
+struct SelectorConfig {
+    /// @dev The hook module for this selector. address(0) = not installed, address(1) = no hook.
+    IHook hook;
+    /// @dev The fallback module that handles calls to this selector.
+    address target;
+    /// @dev The call type: CALLTYPE_SINGLE (0x00) for call, CALLTYPE_DELEGATECALL (0xFF) for delegatecall.
+    CallType callType;
 }
 
-struct SelectorDataFormat {
-    bytes selectorInitData;
-    bytes hookInitData;
+/// @notice Storage for all selector configurations.
+struct SelectorStorage {
+    /// @dev Maps function selector to its routing configuration.
+    mapping(bytes4 => SelectorConfig) selectorConfig;
 }
 
-struct SelectorDataFormatWithExecutorData {
-    bytes selectorInitData;
-    bytes hookInitData;
-    bytes executorHookData;
+/// @notice Configuration for an installed executor module.
+struct ExecutorConfig {
+    /// @dev The hook for this executor. address(1) = installed with no hook, address(0) = not installed.
+    IHook hook;
 }
 
-struct InstallValidatorDataFormat {
-    bytes validatorData;
-    bytes hookData;
-    bytes selectorData;
+/// @notice Storage for all executor configurations.
+struct ExecutorStorage {
+    /// @dev Maps executor address to its configuration.
+    mapping(IExecutor => ExecutorConfig) executorConfig;
 }
 
-struct InstallExecutorDataFormat {
-    bytes executorData;
-    bytes hookData;
+/// @notice Storage tracking which hook modules are enabled.
+struct HookStorage {
+    /// @dev Maps hook address to enabled status.
+    mapping(address => bool) enabled;
 }
 
-struct InstallFallbackDataFormat {
-    bytes selectorData;
-    bytes hookData;
+/// @notice Storage for module-level nonce management and optional registry.
+struct ModuleStorage {
+    /// @dev ERC-7484 module registry address (reserved for future use, not used in vanilla Kernel).
+    address registry;
+    /// @dev Global minimum nonce sequence; nonces below this are invalid across all keys.
+    uint64 nonceValidFrom;
+    /// @dev Maps nonce key to its current sequence number.
+    mapping(uint192 key => uint64) nonce;
+}
+
+/// @notice Signature format for permission-based validations containing per-policy + signer signatures.
+struct PermissionSignature {
+    /// @dev Array of signatures: one per policy (in order) plus one for the signer (last).
+    bytes[] signatures;
 }

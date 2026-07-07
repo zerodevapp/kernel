@@ -1,0 +1,5 @@
+Staker_unlockStake
+├── when the caller is not the owner
+│   └── it should revert with Unauthorized error
+└── when the caller is the owner
+    └── it should call unlockStake on the EntryPoint

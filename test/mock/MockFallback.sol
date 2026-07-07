@@ -3,9 +3,6 @@ pragma solidity ^0.8.0;
 
 import {IERC7579Account} from "src/interfaces/IERC7579Account.sol";
 import {IFallback} from "src/interfaces/IERC7579Modules.sol";
-import {CallType, ExecType, ExecMode} from "src/types/Types.sol";
-import {ExecLib} from "src/utils/ExecLib.sol";
-import {EXEC_MODE_DEFAULT} from "src/types/Constants.sol";
 
 contract Callee {
     address public lastCaller;
@@ -16,6 +13,11 @@ contract Callee {
 }
 
 contract MockFallback is IFallback {
+    event Foobar();
+
+    error Limit();
+    error FallbackRevert();
+
     mapping(address => bytes) public data;
 
     uint256 public valueStored;
@@ -23,6 +25,8 @@ contract MockFallback is IFallback {
     bool isExecutor;
 
     Callee public callee;
+
+    address public caller;
 
     constructor() {
         callee = new Callee();
@@ -48,7 +52,10 @@ contract MockFallback is IFallback {
         return data[smartAccount].length > 0;
     }
 
-    function fallbackFunction(uint256 v) external pure returns (uint256) {
+    function fallbackFunction(uint256 v) external returns (uint256) {
+        caller = address(bytes20(msg.data[msg.data.length - 20:]));
+        require(v < 100, Limit());
+        emit Foobar();
         return v * v;
     }
 
@@ -63,10 +70,20 @@ contract MockFallback is IFallback {
     function setData(uint256 value) external {
         valueStored = value;
         if (isExecutor) {
-            IERC7579Account(msg.sender).executeFromExecutor(
-                ExecMode.wrap(bytes32(0)),
-                ExecLib.encodeSingle(address(callee), 0, abi.encodeWithSelector(Callee.calleeTest.selector))
-            );
+            IERC7579Account(msg.sender)
+                .executeFromExecutor(
+                    bytes32(0),
+                    abi.encodePacked(address(callee), uint256(0), abi.encodeWithSelector(Callee.calleeTest.selector))
+                );
         }
+    }
+
+    function forceRevert() external pure {
+        revert FallbackRevert();
+    }
+
+    // Simple function that works in both CALL and DELEGATECALL contexts
+    function testFunction() external pure returns (uint256) {
+        return 42;
     }
 }

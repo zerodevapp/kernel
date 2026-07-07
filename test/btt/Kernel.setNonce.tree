@@ -1,0 +1,10 @@
+Kernel_setNonce
+├── when caller is not EntryPoint setNonce
+│   └── it should revert with Unauthorized error
+└── when caller is EntryPoint or self setNonce
+    ├── given seq is greater than current sequence for the nonceKey
+    │   └── it should update the nonce sequence to seq
+    ├── given seq is equal to current sequence
+    │   └── it should revert with InvalidNonce error
+    └── given seq is less than current sequence
+        └── it should revert with InvalidNonce error

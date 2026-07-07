@@ -1,34 +1,44 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {PackedUserOperation} from "./interfaces/PackedUserOperation.sol";
-import {IAccount, ValidationData, ValidAfter, ValidUntil, parseValidationData} from "./interfaces/IAccount.sol";
-import {IEntryPoint} from "./interfaces/IEntryPoint.sol";
-import {IAccountExecute} from "./interfaces/IAccountExecute.sol";
+import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
+import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
 import {IERC7579Account} from "./interfaces/IERC7579Account.sol";
-import {ModuleLib} from "./utils/ModuleLib.sol";
+import {IValidator, IExecutor, IHook, IModule} from "./interfaces/IERC7579Modules.sol";
+import {ModuleManager, Install} from "./core/ModuleManager.sol";
+import {ExecutionManager} from "./core/ExecutionManager.sol";
+import {Lib4337} from "./lib/Lib4337.sol";
+import {ERC1271} from "./lib/ERC1271.sol";
+import {parseNonce, getType, getValidator, validatorToIdentifier, permissionToIdentifier} from "./lib/Utils.sol";
+import {LibERC7579} from "solady/accounts/LibERC7579.sol";
 import {
-    ValidationManager,
-    ValidationMode,
     ValidationId,
-    ValidatorLib,
-    ValidationType,
     PermissionId,
-    PassFlag,
-    SKIP_SIGNATURE
-} from "./core/ValidationManager.sol";
-import {IModule, IValidator, IHook, IExecutor, IFallback, IPolicy, ISigner} from "./interfaces/IERC7579Modules.sol";
-import {EIP712} from "solady/utils/EIP712.sol";
-import {ExecLib} from "./utils/ExecLib.sol";
-import {ExecMode, CallType, ExecType, ExecModeSelector, ExecModePayload} from "./types/Types.sol";
+    ValidationMode,
+    ValidationType,
+    isEnable,
+    isReplayable,
+    isEnableReplayable
+} from "./types/Types.sol";
 import {
+    NotImplemented,
+    Unauthorized,
+    UnauthorizedCallData,
+    InvalidSelector,
+    InvalidCallType,
+    InstallSignatureVerificationFailed,
+    InvalidDataLength,
+    InvalidRootValidation,
+    InvalidInitialization,
+    InvalidVid
+} from "./types/Error.sol";
+import {Received} from "./types/Events.sol";
+import {
+    VALIDATION_TYPE_ROOT,
+    VALIDATION_TYPE_PERMISSION,
+    VALIDATION_TYPE_VALIDATOR,
     CALLTYPE_SINGLE,
     CALLTYPE_DELEGATECALL,
-    ERC1967_IMPLEMENTATION_SLOT,
-    VALIDATION_TYPE_ROOT,
-    VALIDATION_TYPE_VALIDATOR,
-    VALIDATION_TYPE_PERMISSION,
-    VALIDATION_TYPE_7702,
     MODULE_TYPE_VALIDATOR,
     MODULE_TYPE_EXECUTOR,
     MODULE_TYPE_FALLBACK,
@@ -36,241 +46,64 @@ import {
     MODULE_TYPE_POLICY,
     MODULE_TYPE_SIGNER,
     HOOK_MODULE_NOT_INSTALLED,
-    HOOK_MODULE_INSTALLED,
-    HOOK_ONLY_ENTRYPOINT,
-    EXECTYPE_TRY,
-    EXECTYPE_DEFAULT,
-    EXEC_MODE_DEFAULT,
-    CALLTYPE_DELEGATECALL,
-    CALLTYPE_SINGLE,
-    CALLTYPE_BATCH,
-    CALLTYPE_STATIC,
-    MAGIC_VALUE_SIG_REPLAYABLE,
-    ERC1271_INVALID,
-    ERC1271_MAGICVALUE,
-    EIP7702_PREFIX
+    HOOK_MODULE_INSTALLED_NO_HOOK
 } from "./types/Constants.sol";
+import {
+    ValidationStorage,
+    ValidationInfo,
+    EnableModeSignature,
+    SelectorConfig,
+    InstallModuleDataFormat,
+    PermissionUninstallData
+} from "./types/Structs.sol";
 
-import {InstallExecutorDataFormat, InstallFallbackDataFormat, InstallValidatorDataFormat} from "./types/Structs.sol";
+/// @title Kernel
+/// @author taek <leekt216@gmail.com>
+/// @notice ERC-7579 compliant modular smart account with pluggable validation, execution, and hook modules.
+abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
+    IEntryPoint immutable ENTRYPOINT;
 
-contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager {
-    error ExecutionReverted();
-    error InvalidExecutor();
-    error InvalidFallback();
-    error InvalidCallType();
-    error OnlyExecuteUserOp();
-    error InvalidModuleType();
-    error InvalidCaller();
-    error InvalidSelector();
-    error InitConfigError(uint256 idx);
-    error AlreadyInitialized();
-
-    event Received(address sender, uint256 amount);
-    event Upgraded(address indexed implementation);
-
-    IEntryPoint public immutable entrypoint;
-
-    // NOTE : when eip 1153 has been enabled, this can be transient storage
-    mapping(bytes32 userOpHash => IHook) internal executionHook;
+    function _onlyEntryPointOrSelf() internal view {
+        require(msg.sender == address(ENTRYPOINT) || msg.sender == address(this), Unauthorized());
+    }
 
     constructor(IEntryPoint _entrypoint) {
-        entrypoint = _entrypoint;
-        _validationStorage().rootValidator = ValidationId.wrap(bytes21(abi.encodePacked(hex"deadbeef")));
-    }
-
-    modifier onlyEntryPoint() {
-        if (msg.sender != address(entrypoint)) {
-            revert InvalidCaller();
-        }
-        _;
-    }
-
-    modifier onlyEntryPointOrSelfOrRoot() {
-        if (
-            msg.sender != address(entrypoint) && msg.sender != address(this) // do rootValidator hook
-        ) {
-            IValidator validator = ValidatorLib.getValidator(_validationStorage().rootValidator);
-            if (validator.isModuleType(4)) {
-                bytes memory ret = IHook(address(validator)).preCheck(msg.sender, msg.value, msg.data);
-                _;
-                IHook(address(validator)).postCheck(ret);
-            } else {
-                revert InvalidCaller();
-            }
-        } else {
-            _;
-        }
-    }
-
-    function initialize(
-        ValidationId _rootValidator,
-        IHook hook,
-        bytes calldata validatorData,
-        bytes calldata hookData,
-        bytes[] calldata initConfig
-    ) external {
-        ValidationStorage storage vs = _validationStorage();
-        if (ValidationId.unwrap(vs.rootValidator) != bytes21(0) || bytes3(address(this).code) == EIP7702_PREFIX) {
-            revert AlreadyInitialized();
-        }
-        if (ValidationId.unwrap(_rootValidator) == bytes21(0)) {
-            revert InvalidValidator();
-        }
-        ValidationType vType = ValidatorLib.getType(_rootValidator);
-        if (vType != VALIDATION_TYPE_VALIDATOR && vType != VALIDATION_TYPE_PERMISSION) {
-            revert InvalidValidationType();
-        }
-        _setRootValidator(_rootValidator);
-        ValidationConfig memory config = ValidationConfig({nonce: uint32(1), hook: hook});
-        vs.currentNonce = 1;
-        _installValidation(_rootValidator, config, validatorData, hookData);
-        for (uint256 i = 0; i < initConfig.length; i++) {
-            (bool success,) = address(this).call(initConfig[i]);
-            if (!success) {
-                revert InitConfigError(i);
-            }
-        }
-    }
-
-    function changeRootValidator(
-        ValidationId _rootValidator,
-        IHook hook,
-        bytes calldata validatorData,
-        bytes calldata hookData
-    ) external payable onlyEntryPointOrSelfOrRoot {
-        ValidationStorage storage vs = _validationStorage();
-        if (ValidationId.unwrap(_rootValidator) == bytes21(0)) {
-            revert InvalidValidator();
-        }
-        ValidationType vType = ValidatorLib.getType(_rootValidator);
-        if (vType != VALIDATION_TYPE_VALIDATOR && vType != VALIDATION_TYPE_PERMISSION) {
-            revert InvalidValidationType();
-        }
-        _setRootValidator(_rootValidator);
-        if (_validationStorage().validationConfig[_rootValidator].hook == IHook(HOOK_MODULE_NOT_INSTALLED)) {
-            // when new rootValidator is not installed yet
-            ValidationConfig memory config = ValidationConfig({nonce: uint32(vs.currentNonce), hook: hook});
-            _installValidation(_rootValidator, config, validatorData, hookData);
-        }
-    }
-
-    function upgradeTo(address _newImplementation) external payable onlyEntryPointOrSelfOrRoot {
-        assembly {
-            sstore(ERC1967_IMPLEMENTATION_SLOT, _newImplementation)
-        }
-        emit Upgraded(_newImplementation);
+        ENTRYPOINT = _entrypoint;
     }
 
     function _domainNameAndVersion() internal pure override returns (string memory name, string memory version) {
         name = "Kernel";
-        version = "0.3.3";
+        version = "0.4.0";
     }
 
-    receive() external payable {
-        emit Received(msg.sender, msg.value);
+    /// @notice Initializes the account with the given module packages. Must be overridden by concrete implementations.
+    /// @param packages The array of module install packages; the first package becomes the root validator.
+    function initialize(Install[] calldata packages) external payable virtual;
+
+    /// @notice Internal initialization that installs packages and sets the first as root.
+    /// @param packages The array of module install packages; must be non-empty.
+    function _initialize(Install[] calldata packages) internal virtual {
+        require(packages.length > 0, InvalidInitialization());
+        Install calldata root = packages[0];
+        _install(packages);
+        _setRoot(root);
     }
 
-    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
-        return this.onERC721Received.selector;
-    }
-
-    function onERC1155Received(address, address, uint256, uint256, bytes calldata) external pure returns (bytes4) {
-        return this.onERC1155Received.selector;
-    }
-
-    function onERC1155BatchReceived(address, address, uint256[] calldata, uint256[] calldata, bytes calldata)
-        external
-        pure
-        returns (bytes4)
-    {
-        return this.onERC1155BatchReceived.selector;
-    }
-
-    fallback() external payable {
-        SelectorConfig memory config = _selectorConfig(msg.sig);
-        bool success;
-        bytes memory result;
-        if (address(config.hook) == HOOK_MODULE_NOT_INSTALLED) {
-            revert InvalidSelector();
-        }
-        // action installed
-        bytes memory context;
-        if (address(config.hook) == HOOK_ONLY_ENTRYPOINT) {
-            // for selector manager, address(0) for the hook will default to type(address).max,
-            // and this will only allow entrypoints to interact
-            if (msg.sender != address(entrypoint)) {
-                revert InvalidCaller();
-            }
-        } else if (address(config.hook) != HOOK_MODULE_INSTALLED) {
-            context = _doPreHook(config.hook, msg.value, msg.data);
-        }
-        // execute action
-        if (config.callType == CALLTYPE_SINGLE) {
-            (success, result) = ExecLib.doFallback2771Call(config.target);
-        } else if (config.callType == CALLTYPE_DELEGATECALL) {
-            (success, result) = ExecLib.executeDelegatecall(config.target, msg.data);
-        } else {
-            revert NotSupportedCallType();
-        }
-        if (!success) {
-            assembly {
-                revert(add(result, 0x20), mload(result))
-            }
-        }
-        if (address(config.hook) != HOOK_MODULE_INSTALLED && address(config.hook) != HOOK_ONLY_ENTRYPOINT) {
-            _doPostHook(config.hook, context);
-        }
-        assembly {
-            return(add(result, 0x20), mload(result))
-        }
-    }
-
-    // validation part
+    /// @notice Validates a UserOperation for ERC-4337 entry point compatibility.
+    /// @dev Parses the nonce to determine validation mode and type, optionally installs modules
+    ///      via enable-mode signatures, then delegates to the appropriate validator.
+    ///      Nonce layout (32 bytes): `[1 byte vMode | 1 byte vType | 20 bytes vId | 2 bytes nonceKey | 8 bytes seq]`.
+    /// @param userOp The packed user operation to validate.
+    /// @param userOpHash The hash of the user operation as computed by the entry point.
+    /// @param missingAccountFunds The amount of funds the account must prefund to the entry point.
+    /// @return validationData Packed validation result: `[20 bytes aggregator | 6 bytes validUntil | 6 bytes validAfter]`.
     function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash, uint256 missingAccountFunds)
         external
         payable
-        override
-        onlyEntryPoint
-        returns (ValidationData validationData)
+        returns (uint256 validationData)
     {
-        ValidationStorage storage vs = _validationStorage();
-        // ONLY ENTRYPOINT
-        // Major change for v2 => v3
-        // 1. instead of packing 4 bytes prefix to userOp.signature to determine the mode, v3 uses userOp.nonce's first 2 bytes to check the mode
-        // 2. instead of packing 20 bytes in userOp.signature for enable mode to provide the validator address, v3 uses userOp.nonce[2:22]
-        // 3. In v2, only 1 plugin validator(aside from root validator) can access the selector.
-        //    In v3, you can use more than 1 plugin to use the exact selector, you need to specify the validator address in userOp.nonce[2:22] to use the validator
-        (ValidationMode vMode, ValidationType vType, ValidationId vId) = ValidatorLib.decodeNonce(userOp.nonce);
-        if (vType == VALIDATION_TYPE_ROOT) {
-            vId = vs.rootValidator;
-        }
-        validationData = _validateUserOp(vMode, vId, userOp, userOpHash);
-        ValidationConfig memory vc = vs.validationConfig[vId];
-        // allow when nonce is not revoked or vType is sudo
-        if (vType != VALIDATION_TYPE_ROOT && vc.nonce < vs.validNonceFrom) {
-            revert InvalidNonce();
-        }
-        IHook execHook = vc.hook;
-        if (address(execHook) == HOOK_MODULE_NOT_INSTALLED && vType != VALIDATION_TYPE_ROOT) {
-            revert InvalidValidator();
-        }
-        executionHook[userOpHash] = execHook;
-
-        if (address(execHook) == HOOK_MODULE_INSTALLED || address(execHook) == HOOK_MODULE_NOT_INSTALLED) {
-            // does not require hook
-            if (vType != VALIDATION_TYPE_ROOT && !vs.allowedSelectors[vId][bytes4(userOp.callData[0:4])]) {
-                revert InvalidValidator();
-            }
-        } else {
-            // requires hook
-            if (vType != VALIDATION_TYPE_ROOT && !vs.allowedSelectors[vId][bytes4(userOp.callData[4:8])]) {
-                revert InvalidValidator();
-            }
-            if (bytes4(userOp.callData[0:4]) != this.executeUserOp.selector) {
-                revert OnlyExecuteUserOp();
-            }
-        }
-
+        _onlyEntryPointOrSelf();
+        validationData = _processUserOp(userOp, userOpHash);
         assembly {
             if missingAccountFunds {
                 pop(call(gas(), caller(), missingAccountFunds, callvalue(), callvalue(), callvalue(), callvalue()))
@@ -279,257 +112,391 @@ contract Kernel is IAccount, IAccountExecute, IERC7579Account, ValidationManager
         }
     }
 
-    function isValidSignature(bytes32 hash, bytes calldata data) external view returns (bytes4) {
-        return _verifySignature(hash, data);
-    }
-
-    // --- Execution ---
-    function executeUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash)
-        external
-        payable
-        override
-        onlyEntryPoint
+    /// @notice ERC-1271 signature validation with nested EIP-712 support (ERC-7739).
+    /// @param hash The hash that was signed.
+    /// @param signature The signature bytes to verify.
+    /// @return The ERC-1271 magic value on success, or 0xffffffff on failure.
+    function isValidSignature(bytes32 hash, bytes calldata signature)
+        public
+        view
+        override(ERC1271, IERC7579Account)
+        returns (bytes4)
     {
-        bytes memory context;
-        IHook hook = executionHook[userOpHash];
-        bool callHook = address(hook) != HOOK_MODULE_INSTALLED;
-        if (callHook) {
-            // removed 4bytes selector
-            context = _doPreHook(hook, msg.value, userOp.callData[4:]);
-        }
-        (bool success, bytes memory ret) = ExecLib.executeDelegatecall(address(this), userOp.callData[4:]);
-        if (!success) {
-            revert ExecutionReverted();
-        }
-        if (callHook) {
-            _doPostHook(hook, context);
-        }
+        return ERC1271.isValidSignature(hash, signature);
     }
 
-    function executeFromExecutor(ExecMode execMode, bytes calldata executionCalldata)
+    function _processUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash)
+        internal
+        returns (uint256 validationData)
+    {
+        /*
+         userOp.nonce = vMode | vType | vId
+        */
+        ValidationMode vMode;
+        ValidationType vType;
+        ValidationId vId;
+        function(ValidationId, bytes32, PackedUserOperation memory, bytes calldata) returns (uint256) validateUserOpFn;
+        (vMode, vType, vId) = parseNonce(userOp.nonce);
+
+        bytes calldata signature = userOp.signature;
+        if (isEnable(vMode)) {
+            bool enableReplayable = isEnableReplayable(vMode);
+            EnableModeSignature calldata sig;
+            assembly {
+                sig := signature.offset
+            }
+            validationData = _verifyInstallSignatureRaw(enableReplayable, sig.nonce, sig.packages, sig.enableSignature);
+            _checkAndIncrementNonce(sig.nonce);
+            _install(sig.packages);
+            signature = sig.userOpSignature;
+        }
+        ValidationStorage storage $ = _validationStorage();
+
+        // For non-root validation, check if validation exists before checking selectors
+        if (vType != VALIDATION_TYPE_ROOT) {
+            require($.vInfo[vId].hook > HOOK_MODULE_NOT_INSTALLED, InvalidVid(vId));
+        }
+
+        // Bypass selector + hook handling when:
+        //   - vType == ROOT: ROOT is the unconditional last-resort access path. It is
+        //     intentionally exempt from selector allow-listing and from validation hooks
+        //     so that a misconfigured / compromised hook on a scoped validation cannot
+        //     lock the user out of their own account. Users who want hook-monitored
+        //     access should reach for it via a non-root validator or permission.
+        //   - non-ROOT with leading allow-listed selector AND no hook installed
+        //     (HOOK_MODULE_INSTALLED_NO_HOOK sentinel): cheap fast-path that skips the
+        //     executeUserOp wrapper because there is nothing for a hook to wrap.
+        // Any other case must route through executeUserOp with an allow-listed inner
+        // selector, and the validation-scoped hook is attached so executeUserOp's
+        // _preHook/_postHook fire around the inner delegatecall.
+        if (
+            vType == VALIDATION_TYPE_ROOT
+                || (_allowedSelector(vId, bytes4(userOp.callData[0:4]))
+                    && $.vInfo[vId].hook == HOOK_MODULE_INSTALLED_NO_HOOK)
+        ) {
+            // No-op, this is cheaper in gas
+        } else {
+            require(
+                bytes4(userOp.callData[0:4]) == this.executeUserOp.selector
+                    && _allowedSelector(vId, bytes4(userOp.callData[4:])),
+                UnauthorizedCallData()
+            );
+            _setValidationHook(userOpHash, IHook($.vInfo[vId].hook));
+        }
+        (vId, validateUserOpFn) = _checkValidation(vType, vId);
+        bytes32 opHash = isReplayable(vMode) ? Lib4337.chainAgnosticUserOpHash(msg.sender, userOp) : userOpHash;
+        validationData =
+            Lib4337.intersectValidationData(validationData, validateUserOpFn(vId, opHash, userOp, signature));
+    }
+
+    /// @notice Executes a user operation with validation-hook context.
+    /// @dev Called by the entry point after validateUserOp. Runs pre/post hooks stored transiently
+    ///      and delegatecalls the inner calldata (userOp.callData[4:]).
+    /// @dev SECURITY: The inner calldata (userOp.callData[4:]) is delegatecalled to `address(this)`
+    ///      with no additional selector or target validation. Any function on Kernel (including
+    ///      privileged ones like `installModule`, `setRoot`, `execute`) can be invoked this way.
+    ///      Authorization relies entirely on `validateUserOp` having approved the outer UserOp.
+    /// @param userOp The packed user operation containing the execution calldata.
+    /// @param userOpHash The hash of the user operation, used to retrieve the transient validation hook.
+    function executeUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash) external payable {
+        _onlyEntryPointOrSelf();
+        IHook hook = _validationHook(userOpHash);
+        bytes memory context = _preHook(hook, userOp.callData[4:]);
+        (bool success, bytes memory ret) = address(this).delegatecall(userOp.callData[4:]);
+        // propagate the revert message
+        if (!success) {
+            assembly {
+                revert(add(ret, 0x20), mload(ret))
+            }
+        }
+        _postHook(hook, context);
+    }
+
+    /// @notice Executes a call according to the given ERC-7579 execution mode.
+    /// @param mode The execution mode encoding call type and exec type (see LibERC7579).
+    /// @param executionData The ABI-encoded execution data matching the call type.
+    function execute(bytes32 mode, bytes calldata executionData) external payable {
+        _onlyEntryPointOrSelf();
+        _execute(mode, executionData);
+    }
+
+    /// @notice Executes a call on behalf of an installed executor module.
+    /// @dev The calling executor must be installed with a valid hook configuration.
+    /// @param mode The execution mode encoding call type and exec type.
+    /// @param executionData The ABI-encoded execution data matching the call type.
+    /// @return returnData Array of return data from each executed call.
+    function executeFromExecutor(bytes32 mode, bytes calldata executionData)
         external
         payable
         returns (bytes[] memory returnData)
     {
-        // no modifier needed, checking if msg.sender is registered executor will replace the modifier
-        IHook hook = _executorConfig(IExecutor(msg.sender)).hook;
-        if (address(hook) == HOOK_MODULE_NOT_INSTALLED) {
-            revert InvalidExecutor();
-        }
-        bytes memory context;
-        bool callHook = address(hook) != HOOK_MODULE_INSTALLED;
-        if (callHook) {
-            context = _doPreHook(hook, msg.value, msg.data);
-        }
-        returnData = ExecLib.execute(execMode, executionCalldata);
-        if (callHook) {
-            _doPostHook(hook, context);
-        }
+        return _executeFromExecutor(mode, executionData);
     }
 
-    function execute(ExecMode execMode, bytes calldata executionCalldata) external payable onlyEntryPointOrSelfOrRoot {
-        ExecLib.execute(execMode, executionCalldata);
-    }
-
-    function installModule(uint256 moduleType, address module, bytes calldata initData)
-        external
-        payable
-        override
-        onlyEntryPointOrSelfOrRoot
+    function _executeFromExecutor(bytes32 mode, bytes calldata executionData)
+        internal
+        executorHook
+        returns (bytes[] memory returnData)
     {
-        if (moduleType == MODULE_TYPE_VALIDATOR) {
-            ValidationStorage storage vs = _validationStorage();
-            ValidationId vId = ValidatorLib.validatorToIdentifier(IValidator(module));
-            if (vs.validationConfig[vId].nonce == vs.currentNonce) {
-                // only increase currentNonce when vId's currentNonce is same
+        return _execute(mode, executionData);
+    }
+
+    /// @dev SECURITY: When `callType` is `CALLTYPE_DELEGATECALL`, the fallback target executes
+    ///      in Kernel's storage context via `delegatecall`. A malicious or buggy fallback module
+    ///      can overwrite any Kernel storage slot. Only install trusted, audited fallback modules
+    ///      with `CALLTYPE_DELEGATECALL`. Prefer `CALLTYPE_SINGLE` (regular call) when possible.
+    function _fallback() internal returns (bytes memory res) {
+        /// @solidity memory-safe-assembly
+        assembly {
+            let s := shr(224, calldataload(0))
+            // 0x150b7a02: `onERC721Received(address,address,uint256,bytes)`.
+            // 0xf23a6e61: `onERC1155Received(address,address,uint256,uint256,bytes)`.
+            // 0xbc197c81: `onERC1155BatchReceived(address,address,uint256[],uint256[],bytes)`.
+            if or(eq(s, 0x150b7a02), or(eq(s, 0xf23a6e61), eq(s, 0xbc197c81))) {
+                // Assumes `mload(0x40) <= 0xffffffff` to save gas on cleaning lower bytes.
+                mstore(0x20, s) // Store `msg.sig`.
+                return(0x3c, 0x20) // Return `msg.sig`.
+            }
+        }
+
+        bytes4 selector = bytes4(msg.data[0:4]);
+        SelectorConfig storage $ = _selectorConfig(selector);
+        // target must be initialized, and if hook is not set only entrypoint can call it
+        require(
+            $.target != address(0) && ($.hook != IHook(HOOK_MODULE_NOT_INSTALLED) || msg.sender == address(ENTRYPOINT)),
+            InvalidSelector()
+        );
+        bytes memory hookData = _preHook($.hook, msg.data);
+
+        bool success;
+        if ($.callType == CALLTYPE_SINGLE) {
+            success = _call($.target, 0, abi.encodePacked(msg.data, msg.sender));
+        } else if ($.callType == CALLTYPE_DELEGATECALL) {
+            success = _delegateCall($.target, msg.data);
+        } else {
+            revert InvalidCallType();
+        }
+        if (!success) {
+            _onRevertThrow();
+        } else {
+            res = _getReturn();
+        }
+        _postHook($.hook, hookData);
+    }
+
+    /// @notice Advances the nonce for a given key, invalidating all lower nonce values.
+    /// @param nonceKey The 192-bit nonce key (upper 24 bytes of the 256-bit nonce).
+    /// @param seq The new sequence number; must be greater than the current value.
+    function setNonce(uint192 nonceKey, uint64 seq) external payable {
+        _onlyEntryPointOrSelf();
+        _setNonce(nonceKey, seq);
+    }
+
+    /// @notice Advances the global minimum nonce, invalidating all nonces below `seq` across all keys.
+    /// @param seq The new global minimum sequence number; must be greater than the current value.
+    function setValidNonceFrom(uint64 seq) external payable {
+        _onlyEntryPointOrSelf();
+        _setValidNonceFrom(seq);
+    }
+
+    /// @notice Installs a single module per ERC-7579.
+    /// @dev The initData is decoded as `InstallModuleDataFormat(bytes installData, bytes internalData)`.
+    /// @param moduleType The module type identifier (1=validator, 2=executor, 3=fallback, 4=hook, 5=policy, 6=signer).
+    /// @param module The address of the module contract to install.
+    /// @param initData ABI-encoded `InstallModuleDataFormat` containing install data and internal configuration.
+    function installModule(uint256 moduleType, address module, bytes calldata initData) external payable override {
+        _onlyEntryPointOrSelf();
+        InstallModuleDataFormat calldata imdf;
+        assembly {
+            imdf := initData.offset
+        }
+        _installModule(moduleType, module, imdf.installData, imdf.internalData);
+    }
+
+    /// @notice Uninstalls a single module per ERC-7579.
+    /// @param moduleType The module type identifier.
+    /// @param module The address of the module contract to uninstall.
+    /// @param initData ABI-encoded `InstallModuleDataFormat` containing uninstall data and internal configuration.
+    function uninstallModule(uint256 moduleType, address module, bytes calldata initData) external payable override {
+        _onlyEntryPointOrSelf();
+        InstallModuleDataFormat calldata imdf;
+        assembly {
+            imdf := initData.offset
+        }
+        _uninstallModule(moduleType, module, imdf.installData, imdf.internalData);
+    }
+
+    /// @notice Installs new modules and sets a new root validator, optionally removing the current one.
+    /// @dev The first package in `pkg` becomes the new root. If `removeCurrent` is true, the old root
+    ///      validator/permission is uninstalled using `uninstallData`.
+    /// @param pkg The array of module install packages; must be non-empty.
+    /// @param removeCurrent Whether to uninstall the current root validator/permission.
+    /// @param uninstallData Data passed to onUninstall for the current root (format depends on root type).
+    function setRoot(Install[] calldata pkg, bool removeCurrent, bytes calldata uninstallData) external payable {
+        _onlyEntryPointOrSelf();
+        require(pkg.length > 0, InvalidInitialization());
+        ValidationId vId = _validationStorage().root;
+        // Install the new packages first so the new root is guaranteed to be installed
+        // by the time `_setRoot` runs its installed-status check.
+        _install(pkg);
+        _setRoot(pkg[0]);
+        if (removeCurrent) {
+            ValidationType vType = getType(vId);
+            ValidationInfo memory vInfo = _validationStorage().vInfo[vId];
+            if (vType == VALIDATION_TYPE_VALIDATOR) {
+                (bool success,) =
+                    address(getValidator(vId)).call(abi.encodeWithSelector(IModule.onUninstall.selector, uninstallData));
+                _uninstallValidator(
+                    address(getValidator(vId)),
+                    // passing in uninstallData here to use calldata, but it's never used
+                    uninstallData,
+                    success
+                );
+            } else if (vType == VALIDATION_TYPE_PERMISSION) {
+                PermissionUninstallData calldata data;
+                assembly {
+                    data := uninstallData.offset
+                }
+                bytes[] calldata uninstallDataArr = data.uninstallData;
+                require(uninstallDataArr.length == vInfo.policies.length + 1, InvalidDataLength());
+                // uninstall policies first
+                // NOTE : success is not checked on purpose as we are focusing on removing not actually calling onUninstall
                 unchecked {
-                    vs.currentNonce++;
+                    for (uint256 i = vInfo.policies.length; i > 0; i--) {
+                        // forge-lint: disable-next-line(unchecked-call)
+                        vInfo.policies[i
+                                - 1].call(abi.encodeWithSelector(IModule.onUninstall.selector, uninstallDataArr[i - 1]));
+                        _uninstallPolicyWithVid(vInfo.policies[i - 1], vId);
+                    }
                 }
+
+                // forge-lint: disable-next-line(unchecked-call)
+                vInfo.signer
+                    .call(
+                        abi.encodeWithSelector(
+                            IModule.onUninstall.selector, uninstallDataArr[uninstallDataArr.length - 1]
+                        )
+                    );
+                _uninstallSignerWithVid(vInfo.signer, vId);
+            } else {
+                revert InvalidRootValidation();
             }
-            ValidationConfig memory config =
-                ValidationConfig({nonce: vs.currentNonce, hook: IHook(address(bytes20(initData[0:20])))});
-            InstallValidatorDataFormat calldata data;
-            assembly {
-                data := add(initData.offset, 20)
-            }
-            _installValidation(vId, config, data.validatorData, data.hookData);
-            if (data.selectorData.length == 4) {
-                // NOTE: we don't allow configure on selector data on v3.1+, but using bytes instead of bytes4 for selector data to make sure we are future proof
-                _grantAccess(vId, bytes4(data.selectorData[0:4]), true);
-            }
-        } else if (moduleType == MODULE_TYPE_EXECUTOR) {
-            InstallExecutorDataFormat calldata data;
-            assembly {
-                data := add(initData.offset, 20)
-            }
-            IHook hook = IHook(address(bytes20(initData[0:20])));
-            _installExecutor(IExecutor(module), data.executorData, hook);
-            _installHook(hook, data.hookData);
-        } else if (moduleType == MODULE_TYPE_FALLBACK) {
-            InstallFallbackDataFormat calldata data;
-            assembly {
-                data := add(initData.offset, 24)
-            }
-            _installSelector(bytes4(initData[0:4]), module, IHook(address(bytes20(initData[4:24]))), data.selectorData);
-            _installHook(IHook(address(bytes20(initData[4:24]))), data.hookData);
-        } else if (
-            moduleType == MODULE_TYPE_HOOK || moduleType == MODULE_TYPE_POLICY || moduleType == MODULE_TYPE_SIGNER
-        ) {
-            // force call onInstall for hook, policy, signer
-            // NOTE: for hook, kernel does not support independent hook install,
-            // NOTE: for policy, kernel does not support independent policy install,
-            // NOTE: for signer, kernel does not support independent signer install,
-            // hook is expected to be paired with proper validator/executor/selector
-            // policy is expected to be paired with proper permissionId
-            // to "ADD" permission, use "installValidations()" function
-            IHook(module).onInstall(initData);
-        } else {
-            revert InvalidModuleType();
         }
-        emit ModuleInstalled(moduleType, module);
     }
 
-    function grantAccess(ValidationId vId, bytes4 selector, bool allow) external payable onlyEntryPointOrSelfOrRoot {
-        _grantAccess(vId, selector, allow);
+    /// @notice Sets the root validation directly to an already-installed ValidationId.
+    /// @param vId The ValidationId to set as root (must be an installed validator or permission).
+    function setRoot(ValidationId vId) external payable {
+        _onlyEntryPointOrSelf();
+        _setRoot(vId);
     }
 
-    function installValidations(
-        ValidationId[] calldata vIds,
-        ValidationConfig[] memory configs,
-        bytes[] calldata validationData,
-        bytes[] calldata hookData
-    ) external payable onlyEntryPointOrSelfOrRoot {
-        _installValidations(vIds, configs, validationData, hookData);
+    /// @notice Grants a validation access to specific function selectors.
+    /// @param vId The ValidationId to grant selector access to.
+    /// @param selectors Packed bytes4 selectors (length must be a multiple of 4).
+    function grantAccess(ValidationId vId, bytes calldata selectors) external payable {
+        _onlyEntryPointOrSelf();
+        _grantAccess(vId, selectors);
     }
 
-    function uninstallValidation(ValidationId vId, bytes calldata deinitData, bytes calldata hookDeinitData)
+    /// @notice Installs modules using a root-signed enable-mode signature (no entry point required).
+    /// @dev Verifies the signature against the current root validator, then installs the packages.
+    /// @param replayable If true, the signature is verified without chain ID binding.
+    /// @param nonce The install nonce to prevent replay.
+    /// @param packages The array of module install packages.
+    /// @param signature The root validator's signature over the install digest.
+    function installModule(bool replayable, uint256 nonce, Install[] calldata packages, bytes calldata signature)
         external
         payable
-        onlyEntryPointOrSelfOrRoot
     {
-        IHook hook = _clearValidationData(vId);
-        ValidationType vType = ValidatorLib.getType(vId);
-        if (vType == VALIDATION_TYPE_VALIDATOR) {
-            IValidator validator = ValidatorLib.getValidator(vId);
-            ModuleLib.uninstallModule(address(validator), deinitData);
-            emit IERC7579Account.ModuleUninstalled(MODULE_TYPE_VALIDATOR, address(validator));
-        } else if (vType == VALIDATION_TYPE_PERMISSION) {
-            PermissionId permission = ValidatorLib.getPermissionId(vId);
-            _uninstallPermission(permission, deinitData);
-        } else {
-            revert InvalidValidationType();
+        // if 7702 or already initialized, use root signature to install module
+        require(_verifyInstallSignature(replayable, nonce, packages, signature), InstallSignatureVerificationFailed());
+        _install(packages);
+    }
+
+    /// @notice Batch-installs multiple modules from the entry point or self.
+    /// @param packages The array of module install packages.
+    function installModule(Install[] calldata packages) external payable {
+        _onlyEntryPointOrSelf();
+        _install(packages);
+    }
+
+    fallback(bytes calldata) external payable returns (bytes memory) {
+        return _fallback();
+    }
+
+    receive() external payable {
+        emit Received(msg.sender, msg.value);
+    }
+
+    /// @notice Returns whether the given execution mode is supported.
+    /// @param mode The ERC-7579 execution mode to check.
+    /// @return True if the mode's call type and exec type are supported.
+    function supportsExecutionMode(bytes32 mode) external pure override returns (bool) {
+        bytes1 callType = LibERC7579.getCallType(mode);
+        bytes1 execType = LibERC7579.getExecType(mode);
+        if (!(execType == LibERC7579.EXECTYPE_DEFAULT || execType == LibERC7579.EXECTYPE_TRY)) {
+            return false;
         }
-        _uninstallHook(hook, hookDeinitData);
-    }
-
-    function invalidateNonce(uint32 nonce) external payable onlyEntryPointOrSelfOrRoot {
-        _invalidateNonce(nonce);
-    }
-
-    function uninstallModule(uint256 moduleType, address module, bytes calldata deInitData)
-        external
-        payable
-        override
-        onlyEntryPointOrSelfOrRoot
-    {
-        if (moduleType == MODULE_TYPE_VALIDATOR) {
-            ValidationId vId = ValidatorLib.validatorToIdentifier(IValidator(module));
-            _clearValidationData(vId);
-        } else if (moduleType == MODULE_TYPE_EXECUTOR) {
-            _clearExecutorData(IExecutor(module));
-        } else if (moduleType == MODULE_TYPE_FALLBACK) {
-            bytes4 selector = bytes4(deInitData[0:4]);
-            address target;
-            _clearSelectorData(selector);
-            if (target == address(0)) {
-                return;
-            }
-            if (target != module) {
-                revert InvalidSelector();
-            }
-            deInitData = deInitData[4:];
-        } else if (moduleType == MODULE_TYPE_HOOK) {
-            ValidationId vId = _validationStorage().rootValidator;
-            if (_validationStorage().validationConfig[vId].hook == IHook(module)) {
-                // when root validator hook is being removed
-                // remove hook on root validator to prevent kernel from being locked
-                _validationStorage().validationConfig[vId].hook = IHook(HOOK_MODULE_INSTALLED);
-            }
-            // force call onUninstall for hook
-            // NOTE: for hook, kernel does not support independent hook install,
-            // hook is expected to be paired with proper validator/executor/selector
-        } else if (moduleType == MODULE_TYPE_POLICY || moduleType == MODULE_TYPE_SIGNER) {
-            ValidationId rootValidator = _validationStorage().rootValidator;
-            bytes32 permissionId = bytes32(deInitData[0:32]);
-            if (ValidatorLib.getType(rootValidator) == VALIDATION_TYPE_PERMISSION) {
-                if (permissionId == bytes32(PermissionId.unwrap(ValidatorLib.getPermissionId(rootValidator)))) {
-                    revert RootValidatorCannotBeRemoved();
-                }
-            }
-            // force call onUninstall for policy
-            // NOTE: for policy, kernel does not support independent policy install,
-            // policy is expected to be paired with proper permissionId
-            // to "REMOVE" permission, use "uninstallValidation()" function
-            // NOTE: for signer, kernel does not support independent signer install,
-            // signer is expected to be paired with proper permissionId
-            // to "REMOVE" permission, use "uninstallValidation()" function
-        } else {
-            revert InvalidModuleType();
+        if (!(callType == LibERC7579.CALLTYPE_SINGLE || callType == LibERC7579.CALLTYPE_BATCH
+                    || callType == LibERC7579.CALLTYPE_DELEGATECALL)) {
+            return false;
         }
-        ModuleLib.uninstallModule(module, deInitData);
-        emit ModuleUninstalled(moduleType, module);
+        return true;
     }
 
-    function supportsModule(uint256 moduleTypeId) external pure override returns (bool) {
-        return moduleTypeId < 7;
+    /// @notice Returns whether the given module type is supported.
+    /// @param moduleTypeId The module type identifier (1-6 are supported).
+    /// @return True if the module type is supported.
+    function supportsModule(uint256 moduleTypeId) external pure returns (bool) {
+        return moduleTypeId < 7 && moduleTypeId != 0;
     }
 
-    function isModuleInstalled(uint256 moduleType, address module, bytes calldata additionalContext)
+    /// @notice Checks whether a specific module is currently installed.
+    /// @param moduleTypeId The module type identifier.
+    /// @param module The module address to check.
+    /// @param additionalContext For fallback modules: the bytes4 selector. For policies/signers: the bytes4 PermissionId.
+    /// @return True if the module is installed for the given type and context.
+    function isModuleInstalled(uint256 moduleTypeId, address module, bytes calldata additionalContext)
         external
         view
         override
         returns (bool)
     {
-        if (moduleType == MODULE_TYPE_VALIDATOR) {
-            return _validationStorage().validationConfig[ValidatorLib.validatorToIdentifier(IValidator(module))].hook
-                != IHook(HOOK_MODULE_NOT_INSTALLED);
-        } else if (moduleType == MODULE_TYPE_EXECUTOR) {
+        if (moduleTypeId == MODULE_TYPE_VALIDATOR) {
+            ValidationId vId = validatorToIdentifier(IValidator(module));
+            return _validationStorage().vInfo[vId].hook != HOOK_MODULE_NOT_INSTALLED;
+        } else if (moduleTypeId == MODULE_TYPE_EXECUTOR) {
             return address(_executorConfig(IExecutor(module)).hook) != HOOK_MODULE_NOT_INSTALLED;
-        } else if (moduleType == MODULE_TYPE_FALLBACK) {
-            return _selectorConfig(bytes4(additionalContext[0:4])).target == module;
+        } else if (moduleTypeId == MODULE_TYPE_FALLBACK) {
+            // forge-lint: disable-next-line(unsafe-typecast)
+            bytes4 selector = bytes4(additionalContext);
+            return _selectorConfig(selector).target == module;
+        } else if (moduleTypeId == MODULE_TYPE_HOOK) {
+            return _hookStorage().enabled[module];
+        } else if (moduleTypeId == MODULE_TYPE_POLICY) {
+            // forge-lint: disable-next-line(unsafe-typecast)
+            ValidationId vId = permissionToIdentifier(PermissionId.wrap(bytes4(additionalContext)));
+            ValidationInfo storage $ = _validationStorage().vInfo[vId];
+            for (uint256 i = 0; i < $.policies.length; i++) {
+                if ($.policies[i] == module) {
+                    return true;
+                }
+            }
+            return false;
+        } else if (moduleTypeId == MODULE_TYPE_SIGNER) {
+            // forge-lint: disable-next-line(unsafe-typecast)
+            ValidationId vId = permissionToIdentifier(PermissionId.wrap(bytes4(additionalContext)));
+            ValidationInfo storage $ = _validationStorage().vInfo[vId];
+            return $.signer == module;
         } else {
-            return false;
+            revert NotImplemented();
         }
     }
 
+    /// @notice Returns the account implementation identifier per ERC-7579.
+    /// @return accountImplementationId The implementation ID string.
     function accountId() external pure override returns (string memory accountImplementationId) {
-        return "kernel.advanced.v0.3.3";
-    }
-
-    function supportsExecutionMode(ExecMode mode) external pure override returns (bool) {
-        (CallType callType, ExecType execType, ExecModeSelector selector, ExecModePayload payload) =
-            ExecLib.decode(mode);
-        if (
-            callType != CALLTYPE_BATCH && callType != CALLTYPE_SINGLE && callType != CALLTYPE_DELEGATECALL
-                && callType != CALLTYPE_STATIC
-        ) {
-            return false;
-        }
-
-        if (
-            ExecType.unwrap(execType) != ExecType.unwrap(EXECTYPE_TRY)
-                && ExecType.unwrap(execType) != ExecType.unwrap(EXECTYPE_DEFAULT)
-        ) {
-            return false;
-        }
-
-        if (ExecModeSelector.unwrap(selector) != ExecModeSelector.unwrap(EXEC_MODE_DEFAULT)) {
-            return false;
-        }
-
-        if (ExecModePayload.unwrap(payload) != bytes22(0)) {
-            return false;
-        }
-        return true;
+        return "kernel.v0.4";
     }
 }

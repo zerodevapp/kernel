@@ -1,0 +1,21 @@
+KernelUUPS_Test
+├── when authorizeUpgrade is called by EntryPoint
+│   └── it should not revert
+├── when authorizeUpgrade is called by self
+│   └── it should not revert
+├── when authorizeUpgrade is called by unauthorized caller
+│   └── it should revert with Unauthorized
+├── when initialize is called for the first time with valid packages
+│   └── it should initialize the kernel and install root
+├── when initialize is called a second time
+│   └── it should revert with InvalidInitialization
+├── when initialize is called with empty packages
+│   └── it should revert with InvalidInitialization
+├── when initialize is called with multiple packages
+│   └── it should install all packages and set first as root
+├── when constructor is called
+│   └── it should disable initializers on the implementation
+├── when initialize is called with value
+│   └── it should accept ETH during initialization
+└── when upgradeToAndCall is called with initialization data
+    └── it should upgrade and run the callback

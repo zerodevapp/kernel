@@ -1,0 +1,5 @@
+KernelFactory_getECDSAAddress
+└── given any packages and nonce
+    ├── it should return the deterministic address without deploying
+    ├── it should return the same address for the same signer, packages, and nonce
+    └── it should return different addresses for different signers, packages, or nonces

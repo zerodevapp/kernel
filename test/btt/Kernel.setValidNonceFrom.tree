@@ -1,0 +1,11 @@
+Kernel_setValidNonceFrom
+├── when the caller is not the EntryPoint or self
+│   └── it should revert with Unauthorized error
+└── when the caller is the EntryPoint or self
+    ├── when setting a new valid nonce from value
+    │   └── it should update the validNonceFrom storage
+    └── when validating nonces
+        ├── given the nonce is below validNonceFrom
+        │   └── it should be invalid
+        └── given the nonce is at or above validNonceFrom
+            └── it should be valid

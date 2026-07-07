@@ -1,0 +1,8 @@
+KernelFactory_constructor
+├── when uups implementation has no code
+│   └── it should revert with ImplementationNotDeployed
+├── when immutableEcdsa implementation has no code
+│   └── it should revert with ImplementationNotDeployed
+└── when both implementations are deployed
+    ├── it should set the UUPS immutable
+    └── it should set the IMMUTABLE_ECDSA immutable

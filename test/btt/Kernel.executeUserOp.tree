@@ -1,0 +1,15 @@
+Kernel_executeUserOp
+├── when the caller is not the EntryPoint or self
+│   └── it should revert with Unauthorized error
+└── when the caller is the EntryPoint or self
+    ├── given the validation hook is set
+    │   ├── it should call preHook with the callData
+    │   ├── when the inner delegatecall succeeds
+    │   │   └── it should call postHook with the context
+    │   └── when the inner delegatecall reverts
+    │       └── it should propagate the revert
+    └── given no validation hook is set
+        ├── when the inner delegatecall succeeds
+        │   └── it should return successfully
+        └── when the inner delegatecall reverts
+            └── it should propagate the revert

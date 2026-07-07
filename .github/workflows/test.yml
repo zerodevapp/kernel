@@ -1,77 +1,43 @@
-name: ci
+name: CI
 
 on:
-  pull_request:
-    branches: [dev,fix/ci]
-    paths:
-      - '**.sol'
-      - '**.yml'
   push:
-    branches: [dev,fix/ci]
-    paths:
-      - '**.sol'
-      - '**.yml'
+  pull_request:
+  workflow_dispatch:
+
+env:
+  FOUNDRY_PROFILE: ci
+
 jobs:
-  tests:
-    name: Forge Testing
-    runs-on: ubuntu-latest
-    env:
-      FOUNDRY_DISABLE_NIGHTLY_WARNING: true
-
+  check:
     strategy:
-      matrix:
-        profile: [post-prague,post-prague-via-ir,via-ir,min-solc,min-solc-via-ir]
+      fail-fast: true
 
+    name: Foundry project
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
-        with:
-          version: nightly
 
-      - name: Install Dependencies
-        run: forge install
-      
-      - name: show list
-        run: ls
+      - name: Show Forge version
+        run: |
+          forge --version
 
-      - name : pwd
-        run: pwd
+      - name: Run Forge fmt
+        run: |
+          forge fmt --check
+        id: fmt
 
-      - name: Run Tests with ${{ matrix.profile }}
-        run: >
-          ( [ "${{ matrix.profile }}" = "post-prague" ] &&
-            forge test --use 0.8.28 --evm-version "prague"
-          ) ||
-          ( [ "${{ matrix.profile }}" = "post-prague-via-ir" ] &&
-            forge test --use 0.8.28 --evm-version "prague" --via-ir
-          ) ||
-          ( [ "${{ matrix.profile }}" = "via-ir" ] &&
-            forge test --via-ir
-          ) ||
-          ( [ "${{ matrix.profile }}" = "min-solc" ] &&
-            forge fmt --check &&
-            forge test --use 0.8.28
-          ) ||
-          ( [ "${{ matrix.profile }}" = "min-solc-via-ir" ] &&
-            forge test --use 0.8.28 --via-ir
-          ) 
+      - name: Run Forge build
+        run: |
+          forge build --sizes --skip MockKernel
+        id: build
 
-  codespell:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os:
-          - ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Run codespell
-        uses: codespell-project/actions-codespell@v2.0
-        with:
-          check_filenames: true
-          ignore_words_list: usera
-          skip: ./.git,package-lock.json,ackee-blockchain-solady-report.pdf,EIP712Mock.sol,yarn.lock
+      - name: Run Forge tests
+        run: |
+          forge test -vvv
+        id: test

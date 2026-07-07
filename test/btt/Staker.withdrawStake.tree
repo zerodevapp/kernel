@@ -1,0 +1,5 @@
+Staker_withdrawStake
+├── when the caller is not the owner
+│   └── it should revert with Unauthorized error
+└── when the caller is the owner
+    └── it should call withdrawStake on the EntryPoint with the recipient
