@@ -411,10 +411,6 @@ Key settings in `foundry.toml`:
 - **Optimizer**: 200 runs
 - **Invariant**: 1000 runs, 1000 depth
 
-## Security
-
-See [CHANGELOG_AUDIT.md](./CHANGELOG_AUDIT.md) for the full audit changelog covering all changes since the last audit.
-
 ## License
 
 MIT
