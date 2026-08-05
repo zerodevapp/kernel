@@ -381,11 +381,11 @@ contract IntersectValidationDataTest is Test {
         uint48 validAfter2,
         uint48 validUntil2
     ) public {
-        // Mask to lower bits then add MODE_BIT to ensure block number format
-        validAfter1 = (validAfter1 & TIMESTAMP_MASK) | MODE_BIT;
-        validUntil1 = (validUntil1 & TIMESTAMP_MASK) | MODE_BIT;
-        validAfter2 = (validAfter2 & TIMESTAMP_MASK) | MODE_BIT;
-        validUntil2 = (validUntil2 & TIMESTAMP_MASK) | MODE_BIT;
+        // EntryPoint v0.9 uses block number format only when both bounds exceed MODE_BIT.
+        validAfter1 = (validAfter1 & (TIMESTAMP_MASK - 1)) + MODE_BIT + 1;
+        validUntil1 = (validUntil1 & (TIMESTAMP_MASK - 1)) + MODE_BIT + 1;
+        validAfter2 = (validAfter2 & (TIMESTAMP_MASK - 1)) + MODE_BIT + 1;
+        validUntil2 = (validUntil2 & (TIMESTAMP_MASK - 1)) + MODE_BIT + 1;
 
         uint256 val1 = createValidationData(validAfter1, validUntil1, address(0));
         uint256 val2 = createValidationData(validAfter2, validUntil2, address(0));
@@ -463,4 +463,3 @@ contract IntersectValidationDataTest is Test {
         assertEq(uint48(result >> 160), 200 | MODE_BIT, "M-03: block validUntil must be preserved");
     }
 }
-

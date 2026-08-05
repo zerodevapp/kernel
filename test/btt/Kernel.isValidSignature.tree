@@ -2,26 +2,10 @@ Kernel_isValidSignature
 ├── when hash equals ERC7739_MAGIC_HASH
 │   └── it should return ERC7739 support indicator
 └── when hash is not ERC7739_MAGIC_HASH
-    ├── given the signature mode byte indicates enable mode
-    │   ├── given the validation type is ROOT
-    │   │   └── it should revert with InvalidValidationType error
-    │   ├── given the enable nonce is invalid
-    │   │   └── it should revert with InvalidNonce error
-    │   ├── given the enable signature is invalid
-    │   │   └── it should return ERC1271_INVALID
-    │   └── given the enable signature is valid
-    │       ├── it should install-validate the packages in the signature
-    │       ├── it should continue with stateless signature validation
-    │       ├── given the validator package is missing
-    │       │   └── it should revert with InvalidValidator error
-    │       └── given the permission signatures are inconsistent
-    │           └── it should revert with InvalidPermissionId error
-    ├── given enable mode is replayable
-    │   ├── it should verify the enable signature without chainId
-    │   └── it should allow cross-chain enable mode
-    ├── given enable mode is not replayable
-    │   ├── it should verify the enable signature with chainId
-    │   └── it should fail on different chains
+    ├── given the structured signature is truncated
+    │   └── it should return ERC1271_INVALID
+    ├── given the signature includes the removed validation-mode prefix
+    │   └── it should return ERC1271_INVALID
     ├── given the validation type is ROOT
     │   ├── given the signature format is TypedDataSign
     │   │   ├── when the root validator returns valid

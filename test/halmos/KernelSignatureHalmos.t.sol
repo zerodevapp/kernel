@@ -33,14 +33,14 @@ contract KernelSignatureHalmos is SymTest, Test {
         bytes32 hash = bytes32(svm.createBytes(32, "hash"));
         bytes memory sig = svm.createBytes(65, "sig");
         rootValidator.sudoSetValidSig(sig);
-        bytes4 ret = kernel.isValidSignature(hash, abi.encodePacked(bytes1(0), bytes1(0), sig));
+        bytes4 ret = kernel.isValidSignature(hash, abi.encodePacked(bytes1(0), sig));
         assertEq(ret, ERC1271_MAGICVALUE);
     }
 
     function checkRootSignatureInvalid() external {
         bytes32 hash = bytes32(svm.createBytes(32, "hash"));
         bytes memory sig = svm.createBytes(65, "sig");
-        bytes4 ret = kernel.isValidSignature(hash, abi.encodePacked(bytes1(0), bytes1(0), sig));
+        bytes4 ret = kernel.isValidSignature(hash, abi.encodePacked(bytes1(0), sig));
         assertEq(ret, ERC1271_INVALID);
     }
 
@@ -48,7 +48,7 @@ contract KernelSignatureHalmos is SymTest, Test {
         bytes32 hash = bytes32(svm.createBytes(32, "hash"));
         bytes memory sig = svm.createBytes(65, "sig");
         vm.expectRevert(InvalidValidationType.selector);
-        kernel.isValidSignature(hash, abi.encodePacked(bytes1(0), bytes1(0x03), sig));
+        kernel.isValidSignature(hash, abi.encodePacked(bytes1(0x03), sig));
     }
 
     function checkValidatorNotInstalledReverts() external {
@@ -56,6 +56,6 @@ contract KernelSignatureHalmos is SymTest, Test {
         bytes32 hash = bytes32(svm.createBytes(32, "hash"));
         bytes memory sig = svm.createBytes(65, "sig");
         vm.expectRevert(abi.encodeWithSelector(InvalidVid.selector, validatorToIdentifier(validator)));
-        kernel.isValidSignature(hash, abi.encodePacked(bytes1(0), bytes1(0x01), bytes20(address(validator)), sig));
+        kernel.isValidSignature(hash, abi.encodePacked(bytes1(0x01), bytes20(address(validator)), sig));
     }
 }

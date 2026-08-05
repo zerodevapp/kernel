@@ -12,7 +12,7 @@ import {KernelFactory} from "src/KernelFactory.sol";
 import {Install} from "src/types/Structs.sol";
 import {MockValidator} from "../mock/MockValidator.sol";
 import {MockExecutor} from "../mock/MockExecutor.sol";
-import {ERC1271_MAGICVALUE, ERC1271_INVALID} from "src/types/Constants.sol";
+import {ERC1271_MAGICVALUE} from "src/types/Constants.sol";
 import {InvalidValidationType} from "src/types/Error.sol";
 import {Received} from "src/types/Events.sol";
 import {EntryPointLib} from "../utils/EntryPointLib.sol";
@@ -194,7 +194,6 @@ contract Kernel7702_Test is Test {
     }
 
     function test_WhenIsValidSignatureReceivesAnInvalidRawECDSASignature() external {
-        // it should revert because fallthrough parses invalid validation type
         bytes32 hash = keccak256("test_invalid_signature");
         (, uint256 wrongKey) = makeAddrAndKey("WrongSigner");
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(wrongKey, hash);

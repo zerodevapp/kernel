@@ -98,13 +98,12 @@ contract CheckValidationTest is Test {
         assertTrue(Lib4337.checkValidation(_pack(MODE_BIT | 100, 0, address(0))));
     }
 
-    // --- exact MODE_BIT classification (>= MODE_BIT, equality counts) --------
+    // --- exact MODE_BIT classification (strictly greater than the flag) -------
 
-    function test_ExactModeBitBound_ClassifiesAsBlockMode() public pure {
-        // RP-01: a bound exactly equal to MODE_BIT counts as block-number format (>= MODE_BIT),
-        // not just strictly greater. Both bounds must carry the flag.
-        assertTrue(Lib4337._usesBlockNumberFormat(MODE_BIT, MODE_BIT));
-        assertTrue(Lib4337._usesBlockNumberFormat(MODE_BIT, MODE_BIT | 10));
+    function test_ExactModeBitBound_ClassifiesAsTimestampMode() public pure {
+        // EntryPoint v0.9 uses block-number mode only when both bounds exceed the flag.
+        assertFalse(Lib4337._usesBlockNumberFormat(MODE_BIT, MODE_BIT));
+        assertFalse(Lib4337._usesBlockNumberFormat(MODE_BIT, MODE_BIT | 10));
         // One bound below MODE_BIT → timestamp format.
         assertFalse(Lib4337._usesBlockNumberFormat(MODE_BIT - 1, MODE_BIT));
         assertFalse(Lib4337._usesBlockNumberFormat(MODE_BIT, MODE_BIT - 1));

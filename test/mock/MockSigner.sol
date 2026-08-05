@@ -9,7 +9,6 @@ contract MockSigner is ISigner {
     mapping(address wallet => bytes) public data;
     mapping(address => mapping(bytes32 => bytes)) public sig;
     mapping(address => mapping(bytes32 => bool)) public pass;
-    bool success;
     uint256 public customValidationData;
 
     function sudoSetValidSig(address _wallet, bytes32 _id, bytes calldata _sig) external payable {
@@ -17,7 +16,6 @@ contract MockSigner is ISigner {
     }
 
     function sudoSetPass(address _wallet, bytes32 _id, bool _flag) external payable {
-        success = _flag;
         pass[_wallet][_id] = _flag;
     }
 
@@ -62,13 +60,5 @@ contract MockSigner is ISigner {
         } else {
             return 0xffffffff;
         }
-    }
-
-    function validateSignatureWithDataWithSender(address, bytes32, bytes calldata signature, bytes calldata)
-        external
-        view
-        returns (bool)
-    {
-        return success;
     }
 }
