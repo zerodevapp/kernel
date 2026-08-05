@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 /// @notice Emitted when a module is installed on the account.
-/// @param moduleType The module type identifier (1=validator, 2=executor, 3=fallback, 5=policy, 6=signer).
+/// @param moduleType The module type identifier (1=validator, 2=executor, 3=fallback, 5=policy, 6=signer, 11=scoped execution hook).
 /// @param module The address of the installed module.
 event ModuleInstalled(uint256 moduleType, address module);
 

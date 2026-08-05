@@ -1,17 +1,26 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {IModule, IValidator} from "../interfaces/IERC7579Modules.sol";
+import {IModule, IValidator, IExecutor, IScopedExecutionHook} from "../interfaces/IERC7579Modules.sol";
 import {ValidationManager} from "./ValidationManager.sol";
 import {ExecutorManager} from "./ExecutorManager.sol";
 import {SelectorManager} from "./SelectorManager.sol";
 import {ERC1271} from "../lib/ERC1271.sol";
-import {InvalidValidationType, InvalidNonce, NotImplemented, PermissionInstallNotFinished} from "../types/Error.sol";
+import {
+    InvalidValidationType,
+    InvalidNonce,
+    NotImplemented,
+    PermissionInstallNotFinished,
+    InvalidDataLength,
+    InvalidScopedExecutionHookTarget,
+    ScopedExecutionHookAlreadyInstalled,
+    ModuleInstallFailed
+} from "../types/Error.sol";
 import {ModuleInstalled, ModuleUninstalled} from "../types/Events.sol";
-import {Install, ModuleStorage} from "../types/Structs.sol";
+import {Install, ModuleStorage, ExecutorConfig, SelectorConfig} from "../types/Structs.sol";
 import {ValidationId, ValidationType, PermissionId} from "../types/Types.sol";
 import {Lib4337} from "../lib/Lib4337.sol";
-import {validatorToIdentifier, permissionToIdentifier} from "../lib/Utils.sol";
+import {getType, validatorToIdentifier, permissionToIdentifier} from "../lib/Utils.sol";
 import {
     MODULE_MANAGER_STORAGE_SLOT,
     VALIDATION_TYPE_ROOT,
@@ -23,7 +32,11 @@ import {
     MODULE_TYPE_EXECUTOR,
     MODULE_TYPE_FALLBACK,
     MODULE_TYPE_POLICY,
-    MODULE_TYPE_SIGNER
+    MODULE_TYPE_SIGNER,
+    MODULE_TYPE_SCOPED_EXECUTION_HOOK,
+    SCOPED_EXECUTION_HOOK_VALIDATION_SCOPE,
+    SCOPED_EXECUTION_HOOK_EXECUTOR_SCOPE,
+    SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE
 } from "../types/Constants.sol";
 import {EfficientHashLib} from "solady/utils/EfficientHashLib.sol";
 
@@ -122,8 +135,88 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, SelectorM
         return EfficientHashLib.hash(buffer);
     }
 
+    /// @notice Installs a scoped execution hook for a validation, executor, or selector.
+    /// @dev internalData is `[scope | target]`: 22 bytes for a ValidationId,
+    ///      21 bytes for an executor address, or 5 bytes for a selector.
+    function _installScopedExecutionHook(address hook, bytes calldata internalData, bool installSuccess) internal {
+        require(installSuccess && hook.code.length > 0, ModuleInstallFailed());
+        bytes1 scope = _scopedExecutionHookScope(internalData);
+        if (scope == SCOPED_EXECUTION_HOOK_VALIDATION_SCOPE) {
+            require(internalData.length == 22, InvalidDataLength());
+            ValidationId vId = ValidationId.wrap(bytes21(internalData[1:22]));
+            ValidationType vType = getType(vId);
+            require(
+                vType == VALIDATION_TYPE_VALIDATOR || vType == VALIDATION_TYPE_PERMISSION,
+                InvalidScopedExecutionHookTarget()
+            );
+            _installValidationScopedExecutionHook(hook, vId, installSuccess);
+        } else if (scope == SCOPED_EXECUTION_HOOK_EXECUTOR_SCOPE) {
+            require(internalData.length == 21, InvalidDataLength());
+            IExecutor executor = IExecutor(address(bytes20(internalData[1:21])));
+            ExecutorConfig storage config = _executorConfig(executor);
+            require(config.installed, InvalidScopedExecutionHookTarget());
+            require(address(config.scopedExecutionHook) == address(0), ScopedExecutionHookAlreadyInstalled());
+            config.scopedExecutionHook = IScopedExecutionHook(hook);
+        } else if (scope == SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE) {
+            require(internalData.length == 5, InvalidDataLength());
+            bytes4 selector = bytes4(internalData[1:5]);
+            SelectorConfig storage config = _selectorConfig(selector);
+            require(config.target != address(0), InvalidScopedExecutionHookTarget());
+            require(address(config.scopedExecutionHook) == address(0), ScopedExecutionHookAlreadyInstalled());
+            config.scopedExecutionHook = IScopedExecutionHook(hook);
+        } else {
+            revert InvalidScopedExecutionHookTarget();
+        }
+    }
+
+    /// @notice Uninstalls a scoped execution hook from a validation, executor, or selector.
+    function _uninstallScopedExecutionHook(address hook, bytes calldata internalData, bool) internal {
+        bytes1 scope = _scopedExecutionHookScope(internalData);
+        if (scope == SCOPED_EXECUTION_HOOK_VALIDATION_SCOPE) {
+            require(internalData.length == 22, InvalidDataLength());
+            _uninstallScopedExecutionHookWithVid(hook, ValidationId.wrap(bytes21(internalData[1:22])));
+        } else if (scope == SCOPED_EXECUTION_HOOK_EXECUTOR_SCOPE) {
+            require(internalData.length == 21, InvalidDataLength());
+            ExecutorConfig storage config = _executorConfig(IExecutor(address(bytes20(internalData[1:21]))));
+            require(address(config.scopedExecutionHook) == hook, InvalidScopedExecutionHookTarget());
+            config.scopedExecutionHook = IScopedExecutionHook(address(0));
+        } else if (scope == SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE) {
+            require(internalData.length == 5, InvalidDataLength());
+            SelectorConfig storage config = _selectorConfig(bytes4(internalData[1:5]));
+            require(address(config.scopedExecutionHook) == hook, InvalidScopedExecutionHookTarget());
+            config.scopedExecutionHook = IScopedExecutionHook(address(0));
+        } else {
+            revert InvalidScopedExecutionHookTarget();
+        }
+    }
+
+    function _scopedExecutionHookScope(bytes calldata internalData) private pure returns (bytes1 scope) {
+        require(internalData.length > 0, InvalidDataLength());
+        scope = bytes1(internalData[0]);
+    }
+
+    function _isScopedExecutionHookInstalled(address hook, bytes calldata context) internal view returns (bool) {
+        if (context.length == 0) return false;
+        bytes1 scope = bytes1(context[0]);
+        if (scope == SCOPED_EXECUTION_HOOK_VALIDATION_SCOPE) {
+            if (context.length != 22) return false;
+            ValidationId vId = ValidationId.wrap(bytes21(context[1:22]));
+            return address(_validationStorage().vInfo[vId].scopedExecutionHook) == hook;
+        }
+        if (scope == SCOPED_EXECUTION_HOOK_EXECUTOR_SCOPE) {
+            if (context.length != 21) return false;
+            address executor = address(bytes20(context[1:21]));
+            return address(_executorConfig(IExecutor(executor)).scopedExecutionHook) == hook;
+        }
+        if (scope == SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE) {
+            if (context.length != 5) return false;
+            return address(_selectorConfig(bytes4(context[1:5])).scopedExecutionHook) == hook;
+        }
+        return false;
+    }
+
     /// @notice Routes a module installation to the appropriate type-specific handler.
-    /// @param moduleType The module type (1=validator, 2=executor, 3=fallback, 5=policy, 6=signer).
+    /// @param moduleType The module type (1=validator, 2=executor, 3=fallback, 5=policy, 6=signer, 11=scoped execution hook).
     /// @param module The module address.
     /// @param moduleData Data forwarded to the module's onInstall callback.
     /// @param internalData Kernel-internal configuration data (format varies by module type).
@@ -142,6 +235,8 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, SelectorM
             hook = _installPolicy;
         } else if (moduleType == MODULE_TYPE_SIGNER) {
             hook = _installSigner;
+        } else if (moduleType == MODULE_TYPE_SCOPED_EXECUTION_HOOK) {
+            hook = _installScopedExecutionHook;
         } else {
             revert NotImplemented();
         }
@@ -171,6 +266,8 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, SelectorM
             hook = _uninstallPolicy;
         } else if (moduleType == MODULE_TYPE_SIGNER) {
             hook = _uninstallSigner;
+        } else if (moduleType == MODULE_TYPE_SCOPED_EXECUTION_HOOK) {
+            hook = _uninstallScopedExecutionHook;
         } else {
             revert NotImplemented();
         }

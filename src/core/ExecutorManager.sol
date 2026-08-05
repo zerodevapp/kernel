@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import {EXECUTOR_MANAGER_STORAGE_SLOT} from "../types/Constants.sol";
 import {IExecutor} from "../interfaces/IERC7579Modules.sol";
 import {ExecutorStorage, ExecutorConfig} from "../types/Structs.sol";
-import {InvalidDataLength} from "../types/Error.sol";
+import {InvalidDataLength, ScopedExecutionHookStillInstalled} from "../types/Error.sol";
 
 /// @title ExecutorManager
 /// @author taek <leekt216@gmail.com>
@@ -26,7 +26,7 @@ abstract contract ExecutorManager {
         config = _executorStorage().executorConfig[executor];
     }
 
-    /// @notice Installs an executor module without a hook.
+    /// @notice Installs an executor module.
     function _installExecutor(address _executor, bytes calldata _internalData, bool) internal {
         require(_internalData.length == 0, InvalidDataLength());
         // Executor installation intentionally does not depend on onInstall success.
@@ -36,6 +36,8 @@ abstract contract ExecutorManager {
     /// @notice Uninstalls an executor module.
     function _uninstallExecutor(address _executor, bytes calldata _internalData, bool) internal {
         require(_internalData.length == 0, InvalidDataLength());
-        _executorConfig(IExecutor(_executor)).installed = false;
+        ExecutorConfig storage config = _executorConfig(IExecutor(_executor));
+        require(address(config.scopedExecutionHook) == address(0), ScopedExecutionHookStillInstalled());
+        config.installed = false;
     }
 }

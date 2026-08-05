@@ -39,6 +39,15 @@ error OccupiedValidationId();
 /// @notice Thrown when policies are not uninstalled in reverse order (LIFO).
 error InvalidPermissionUninstallOrder();
 
+/// @notice Thrown when removing a target before its scoped execution hook.
+error ScopedExecutionHookStillInstalled();
+
+/// @notice Thrown when a scoped-execution-hook scope or target is invalid or not installed.
+error InvalidScopedExecutionHookTarget();
+
+/// @notice Thrown when a scoped execution hook is already installed for a target.
+error ScopedExecutionHookAlreadyInstalled();
+
 /// @notice Thrown when a permission ID does not match the expected signer or policy configuration.
 error InvalidPermissionId();
 

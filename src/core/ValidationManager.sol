@@ -3,12 +3,15 @@ pragma solidity ^0.8.0;
 
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
 import {IAccountExecute} from "account-abstraction/interfaces/IAccountExecute.sol";
-import {IValidator, IPolicy, ISigner} from "../interfaces/IERC7579Modules.sol";
+import {IValidator, IPolicy, ISigner, IScopedExecutionHook} from "../interfaces/IERC7579Modules.sol";
 import {
     InvalidRootValidation,
     ModuleInstallFailed,
     OccupiedValidationId,
     InvalidPermissionUninstallOrder,
+    ScopedExecutionHookStillInstalled,
+    ScopedExecutionHookAlreadyInstalled,
+    InvalidScopedExecutionHookTarget,
     InvalidPermissionId,
     InvalidSelectorGrant,
     InvalidValidationType,
@@ -34,12 +37,23 @@ import {
 } from "../types/Constants.sol";
 import {PermissionSignature, ValidationStorage, ValidationInfo, Install} from "../types/Structs.sol";
 import {Lib4337} from "../lib/Lib4337.sol";
-import {getType, getValidator, getPermissionId, validatorToIdentifier, permissionToIdentifier} from "../lib/Utils.sol";
+import {
+    getType,
+    getValidator,
+    getPermissionId,
+    validatorToIdentifier,
+    permissionToIdentifier,
+    validationScopedExecutionHookId
+} from "../lib/Utils.sol";
 
 /// @title ValidationManager
 /// @author taek <leekt216@gmail.com>
 /// @notice Manages validation identifiers (validators and permissions), root validation, and signature verification.
 abstract contract ValidationManager {
+    bytes32 private constant _SCOPED_EXECUTION_HOOK_ADDRESS_KEY = keccak256("kernel.scopedExecutionHook.address");
+    bytes32 private constant _SCOPED_EXECUTION_HOOK_VALIDATION_ID_KEY =
+        keccak256("kernel.scopedExecutionHook.validationId");
+
     /// @dev Tracks the permission being installed within a batch to ensure consistency.
     ValidationId transient installingPermission;
 
@@ -48,6 +62,37 @@ abstract contract ValidationManager {
     function root() external view returns (ValidationId) {
         ValidationStorage storage $ = _validationStorage();
         return $.root;
+    }
+
+    /// @notice Retrieves the validation ID and scoped execution hook stored for a userOp hash.
+    function _validationScopedExecutionHook(bytes32 userOpHash)
+        internal
+        view
+        returns (ValidationId vId, IScopedExecutionHook hook)
+    {
+        bytes32 hookKey = keccak256(abi.encodePacked(_SCOPED_EXECUTION_HOOK_ADDRESS_KEY, userOpHash));
+        bytes32 vIdKey = keccak256(abi.encodePacked(_SCOPED_EXECUTION_HOOK_VALIDATION_ID_KEY, userOpHash));
+        assembly {
+            hook := tload(hookKey)
+            vId := tload(vIdKey)
+        }
+    }
+
+    /// @notice Stores a validation ID and scoped execution hook keyed by the userOp hash.
+    function _setValidationScopedExecutionHook(bytes32 userOpHash, ValidationId vId, IScopedExecutionHook hook)
+        internal
+    {
+        bytes32 hookKey = keccak256(abi.encodePacked(_SCOPED_EXECUTION_HOOK_ADDRESS_KEY, userOpHash));
+        bytes32 vIdKey = keccak256(abi.encodePacked(_SCOPED_EXECUTION_HOOK_VALIDATION_ID_KEY, userOpHash));
+        assembly {
+            tstore(hookKey, hook)
+            tstore(vIdKey, vId)
+        }
+    }
+
+    /// @notice Returns the scoped identifier exposed to a validation-scoped execution hook.
+    function _validationScopedExecutionHookId(ValidationId vId) internal pure returns (bytes32) {
+        return validationScopedExecutionHookId(vId);
     }
 
     /// @notice Returns the validation info (hook, signer, policies) for a given ValidationId.
@@ -146,6 +191,18 @@ abstract contract ValidationManager {
         installingPermission = ValidationId.wrap(bytes21(0));
     }
 
+    /// @notice Installs a scoped execution hook for an existing validator or permission.
+    function _installValidationScopedExecutionHook(address _hook, ValidationId vId, bool _installSuccess) internal {
+        require(_installSuccess && _hook.code.length > 0, ModuleInstallFailed());
+        ValidationInfo storage info = _validationStorage().vInfo[vId];
+        require(info.installed, InvalidScopedExecutionHookTarget());
+        if (getType(vId) == VALIDATION_TYPE_PERMISSION) {
+            require(info.signer != address(0), InvalidScopedExecutionHookTarget());
+        }
+        require(address(info.scopedExecutionHook) == address(0), ScopedExecutionHookAlreadyInstalled());
+        info.scopedExecutionHook = IScopedExecutionHook(_hook);
+    }
+
     /// @notice Validates that a permission install is consistent (same PermissionId within a batch).
     /// @param _internalData Data with PermissionId in the first 4 bytes.
     /// @param _installSuccess Whether the module's onInstall call succeeded.
@@ -171,6 +228,7 @@ abstract contract ValidationManager {
     function _uninstallValidation(ValidationId _vId) internal {
         ValidationStorage storage $ = _validationStorage();
         require($.root != _vId, CannotUninstallRoot());
+        require(address($.vInfo[_vId].scopedExecutionHook) == address(0), ScopedExecutionHookStillInstalled());
         $.vInfo[_vId].installed = false;
     }
 
@@ -179,6 +237,13 @@ abstract contract ValidationManager {
     function _uninstallValidator(address _validator, bytes calldata, bool) internal {
         ValidationId vId = validatorToIdentifier(IValidator(_validator));
         _uninstallValidation(vId);
+    }
+
+    /// @notice Uninstalls a scoped execution hook without uninstalling its validator or permission.
+    function _uninstallScopedExecutionHookWithVid(address _hook, ValidationId vId) internal {
+        ValidationInfo storage info = _validationStorage().vInfo[vId];
+        require(address(info.scopedExecutionHook) == _hook, InvalidScopedExecutionHookTarget());
+        info.scopedExecutionHook = IScopedExecutionHook(address(0));
     }
 
     /// @notice Uninstalls a policy module. Policies must be uninstalled in reverse order (LIFO).
@@ -215,6 +280,7 @@ abstract contract ValidationManager {
     /// @param vId The validation identifier the signer belongs to.
     function _uninstallSignerWithVid(address _signer, ValidationId vId) internal {
         ValidationInfo storage $ = _validationStorage().vInfo[vId];
+        require(address($.scopedExecutionHook) == address(0), ScopedExecutionHookStillInstalled());
         require($.policies.length == 0, InvalidPermissionUninstallOrder());
         require($.signer == _signer, InvalidPermissionId());
         $.signer = address(0);

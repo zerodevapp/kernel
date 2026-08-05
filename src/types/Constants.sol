@@ -16,6 +16,11 @@ uint256 constant MODULE_TYPE_EXECUTOR = 2;
 uint256 constant MODULE_TYPE_FALLBACK = 3;
 uint256 constant MODULE_TYPE_POLICY = 5;
 uint256 constant MODULE_TYPE_SIGNER = 6;
+uint256 constant MODULE_TYPE_SCOPED_EXECUTION_HOOK = 11;
+
+bytes1 constant SCOPED_EXECUTION_HOOK_VALIDATION_SCOPE = 0x01;
+bytes1 constant SCOPED_EXECUTION_HOOK_EXECUTOR_SCOPE = 0x02;
+bytes1 constant SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE = 0x03;
 
 // note : ROOT == FALLBACK, they do indicate same value but to have different meanings in different context
 // FALLBACK - usually used when using 7702 validation logic

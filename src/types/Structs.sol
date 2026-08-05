@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import {ValidationId, CallType} from "./Types.sol";
-import {IExecutor} from "../interfaces/IERC7579Modules.sol";
+import {IScopedExecutionHook, IExecutor} from "../interfaces/IERC7579Modules.sol";
 
 /// @notice Describes a module installation: the module type, address, and its data payloads.
 /// @dev The `moduleData` is forwarded to the module's onInstall/onUninstall callback.
@@ -12,8 +12,9 @@ import {IExecutor} from "../interfaces/IERC7579Modules.sol";
 ///      - Fallback/Selectors (type 3): `[bytes4 selector | bytes1 callType]`
 ///      - Policies (type 5): `[bytes4 permissionId | ...]`
 ///      - Signers (type 6): `[bytes4 permissionId | bytes4[] allowedSelectors]`
+///      - Execution hooks (type 11): `[bytes1 scope | target]`
 struct Install {
-    /// @dev The module type identifier (1=validator, 2=executor, 3=fallback, 5=policy, 6=signer).
+    /// @dev The module type identifier (1=validator, 2=executor, 3=fallback, 5=policy, 6=signer, 11=scoped execution hook).
     uint256 moduleType;
     /// @dev The module contract address.
     address module;
@@ -23,12 +24,14 @@ struct Install {
     bytes internalData;
 }
 
-/// @notice Stores per-validation state: installation, selector nonce, signer, and policies.
+/// @notice Stores per-validation state: installation, selector nonce, scoped execution hook, signer, and policies.
 struct ValidationInfo {
     /// @dev Incremented when selectors are (re)granted; used to invalidate old selector allowances.
     uint32 nonce;
     /// @dev Whether this validator or permission is installed.
     bool installed;
+    /// @dev Optional execution hook scoped to this validation.
+    IScopedExecutionHook scopedExecutionHook;
     /// @dev The signer module address (only for permission-based validations).
     address signer;
     /// @dev Array of policy module addresses (only for permission-based validations).
@@ -75,9 +78,9 @@ struct InstallModuleDataFormat {
     bytes internalData;
 }
 
-/// @notice Wrapper for permission uninstall data containing per-module uninstall payloads.
-struct PermissionUninstallData {
-    /// @dev Array of uninstall data, one per policy plus one for the signer (length = policies.length + 1).
+/// @notice Wrapper containing per-module uninstall payloads for a validation.
+struct ValidationUninstallData {
+    /// @dev Permission order is policies, signer, then optional hook; validator order is validator, then hook.
     bytes[] uninstallData;
 }
 
@@ -87,6 +90,8 @@ struct SelectorConfig {
     address target;
     /// @dev The call type: CALLTYPE_SINGLE (0x00) for call, CALLTYPE_DELEGATECALL (0xFF) for delegatecall.
     CallType callType;
+    /// @dev Optional execution hook scoped to this selector.
+    IScopedExecutionHook scopedExecutionHook;
 }
 
 /// @notice Storage for all selector configurations.
@@ -99,6 +104,8 @@ struct SelectorStorage {
 struct ExecutorConfig {
     /// @dev Whether the executor is installed.
     bool installed;
+    /// @dev Optional execution hook scoped to this executor.
+    IScopedExecutionHook scopedExecutionHook;
 }
 
 /// @notice Storage for all executor configurations.
