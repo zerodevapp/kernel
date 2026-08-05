@@ -60,15 +60,6 @@ interface IValidator is IModule {
 
 interface IExecutor is IModule {}
 
-interface IHook is IModule {
-    function preCheck(address msgSender, uint256 msgValue, bytes calldata msgData)
-        external
-        payable
-        returns (bytes memory hookData);
-
-    function postCheck(bytes calldata hookData) external payable;
-}
-
 interface IFallback is IModule {}
 
 interface IPolicy is IModule {

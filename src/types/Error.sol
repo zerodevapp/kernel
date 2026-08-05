@@ -15,9 +15,6 @@ error InvalidValidator();
 /// @notice Thrown when an unsupported module type is encountered.
 error NotImplemented();
 
-/// @notice Thrown when a required module (hook) is not installed.
-error NotInstalled();
-
 /// @notice Thrown when an install-mode signature fails verification.
 error InstallSignatureVerificationFailed();
 
@@ -63,7 +60,7 @@ error CannotUninstallRoot();
 /// @notice Thrown when a signature is invalid or has the wrong number of sub-signatures.
 error InvalidSignature();
 
-/// @notice Thrown when a ValidationId is not installed (hook == address(0)).
+/// @notice Thrown when a ValidationId is not installed.
 /// @param vId The invalid validation identifier.
 error InvalidVid(ValidationId vId);
 

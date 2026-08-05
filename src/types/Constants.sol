@@ -14,7 +14,6 @@ CallType constant CALLTYPE_DELEGATECALL = CallType.wrap(0xFF);
 uint256 constant MODULE_TYPE_VALIDATOR = 1;
 uint256 constant MODULE_TYPE_EXECUTOR = 2;
 uint256 constant MODULE_TYPE_FALLBACK = 3;
-uint256 constant MODULE_TYPE_HOOK = 4;
 uint256 constant MODULE_TYPE_POLICY = 5;
 uint256 constant MODULE_TYPE_SIGNER = 6;
 uint256 constant MODULE_TYPE_STATELESS_VALIDATOR_WITH_SENDER = 10;
@@ -34,8 +33,6 @@ bytes32 constant SELECTOR_MANAGER_STORAGE_SLOT = 0x550d18e77e0b3e646dcc27a9961c7
 bytes32 constant MODULE_MANAGER_STORAGE_SLOT = 0x9bc558e75ed0a57385e96d6b87fd2864d462eed29668be6fed742168fd90ab0f;
 ///@custom:storage-location bytes32(uint256(keccak256('kernel.v4.executor')) - 1)
 bytes32 constant EXECUTOR_MANAGER_STORAGE_SLOT = 0xc98f19fae81314cbf0302e1e3c0554f60c259fab8e2d5d392893489d40eb0045;
-///@custom:storage-location bytes32(uint256(keccak256('kernel.v4.hook'))-1)
-bytes32 constant HOOK_MANAGER_STORAGE_SLOT = 0x5419def70c6ad54339f14ca6da31808409bec8ff0f178491c5b59f0d8276d4d3;
 ///@custom:storage-location bytes32(uint256(keccak256('kernel.v4.validation')) - 1)
 bytes32 constant VALIDATION_MANAGER_STORAGE_SLOT = 0xded5d420c407eac3c615e6abe13ab4a0bd7173e5045ea543765b46f0df6e260c;
 ///@custom:storage-location bytes32(uint256(keccak256('eip1967.proxy.implementation')) - 1)
@@ -44,9 +41,6 @@ bytes4 constant ERC1271_MAGICVALUE = 0x1626ba7e;
 bytes4 constant ERC1271_INVALID = 0xffffffff;
 uint256 constant SIG_VALIDATION_FAILED_UINT = 1;
 uint256 constant SIG_VALIDATION_SUCCESS_UINT = 0;
-
-address constant HOOK_MODULE_NOT_INSTALLED = address(0);
-address constant HOOK_MODULE_INSTALLED_NO_HOOK = address(1);
 
 //InstallPackages(uint256 nonce,Install[] packages)Install(uint256 moduleType,address module,bytes moduleData,bytes internalData)
 bytes32 constant INSTALL_PACKAGES_STRUCT_HASH = 0x633d6810f7f4053622dad4c187707d9c3cd7f57b8b68943473d3437060aefc6d;

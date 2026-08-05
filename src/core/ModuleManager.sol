@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {IHook, IExecutor, IModule, IValidator, IStatelessValidatorWithSender} from "../interfaces/IERC7579Modules.sol";
+import {IModule, IValidator, IStatelessValidatorWithSender} from "../interfaces/IERC7579Modules.sol";
 import {ValidationManager} from "./ValidationManager.sol";
 import {ExecutorManager} from "./ExecutorManager.sol";
-import {HookManager} from "./HookManager.sol";
 import {SelectorManager} from "./SelectorManager.sol";
 import {ERC1271} from "../lib/ERC1271.sol";
 import {
@@ -14,7 +13,6 @@ import {
     InvalidPermissionId,
     InvalidSignature,
     NotImplemented,
-    Unauthorized,
     PermissionInstallNotFinished,
     LastSignatureShouldBeSigner
 } from "../types/Error.sol";
@@ -40,27 +38,16 @@ import {
     MODULE_TYPE_VALIDATOR,
     MODULE_TYPE_EXECUTOR,
     MODULE_TYPE_FALLBACK,
-    MODULE_TYPE_HOOK,
     MODULE_TYPE_POLICY,
-    MODULE_TYPE_SIGNER,
-    HOOK_MODULE_NOT_INSTALLED
+    MODULE_TYPE_SIGNER
 } from "../types/Constants.sol";
 import {EfficientHashLib} from "solady/utils/EfficientHashLib.sol";
 
 /// @title ModuleManager
 /// @author taek <leekt216@gmail.com>
-/// @notice Composes validation, executor, hook, and selector managers; handles module installation,
+/// @notice Composes validation, executor, and selector managers; handles module installation,
 ///         enable-mode signature verification, nonce management, and ERC-1271 signature flows.
-abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManager, SelectorManager, ERC1271 {
-    /// @dev Modifier that wraps executor calls with their configured hook's pre/post checks.
-    modifier executorHook() {
-        IHook hook = _executorConfig(IExecutor(msg.sender)).hook;
-        require(address(hook) != HOOK_MODULE_NOT_INSTALLED, Unauthorized());
-        bytes memory hookData = _preHook(hook, msg.data);
-        _;
-        _postHook(hook, hookData);
-    }
-
+abstract contract ModuleManager is ValidationManager, ExecutorManager, SelectorManager, ERC1271 {
     /// @dev Override this function to integrate an ERC-7484 module registry check.
     function _installModuleCheck(uint256 moduleType, address module) internal virtual {}
 
@@ -91,15 +78,6 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
             seq = ms.nonceValidFrom;
         }
         return (uint256(key) << 64) + seq;
-    }
-
-    function _hookEnabled(IHook _hook)
-        internal
-        view
-        override(ValidationManager, ExecutorManager, HookManager, SelectorManager)
-        returns (bool)
-    {
-        return HookManager._hookEnabled(_hook);
     }
 
     function _moduleStorage() internal pure returns (ModuleStorage storage $) {
@@ -182,7 +160,7 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
     }
 
     /// @notice Routes a module installation to the appropriate type-specific handler.
-    /// @param moduleType The module type (1=validator, 2=executor, 3=fallback, 4=hook, 5=policy, 6=signer).
+    /// @param moduleType The module type (1=validator, 2=executor, 3=fallback, 5=policy, 6=signer).
     /// @param module The module address.
     /// @param moduleData Data forwarded to the module's onInstall callback.
     /// @param internalData Kernel-internal configuration data (format varies by module type).
@@ -197,8 +175,6 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
             hook = _installExecutor;
         } else if (moduleType == MODULE_TYPE_FALLBACK) {
             hook = _installSelector;
-        } else if (moduleType == MODULE_TYPE_HOOK) {
-            hook = _installHook;
         } else if (moduleType == MODULE_TYPE_POLICY) {
             hook = _installPolicy;
         } else if (moduleType == MODULE_TYPE_SIGNER) {
@@ -228,8 +204,6 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
             hook = _uninstallExecutor;
         } else if (moduleType == MODULE_TYPE_FALLBACK) {
             hook = _uninstallSelector;
-        } else if (moduleType == MODULE_TYPE_HOOK) {
-            hook = _uninstallHook;
         } else if (moduleType == MODULE_TYPE_POLICY) {
             hook = _uninstallPolicy;
         } else if (moduleType == MODULE_TYPE_SIGNER) {

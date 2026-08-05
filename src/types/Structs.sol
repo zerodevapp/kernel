@@ -2,19 +2,18 @@
 pragma solidity ^0.8.0;
 
 import {ValidationId, CallType} from "./Types.sol";
-import {IHook, IExecutor} from "../interfaces/IERC7579Modules.sol";
+import {IExecutor} from "../interfaces/IERC7579Modules.sol";
 
 /// @notice Describes a module installation: the module type, address, and its data payloads.
 /// @dev The `moduleData` is forwarded to the module's onInstall/onUninstall callback.
 ///      The `internalData` configures Kernel-internal state and its format varies by module type:
-///      - Validators (type 1): `[bytes20 hookAddress | bytes4[] allowedSelectors]`
-///      - Executors (type 2): `[bytes20 hookAddress]`
-///      - Fallback/Selectors (type 3): `[bytes4 selector | bytes1 callType | bytes20 hookAddress]`
-///      - Hooks (type 4): ignored (empty OK)
+///      - Validators (type 1): `[bytes4[] allowedSelectors]`
+///      - Executors (type 2): ignored (empty OK)
+///      - Fallback/Selectors (type 3): `[bytes4 selector | bytes1 callType]`
 ///      - Policies (type 5): `[bytes4 permissionId | ...]`
-///      - Signers (type 6): `[bytes4 permissionId | bytes20 hookAddress | bytes4[] allowedSelectors]`
+///      - Signers (type 6): `[bytes4 permissionId | bytes4[] allowedSelectors]`
 struct Install {
-    /// @dev The module type identifier (1=validator, 2=executor, 3=fallback, 4=hook, 5=policy, 6=signer).
+    /// @dev The module type identifier (1=validator, 2=executor, 3=fallback, 5=policy, 6=signer).
     uint256 moduleType;
     /// @dev The module contract address.
     address module;
@@ -24,12 +23,12 @@ struct Install {
     bytes internalData;
 }
 
-/// @notice Stores per-validation state: nonce for selector access, hook, signer, and policies.
+/// @notice Stores per-validation state: installation, selector nonce, signer, and policies.
 struct ValidationInfo {
     /// @dev Incremented when selectors are (re)granted; used to invalidate old selector allowances.
     uint32 nonce;
-    /// @dev The hook address for this validation. address(0) = not installed, address(1) = installed with no hook.
-    address hook;
+    /// @dev Whether this validator or permission is installed.
+    bool installed;
     /// @dev The signer module address (only for permission-based validations).
     address signer;
     /// @dev Array of policy module addresses (only for permission-based validations).
@@ -84,8 +83,6 @@ struct PermissionUninstallData {
 
 /// @notice Fallback selector routing configuration.
 struct SelectorConfig {
-    /// @dev The hook module for this selector. address(0) = not installed, address(1) = no hook.
-    IHook hook;
     /// @dev The fallback module that handles calls to this selector.
     address target;
     /// @dev The call type: CALLTYPE_SINGLE (0x00) for call, CALLTYPE_DELEGATECALL (0xFF) for delegatecall.
@@ -98,22 +95,16 @@ struct SelectorStorage {
     mapping(bytes4 => SelectorConfig) selectorConfig;
 }
 
-/// @notice Configuration for an installed executor module.
+/// @notice Configuration for an executor module.
 struct ExecutorConfig {
-    /// @dev The hook for this executor. address(1) = installed with no hook, address(0) = not installed.
-    IHook hook;
+    /// @dev Whether the executor is installed.
+    bool installed;
 }
 
 /// @notice Storage for all executor configurations.
 struct ExecutorStorage {
     /// @dev Maps executor address to its configuration.
     mapping(IExecutor => ExecutorConfig) executorConfig;
-}
-
-/// @notice Storage tracking which hook modules are enabled.
-struct HookStorage {
-    /// @dev Maps hook address to enabled status.
-    mapping(address => bool) enabled;
 }
 
 /// @notice Storage for module-level nonce management and optional registry.
