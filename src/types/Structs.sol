@@ -63,7 +63,7 @@ struct EnableModeSignature {
     Install[] packages;
     /// @dev The root validator's signature authorizing the install.
     bytes enableSignature;
-    /// @dev The actual userOp or ERC-1271 signature (after the enable portion).
+    /// @dev The actual UserOperation signature after the enable portion.
     bytes userOpSignature;
 }
 

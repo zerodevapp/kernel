@@ -1,33 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {IModule, IValidator, IStatelessValidatorWithSender} from "../interfaces/IERC7579Modules.sol";
+import {IModule, IValidator} from "../interfaces/IERC7579Modules.sol";
 import {ValidationManager} from "./ValidationManager.sol";
 import {ExecutorManager} from "./ExecutorManager.sol";
 import {SelectorManager} from "./SelectorManager.sol";
 import {ERC1271} from "../lib/ERC1271.sol";
-import {
-    InvalidValidationType,
-    InvalidNonce,
-    InvalidValidator,
-    InvalidPermissionId,
-    InvalidSignature,
-    NotImplemented,
-    PermissionInstallNotFinished,
-    LastSignatureShouldBeSigner
-} from "../types/Error.sol";
+import {InvalidValidationType, InvalidNonce, NotImplemented, PermissionInstallNotFinished} from "../types/Error.sol";
 import {ModuleInstalled, ModuleUninstalled} from "../types/Events.sol";
-import {Install, EnableModeSignature, ModuleStorage, PermissionSignature} from "../types/Structs.sol";
-import {
-    ValidationId,
-    ValidationMode,
-    ValidationType,
-    PermissionId,
-    isEnable,
-    isEnableReplayable
-} from "../types/Types.sol";
+import {Install, ModuleStorage} from "../types/Structs.sol";
+import {ValidationId, ValidationType, PermissionId} from "../types/Types.sol";
 import {Lib4337} from "../lib/Lib4337.sol";
-import {getType, getValidator, getPermissionId, validatorToIdentifier, permissionToIdentifier} from "../lib/Utils.sol";
+import {validatorToIdentifier, permissionToIdentifier} from "../lib/Utils.sol";
 import {
     MODULE_MANAGER_STORAGE_SLOT,
     VALIDATION_TYPE_ROOT,
@@ -92,47 +76,26 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, SelectorM
         override
         returns (bool result)
     {
-        // check if fallback signature is allowed
-        if (_erc1271RawAllowed()) {
-            result = _verifyFallbackSignature(hash, signature);
+        bool rawAllowed = _erc1271RawAllowed();
+        if (rawAllowed && _verifyFallbackSignature(hash, signature)) return true;
+        if (signature.length == 0) return false;
+        ValidationType vType = ValidationType.wrap(bytes1(signature[0]));
+        ValidationId vId;
+        if (vType == VALIDATION_TYPE_ROOT) {
+            vId = _validationStorage().root;
+            signature = signature[1:];
+        } else if (vType == VALIDATION_TYPE_VALIDATOR) {
+            if (signature.length < 21) return false;
+            vId = validatorToIdentifier(IValidator(address(bytes20(signature[1:21]))));
+            signature = signature[21:];
+        } else if (vType == VALIDATION_TYPE_PERMISSION) {
+            if (signature.length < 5) return false;
+            vId = permissionToIdentifier(PermissionId.wrap(bytes4(signature[1:5])));
+            signature = signature[5:];
+        } else {
+            revert InvalidValidationType();
         }
-        if (!result) {
-            ValidationMode vMode = ValidationMode.wrap(bytes1(signature[0]));
-            ValidationType vType = ValidationType.wrap(bytes1(signature[1]));
-            ValidationId vId;
-            if (vType == VALIDATION_TYPE_ROOT) {
-                vId = _validationStorage().root;
-                signature = signature[2:];
-            } else if (vType == VALIDATION_TYPE_VALIDATOR) {
-                vId = validatorToIdentifier(IValidator(address(bytes20(signature[2:22]))));
-                signature = signature[22:];
-            } else if (vType == VALIDATION_TYPE_PERMISSION) {
-                vId = permissionToIdentifier(PermissionId.wrap(bytes4(signature[2:6])));
-                signature = signature[6:];
-            } else {
-                revert InvalidValidationType();
-            }
-            uint256 validationData;
-            if (isEnable(vMode)) {
-                require(vType != VALIDATION_TYPE_ROOT, InvalidValidationType());
-                bool enableReplayable = isEnableReplayable(vMode);
-                EnableModeSignature calldata sig;
-                assembly {
-                    sig := signature.offset
-                }
-                if (!Lib4337.checkValidation(
-                        _verifyInstallSignatureRaw(enableReplayable, sig.nonce, sig.packages, sig.enableSignature)
-                    )) {
-                    // if enable sig is invalid, short circuit
-                    return false;
-                }
-                _checkNonce(sig.nonce);
-                return _verifyStatelessSignature(sig.packages, vId, hash, sig.userOpSignature);
-            } else {
-                validationData = _verifySignature(vId, msg.sender, hash, signature);
-            }
-            result = Lib4337.checkValidation(validationData);
-        }
+        result = Lib4337.checkValidation(_verifySignature(vId, msg.sender, hash, signature));
     }
 
     /// @notice Computes the EIP-712 hash of an array of Install packages.
@@ -346,71 +309,5 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, SelectorM
         bytes32 digest =
             hashTypedData(EfficientHashLib.hash(INSTALL_PACKAGES_STRUCT_HASH, bytes32(_nonce), _installHash(packages)));
         return _verifySignature(vId, address(this), digest, signature);
-    }
-
-    /// @notice Verifies a stateless signature for enable-mode ERC-1271 flows.
-    /// @dev Locates the validator/permission modules in the packages and calls their stateless verify.
-    /// @param packages The install packages containing the modules to verify against.
-    /// @param vId The validation identifier to use.
-    /// @param hash The hash to verify.
-    /// @param signature The signature bytes.
-    /// @return True if the stateless signature verification succeeds.
-    function _verifyStatelessSignature(
-        Install[] calldata packages,
-        ValidationId vId,
-        bytes32 hash,
-        bytes calldata signature
-    ) internal view returns (bool) {
-        ValidationType vType = getType(vId);
-        if (vType == VALIDATION_TYPE_VALIDATOR) {
-            IValidator validator = getValidator(vId);
-            uint256 i;
-            for (i; i < packages.length; i++) {
-                Install calldata pkg = packages[i];
-                if (pkg.moduleType == MODULE_TYPE_VALIDATOR && pkg.module == address(validator)) {
-                    break;
-                }
-            }
-            require(i < packages.length, InvalidValidator());
-            return IStatelessValidatorWithSender(address(validator))
-                .validateSignatureWithDataWithSender(msg.sender, hash, signature, packages[i].moduleData);
-        } else if (vType == VALIDATION_TYPE_PERMISSION) {
-            PermissionId pId = getPermissionId(vId);
-            PermissionSignature calldata permissionSig;
-            assembly {
-                permissionSig := signature.offset
-            }
-            require(permissionSig.signatures.length > 0, InvalidSignature());
-            uint256 sigIdx;
-            for (uint256 i; i < packages.length; i++) {
-                Install calldata pkg = packages[i];
-                // Restrict matching to policy (5) / signer (6) modules. Otherwise a
-                // package of a different module type (e.g. selector type 3 or hook type 4)
-                // whose internalData happens to start with `pId` would be enrolled into the
-                // permission's signature chain.
-                if (PermissionId.wrap(bytes4(pkg.internalData)) == pId && (pkg.moduleType == 5 || pkg.moduleType == 6))
-                {
-                    if (sigIdx == permissionSig.signatures.length - 1) {
-                        require(pkg.moduleType == MODULE_TYPE_SIGNER, LastSignatureShouldBeSigner());
-                        require(IModule(pkg.module).isModuleType(MODULE_TYPE_SIGNER), LastSignatureShouldBeSigner());
-                    }
-                    bool res = IStatelessValidatorWithSender(pkg.module)
-                        .validateSignatureWithDataWithSender(
-                            msg.sender,
-                            hash,
-                            permissionSig.signatures[sigIdx],
-                            pkg.moduleData // NOTE: not passing the permissionId as stateless does not need any permissionId
-                        );
-                    if (!res) {
-                        return false;
-                    }
-                    sigIdx++;
-                }
-            }
-            require(sigIdx == permissionSig.signatures.length, InvalidPermissionId());
-            return true;
-        } else {
-            revert InvalidValidationType();
-        }
     }
 }

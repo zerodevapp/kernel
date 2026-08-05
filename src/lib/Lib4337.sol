@@ -9,7 +9,7 @@ import {DOMAIN_TYPEHASH_SANS_CHAIN_ID} from "../types/Constants.sol";
 import {ValidityFormatMismatch} from "../types/Error.sol";
 
 library Lib4337 {
-    /// @dev Highest bit of uint48, indicates block number mode when set on both validAfter and validUntil
+    /// @dev EntryPoint v0.9 flag for block number mode.
     uint48 internal constant MODE_BIT = 0x800000000000;
 
     function chainAgnosticUserOpHash(address ep, PackedUserOperation calldata userOp) internal view returns (bytes32) {
@@ -73,9 +73,9 @@ library Lib4337 {
         return _intersectValidationData(a, b);
     }
 
-    /// @dev Returns true if validation data uses block number format (both validAfter and validUntil have MODE_BIT set)
+    /// @dev Returns true if validation data uses block number format per EntryPoint v0.9.
     function _usesBlockNumberFormat(uint48 validAfter, uint48 validUntil) internal pure returns (bool) {
-        return (validAfter & MODE_BIT != 0) && (validUntil & MODE_BIT != 0);
+        return validAfter > MODE_BIT && validUntil > MODE_BIT;
     }
 
     function _intersectValidationData(uint256 preValidationData, uint256 validationRes)

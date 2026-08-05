@@ -9,9 +9,6 @@ error ImplementationNotDeployed();
 /// @notice Thrown when a module's onInstall callback fails.
 error ModuleInstallFailed();
 
-/// @notice Thrown when a validator cannot be found in the install packages during stateless verification.
-error InvalidValidator();
-
 /// @notice Thrown when an unsupported module type is encountered.
 error NotImplemented();
 
@@ -72,9 +69,6 @@ error PermissionInstallNotFinished();
 
 /// @notice Thrown when policies and signer within a batch use inconsistent PermissionIds.
 error InvalidPermissionInstall();
-
-/// @notice Thrown when the last signature in a stateless permission verification is not from a signer module.
-error LastSignatureShouldBeSigner();
 
 /// @notice Thrown when a zero-address signer is provided to the ECDSA factory.
 error InvalidSigner();

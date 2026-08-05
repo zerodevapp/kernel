@@ -16,7 +16,6 @@ uint256 constant MODULE_TYPE_EXECUTOR = 2;
 uint256 constant MODULE_TYPE_FALLBACK = 3;
 uint256 constant MODULE_TYPE_POLICY = 5;
 uint256 constant MODULE_TYPE_SIGNER = 6;
-uint256 constant MODULE_TYPE_STATELESS_VALIDATOR_WITH_SENDER = 10;
 
 // note : ROOT == FALLBACK, they do indicate same value but to have different meanings in different context
 // FALLBACK - usually used when using 7702 validation logic
