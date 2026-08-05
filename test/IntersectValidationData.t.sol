@@ -400,5 +400,67 @@ contract IntersectValidationDataTest is Test {
         assertTrue(resultAfter & MODE_BIT != 0, "Result validAfter should have MODE_BIT");
         assertTrue(resultUntil & MODE_BIT != 0, "Result validUntil should have MODE_BIT");
     }
+
+    /**
+     * TEST CATEGORY 9: Regression — validity-format ordering (audit M-03)
+     *
+     * The format check must run AFTER `validUntil == 0 -> max` normalization, the
+     * aggregator failure/conflict must resolve BEFORE the format check, and a neutral
+     * `[0, max]` range must be exempt from the format check.
+     */
+
+    // An unbounded block range encodes validUntil = 0. Before the fix this was classified
+    // as timestamp format (raw validUntil = 0 lacks MODE_BIT), so pairing it with a future
+    // timestamp range passed the format check and then dropped the future timestamp start
+    // (MODE_BIT >> any real timestamp, so max() kept the block validAfter). After the fix the
+    // range normalizes to [MODE_BIT|block, max] (block format) and the mismatched intersection
+    // is rejected instead of silently producing an already-valid result.
+    function test_Regression_UnboundedBlockRangeVsFutureTimestampReverts() public {
+        uint256 unboundedBlock = createValidationData(100 | MODE_BIT, 0, address(0));
+        uint256 futureTimestamp = createValidationData(2_000_000_000, 0, address(0));
+
+        try this.callIntersect(unboundedBlock, futureTimestamp) returns (uint256 result) {
+            // The dangerous pre-fix outcome: no revert AND the future start is dropped.
+            uint48 resultAfter = uint48(result >> 208);
+            assertFalse(
+                resultAfter == (100 | MODE_BIT),
+                "M-03: future timestamp start dropped by misclassified unbounded block range"
+            );
+            fail("M-03: mismatched block/timestamp intersection must revert, not silently merge");
+        } catch (bytes memory reason) {
+            assertEq(bytes4(reason), bytes4(keccak256("ValidityFormatMismatch()")));
+        }
+    }
+
+    // A signature-failure operand (aggregator == 1) has all-zero raw time bounds. Before the
+    // fix, pairing it with a block-format range hit the format `revert` before the aggregator
+    // logic ran. After the fix the failure short-circuits and returns SIG_VALIDATION_FAILED.
+    function test_Regression_FailureOperandDoesNotRevertOnFormatMismatch() public {
+        uint256 blockValid = createValidationData(100 | MODE_BIT, 200 | MODE_BIT, address(0));
+        uint256 failure = createValidationData(0, 0, address(1));
+
+        // Must not revert; must return failure.
+        uint256 result = Lib4337._intersectValidationData(blockValid, failure);
+        assertEq(uint160(result), 1, "M-03: signature failure must be returned, not reverted");
+
+        // Symmetric ordering.
+        uint256 resultRev = Lib4337._intersectValidationData(failure, blockValid);
+        assertEq(uint160(resultRev), 1, "M-03: signature failure must be returned, not reverted (reverse)");
+    }
+
+    // A neutral [0, max] range carries no restriction and no format. It must intersect with a
+    // block-format range without a spurious ValidityFormatMismatch (its normalized validUntil
+    // has MODE_BIT set, which would otherwise misclassify it as block/timestamp inconsistently).
+    function test_Regression_NeutralRangeWithBlockRangeDoesNotRevert() public {
+        // Neutral range carrying only an aggregator (validAfter = validUntil = 0).
+        uint256 neutral = createValidationData(0, 0, BLS_AGGREGATOR);
+        uint256 blockRange = createValidationData(100 | MODE_BIT, 200 | MODE_BIT, address(0));
+
+        uint256 result = Lib4337._intersectValidationData(neutral, blockRange);
+
+        assertEq(uint160(result), uint160(BLS_AGGREGATOR), "M-03: aggregator must survive neutral intersection");
+        assertEq(uint48(result >> 208), 100 | MODE_BIT, "M-03: block validAfter must be preserved");
+        assertEq(uint48(result >> 160), 200 | MODE_BIT, "M-03: block validUntil must be preserved");
+    }
 }
 

@@ -129,12 +129,12 @@ abstract contract Lib4337_Test is Test {
     }
 
     function test_GivenValidAfterEqualsCurrentTimestamp() external whenCallingCheckValidation {
-        // Boundary: validAfter == block.timestamp should pass (not strictly greater than)
+        // Canonical EntryPoint v0.9: validAfter is exclusive, so current == validAfter is NOT yet valid.
         uint256 validationData = packValidationData(uint48(_currentTimestamp), 0, address(0));
 
         bool isValid = harness.checkValidation(validationData);
 
-        assertTrue(isValid, "should return true when validAfter equals current timestamp");
+        assertFalse(isValid, "should return false when validAfter equals current timestamp");
     }
 
     /*//////////////////////////////////////////////////////////////

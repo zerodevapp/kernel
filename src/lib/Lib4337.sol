@@ -32,11 +32,20 @@ library Lib4337 {
     }
 
     function checkValidation(uint256 validationData) internal view returns (bool) {
-        (uint48 vAfter, uint48 vUntil, address res) = Lib4337.parseValidationData(validationData);
-        if (vAfter > block.timestamp || vUntil < block.timestamp) {
-            return false;
+        if (validationData == 0) {
+            return true;
         }
-        return res == address(0);
+        (uint48 vAfter, uint48 vUntil, address res) = Lib4337.parseValidationData(validationData);
+        uint256 current;
+        if (_usesBlockNumberFormat(vAfter, vUntil)) {
+            vAfter &= MODE_BIT - 1;
+            vUntil &= MODE_BIT - 1;
+            current = block.number;
+        } else {
+            current = block.timestamp;
+        }
+        // Canonical EntryPoint v0.9 interval: (validAfter, validUntil].
+        return res == address(0) && current > vAfter && current <= vUntil;
     }
 
     /// @dev Variant of `_hashTypedData` that excludes the chain ID.
@@ -78,25 +87,8 @@ library Lib4337 {
             return preValidationData | validationRes;
         }
 
-        // Extract raw time bounds
-        uint48 validUntil1 = uint48(preValidationData >> 160);
-        uint48 validUntil2 = uint48(validationRes >> 160);
-        uint48 validAfter1 = uint48(preValidationData >> 208);
-        uint48 validAfter2 = uint48(validationRes >> 208);
-
-        // Check for validity format mismatch (EP v0.9: block number vs timestamp)
-        // Block number format: both validAfter and validUntil have highest bit set
-        bool preUsesBlock = _usesBlockNumberFormat(validAfter1, validUntil1);
-        bool resUsesBlock = _usesBlockNumberFormat(validAfter2, validUntil2);
-        require(preUsesBlock == resUsesBlock, ValidityFormatMismatch());
-
-        // Convert validUntil=0 to max (no expiry)
-        if (validUntil1 == 0) validUntil1 = type(uint48).max;
-        if (validUntil2 == 0) validUntil2 = type(uint48).max;
-
-        resValidationData = uint256(validUntil1 > validUntil2 ? validUntil2 : validUntil1) << 160;
-        resValidationData |= uint256(validAfter1 < validAfter2 ? validAfter2 : validAfter1) << 208;
-
+        // Aggregator FIRST: resolve success / failure / conflict before touching the ranges.
+        //
         // Aggregator values: 0 = success, 1 = failure, >1 = aggregator address
         //
         // Rules (in precedence order):
@@ -109,20 +101,51 @@ library Lib4337 {
         uint160 preAgg = uint160(preValidationData);
         uint160 resAgg = uint160(validationRes);
 
-        uint160 finalAgg;
-
-        finalAgg = (preAgg == 1 || resAgg == 1)
+        uint160 finalAgg = (preAgg == 1 || resAgg == 1)
             ? 1  // Any failure
             : (preAgg == 0 && resAgg == 0)
                 ? 0  // Both success
                 : (preAgg > 1 && resAgg == 0)
-                    ? preAgg  // Preserve aggregator (FIX)
+                    ? preAgg  // Preserve aggregator
                     : (preAgg == 0 && resAgg > 1)
                         ? resAgg  // Use new aggregator
                         : (preAgg == resAgg)
                             ? preAgg  // Same aggregator
                             : 1; // Conflict or unknown
 
+        // Extract raw time bounds
+        uint48 validUntil1 = uint48(preValidationData >> 160);
+        uint48 validUntil2 = uint48(validationRes >> 160);
+        uint48 validAfter1 = uint48(preValidationData >> 208);
+        uint48 validAfter2 = uint48(validationRes >> 208);
+
+        // Normalize validUntil=0 to max (no expiry) BEFORE classifying the format. Doing this
+        // after the format check misclassifies an unbounded block range (validUntil=0) as a
+        // timestamp range, letting a mixed intersection drop a future timestamp start.
+        if (validUntil1 == 0) validUntil1 = type(uint48).max;
+        if (validUntil2 == 0) validUntil2 = type(uint48).max;
+
+        // Only enforce format compatibility for a usable (non-failure) result. When either side
+        // reports signature failure (finalAgg == 1) the op is rejected regardless of its time
+        // bounds, and a failed operand carries zeroed bounds that must not trigger a spurious
+        // ValidityFormatMismatch revert — so the check is skipped. A neutral [0, max] range
+        // carries no restriction and no format and is likewise exempt (its normalized validUntil
+        // has MODE_BIT set, which would otherwise misclassify it as a block range).
+        if (finalAgg != 1) {
+            bool preNeutral = validAfter1 == 0 && validUntil1 == type(uint48).max;
+            bool resNeutral = validAfter2 == 0 && validUntil2 == type(uint48).max;
+            // Block number format: both validAfter and validUntil have the highest bit set.
+            if (!preNeutral && !resNeutral) {
+                require(
+                    _usesBlockNumberFormat(validAfter1, validUntil1)
+                        == _usesBlockNumberFormat(validAfter2, validUntil2),
+                    ValidityFormatMismatch()
+                );
+            }
+        }
+
+        resValidationData = uint256(validUntil1 > validUntil2 ? validUntil2 : validUntil1) << 160;
+        resValidationData |= uint256(validAfter1 < validAfter2 ? validAfter2 : validAfter1) << 208;
         resValidationData |= finalAgg;
     }
 }

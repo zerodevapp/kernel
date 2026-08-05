@@ -20,7 +20,7 @@ Lib4337_Test
 │   ├── given validation data is zero
 │   │   └── it should return true
 │   └── given validAfter equals current timestamp
-│       └── it should return true
+│       └── it should return false
 ├── when calling intersectValidationData
 │   ├── given preValidationData is zero
 │   │   └── it should return validationRes via short circuit

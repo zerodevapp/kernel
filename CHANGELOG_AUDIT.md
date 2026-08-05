@@ -17,7 +17,7 @@ Added support for ERC-4337 EntryPoint version 0.9.
 - Gas snapshot updates reflecting v0.9 optimizations (reduced gas costs across all test scenarios)
 - **Breaking Change:** UserOperation hash calculation has been changed in EntryPoint v0.9
 - **Files:** `foundry.toml`, `remappings.txt`, `soldeer.lock`, `test/utils/EntryPointLib.sol`, `test/KernelUserOpTest.sol`, `test/KernelValidatorTest.sol`
-- **EntryPoint Address:** `0x43370900c8de573dB349BEd8DD53b4Ebd3Cce709`
+- **EntryPoint Address:** `0x433709009B8330FDa32311DF1C2AFA402eD8D009`
 - **Commits:** 977ca07, aa91ef1, 110c7af, 3e72921
 - **Note:** The module type ID was updated from 8 to 10 for `MODULE_TYPE_STATELESS_VALIDATOR_WITH_SENDER` as part of this upgrade
 - you can find the release docs in [here](https://docs.google.com/document/d/1RKkKZsP1eYkOoBEkzJ1vWRK_bcWXaewoGPzawMjsleM/edit?usp=drivesdk), please do note that this document is not in public yet

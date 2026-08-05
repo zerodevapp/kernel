@@ -349,6 +349,51 @@ abstract contract KernelUserOpTest is KernelTestBase {
         vm.stopPrank();
     }
 
+    // Regression (audit H-01): enable-mode install must NOT persist when the root signature
+    // fails, even when validateUserOp is invoked outside the EntryPoint validation phase (during
+    // execution EntryPoint calls the account with arbitrary calldata and ignores the returned
+    // validationData). Before the fix, _processUserOp installed the package and advanced the
+    // nonce before the failed validationData was ever checked, so a scoped key could install
+    // arbitrary modules without root approval.
+    function test_userop_enable_failed_root_sig_does_not_install() external entryPointTest {
+        // newValidator is not installed yet.
+        assertEq(kernel.validationInfo(validatorToIdentifier(newValidator)).hook, address(0));
+
+        PackedUserOperation memory op = PackedUserOperation({
+            sender: address(kernel),
+            nonce: encodeNonce(false, true, false, bytes1(0x01), bytes20(address(newValidator))),
+            initCode: hex"",
+            callData: abi.encodeWithSelector(
+                Kernel.execute.selector,
+                bytes32(0),
+                abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
+            ),
+            accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
+            preVerificationGas: 1000000,
+            gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
+            paymasterAndData: hex"",
+            signature: hex""
+        });
+        // enableSuccess = false -> the root signature over the install digest is invalid.
+        op.signature = encodeEnableValidatorSignature(
+            Kernel.execute.selector, 0, false, false, _rootSignHash, _validatorSignUserOp(op, true, false)
+        );
+
+        // Simulate the execution-phase re-entry: EntryPoint calls validateUserOp and discards
+        // the return value.
+        vm.prank(address(ep));
+        uint256 validationData = kernel.validateUserOp(op, bytes32(0), 0);
+
+        // Failed root signature must surface as validation failure...
+        assertEq(uint160(validationData), 1, "H-01: failed root sig must return SIG_VALIDATION_FAILED");
+        // ...and the module must NOT have been installed.
+        assertEq(
+            kernel.validationInfo(validatorToIdentifier(newValidator)).hook,
+            address(0),
+            "H-01: module installed despite failed root signature"
+        );
+    }
+
     function test_userop_validator_aa24_validation_failed() external entryPointTest {
         PackedUserOperation[] memory ops = new PackedUserOperation[](1);
         ops[0] = PackedUserOperation({
