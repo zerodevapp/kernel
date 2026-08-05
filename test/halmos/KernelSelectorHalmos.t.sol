@@ -10,17 +10,14 @@ import {KernelFactory} from "src/KernelFactory.sol";
 import {Install, SelectorConfig} from "src/types/Structs.sol";
 import {CallType} from "src/types/Types.sol";
 import {CALLTYPE_SINGLE} from "src/types/Constants.sol";
-import {InvalidSelector} from "src/types/Error.sol";
 import {EntryPointLib} from "../utils/EntryPointLib.sol";
 import {MockValidator} from "../mock/MockValidator.sol";
 import {MockFallback} from "../mock/MockFallback.sol";
-import {MockHook} from "../mock/MockHook.sol";
 
 contract KernelSelectorHalmos is SymTest, Test {
     Kernel private kernel;
     IEntryPoint private ep;
     MockFallback private fallbackModule;
-    MockHook private hook;
 
     function setUp() external {
         ep = EntryPointLib.deploy();
@@ -32,16 +29,12 @@ contract KernelSelectorHalmos is SymTest, Test {
         pkgs[0] = Install({moduleType: 1, module: address(rootValidator), moduleData: hex"", internalData: hex""});
         kernel = factory.deploy(pkgs, 0);
         fallbackModule = new MockFallback();
-        hook = new MockHook();
-        vm.startPrank(address(ep));
-        kernel.installModule(4, address(hook), abi.encode(hex"", hex""));
-        vm.stopPrank();
     }
 
     function checkSelectorInstallUninstall() external {
         bytes4 selector = bytes4(svm.createBytes(4, "selector"));
         bytes1 callType = CallType.unwrap(CALLTYPE_SINGLE);
-        bytes memory internalData = abi.encodePacked(selector, callType, address(0));
+        bytes memory internalData = abi.encodePacked(selector, callType);
 
         vm.startPrank(address(ep));
         kernel.installModule(3, address(fallbackModule), abi.encode(hex"deadbeef", internalData));
@@ -64,7 +57,7 @@ contract KernelSelectorHalmos is SymTest, Test {
 
     function checkSelectorCallTypeAppendsSender() external {
         bytes1 callType = CallType.unwrap(CALLTYPE_SINGLE);
-        bytes memory internalData = abi.encodePacked(MockFallback.getCaller.selector, callType, address(0));
+        bytes memory internalData = abi.encodePacked(MockFallback.getCaller.selector, callType);
         vm.startPrank(address(ep));
         kernel.installModule(3, address(fallbackModule), abi.encode(hex"deadbeef", internalData));
         vm.stopPrank();
@@ -82,7 +75,7 @@ contract KernelSelectorHalmos is SymTest, Test {
 
     function checkSelectorDelegatecallDoesNotAppendSender() external {
         bytes1 callType = bytes1(uint8(0xFF));
-        bytes memory internalData = abi.encodePacked(MockFallback.getCaller.selector, callType, address(0));
+        bytes memory internalData = abi.encodePacked(MockFallback.getCaller.selector, callType);
         vm.startPrank(address(ep));
         kernel.installModule(3, address(fallbackModule), abi.encode(hex"deadbeef", internalData));
         vm.stopPrank();
@@ -96,52 +89,5 @@ contract KernelSelectorHalmos is SymTest, Test {
         assertTrue(success);
         address decoded = abi.decode(ret, (address));
         assertEq(decoded, payloadAddr);
-    }
-
-    function checkSelectorHookRevertsOnPreHook() external {
-        bytes1 callType = CallType.unwrap(CALLTYPE_SINGLE);
-        bytes memory internalData = abi.encodePacked(MockFallback.getCaller.selector, callType, address(hook));
-        vm.startPrank(address(ep));
-        kernel.installModule(3, address(fallbackModule), abi.encode(hex"deadbeef", internalData));
-        vm.stopPrank();
-
-        hook.setRevertOnPreHook(true);
-        bytes memory data = abi.encodePacked(
-            MockFallback.getCaller.selector, bytes20(address(0x1111111111111111111111111111111111111111))
-        );
-        vm.expectRevert(MockHook.PreHookReverted.selector);
-        (bool success,) = address(kernel).call(data);
-        (success);
-    }
-
-    function checkSelectorHookRevertsOnPostHook() external {
-        bytes1 callType = CallType.unwrap(CALLTYPE_SINGLE);
-        bytes memory internalData = abi.encodePacked(MockFallback.getCaller.selector, callType, address(hook));
-        vm.startPrank(address(ep));
-        kernel.installModule(3, address(fallbackModule), abi.encode(hex"deadbeef", internalData));
-        vm.stopPrank();
-
-        hook.setRevertOnPostHook(true);
-        bytes memory data = abi.encodePacked(
-            MockFallback.getCaller.selector, bytes20(address(0x1111111111111111111111111111111111111111))
-        );
-        vm.expectRevert(MockHook.PostHookReverted.selector);
-        (bool success,) = address(kernel).call(data);
-        (success);
-    }
-
-    function checkSelectorHookZeroRequiresEntryPoint() external {
-        bytes1 callType = CallType.unwrap(CALLTYPE_SINGLE);
-        bytes memory internalData = abi.encodePacked(MockFallback.getCaller.selector, callType, address(0));
-        vm.startPrank(address(ep));
-        kernel.installModule(3, address(fallbackModule), abi.encode(hex"deadbeef", internalData));
-        vm.stopPrank();
-
-        bytes memory data = abi.encodePacked(
-            MockFallback.getCaller.selector, bytes20(address(0x1111111111111111111111111111111111111111))
-        );
-        vm.expectRevert(InvalidSelector.selector);
-        (bool success,) = address(kernel).call(data);
-        (success);
     }
 }

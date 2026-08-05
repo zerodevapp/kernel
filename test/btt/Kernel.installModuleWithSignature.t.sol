@@ -192,22 +192,15 @@ abstract contract Kernel_installModuleWithSignature is BTTModifiers {
     }
 
     function test_GivenPackagesContainAValidator() external {
-        // it should install the validator with its hook and allowed selectors
-        // it should NOT automatically set it as root
+        // it should install the validator with allowed selectors without changing root
         MockValidator testValidator = new MockValidator();
-        MockHook testHook = new MockHook();
-
-        // Install hook first via entrypoint
-        vm.startPrank(address(ep));
-        kernel.installModule(4, address(testHook), abi.encode(hex"", hex""));
-        vm.stopPrank();
 
         Install[] memory packages = new Install[](1);
         packages[0] = Install({
             moduleType: 1,
             module: address(testValidator),
             moduleData: hex"",
-            internalData: abi.encodePacked(address(testHook), bytes4(keccak256("execute(bytes32,bytes)")))
+            internalData: abi.encodePacked(bytes4(keccak256("execute(bytes32,bytes)")))
         });
 
         bytes32 digest = KernelHelper.installDigest(address(kernel), false, 0, packages);
@@ -218,11 +211,9 @@ abstract contract Kernel_installModuleWithSignature is BTTModifiers {
         // Validator should be installed
         assertTrue(kernel.isModuleInstalled(1, address(testValidator), ""), "Validator should be installed");
 
-        // Verify the hook was set
-        assertEq(
-            kernel.validationInfo(validatorToIdentifier(IValidator(address(testValidator)))).hook,
-            address(testHook),
-            "Validator should have the hook set"
+        assertTrue(
+            kernel.validationInfo(validatorToIdentifier(IValidator(address(testValidator)))).installed,
+            "Validator should be marked installed"
         );
     }
 
@@ -251,7 +242,7 @@ abstract contract Kernel_installModuleWithSignature is BTTModifiers {
             moduleType: 3,
             module: address(testFallback),
             moduleData: hex"",
-            internalData: abi.encodePacked(selector, bytes1(0x00), address(1))
+            internalData: abi.encodePacked(selector, bytes1(0x00))
         });
 
         bytes32 digest = KernelHelper.installDigest(address(kernel), false, 0, packages);
@@ -293,20 +284,5 @@ abstract contract Kernel_installModuleWithSignature is BTTModifiers {
             kernel.isModuleInstalled(6, address(testSigner), abi.encodePacked(testPermId)),
             "Signer should be installed for permissionId"
         );
-    }
-
-    function test_GivenPackagesContainAHook() external {
-        // it should enable the hook
-        MockHook testHook = new MockHook();
-
-        Install[] memory packages = new Install[](1);
-        packages[0] = Install({moduleType: 4, module: address(testHook), moduleData: hex"", internalData: hex""});
-
-        bytes32 digest = KernelHelper.installDigest(address(kernel), false, 0, packages);
-        bytes memory signature = _rootSignHash(digest, true);
-
-        kernel.installModule(false, 0, packages, signature);
-
-        assertTrue(kernel.isModuleInstalled(4, address(testHook), ""), "Hook should be enabled");
     }
 }

@@ -15,15 +15,12 @@ import {
     VALIDATION_TYPE_VALIDATOR,
     VALIDATION_TYPE_PERMISSION,
     VALIDATION_TYPE_ROOT,
-    HOOK_MODULE_NOT_INSTALLED,
-    HOOK_MODULE_INSTALLED_NO_HOOK,
     ERC1271_MAGICVALUE,
     ERC1271_INVALID,
     SIG_VALIDATION_FAILED_UINT,
     MODULE_TYPE_VALIDATOR,
     MODULE_TYPE_EXECUTOR,
     MODULE_TYPE_FALLBACK,
-    MODULE_TYPE_HOOK,
     MODULE_TYPE_POLICY,
     MODULE_TYPE_SIGNER
 } from "src/types/Constants.sol";
@@ -42,7 +39,6 @@ import {
 import {EntryPointLib} from "../utils/EntryPointLib.sol";
 import {MockValidator} from "../mock/MockValidator.sol";
 import {MockExecutor} from "../mock/MockExecutor.sol";
-import {MockHook} from "../mock/MockHook.sol";
 import {MockFallback} from "../mock/MockFallback.sol";
 import {MockPolicy} from "../mock/MockPolicy.sol";
 import {MockSigner} from "../mock/MockSigner.sol";
@@ -55,7 +51,6 @@ contract KernelFuzz is Test {
     MockValidator private rootValidator;
     MockValidator private secondValidator;
     MockExecutor private executor;
-    MockHook private hook;
     MockFallback private fallbackModule;
     MockPolicy private policy;
     MockSigner private signer;
@@ -72,14 +67,12 @@ contract KernelFuzz is Test {
 
         secondValidator = new MockValidator();
         executor = new MockExecutor();
-        hook = new MockHook();
         fallbackModule = new MockFallback();
         policy = new MockPolicy();
         signer = new MockSigner();
 
-        // Install hook, executor, and second validator
+        // Install executor and second validator
         vm.startPrank(address(ep));
-        kernel.installModule(4, address(hook), abi.encode(hex"", hex""));
         kernel.installModule(2, address(executor), abi.encode(hex"deadbeef", hex""));
         kernel.installModule(1, address(secondValidator), abi.encode(hex"", hex""));
         vm.stopPrank();
@@ -108,21 +101,10 @@ contract KernelFuzz is Test {
         assertTrue(kernel.isModuleInstalled(2, address(newExec), hex""), "new executor not installed");
     }
 
-    /// @dev Installing a hook module never corrupts existing validators
-    function testFuzz_installHook_preservesValidators(bytes calldata moduleData) public {
-        assertTrue(kernel.isModuleInstalled(1, address(rootValidator), hex""), "root should be installed");
-        assertTrue(kernel.isModuleInstalled(1, address(secondValidator), hex""), "second should be installed");
-        MockHook newHook = new MockHook();
-        vm.startPrank(address(ep));
-        kernel.installModule(4, address(newHook), abi.encode(moduleData, hex""));
-        vm.stopPrank();
-        assertTrue(kernel.isModuleInstalled(1, address(rootValidator), hex""), "root corrupted");
-        assertTrue(kernel.isModuleInstalled(1, address(secondValidator), hex""), "second corrupted");
-    }
-
     /// @dev Installing an invalid module type reverts
     function testFuzz_installModule_invalidType_reverts(uint256 moduleType) public {
         moduleType = bound(moduleType, 7, type(uint256).max);
+        vm.assume(moduleType != 11);
         MockValidator v = new MockValidator();
         vm.startPrank(address(ep));
         vm.expectRevert(NotImplemented.selector);
@@ -176,70 +158,33 @@ contract KernelFuzz is Test {
         (success);
     }
 
-    /// @dev After installing a selector, calling it from EP succeeds (when hook is address(0))
-    function testFuzz_fallback_installedSelector_fromEP_succeeds(uint256 selectorSeed) public {
-        bytes4 selector = MockFallback.testFunction.selector;
-        bytes1 callType = CallType.unwrap(CALLTYPE_SINGLE);
-        bytes memory internalData = abi.encodePacked(selector, callType, address(0));
-        vm.startPrank(address(ep));
-        kernel.installModule(3, address(fallbackModule), abi.encode(hex"deadbeef", internalData));
-        vm.stopPrank();
-
-        // Only EP can call selectors with hook == address(0)
-        vm.startPrank(address(ep));
-        (bool success, bytes memory ret) = address(kernel).call(abi.encodePacked(selector));
-        vm.stopPrank();
-        assertTrue(success, "selector call from EP should succeed");
-    }
-
-    /// @dev After installing a selector with hook=address(0), non-EP callers get InvalidSelector
-    function testFuzz_fallback_hookZero_nonEP_reverts(address caller) public {
-        vm.assume(caller != address(ep));
-        vm.assume(caller != address(kernel));
-
-        bytes4 selector = MockFallback.testFunction.selector;
-        bytes1 callType = CallType.unwrap(CALLTYPE_SINGLE);
-        bytes memory internalData = abi.encodePacked(selector, callType, address(0));
-        vm.startPrank(address(ep));
-        kernel.installModule(3, address(fallbackModule), abi.encode(hex"deadbeef", internalData));
-        vm.stopPrank();
-
-        vm.startPrank(caller);
-        vm.expectRevert(InvalidSelector.selector);
-        (bool success,) = address(kernel).call(abi.encodePacked(selector, bytes20(caller)));
-        (success);
-        vm.stopPrank();
-    }
-
-    /// @dev After installing a selector with a real hook, anyone can call it
-    function testFuzz_fallback_withHook_anyoneCalls(address caller) public {
+    /// @dev Installed fallback selectors are callable without a generic hook.
+    function testFuzz_fallback_installedSelector_anyoneCalls(address caller) public {
         vm.assume(caller != address(0));
 
         bytes4 selector = MockFallback.testFunction.selector;
         bytes1 callType = CallType.unwrap(CALLTYPE_SINGLE);
-        bytes memory internalData = abi.encodePacked(selector, callType, address(hook));
-        vm.startPrank(address(ep));
+        bytes memory internalData = abi.encodePacked(selector, callType);
+        vm.prank(address(ep));
         kernel.installModule(3, address(fallbackModule), abi.encode(hex"deadbeef", internalData));
-        vm.stopPrank();
 
-        vm.startPrank(caller);
-        (bool success,) = address(kernel).call(abi.encodePacked(selector, bytes20(address(0x1234))));
-        vm.stopPrank();
-        assertTrue(success, "selector call with hook should succeed for anyone");
+        vm.prank(caller);
+        (bool success,) = address(kernel).call(abi.encodePacked(selector));
+        assertTrue(success, "installed selector should be callable");
     }
 
     // ========= isValidSignature fuzz tests =========
 
     /// @dev isValidSignature with root type and invalid sig returns ERC1271_INVALID
     function testFuzz_isValidSignature_invalidSig_returnsInvalid(bytes32 hash, bytes calldata sig) public view {
-        bytes memory fullSig = abi.encodePacked(bytes1(0), bytes1(0), sig);
+        bytes memory fullSig = abi.encodePacked(bytes1(0), sig);
         bytes4 ret = kernel.isValidSignature(hash, fullSig);
         assertEq(ret, ERC1271_INVALID, "should return invalid for arbitrary sig");
     }
 
     /// @dev isValidSignature with invalid validation type (0x03) reverts
     function testFuzz_isValidSignature_invalidType_reverts(bytes32 hash, bytes calldata sig) public {
-        bytes memory fullSig = abi.encodePacked(bytes1(0), bytes1(0x03), sig);
+        bytes memory fullSig = abi.encodePacked(bytes1(0x03), sig);
         vm.expectRevert(InvalidValidationType.selector);
         kernel.isValidSignature(hash, fullSig);
     }
@@ -249,7 +194,7 @@ contract KernelFuzz is Test {
         MockValidator uninstalled = new MockValidator();
         bytes memory sig =
             hex"deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefde";
-        bytes memory fullSig = abi.encodePacked(bytes1(0), bytes1(0x01), bytes20(address(uninstalled)), sig);
+        bytes memory fullSig = abi.encodePacked(bytes1(0x01), bytes20(address(uninstalled)), sig);
         vm.expectRevert(abi.encodeWithSelector(InvalidVid.selector, validatorToIdentifier(uninstalled)));
         kernel.isValidSignature(hash, fullSig);
     }
@@ -434,10 +379,11 @@ contract KernelFuzz is Test {
 
     // ========= supportsModule fuzz tests =========
 
-    /// @dev supportsModule returns true only for types 1-6
+    /// @dev supportsModule returns true only for types 1, 2, 3, 5, 6, and 11
     function testFuzz_supportsModule(uint256 moduleTypeId) public view {
         bool supported = kernel.supportsModule(moduleTypeId);
-        bool expected = moduleTypeId < 7 && moduleTypeId != 0;
+        bool expected = moduleTypeId == 1 || moduleTypeId == 2 || moduleTypeId == 3 || moduleTypeId == 5
+            || moduleTypeId == 6 || moduleTypeId == 11;
         assertEq(supported, expected, "supportsModule mismatch");
     }
 

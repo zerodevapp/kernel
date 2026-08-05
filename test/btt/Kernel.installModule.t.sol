@@ -15,16 +15,10 @@ import {MockRevertingFallback} from "../mock/MockRevertingFallback.sol";
 import {MockRevertingHook} from "../mock/MockRevertingHook.sol";
 import {MockRevertingPolicy} from "../mock/MockRevertingPolicy.sol";
 import {MockRevertingSigner} from "../mock/MockRevertingSigner.sol";
-import {IValidator, IExecutor, IHook} from "src/interfaces/IERC7579Modules.sol";
+import {IValidator, IExecutor} from "src/interfaces/IERC7579Modules.sol";
 import {validatorToIdentifier, permissionToIdentifier} from "src/lib/Utils.sol";
 import {PermissionId} from "src/types/Types.sol";
-import {
-    Unauthorized,
-    NotImplemented,
-    OccupiedValidationId,
-    ModuleInstallFailed,
-    NotInstalled
-} from "src/types/Error.sol";
+import {Unauthorized, NotImplemented, OccupiedValidationId, ModuleInstallFailed} from "src/types/Error.sol";
 import {Install} from "src/types/Structs.sol";
 
 /// @title Kernel.installModule BTT Tests
@@ -100,9 +94,8 @@ abstract contract Kernel_installModule is BTTModifiers {
         kernel.installModule(1, address(mockValidator), abi.encode(hex"", hex""));
 
         // Verify validator is installed (hook should be address(1) by default)
-        assertEq(
-            kernel.validationInfo(validatorToIdentifier(IValidator(address(mockValidator)))).hook,
-            address(1),
+        assertTrue(
+            kernel.validationInfo(validatorToIdentifier(IValidator(address(mockValidator)))).installed,
             "Validator should be installed with hook=address(1)"
         );
     }
@@ -112,71 +105,9 @@ abstract contract Kernel_installModule is BTTModifiers {
         _;
     }
 
-    function test_GivenTheHookIsAddress0OrAddress1()
-        external
-        whenTheCallerIsTheEntryPointOrSelf
-        givenModuleTypeIsValidator
-        givenTheValidatorIsNotInstalled
-        givenInternalDataContainsAHookAddress
-    {
-        // it should set the hook accordingly
-        MockValidator mockValidator = new MockValidator();
-
-        // Test with address(1) - explicit no-hook marker
-        kernel.installModule(1, address(mockValidator), abi.encode(hex"", abi.encodePacked(address(1))));
-
-        assertEq(
-            kernel.validationInfo(validatorToIdentifier(IValidator(address(mockValidator)))).hook,
-            address(1),
-            "Validator hook should be address(1)"
-        );
-    }
-
     modifier givenTheHookIsAContract() {
         _hookIsContract = true;
         _;
-    }
-
-    function test_GivenTheHookIsEnabled()
-        external
-        whenTheCallerIsTheEntryPointOrSelf
-        givenModuleTypeIsValidator
-        givenTheValidatorIsNotInstalled
-        givenInternalDataContainsAHookAddress
-        givenTheHookIsAContract
-    {
-        // it should associate the hook with this validator
-        MockValidator mockValidator = new MockValidator();
-        MockHook mockHook = new MockHook();
-
-        // Install hook first
-        kernel.installModule(4, address(mockHook), abi.encode(hex"", hex""));
-
-        // Install validator with the hook
-        kernel.installModule(1, address(mockValidator), abi.encode(hex"", abi.encodePacked(address(mockHook))));
-
-        assertEq(
-            kernel.validationInfo(validatorToIdentifier(IValidator(address(mockValidator)))).hook,
-            address(mockHook),
-            "Validator should have the custom hook"
-        );
-    }
-
-    function test_GivenTheHookIsNotEnabled()
-        external
-        whenTheCallerIsTheEntryPointOrSelf
-        givenModuleTypeIsValidator
-        givenTheValidatorIsNotInstalled
-        givenInternalDataContainsAHookAddress
-        givenTheHookIsAContract
-    {
-        // it should revert with NotInstalled error
-        MockValidator mockValidator = new MockValidator();
-        MockHook mockHook = new MockHook();
-
-        // Do NOT install hook first - try to use an uninstalled hook
-        vm.expectRevert(NotInstalled.selector);
-        kernel.installModule(1, address(mockValidator), abi.encode(hex"", abi.encodePacked(address(mockHook))));
     }
 
     modifier givenModuleTypeIsExecutor() override {
@@ -208,45 +139,6 @@ abstract contract Kernel_installModule is BTTModifiers {
         assertTrue(kernel.isModuleInstalled(2, address(mockExecutor), ""), "Executor should be installed");
     }
 
-    function test_GivenTheHookIsEnabled_GivenInternalDataContainsAHookAddress()
-        external
-        whenTheCallerIsTheEntryPointOrSelf
-        givenModuleTypeIsExecutor
-        givenInternalDataContainsAHookAddress
-    {
-        // it should associate the hook with this executor
-        MockExecutor mockExecutor = new MockExecutor();
-        MockHook mockHook = new MockHook();
-
-        // Install hook first so it's enabled
-        kernel.installModule(4, address(mockHook), abi.encode(hex"", hex""));
-
-        // Install executor with the enabled hook
-        kernel.installModule(2, address(mockExecutor), abi.encode(hex"", abi.encodePacked(address(mockHook))));
-
-        assertTrue(kernel.isModuleInstalled(2, address(mockExecutor), ""), "Executor should be installed");
-        assertEq(
-            address(kernel.executorConfig(address(mockExecutor)).hook),
-            address(mockHook),
-            "Executor should have the custom hook"
-        );
-    }
-
-    function test_GivenTheHookIsNotEnabled_GivenInternalDataContainsAHookAddress()
-        external
-        whenTheCallerIsTheEntryPointOrSelf
-        givenModuleTypeIsExecutor
-        givenInternalDataContainsAHookAddress
-    {
-        // it should revert with NotInstalled error
-        MockExecutor mockExecutor = new MockExecutor();
-        MockHook mockHook = new MockHook();
-
-        // Do NOT install hook first - try to use an uninstalled hook
-        vm.expectRevert(NotInstalled.selector);
-        kernel.installModule(2, address(mockExecutor), abi.encode(hex"", abi.encodePacked(address(mockHook))));
-    }
-
     modifier givenModuleTypeIsFallback() override {
         _;
     }
@@ -262,9 +154,7 @@ abstract contract Kernel_installModule is BTTModifiers {
         bytes4 selector = bytes4(keccak256("customFunction()"));
 
         // Install first fallback
-        kernel.installModule(
-            3, address(mockFallback1), abi.encode(hex"", abi.encodePacked(selector, bytes1(0x00), address(1)))
-        );
+        kernel.installModule(3, address(mockFallback1), abi.encode(hex"", abi.encodePacked(selector, bytes1(0x00))));
 
         assertTrue(
             kernel.isModuleInstalled(3, address(mockFallback1), abi.encodePacked(selector)),
@@ -272,9 +162,7 @@ abstract contract Kernel_installModule is BTTModifiers {
         );
 
         // Overwrite with second fallback
-        kernel.installModule(
-            3, address(mockFallback2), abi.encode(hex"", abi.encodePacked(selector, bytes1(0x00), address(1)))
-        );
+        kernel.installModule(3, address(mockFallback2), abi.encode(hex"", abi.encodePacked(selector, bytes1(0x00))));
 
         assertTrue(
             kernel.isModuleInstalled(3, address(mockFallback2), abi.encodePacked(selector)),
@@ -299,9 +187,7 @@ abstract contract Kernel_installModule is BTTModifiers {
 
         // callType 0x00 = CALL (not DELEGATECALL)
         vm.expectRevert(ModuleInstallFailed.selector);
-        kernel.installModule(
-            3, address(revertingFallback), abi.encode(hex"", abi.encodePacked(selector, bytes1(0x00), address(1)))
-        );
+        kernel.installModule(3, address(revertingFallback), abi.encode(hex"", abi.encodePacked(selector, bytes1(0x00))));
     }
 
     function test_WhenOnInstallRevertsAndCallTypeIsDELEGATECALL()
@@ -315,9 +201,7 @@ abstract contract Kernel_installModule is BTTModifiers {
         bytes4 selector = bytes4(keccak256("customFunction()"));
 
         // callType 0xff = DELEGATECALL
-        kernel.installModule(
-            3, address(revertingFallback), abi.encode(hex"", abi.encodePacked(selector, bytes1(0xff), address(1)))
-        );
+        kernel.installModule(3, address(revertingFallback), abi.encode(hex"", abi.encodePacked(selector, bytes1(0xff))));
 
         assertTrue(
             kernel.isModuleInstalled(3, address(revertingFallback), abi.encodePacked(selector)),
@@ -338,9 +222,7 @@ abstract contract Kernel_installModule is BTTModifiers {
         MockFallback mockFallback = new MockFallback();
         bytes4 selector = bytes4(keccak256("customFunction()"));
 
-        kernel.installModule(
-            3, address(mockFallback), abi.encode(hex"", abi.encodePacked(selector, bytes1(0x00), address(1)))
-        );
+        kernel.installModule(3, address(mockFallback), abi.encode(hex"", abi.encodePacked(selector, bytes1(0x00))));
 
         assertTrue(
             kernel.isModuleInstalled(3, address(mockFallback), abi.encodePacked(selector)),
@@ -350,30 +232,6 @@ abstract contract Kernel_installModule is BTTModifiers {
 
     modifier givenModuleTypeIsHook() override {
         _;
-    }
-
-    function test_WhenInternalDataIsEmptyAndOnInstallReverts()
-        external
-        whenTheCallerIsTheEntryPointOrSelf
-        givenModuleTypeIsHook
-    {
-        // it should revert with ModuleInstallFailed error
-        MockRevertingHook revertingHook = new MockRevertingHook();
-
-        // Empty internalData = "" means onInstall revert will cause failure
-        vm.expectRevert(ModuleInstallFailed.selector);
-        kernel.installModule(4, address(revertingHook), abi.encode(hex"", ""));
-    }
-
-    function test_WhenInternalDataIsNon_empty() external whenTheCallerIsTheEntryPointOrSelf givenModuleTypeIsHook {
-        // it should enable the hook even if onInstall reverts
-        // it should emit ModuleInstalled event
-        MockRevertingHook revertingHook = new MockRevertingHook();
-
-        // Non-empty internalData means hook is installed even if onInstall reverts
-        kernel.installModule(4, address(revertingHook), abi.encode(hex"", "non-empty"));
-
-        assertTrue(kernel.isModuleInstalled(4, address(revertingHook), ""), "Hook should be enabled");
     }
 
     modifier givenModuleTypeIsPolicy() override {
@@ -509,25 +367,6 @@ abstract contract Kernel_installModule is BTTModifiers {
         kernel.installModule(6, address(revertingSigner), abi.encode(hex"", abi.encodePacked(testPermId)));
     }
 
-    function test_GivenTheHookAddressInInternalDataIsInvalid()
-        external
-        whenTheCallerIsTheEntryPointOrSelf
-        givenModuleTypeIsPolicy
-    {
-        // Policy internalData hook bytes are ignored (hook is set via signer install),
-        // so policy install should succeed regardless of extra bytes in internalData
-        MockPolicy mockPolicy = new MockPolicy();
-        PermissionId testPermId = PermissionId.wrap(bytes4(keccak256("testPolicy")));
-        MockHook uninstalledHook = new MockHook();
-
-        kernel.installModule(
-            5, address(mockPolicy), abi.encode(hex"", abi.encodePacked(testPermId, address(uninstalledHook)))
-        );
-        assertTrue(
-            kernel.isModuleInstalled(5, address(mockPolicy), abi.encodePacked(testPermId)), "Policy should be installed"
-        );
-    }
-
     function test_GivenThePermissionIdChangesDuringAMulti_packageInstall_GivenModuleTypeIsSigner()
         external
         whenTheCallerIsTheEntryPointOrSelf
@@ -562,11 +401,8 @@ abstract contract Kernel_installModule is BTTModifiers {
         kernel.installModule(5, address(mockPolicy), abi.encode(hex"", abi.encodePacked(testPermId)));
         kernel.installModule(6, address(mockSigner), abi.encode(hex"", abi.encodePacked(testPermId)));
 
-        // Permission should now be usable (hook set to address(1))
-        assertEq(
-            kernel.validationInfo(permissionToIdentifier(testPermId)).hook,
-            address(1),
-            "Permission hook should be set to address(1)"
+        assertTrue(
+            kernel.validationInfo(permissionToIdentifier(testPermId)).installed, "Permission should be installed"
         );
     }
 
@@ -632,64 +468,6 @@ abstract contract Kernel_installModule is BTTModifiers {
     bool internal _useInstallArrayOverload;
     bool internal _internalDataNonEmpty;
 
-    function test_GivenTheExecutorHookIsEnabled()
-        external
-        whenTheCallerIsTheEntryPointOrSelf
-        givenModuleTypeIsExecutor
-    {
-        // it should associate the hook with this executor
-        MockExecutor mockExecutor = new MockExecutor();
-        MockHook mockHook = new MockHook();
-
-        // Install hook first so it's enabled
-        kernel.installModule(4, address(mockHook), abi.encode(hex"", hex""));
-
-        // Install executor with the enabled hook
-        kernel.installModule(2, address(mockExecutor), abi.encode(hex"", abi.encodePacked(address(mockHook))));
-
-        assertTrue(kernel.isModuleInstalled(2, address(mockExecutor), ""), "Executor should be installed");
-        assertEq(
-            address(kernel.executorConfig(address(mockExecutor)).hook),
-            address(mockHook),
-            "Executor should have the custom hook"
-        );
-    }
-
-    function test_GivenTheExecutorHookIsNotEnabled()
-        external
-        whenTheCallerIsTheEntryPointOrSelf
-        givenModuleTypeIsExecutor
-    {
-        // it should revert with NotInstalled error
-        MockExecutor mockExecutor = new MockExecutor();
-        MockHook mockHook = new MockHook();
-
-        // Do NOT install hook first - try to use an uninstalled hook
-        vm.expectRevert(NotInstalled.selector);
-        kernel.installModule(2, address(mockExecutor), abi.encode(hex"", abi.encodePacked(address(mockHook))));
-    }
-
-    function test_GivenTheHookAddressInInternalDataIsInvalid_GivenModuleTypeIsSigner()
-        external
-        whenTheCallerIsTheEntryPointOrSelf
-        givenModuleTypeIsSigner
-    {
-        // it should revert with NotInstalled error
-        MockPolicy mockPolicy = new MockPolicy();
-        MockSigner mockSigner = new MockSigner();
-        PermissionId testPermId = PermissionId.wrap(bytes4(keccak256("testSigner")));
-        MockHook uninstalledHook = new MockHook();
-
-        // Install policy first
-        kernel.installModule(5, address(mockPolicy), abi.encode(hex"", abi.encodePacked(testPermId)));
-
-        // Try to install signer with uninstalled hook
-        vm.expectRevert(NotInstalled.selector);
-        kernel.installModule(
-            6, address(mockSigner), abi.encode(hex"", abi.encodePacked(testPermId, address(uninstalledHook)))
-        );
-    }
-
     function test_WhenOnInstallReverts_Executor()
         external
         whenTheCallerIsTheEntryPointOrSelf
@@ -730,9 +508,7 @@ abstract contract Kernel_installModule is BTTModifiers {
         bytes4 selector = bytes4(keccak256("anotherFunction()"));
 
         vm.expectRevert(ModuleInstallFailed.selector);
-        kernel.installModule(
-            3, address(revertingFallback), abi.encode(hex"", abi.encodePacked(selector, bytes1(0x00), address(1)))
-        );
+        kernel.installModule(3, address(revertingFallback), abi.encode(hex"", abi.encodePacked(selector, bytes1(0x00))));
     }
 
     function test_WhenOnInstallRevertsAndCallTypeIsDelegatecall()
@@ -745,9 +521,7 @@ abstract contract Kernel_installModule is BTTModifiers {
         MockRevertingFallback revertingFallback = new MockRevertingFallback();
         bytes4 selector = bytes4(keccak256("anotherFunction()"));
 
-        kernel.installModule(
-            3, address(revertingFallback), abi.encode(hex"", abi.encodePacked(selector, bytes1(0xff), address(1)))
-        );
+        kernel.installModule(3, address(revertingFallback), abi.encode(hex"", abi.encodePacked(selector, bytes1(0xff))));
 
         assertTrue(
             kernel.isModuleInstalled(3, address(revertingFallback), abi.encodePacked(selector)),
@@ -768,9 +542,7 @@ abstract contract Kernel_installModule is BTTModifiers {
         MockFallback mockFallback = new MockFallback();
         bytes4 selector = bytes4(keccak256("anotherFunction()"));
 
-        kernel.installModule(
-            3, address(mockFallback), abi.encode(hex"", abi.encodePacked(selector, bytes1(0x00), address(1)))
-        );
+        kernel.installModule(3, address(mockFallback), abi.encode(hex"", abi.encodePacked(selector, bytes1(0x00))));
 
         assertTrue(
             kernel.isModuleInstalled(3, address(mockFallback), abi.encodePacked(selector)),
@@ -781,23 +553,6 @@ abstract contract Kernel_installModule is BTTModifiers {
     modifier whenInternalDataIsNonEmpty() {
         _internalDataNonEmpty = true;
         _;
-    }
-
-    function test_WhenInternalDataIsNonEmpty()
-        external
-        whenTheCallerIsTheEntryPointOrSelf
-        givenModuleTypeIsHook
-        whenInternalDataIsNonEmpty
-    {
-        // it should enable the hook even if onInstall reverts
-        // it should emit ModuleInstalled event
-        MockRevertingHook revertingHook = new MockRevertingHook();
-
-        kernel.installModule(4, address(revertingHook), abi.encode(hex"", "some-data"));
-
-        assertTrue(
-            kernel.isModuleInstalled(4, address(revertingHook), ""), "Hook should be enabled with non-empty data"
-        );
     }
 
     function test_GivenModuleTypeIsPolicy_ParsesPermissionId()
@@ -824,23 +579,6 @@ abstract contract Kernel_installModule is BTTModifiers {
 
         vm.expectRevert(ModuleInstallFailed.selector);
         kernel.installModule(5, address(revertingPolicy), abi.encode(hex"", abi.encodePacked(testPermId)));
-    }
-
-    function test_GivenTheHookAddressInInternalDataIsInvalid_Policy()
-        external
-        whenTheCallerIsTheEntryPointOrSelf
-        givenModuleTypeIsPolicy
-    {
-        // Policy internalData hook bytes are ignored (hook is set via signer install),
-        // so policy install should succeed regardless of extra bytes in internalData
-        MockPolicy mockPolicy = new MockPolicy();
-        PermissionId testPermId = PermissionId.wrap(bytes4(keccak256("invalidHookPolicy")));
-        address fakeHook = makeAddr("fakeHook");
-
-        kernel.installModule(5, address(mockPolicy), abi.encode(hex"", abi.encodePacked(testPermId, fakeHook)));
-        assertTrue(
-            kernel.isModuleInstalled(5, address(mockPolicy), abi.encodePacked(testPermId)), "Policy should be installed"
-        );
     }
 
     function test_GivenThePermissionIdChangesDuringMultiPackageInstall_Policy()
@@ -905,23 +643,6 @@ abstract contract Kernel_installModule is BTTModifiers {
         kernel.installModule(6, address(revertingSigner), abi.encode(hex"", abi.encodePacked(testPermId)));
     }
 
-    function test_GivenTheHookAddressInInternalDataIsInvalid_Signer()
-        external
-        whenTheCallerIsTheEntryPointOrSelf
-        givenModuleTypeIsSigner
-    {
-        // it should revert with NotInstalled error
-        MockPolicy mockPolicy = new MockPolicy();
-        MockSigner mockSigner = new MockSigner();
-        PermissionId testPermId = PermissionId.wrap(bytes4(keccak256("invalidHookSigner")));
-        address fakeHook = makeAddr("fakeHook");
-
-        kernel.installModule(5, address(mockPolicy), abi.encode(hex"", abi.encodePacked(testPermId)));
-
-        vm.expectRevert(NotInstalled.selector);
-        kernel.installModule(6, address(mockSigner), abi.encode(hex"", abi.encodePacked(testPermId, fakeHook)));
-    }
-
     function test_GivenThePermissionIdChangesDuringMultiPackageInstall_Signer()
         external
         whenTheCallerIsTheEntryPointOrSelf
@@ -955,8 +676,8 @@ abstract contract Kernel_installModule is BTTModifiers {
         assertTrue(
             kernel.isModuleInstalled(6, address(mockSigner), abi.encodePacked(testPermId)), "Signer should be installed"
         );
-        assertEq(
-            kernel.validationInfo(permissionToIdentifier(testPermId)).hook, address(1), "Permission should be activated"
+        assertTrue(
+            kernel.validationInfo(permissionToIdentifier(testPermId)).installed, "Permission should be activated"
         );
     }
 }

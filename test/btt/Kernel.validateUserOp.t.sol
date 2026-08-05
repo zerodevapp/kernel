@@ -15,7 +15,6 @@ import {PermissionId} from "src/types/Types.sol";
 import {
     Unauthorized,
     UnauthorizedCallData,
-    InvalidValidator,
     InvalidPermissionId,
     InvalidNonce,
     InvalidVid,
@@ -95,7 +94,7 @@ abstract contract Kernel_validateUserOp is BTTModifiers {
             moduleType: 1,
             module: address(newValidator),
             moduleData: hex"",
-            internalData: abi.encodePacked(address(0), Kernel.execute.selector)
+            internalData: abi.encodePacked(Kernel.execute.selector)
         });
         op2.signature = abi.encode(
             uint256(0),
@@ -149,9 +148,8 @@ abstract contract Kernel_validateUserOp is BTTModifiers {
         uint256 validationData = kernel.validateUserOp(op, userOpHash, 0);
 
         // Verify the validator was installed
-        assertEq(
-            kernel.validationInfo(validatorToIdentifier(IValidator(address(newValidator)))).hook,
-            address(1),
+        assertTrue(
+            kernel.validationInfo(validatorToIdentifier(IValidator(address(newValidator)))).installed,
             "Validator should be installed"
         );
         assertEq(validationData, 0, "Enable mode with valid signature should return 0");
@@ -281,9 +279,7 @@ abstract contract Kernel_validateUserOp is BTTModifiers {
     {
         // Deploy and install a misconfigured validator that returns empty data
         MockEmptyReturnValidator emptyValidator = new MockEmptyReturnValidator();
-        kernel.installModule(
-            1, address(emptyValidator), abi.encode(hex"", abi.encodePacked(address(0), Kernel.execute.selector))
-        );
+        kernel.installModule(1, address(emptyValidator), abi.encode(hex"", abi.encodePacked(Kernel.execute.selector)));
 
         PackedUserOperation memory op = PackedUserOperation({
             sender: address(kernel),
@@ -396,40 +392,6 @@ abstract contract Kernel_validateUserOp is BTTModifiers {
         kernel.validateUserOp(op, userOpHash, 0);
     }
 
-    function test_WhenTheCallDataUsesExecuteUserOpWrapper()
-        external
-        whenTheCallerIsTheEntryPointOrSelf
-        givenTheValidationTypeIsVALIDATOR
-        givenTheValidatorIsInstalled
-        givenTheCallDataSelectorIsInTheAllowedListAndHookIsNotAddress1
-    {
-        // it should set the validation hook for later execution
-        // it should continue with signature validation
-        vm.stopPrank();
-        vm.startPrank(address(ep));
-
-        // Install hook first
-        kernel.installModule(4, address(hook), abi.encode(hex"", hex""));
-
-        _installValidatorWithSelectorPolicy();
-
-        PackedUserOperation memory op = _createUserOpWithValidatorValidation();
-        op.callData = abi.encodePacked(
-            Kernel.executeUserOp.selector,
-            abi.encodeWithSelector(
-                Kernel.execute.selector,
-                bytes32(0),
-                abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
-            )
-        );
-        op.signature = _validatorSignUserOp(op, true, false);
-        bytes32 userOpHash = ep.getUserOpHash(op);
-
-        uint256 validationData = kernel.validateUserOp(op, userOpHash, 0);
-
-        assertEq(validationData, 0, "Validation with executeUserOp wrapper and hook should succeed");
-    }
-
     modifier givenTheCallDataSelectorIsNotDirectlyAllowed() {
         _selectorAllowed = false;
         _selectorHook = address(0);
@@ -529,41 +491,6 @@ abstract contract Kernel_validateUserOp is BTTModifiers {
 
         vm.expectRevert(UnauthorizedCallData.selector);
         kernel.validateUserOp(op, userOpHash, 0);
-    }
-
-    function test_GivenAValidationHookIsConfigured()
-        external
-        whenTheCallerIsTheEntryPointOrSelf
-        givenTheValidationTypeIsVALIDATOR
-        givenTheValidatorIsInstalled
-    {
-        // it should store the hook in transient storage for executeUserOp
-        vm.stopPrank();
-        vm.startPrank(address(ep));
-
-        // Install hook first
-        kernel.installModule(4, address(hook), abi.encode(hex"", hex""));
-
-        // Configure to allow execute selector with the hook
-        _selectorAllowed = true;
-        _selectorHook = address(hook);
-        _installValidatorWithSelectorPolicy();
-
-        PackedUserOperation memory op = _createUserOpWithValidatorValidation();
-        op.callData = abi.encodePacked(
-            Kernel.executeUserOp.selector,
-            abi.encodeWithSelector(
-                Kernel.execute.selector,
-                bytes32(0),
-                abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
-            )
-        );
-        op.signature = _validatorSignUserOp(op, true, false);
-        bytes32 userOpHash = ep.getUserOpHash(op);
-
-        uint256 validationData = kernel.validateUserOp(op, userOpHash, 0);
-
-        assertEq(validationData, 0, "Validator with hook configured should return 0");
     }
 
     modifier givenTheValidationTypeIsPERMISSION() {
@@ -947,7 +874,7 @@ abstract contract Kernel_validateUserOp is BTTModifiers {
             moduleType: 1,
             module: address(newValidator),
             moduleData: hex"",
-            internalData: abi.encodePacked(address(0), Kernel.execute.selector)
+            internalData: abi.encodePacked(Kernel.execute.selector)
         });
         op2.signature = abi.encode(
             uint256(0),
@@ -1029,9 +956,7 @@ abstract contract Kernel_validateUserOp is BTTModifiers {
         givenValidationTypeIsValidator
     {
         // Manually install validator with execute selector allowed (don't use givenValidatorIsInstalled)
-        kernel.installModule(
-            1, address(newValidator), abi.encode(hex"", abi.encodePacked(address(0), Kernel.execute.selector))
-        );
+        kernel.installModule(1, address(newValidator), abi.encode(hex"", abi.encodePacked(Kernel.execute.selector)));
 
         PackedUserOperation memory op = _createUserOpWithValidatorValidation();
         op.callData = abi.encodePacked(
@@ -1060,9 +985,7 @@ abstract contract Kernel_validateUserOp is BTTModifiers {
         givenValidationTypeIsValidator
     {
         // Manually install validator with execute selector allowed (don't use givenValidatorIsInstalled)
-        kernel.installModule(
-            1, address(newValidator), abi.encode(hex"", abi.encodePacked(address(0), Kernel.execute.selector))
-        );
+        kernel.installModule(1, address(newValidator), abi.encode(hex"", abi.encodePacked(Kernel.execute.selector)));
 
         PackedUserOperation memory op = _createUserOpWithValidatorValidation();
         op.callData = abi.encodePacked(
@@ -1220,8 +1143,8 @@ abstract contract Kernel_validateUserOp is BTTModifiers {
 
         assertEq(validationData, 0, "Enable mode with valid signature should return 0");
         // Verify validator was installed
-        assertEq(
-            kernel.validationInfo(validatorToIdentifier(newValidator)).hook, address(1), "Validator should be installed"
+        assertTrue(
+            kernel.validationInfo(validatorToIdentifier(newValidator)).installed, "Validator should be installed"
         );
     }
 

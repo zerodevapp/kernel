@@ -6,7 +6,6 @@ import {
     SELECTOR_MANAGER_STORAGE_SLOT,
     MODULE_MANAGER_STORAGE_SLOT,
     EXECUTOR_MANAGER_STORAGE_SLOT,
-    HOOK_MANAGER_STORAGE_SLOT,
     VALIDATION_MANAGER_STORAGE_SLOT,
     ERC1967_IMPLEMENTATION_SLOT
 } from "src/types/Constants.sol";
@@ -14,19 +13,18 @@ import {
 /// @title KernelStorageSlotHalmos
 /// @notice Halmos proofs that ERC-7201 storage slots do not collide
 contract KernelStorageSlotHalmos is SymTest, Test {
-    /// @notice Prove all 6 storage slots are pairwise distinct
+    /// @notice Prove all storage slots are pairwise distinct
     function check_AllStorageSlotsDistinct() external pure {
-        bytes32[6] memory slots = [
+        bytes32[5] memory slots = [
             SELECTOR_MANAGER_STORAGE_SLOT,
             MODULE_MANAGER_STORAGE_SLOT,
             EXECUTOR_MANAGER_STORAGE_SLOT,
-            HOOK_MANAGER_STORAGE_SLOT,
             VALIDATION_MANAGER_STORAGE_SLOT,
             ERC1967_IMPLEMENTATION_SLOT
         ];
 
-        for (uint256 i = 0; i < 6; i++) {
-            for (uint256 j = i + 1; j < 6; j++) {
+        for (uint256 i = 0; i < 5; i++) {
+            for (uint256 j = i + 1; j < 5; j++) {
                 assertTrue(slots[i] != slots[j], "storage slot collision");
             }
         }
@@ -48,12 +46,6 @@ contract KernelStorageSlotHalmos is SymTest, Test {
     function check_ExecutorManagerSlotDerivation() external pure {
         bytes32 expected = bytes32(uint256(keccak256("kernel.v4.executor")) - 1);
         assertEq(EXECUTOR_MANAGER_STORAGE_SLOT, expected);
-    }
-
-    /// @notice Prove HOOK_MANAGER_STORAGE_SLOT matches keccak256('kernel.v4.hook') - 1
-    function check_HookManagerSlotDerivation() external pure {
-        bytes32 expected = bytes32(uint256(keccak256("kernel.v4.hook")) - 1);
-        assertEq(HOOK_MANAGER_STORAGE_SLOT, expected);
     }
 
     /// @notice Prove VALIDATION_MANAGER_STORAGE_SLOT matches keccak256('kernel.v4.validation') - 1

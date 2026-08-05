@@ -5,7 +5,13 @@ import {Call} from "src/types/Structs.sol";
 import {MockExecutor} from "./mock/MockExecutor.sol";
 import {MockCallee} from "./mock/MockCallee.sol";
 import {KernelTestBase} from "./KernelTestBase.sol";
-import {Unauthorized} from "src/types/Error.sol";
+import {Unauthorized, InvalidDataLength, ScopedExecutionHookStillInstalled} from "src/types/Error.sol";
+import {SCOPED_EXECUTION_HOOK_EXECUTOR_SCOPE} from "src/types/Constants.sol";
+import {
+    executorScopedExecutionHookId,
+    getScopedExecutionHookScope,
+    getScopedExecutionHookExecutor
+} from "src/lib/Utils.sol";
 
 abstract contract KernelExecutorTest is KernelTestBase {
     function test_execute_from_executor_fail_not_executor() external {
@@ -21,31 +27,65 @@ abstract contract KernelExecutorTest is KernelTestBase {
         assertTrue(kernel.supportsModule(2));
         address newEx = address(new MockExecutor());
         kernel.installModule(2, newEx, abi.encode(hex"deadbeef", ""));
-        assertEq(address(kernel.executorConfig(newEx).hook), address(1));
+        assertTrue(kernel.executorConfig(newEx).installed);
         assertTrue(kernel.isModuleInstalled(2, newEx, hex""));
     }
 
     function test_install_executor_oninstall_fail() external unitTest {
         address newEx = makeAddr("New Executor");
         kernel.installModule(2, newEx, abi.encode(hex"", ""));
-        assertEq(address(kernel.executorConfig(newEx).hook), address(1));
+        assertTrue(kernel.executorConfig(newEx).installed);
         assertTrue(kernel.isModuleInstalled(2, newEx, hex""));
+    }
+
+    function test_install_executor_rejects_legacy_hook_data() external unitTest {
+        MockExecutor newEx = new MockExecutor();
+        vm.expectRevert(InvalidDataLength.selector);
+        kernel.installModule(2, address(newEx), abi.encode(hex"", abi.encodePacked(address(1))));
     }
 
     function test_uninstall_executor_onuninstall_success() external unitTest {
         address newEx = address(new MockExecutor());
         kernel.installModule(2, newEx, abi.encode(hex"deadbeef", ""));
-        assertEq(address(kernel.executorConfig(newEx).hook), address(1));
+        assertTrue(kernel.executorConfig(newEx).installed);
         kernel.uninstallModule(2, newEx, abi.encode(hex"", hex""));
-        assertEq(address(kernel.executorConfig(newEx).hook), address(0));
+        assertFalse(kernel.executorConfig(newEx).installed);
     }
 
     function test_uninstall_executor_onuninstall_fail() external unitTest {
         address newEx = makeAddr("New Executor");
         kernel.installModule(2, newEx, abi.encode(hex"", ""));
-        assertEq(address(kernel.executorConfig(newEx).hook), address(1));
+        assertTrue(kernel.executorConfig(newEx).installed);
         kernel.uninstallModule(2, newEx, abi.encode(hex"", hex""));
-        assertEq(address(kernel.executorConfig(newEx).hook), address(0));
+        assertFalse(kernel.executorConfig(newEx).installed);
+    }
+
+    function test_executor_scoped_execution_hook() external {
+        bytes memory hookContext = abi.encodePacked(SCOPED_EXECUTION_HOOK_EXECUTOR_SCOPE, bytes20(executor));
+        vm.startPrank(address(ep));
+        kernel.installModule(11, address(hook), abi.encode(hex"deadbeef", hookContext));
+        assertTrue(kernel.isModuleInstalled(11, address(hook), hookContext));
+        assertEq(address(kernel.executorConfig(executor).scopedExecutionHook), address(hook));
+        vm.stopPrank();
+
+        vm.prank(executor);
+        kernel.executeFromExecutor(
+            bytes32(0), abi.encodePacked(address(callee), uint256(0), abi.encodeWithSelector(MockCallee.foo.selector))
+        );
+        bytes32 expectedId = executorScopedExecutionHookId(executor);
+        assertEq(getScopedExecutionHookScope(expectedId), SCOPED_EXECUTION_HOOK_EXECUTOR_SCOPE);
+        assertEq(getScopedExecutionHookExecutor(expectedId), executor);
+        assertEq(hook.preCheckId(address(kernel)), expectedId);
+        assertEq(hook.postCheckId(address(kernel)), expectedId);
+        assertEq(callee.bar(), 1);
+
+        vm.startPrank(address(ep));
+        vm.expectRevert(ScopedExecutionHookStillInstalled.selector);
+        kernel.uninstallModule(2, executor, abi.encode(hex"", hex""));
+        kernel.uninstallModule(11, address(hook), abi.encode(hex"", hookContext));
+        kernel.uninstallModule(2, executor, abi.encode(hex"", hex""));
+        assertFalse(kernel.executorConfig(executor).installed);
+        vm.stopPrank();
     }
 
     function test_execute_from_executor() external unitTestExecutor {

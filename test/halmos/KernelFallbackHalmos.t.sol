@@ -9,11 +9,10 @@ import {KernelImmutableECDSA} from "src/KernelImmutableECDSA.sol";
 import {KernelFactory} from "src/KernelFactory.sol";
 import {Install, SelectorConfig} from "src/types/Structs.sol";
 import {CallType} from "src/types/Types.sol";
-import {CALLTYPE_SINGLE, CALLTYPE_DELEGATECALL, HOOK_MODULE_NOT_INSTALLED} from "src/types/Constants.sol";
+import {CALLTYPE_SINGLE, CALLTYPE_DELEGATECALL} from "src/types/Constants.sol";
 import {EntryPointLib} from "../utils/EntryPointLib.sol";
 import {MockValidator} from "../mock/MockValidator.sol";
 import {MockFallback} from "../mock/MockFallback.sol";
-import {MockHook} from "../mock/MockHook.sol";
 
 /// @title KernelFallbackHalmos
 /// @notice Halmos proofs that _fallback can never route to an uninstalled module
@@ -21,7 +20,6 @@ contract KernelFallbackHalmos is SymTest, Test {
     Kernel private kernel;
     IEntryPoint private ep;
     MockFallback private fallbackModule;
-    MockHook private hook;
 
     function setUp() external {
         ep = EntryPointLib.deploy();
@@ -33,10 +31,6 @@ contract KernelFallbackHalmos is SymTest, Test {
         pkgs[0] = Install({moduleType: 1, module: address(rootValidator), moduleData: hex"", internalData: hex""});
         kernel = factory.deploy(pkgs, 0);
         fallbackModule = new MockFallback();
-        hook = new MockHook();
-        vm.startPrank(address(ep));
-        kernel.installModule(4, address(hook), abi.encode(hex"", hex""));
-        vm.stopPrank();
     }
 
     /// @notice Prove that calling a selector with no installed fallback always reverts
@@ -54,7 +48,7 @@ contract KernelFallbackHalmos is SymTest, Test {
     function check_FallbackAfterUninstallReverts() external {
         bytes4 selector = MockFallback.testFunction.selector;
         bytes1 callType = CallType.unwrap(CALLTYPE_SINGLE);
-        bytes memory internalData = abi.encodePacked(selector, callType, address(hook));
+        bytes memory internalData = abi.encodePacked(selector, callType);
 
         // Install then uninstall
         vm.startPrank(address(ep));
@@ -74,7 +68,7 @@ contract KernelFallbackHalmos is SymTest, Test {
     function check_FallbackInstallSetsCorrectConfig() external {
         bytes4 selector = MockFallback.testFunction.selector;
         bytes1 callType = CallType.unwrap(CALLTYPE_SINGLE);
-        bytes memory internalData = abi.encodePacked(selector, callType, address(hook));
+        bytes memory internalData = abi.encodePacked(selector, callType);
 
         vm.startPrank(address(ep));
         kernel.installModule(3, address(fallbackModule), abi.encode(hex"deadbeef", internalData));
@@ -85,28 +79,11 @@ contract KernelFallbackHalmos is SymTest, Test {
         assertEq(CallType.unwrap(cfg.callType), callType);
     }
 
-    /// @notice Prove that fallback with hook=0 and non-EP caller reverts
-    function check_FallbackHookZeroNonEPReverts() external {
+    /// @notice Prove an installed fallback allows any caller
+    function check_FallbackAllowsAnyCaller() external {
         bytes4 selector = MockFallback.testFunction.selector;
         bytes1 callType = CallType.unwrap(CALLTYPE_SINGLE);
-        bytes memory internalData = abi.encodePacked(selector, callType, address(0));
-
-        vm.startPrank(address(ep));
-        kernel.installModule(3, address(fallbackModule), abi.encode(hex"deadbeef", internalData));
-        vm.stopPrank();
-
-        address caller = address(0xBEEF);
-        vm.startPrank(caller);
-        (bool success,) = address(kernel).call(abi.encodePacked(selector, bytes20(caller)));
-        vm.stopPrank();
-        assertFalse(success, "hook=0 with non-EP caller should revert");
-    }
-
-    /// @notice Prove fallback with hook=address(1) allows any caller
-    function check_FallbackNoHookAllowsAnyCaller() external {
-        bytes4 selector = MockFallback.testFunction.selector;
-        bytes1 callType = CallType.unwrap(CALLTYPE_SINGLE);
-        bytes memory internalData = abi.encodePacked(selector, callType, address(1));
+        bytes memory internalData = abi.encodePacked(selector, callType);
 
         vm.startPrank(address(ep));
         kernel.installModule(3, address(fallbackModule), abi.encode(hex"deadbeef", internalData));

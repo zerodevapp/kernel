@@ -5,7 +5,6 @@ import {BTTModifiers} from "./BTTModifiers.sol";
 import {Unauthorized, InvalidExecType, InvalidCallType} from "src/types/Error.sol";
 import {MockExecutor} from "../mock/MockExecutor.sol";
 import {MockCallee} from "../mock/MockCallee.sol";
-import {MockHook} from "../mock/MockHook.sol";
 import {MockAction} from "../mock/MockAction.sol";
 import {LibERC7579} from "solady/accounts/LibERC7579.sol";
 import {Call} from "src/types/Structs.sol";
@@ -16,10 +15,6 @@ abstract contract Kernel_executeFromExecutor is BTTModifiers {
     // State variables for execution mode - used by tests to build mode
     bytes1 internal _executorCallType;
     bytes1 internal _executorExecType;
-
-    // State variables for hook tests - set by modifiers, used by tests
-    MockHook internal _hookContract;
-    MockExecutor internal _executorWithHook;
 
     function _setupExecutorTests() internal {
         testExecutor = new MockExecutor();
@@ -50,117 +45,6 @@ abstract contract Kernel_executeFromExecutor is BTTModifiers {
         testExecutor.executeViaKernel(
             kernel, LibERC7579.CALLTYPE_SINGLE, bytes1(0x02), address(callee), 0, MockCallee.foo.selector
         );
-    }
-
-    // Hook setup helper - creates and installs executor with hook
-    function _setupExecutorWithHook() internal {
-        _hookContract = new MockHook();
-        _executorWithHook = new MockExecutor();
-        vm.startPrank(address(ep));
-        // Install the hook module first so it's recognized as a valid hook
-        kernel.installModule(4, address(_hookContract), abi.encode(hex"", hex""));
-        kernel.installModule(2, address(_executorWithHook), abi.encode(hex"", abi.encodePacked(address(_hookContract))));
-        vm.stopPrank();
-    }
-
-    modifier givenTheExecutorHasAHookConfigured() {
-        // Set up executor with hook - tests use _hookContract and _executorWithHook
-        _setupExecutorWithHook();
-        _;
-    }
-
-    function test_GivenTheExecutorHasAHookConfigured()
-        external
-        whenTheCallerIsAnInstalledExecutor
-        givenTheExecutorHasAHookConfigured
-    {
-        // it should call preHook on the executor hook before execution
-        _executorWithHook.executeViaKernel(
-            kernel, LibERC7579.CALLTYPE_SINGLE, LibERC7579.EXECTYPE_DEFAULT, address(callee), 0, MockCallee.foo.selector
-        );
-
-        assertTrue(_hookContract.preHookCalled(), "preHook should be called");
-    }
-
-    function test_GivenPreHookReverts() external whenTheCallerIsAnInstalledExecutor givenTheExecutorHasAHookConfigured {
-        // it should propagate the revert
-        // Configure the hook to revert on preHook
-        _hookContract.setRevertOnPreHook(true);
-
-        vm.expectRevert(MockHook.PreHookReverted.selector);
-        _executorWithHook.executeViaKernel(
-            kernel, LibERC7579.CALLTYPE_SINGLE, LibERC7579.EXECTYPE_DEFAULT, address(callee), 0, MockCallee.foo.selector
-        );
-    }
-
-    modifier givenPreHookSucceeds() {
-        // Ensure hook does not revert on preHook (default behavior, but explicit)
-        _hookContract.setRevertOnPreHook(false);
-        _;
-    }
-
-    function test_GivenPreHookSucceeds()
-        external
-        whenTheCallerIsAnInstalledExecutor
-        givenTheExecutorHasAHookConfigured
-        givenPreHookSucceeds
-    {
-        // it should execute the requested operations
-        // it should call postHook on the executor hook after execution
-        _executorWithHook.executeViaKernel(
-            kernel, LibERC7579.CALLTYPE_SINGLE, LibERC7579.EXECTYPE_DEFAULT, address(callee), 0, MockCallee.foo.selector
-        );
-
-        assertTrue(_hookContract.postHookCalled(), "postHook should be called");
-        assertEq(callee.bar(), 1, "Callee should be called");
-    }
-
-    function test_GivenPostHookReverts()
-        external
-        whenTheCallerIsAnInstalledExecutor
-        givenTheExecutorHasAHookConfigured
-        givenPreHookSucceeds
-    {
-        // it should propagate the revert
-        // Configure the hook to revert on postHook
-        _hookContract.setRevertOnPostHook(true);
-
-        vm.expectRevert(MockHook.PostHookReverted.selector);
-        _executorWithHook.executeViaKernel(
-            kernel, LibERC7579.CALLTYPE_SINGLE, LibERC7579.EXECTYPE_DEFAULT, address(callee), 0, MockCallee.foo.selector
-        );
-    }
-
-    function test_GivenPostHookSucceeds()
-        external
-        whenTheCallerIsAnInstalledExecutor
-        givenTheExecutorHasAHookConfigured
-        givenPreHookSucceeds
-    {
-        // it should return the execution results
-        bytes[] memory results = _executorWithHook.executeViaKernel(
-            kernel, LibERC7579.CALLTYPE_SINGLE, LibERC7579.EXECTYPE_DEFAULT, address(callee), 0, MockCallee.foo.selector
-        );
-
-        assertEq(results.length, 1, "Should return one result");
-    }
-
-    function test_GivenTheExecutorHasHookSetToAddress1() external whenTheCallerIsAnInstalledExecutor {
-        // it should skip preHook and postHook calls
-        // it should execute the requested operations directly
-        MockExecutor executorNoHook = new MockExecutor();
-
-        vm.startPrank(address(ep));
-        // address(1) means skip hooks
-        kernel.installModule(2, address(executorNoHook), abi.encode(hex"", abi.encodePacked(address(1))));
-        vm.stopPrank();
-
-        uint256 barBefore = callee.bar();
-        executorNoHook.executeViaKernel(
-            kernel, LibERC7579.CALLTYPE_SINGLE, LibERC7579.EXECTYPE_DEFAULT, address(callee), 0, MockCallee.foo.selector
-        );
-
-        assertEq(callee.bar(), barBefore + 1, "Callee should be called directly");
     }
 
     modifier givenTheExecutionModeCallTypeIsSINGLE() {

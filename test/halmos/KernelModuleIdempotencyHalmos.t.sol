@@ -10,7 +10,7 @@ import {KernelFactory} from "src/KernelFactory.sol";
 import {Install, ValidationInfo, SelectorConfig, ExecutorConfig} from "src/types/Structs.sol";
 import {ValidationId, CallType, PermissionId} from "src/types/Types.sol";
 import {validatorToIdentifier, permissionToIdentifier} from "src/lib/Utils.sol";
-import {CALLTYPE_SINGLE, HOOK_MODULE_NOT_INSTALLED, HOOK_MODULE_INSTALLED_NO_HOOK} from "src/types/Constants.sol";
+import {CALLTYPE_SINGLE} from "src/types/Constants.sol";
 import {EntryPointLib} from "../utils/EntryPointLib.sol";
 import {MockValidator} from "../mock/MockValidator.sol";
 import {MockExecutor} from "../mock/MockExecutor.sol";
@@ -18,7 +18,6 @@ import {MockHook} from "../mock/MockHook.sol";
 import {MockFallback} from "../mock/MockFallback.sol";
 import {MockPolicy} from "../mock/MockPolicy.sol";
 import {MockSigner} from "../mock/MockSigner.sol";
-import {IHook} from "src/interfaces/IERC7579Modules.sol";
 
 /// @title KernelModuleIdempotencyHalmos
 /// @notice Halmos proofs that install+uninstall is idempotent for all module types
@@ -67,19 +66,17 @@ contract KernelModuleIdempotencyHalmos is SymTest, Test {
 
         assertFalse(kernel.isModuleInstalled(2, address(e), hex""));
         ExecutorConfig memory cfg = kernel.executorConfig(address(e));
-        assertEq(address(cfg.hook), HOOK_MODULE_NOT_INSTALLED);
+        assertFalse(cfg.installed);
     }
 
     /// @notice Prove selector install+uninstall returns to not-installed state
     function check_SelectorInstallUninstallIdempotent() external {
         MockFallback f = new MockFallback();
-        MockHook h = new MockHook();
         bytes4 selector = MockFallback.testFunction.selector;
 
         vm.startPrank(address(ep));
-        kernel.installModule(4, address(h), abi.encode(hex"", hex""));
         bytes1 callType = CallType.unwrap(CALLTYPE_SINGLE);
-        kernel.installModule(3, address(f), abi.encode(hex"deadbeef", abi.encodePacked(selector, callType, address(h))));
+        kernel.installModule(3, address(f), abi.encode(hex"deadbeef", abi.encodePacked(selector, callType)));
         assertTrue(kernel.isModuleInstalled(3, address(f), abi.encodePacked(selector)));
 
         kernel.uninstallModule(3, address(f), abi.encode(hex"", abi.encodePacked(selector)));
@@ -89,21 +86,6 @@ contract KernelModuleIdempotencyHalmos is SymTest, Test {
         SelectorConfig memory cfg = kernel.selectorConfig(selector);
         assertEq(cfg.target, address(0));
         assertEq(CallType.unwrap(cfg.callType), bytes1(0));
-    }
-
-    /// @notice Prove hook install+uninstall returns to not-installed state
-    function check_HookInstallUninstallIdempotent() external {
-        MockHook h = new MockHook();
-        assertFalse(kernel.isModuleInstalled(4, address(h), hex""));
-
-        vm.startPrank(address(ep));
-        kernel.installModule(4, address(h), abi.encode(hex"", hex""));
-        assertTrue(kernel.isModuleInstalled(4, address(h), hex""));
-
-        kernel.uninstallModule(4, address(h), abi.encode(hex"", hex""));
-        vm.stopPrank();
-
-        assertFalse(kernel.isModuleInstalled(4, address(h), hex""));
     }
 
     /// @notice Prove permission (policy+signer) install+uninstall returns to not-installed state
@@ -135,7 +117,7 @@ contract KernelModuleIdempotencyHalmos is SymTest, Test {
         assertFalse(kernel.isModuleInstalled(6, address(s), abi.encodePacked(permId)));
 
         ValidationInfo memory vInfo = kernel.validationInfo(vId);
-        assertEq(vInfo.hook, HOOK_MODULE_NOT_INSTALLED);
+        assertFalse(vInfo.installed);
         assertEq(vInfo.signer, address(0));
         assertEq(vInfo.policies.length, 0);
     }

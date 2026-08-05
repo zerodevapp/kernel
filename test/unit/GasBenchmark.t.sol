@@ -9,10 +9,9 @@ import {KernelImmutableECDSA} from "src/KernelImmutableECDSA.sol";
 import {KernelFactory} from "src/KernelFactory.sol";
 import {MockFallback} from "../mock/MockFallback.sol";
 import {MockValidator} from "../mock/MockValidator.sol";
-import {MockHook} from "../mock/MockHook.sol";
 import {Install} from "src/types/Structs.sol";
 import {EntryPointLib} from "../utils/EntryPointLib.sol";
-import {CALLTYPE_SINGLE, MODULE_TYPE_VALIDATOR, MODULE_TYPE_FALLBACK, MODULE_TYPE_HOOK} from "src/types/Constants.sol";
+import {CALLTYPE_SINGLE, MODULE_TYPE_VALIDATOR, MODULE_TYPE_FALLBACK} from "src/types/Constants.sol";
 
 /// @title Gas Benchmark Tests
 /// @notice Focused gas benchmarks for specific optimization paths
@@ -22,7 +21,6 @@ contract GasBenchmarkTest is Test {
     Kernel kernel;
     MockValidator validator;
     MockFallback mockFallback;
-    MockHook mockHook;
 
     function setUp() public {
         ep = EntryPointLib.deploy();
@@ -32,29 +30,19 @@ contract GasBenchmarkTest is Test {
         factory = new KernelFactory(uups, immutableEcdsa);
         validator = new MockValidator();
         mockFallback = new MockFallback();
-        mockHook = new MockHook();
 
         // Deploy kernel via factory
         Install[] memory packages = new Install[](1);
         packages[0] = Install({
-            moduleType: MODULE_TYPE_VALIDATOR,
-            module: address(validator),
-            moduleData: "",
-            internalData: abi.encodePacked(address(0))
+            moduleType: MODULE_TYPE_VALIDATOR, module: address(validator), moduleData: "", internalData: hex""
         });
         kernel = Kernel(payable(factory.deploy(packages, 0)));
         vm.deal(address(kernel), 10 ether);
 
-        // Install hook
         vm.startPrank(address(ep));
-        kernel.installModule(
-            MODULE_TYPE_HOOK, address(mockHook), abi.encode(abi.encodePacked(hex""), abi.encodePacked(hex""))
-        );
 
-        // Install fallback with hook
-        // internalData format: selector(4) + callType(1) + hook(20)
-        bytes memory internalData =
-            abi.encodePacked(MockFallback.fallbackFunction.selector, CALLTYPE_SINGLE, address(mockHook));
+        // internalData format: selector(4) + callType(1)
+        bytes memory internalData = abi.encodePacked(MockFallback.fallbackFunction.selector, CALLTYPE_SINGLE);
         kernel.installModule(MODULE_TYPE_FALLBACK, address(mockFallback), abi.encode(hex"", internalData));
         vm.stopPrank();
     }
@@ -87,11 +75,11 @@ contract GasBenchmarkTest is Test {
         vm.stopPrank();
     }
 
-    /// @notice Benchmark: fallback with hook exercises _fallback() hook check path
-    function test_gasBenchmark_fallbackWithHook() public {
+    /// @notice Benchmark: installed fallback routing
+    function test_gasBenchmark_fallback() public {
         uint256 gasBefore = gasleft();
         MockFallback(address(kernel)).fallbackFunction(5);
         uint256 gasAfter = gasleft();
-        emit log_named_uint("Gas used for fallback with hook", gasBefore - gasAfter);
+        emit log_named_uint("Gas used for fallback", gasBefore - gasAfter);
     }
 }

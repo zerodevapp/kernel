@@ -7,7 +7,7 @@ import {MockCallee} from "./mock/MockCallee.sol";
 import {KernelTestBase} from "./KernelTestBase.sol";
 import {PermissionId} from "src/types/Types.sol";
 import {ValidationId} from "src/types/Types.sol";
-import {InvalidVid} from "src/types/Error.sol";
+import {InvalidVid, UnauthorizedCallData} from "src/types/Error.sol";
 import {permissionToIdentifier, validatorToIdentifier} from "src/lib/Utils.sol";
 import {SimpleAccount} from "account-abstraction/accounts/SimpleAccount.sol";
 import {SimpleAccountFactory} from "account-abstraction/accounts/SimpleAccountFactory.sol";
@@ -15,6 +15,39 @@ import {LibBytes} from "solady/utils/LibBytes.sol";
 
 abstract contract KernelUserOpTest is KernelTestBase {
     error Result(uint256 gas);
+
+    function _rootUserOpWithCallData(bytes memory callData) internal view returns (PackedUserOperation memory) {
+        return PackedUserOperation({
+            sender: address(kernel),
+            nonce: encodeNonce(false, false, false, bytes1(0), bytes20(0)),
+            initCode: hex"",
+            callData: callData,
+            accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
+            preVerificationGas: 0,
+            gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
+            paymasterAndData: hex"",
+            signature: hex""
+        });
+    }
+
+    function test_validateuserop_rejects_direct_validateuserop_calldata() external entryPointTest {
+        PackedUserOperation memory op = _rootUserOpWithCallData(abi.encodePacked(Kernel.validateUserOp.selector));
+
+        vm.startPrank(address(ep));
+        vm.expectRevert(UnauthorizedCallData.selector);
+        kernel.validateUserOp(op, bytes32(0), 0);
+        vm.stopPrank();
+    }
+
+    function test_validateuserop_rejects_wrapped_validateuserop_calldata() external entryPointTest {
+        PackedUserOperation memory op =
+            _rootUserOpWithCallData(abi.encodePacked(Kernel.executeUserOp.selector, Kernel.validateUserOp.selector));
+
+        vm.startPrank(address(ep));
+        vm.expectRevert(UnauthorizedCallData.selector);
+        kernel.validateUserOp(op, bytes32(0), 0);
+        vm.stopPrank();
+    }
 
     function estimateUserOpGasLimit(PackedUserOperation memory op) internal returns (uint128, uint128) {
         try this.simulateEntrypointCall(op) {}
@@ -246,81 +279,7 @@ abstract contract KernelUserOpTest is KernelTestBase {
         ep.handleOps(ops, beneficiary);
         vm.stopPrank();
         assertEq(callee.bar(), 1);
-        assertEq(kernel.validationInfo(validatorToIdentifier(newValidator)).hook, address(1));
-    }
-
-    function test_userop_validator_hook_failed_prehook() external entryPointTest {
-        vm.startPrank(address(ep));
-        kernel.installModule(4, address(hook), abi.encode(hex"", ""));
-        kernel.installModule(
-            1,
-            address(newValidator),
-            abi.encode(hex"deadbeef", abi.encodePacked(address(hook), kernel.execute.selector))
-        );
-        vm.stopPrank();
-        hook.setRevertOnPreHook(true);
-
-        PackedUserOperation[] memory ops = new PackedUserOperation[](1);
-        ops[0] = PackedUserOperation({
-            sender: address(kernel),
-            nonce: encodeNonce(false, false, false, bytes1(0x01), bytes20(address(newValidator))),
-            initCode: hex"",
-            callData: abi.encodePacked(
-                Kernel.executeUserOp.selector,
-                abi.encodeWithSelector(
-                    Kernel.execute.selector,
-                    bytes32(0),
-                    abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
-                )
-            ),
-            accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
-            preVerificationGas: 1000000,
-            gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
-            paymasterAndData: hex"",
-            signature: hex""
-        });
-        ops[0].signature = _validatorSignUserOp(ops[0], true, false);
-        vm.startPrank(beneficiary, beneficiary);
-        ep.handleOps(ops, beneficiary);
-        vm.stopPrank();
-        assertEq(callee.bar(), 0);
-    }
-
-    function test_userop_validator_hook_failed_posthook() external entryPointTest {
-        vm.startPrank(address(ep));
-        kernel.installModule(4, address(hook), abi.encode(hex"", ""));
-        kernel.installModule(
-            1,
-            address(newValidator),
-            abi.encode(hex"deadbeef", abi.encodePacked(address(hook), kernel.execute.selector))
-        );
-        vm.stopPrank();
-        hook.setRevertOnPostHook(true);
-
-        PackedUserOperation[] memory ops = new PackedUserOperation[](1);
-        ops[0] = PackedUserOperation({
-            sender: address(kernel),
-            nonce: encodeNonce(false, false, false, bytes1(0x01), bytes20(address(newValidator))),
-            initCode: hex"",
-            callData: abi.encodePacked(
-                Kernel.executeUserOp.selector,
-                abi.encodeWithSelector(
-                    Kernel.execute.selector,
-                    bytes32(0),
-                    abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
-                )
-            ),
-            accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
-            preVerificationGas: 1000000,
-            gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
-            paymasterAndData: hex"",
-            signature: hex""
-        });
-        ops[0].signature = _validatorSignUserOp(ops[0], true, false);
-        vm.startPrank(beneficiary, beneficiary);
-        ep.handleOps(ops, beneficiary);
-        vm.stopPrank();
-        assertEq(callee.bar(), 0);
+        assertTrue(kernel.validationInfo(validatorToIdentifier(newValidator)).installed);
     }
 
     function test_userop_validator_aa24_enable_fail_wrong_signature() external entryPointTest {
@@ -357,7 +316,7 @@ abstract contract KernelUserOpTest is KernelTestBase {
     // arbitrary modules without root approval.
     function test_userop_enable_failed_root_sig_does_not_install() external entryPointTest {
         // newValidator is not installed yet.
-        assertEq(kernel.validationInfo(validatorToIdentifier(newValidator)).hook, address(0));
+        assertFalse(kernel.validationInfo(validatorToIdentifier(newValidator)).installed);
 
         PackedUserOperation memory op = PackedUserOperation({
             sender: address(kernel),
@@ -387,9 +346,8 @@ abstract contract KernelUserOpTest is KernelTestBase {
         // Failed root signature must surface as validation failure...
         assertEq(uint160(validationData), 1, "H-01: failed root sig must return SIG_VALIDATION_FAILED");
         // ...and the module must NOT have been installed.
-        assertEq(
-            kernel.validationInfo(validatorToIdentifier(newValidator)).hook,
-            address(0),
+        assertFalse(
+            kernel.validationInfo(validatorToIdentifier(newValidator)).installed,
             "H-01: module installed despite failed root signature"
         );
     }

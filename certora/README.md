@@ -2,6 +2,8 @@
 
 Formal verification harness for properties that need multi-step traces or unbounded-array quantification (out of Halmos's reach).
 
+> **v4 scoped-execution-hook migration:** generic type-4 hooks and their sentinels were removed. Type-11 scoped execution hooks can be scoped to a validation, executor, or selector. `ValidationInfo.installed` now tracks validation installation. Historical results below that mention generic hooks describe the pre-migration model and must be rerun before being treated as current evidence. ERC-1271 signatures no longer carry a validation-mode byte; enable-mode installation remains ERC-4337-only.
+
 ## Layout
 
 ```
@@ -41,7 +43,7 @@ The run uploads to Certora cloud and prints a job URL. Open it for the report.
 ### Results (FV Round 1, Phase C — pre-fix)
 
 | Rule | Status | Notes |
-|---|---|---|
+| --- | --- | --- |
 | `validateUserOpEnforcesInnerSelectorAccess_naive` | **FAIL** | CEX surfaced the fast-path bypass implementation finding |
 | `validateUserOpEnforcesInnerSelectorAccess_strict` | **PASS** | Property held when the fast-path was explicitly excluded |
 | `sanityValidateUserOpReachesSuccess` | **PASS** (satisfy) | Confirmed the rule setup was not vacuous |
@@ -54,13 +56,13 @@ After the fix at commit `0921b25` (`src/core/ValidationManager.sol` —
 `_grantAccess` blocks `executeUserOp.selector` for non-root vIds):
 
 | Rule / Invariant | Status | Notes |
-|---|---|---|
+| --- | --- | --- |
 | `validateUserOpEnforcesInnerSelectorAccess_naive` | ✅ **PASS** | The original CEX witness is now structurally unreachable. The fix closes the immediate attack. |
 | `validateUserOpEnforcesInnerSelectorAccess_strict` | ✅ **PASS** | Regression — still holds with `!fastPath` precondition. |
 | `sanityValidateUserOpReachesSuccess` (satisfy) | ✅ **PASS** | Rule setup is not vacuous. |
 | `nonRootCannotAllowExecuteUserOp` (invariant) | 🚨 **FAIL** | Secondary finding — root rotation leaves `allowed[oldRoot][executeUserOp]` non-zero. See breakdown below. |
 
-Round 2 job URL: https://prover.certora.com/output/3606101/19ed688fd26e43cfa25d435306bec6f1?anonymousKey=a87fff01a79ea67c696ced6eb56bd0dbae8403e7
+Round 2 job URL: <https://prover.certora.com/output/3606101/19ed688fd26e43cfa25d435306bec6f1?anonymousKey=a87fff01a79ea67c696ced6eb56bd0dbae8403e7>
 
 #### Secondary finding — `setRoot` residual
 
@@ -69,7 +71,7 @@ Certora's induction step on the invariant `nonRootCannotAllowExecuteUserOp` prod
 Failing methods (induction step) and how each reaches `_setRoot`:
 
 | Method | Path to `_setRoot` |
-|---|---|
+| --- | --- |
 | `setRoot(bytes21)` | Direct |
 | `setRoot((uint256,address,bytes,…))` (overload via install) | Direct |
 | `initialize((uint256,address,bytes,…))` | Root install path |
@@ -86,11 +88,11 @@ Selected remediation: **Option E** — bump `vInfo[oldRoot].nonce` in `_setRoot`
 After the `_setRoot` fix we tried two stronger invariant formulations:
 
 | Round | Invariant form | Result |
-|---|---|---|
+| --- | --- | --- |
 | 3 | `allowedNonce(vId, exec) != vInfoNonce(vId)` for non-root vId | FAIL — base case (uninstalled vIds have both sides = 0, so `0 != 0` is false). Helper invariant `installedValidationsHaveNonzeroNonce` timed out at 96 min on one induction step. |
 | 4 | Bypass-impossible form: `NOT (_allowedSelector(vId, exec) AND hook == INSTALLED_NO_HOOK)` for non-root vId | FAIL — Certora's NONDET / AUTO-HAVOC abstraction for external module callbacks lets it imagine arbitrary writes to ValidationStorage on every entry point that involves a delegatecall or callback (`executeUserOp`, `execute`, `validateUserOp`, `installModule`, `setRoot`, `grantAccess`, `upgradeToAndCall`, `<receiveOrFallback>`, `initialize`). `_onlyEntryPointOrSelf` prevents this reentrant write in production, but encoding that as precise CVL summaries for ~10 sites is days of work and likely OOMs. |
 
-Round 4 job URL: https://prover.certora.com/output/3606101/e16f05be609a48b79c6bfa16f7c357f4?anonymousKey=39f0672f112513c790ec1d6d8ba351876073e395
+Round 4 job URL: <https://prover.certora.com/output/3606101/e16f05be609a48b79c6bfa16f7c357f4?anonymousKey=39f0672f112513c790ec1d6d8ba351876073e395>
 
 **Decision (2026-05-21)**: accept the invariant as unprovable under the current CVL summary set. The audit story is carried by:
 
@@ -107,9 +109,9 @@ inner-selector `require` when ALL of the following held:
 
 - `vType != ROOT`,
 - `_allowedSelector(vId, outerSel)` was true with `outerSel == executeUserOp.selector`,
-- `vInfo[vId].hook == HOOK_MODULE_INSTALLED_NO_HOOK`.
+- `vInfo[vId].installed && vInfo[vId].scopedExecutionHook == address(0)`.
 
-When this happened, `_setValidationHook` was never called, the transient hook
+When this happened, `_setValidationScopedExecutionHook` was never called, the transient hook
 stayed at 0, and `executeUserOp`'s inner delegatecall ran with NO selector
 check — handing a non-ROOT validation the equivalent of root privileges.
 
@@ -138,7 +140,7 @@ rotation. Report any such CEX honestly to the orchestrator.
 ### #4 — Permission validation totality
 
 | Rule | Status | Notes |
-|---|---|---|
+| --- | --- | --- |
 | `policyFailureImpliesAggregateFailure` | ✅ PASS | If any policy returns failure, the aggregate is failure. |
 | `signerFailureImpliesAggregateFailure` | ✅ PASS | If the signer returns failure, the aggregate is failure. |
 | `sanityCanSucceed` (satisfy) | ✅ PASS | Non-vacuous: a non-reverting call exists. |
@@ -149,22 +151,23 @@ Files: `certora/specs/Permission.spec`, `certora/conf/Permission.conf`.
 ### #6 — `setRoot` LIFO clear of permission state
 
 | Rule | Status |
-|---|---|
+| --- | --- |
 | `setRootClearsOldPermissionState` | ✅ PASS |
 | `sanitySetRootReaches` (satisfy) | ✅ PASS |
 
-After `setRoot(packages, removeCurrent=true)` on a `VALIDATION_TYPE_PERMISSION` root, the old root's `policies.length == 0`, `signer == 0`, and `hook == HOOK_MODULE_NOT_INSTALLED`. LIFO loop bound at `policies.length <= 3`.
+After `setRoot(packages, removeCurrent=true)` on a `VALIDATION_TYPE_PERMISSION` root, the old root's `policies.length == 0`, `signer == 0`, `scopedExecutionHook == 0`, and `installed == false`. LIFO loop bound at `policies.length <= 3`.
 
 Files: `certora/specs/SetRootLifo.spec`, `certora/conf/SetRootLifo.conf`.
 
 ### #11 — View/write permission path equivalence
 
 | Rule | Status | Notes |
-|---|---|---|
+| --- | --- | --- |
 | `viewAndWritePathsAgreeOnSuccess` | ✅ PASS | View (ERC-1271) and write (ERC-4337) paths agree on the success/failure binary outcome. |
 | `sanityViewPathReaches` (satisfy) | ✅ PASS | Non-vacuous. |
 
 Notable spec evolution (Rounds 1-4):
+
 1. Full `uint256` equality assertion — FAIL by design (view path's `bytes4`-lift cannot represent ERC-4337 time bounds).
 2. Binary outcome with `signerGhostUint == 0 <=> bytes4 == MAGIC` axiom — FAIL (axiom too narrow; ignored aggregator bits).
 3. Tightened axiom to `AGG_OK(signerGhostUint) <=> bytes4 == MAGIC` + iff on intersectGhost — FAIL (signer ghost still had arbitrary upper bits).
@@ -177,16 +180,16 @@ Files: `certora/specs/PermissionEquivalence.spec`, `certora/conf/PermissionEquiv
 The Round 1 global invariant `nonRootCannotBypassFastPathWithExecuteUserOp` in `specs/Kernel.spec` is replaced for verification purposes by **four writer-local rules** in `specs/PhaseCWriterLocal.spec`:
 
 | Rule | Status |
-|---|---|
+| --- | --- |
 | `grantAccessPreservesNonBypass` | ✅ PASS |
 | `setRootPreservesNonBypass` | ✅ PASS |
 | `uninstallValidationPreservesNonBypass` | ✅ PASS |
 | `initializeValidationPreservesNonBypass` | ✅ PASS |
 | 4 corresponding `sanity*` rules | ✅ PASS (all 4) |
 
-Job: https://prover.certora.com/output/3606101/37e8675776484e4998f16f528d2dd29a
+Job: <https://prover.certora.com/output/3606101/37e8675776484e4998f16f528d2dd29a>
 
-**Implication chain** (documented in `specs/PhaseCWriterLocal.spec` docstring; not formally proven in CVL but verified by grep over `src/`): the four functions are the ONLY paths that write `$.allowed`, `$.vInfo[*].nonce`, `$.vInfo[*].hook`, or `$.root`. Genesis state trivially satisfies the bypass-impossible property. Each writer preserves it. Therefore by structural induction, every reachable state satisfies it. The conjunction of the 4 local rules + static-writer-completeness ⇒ the original global property.
+**Implication chain** (documented in `specs/PhaseCWriterLocal.spec` docstring; not formally proven in CVL but verified by grep over `src/`): the four functions are the ONLY paths that write `$.allowed`, `$.vInfo[*].nonce`, `$.vInfo[*].installed`, or `$.root`. Genesis state trivially satisfies the bypass-impossible property. Each writer preserves it. Therefore by structural induction, every reachable state satisfies it. The conjunction of the 4 local rules + static-writer-completeness ⇒ the original global property.
 
 The original `Kernel.spec` invariant remains as documented intent + regression target for future Certora releases with stronger summaries.
 

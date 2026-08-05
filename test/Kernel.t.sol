@@ -3,7 +3,6 @@ pragma solidity ^0.8.0;
 import {EntryPointLib} from "./utils/EntryPointLib.sol";
 import {KernelUUPS} from "src/KernelUUPS.sol";
 import {KernelFactory} from "src/KernelFactory.sol";
-import {KernelUUPS} from "src/KernelUUPS.sol";
 import {KernelImmutableECDSA} from "src/KernelImmutableECDSA.sol";
 import {Install} from "src/types/Structs.sol";
 import {MockFallback} from "./mock/MockFallback.sol";
@@ -15,7 +14,6 @@ import {MockCallee} from "./mock/MockCallee.sol";
 import {NotImplemented} from "src/types/Error.sol";
 import {InvalidInitialization} from "src/types/Error.sol";
 import {InvalidSelector} from "src/types/Error.sol";
-import {Install} from "src/types/Structs.sol";
 import {ERC1967_IMPLEMENTATION_SLOT} from "src/types/Constants.sol";
 import {KernelUserOpTest} from "./KernelUserOpTest.sol";
 import {KernelERC1271Test} from "./KernelERC1271Test.sol";
@@ -23,7 +21,6 @@ import {KernelExecutorTest} from "./KernelExecutorTest.sol";
 import {KernelValidatorTest} from "./KernelValidatorTest.sol";
 import {KernelExecuteTest} from "./KernelExecuteTest.sol";
 import {KernelSelectorTest} from "./KernelSelectorTest.sol";
-import {KernelHookTest} from "./KernelHookTest.sol";
 import {ChainAgnosticHashHelper} from "./utils/ChainAgnosticHashHelper.sol";
 import {PermissionId} from "src/types/Types.sol";
 
@@ -33,8 +30,7 @@ contract KernelTest is
     KernelExecutorTest,
     KernelValidatorTest,
     KernelExecuteTest,
-    KernelSelectorTest,
-    KernelHookTest
+    KernelSelectorTest
 {
     KernelUUPS uups;
 
@@ -134,9 +130,10 @@ contract KernelTest is
         assertTrue(kernel.supportsModule(1));
         assertTrue(kernel.supportsModule(2));
         assertTrue(kernel.supportsModule(3));
-        assertTrue(kernel.supportsModule(4));
+        assertFalse(kernel.supportsModule(4));
         assertTrue(kernel.supportsModule(5));
         assertTrue(kernel.supportsModule(6));
         assertFalse(kernel.supportsModule(7));
+        assertTrue(kernel.supportsModule(11));
     }
 }

@@ -10,7 +10,7 @@ import {Call} from "src/types/Structs.sol";
 import {MockCallee} from "../mock/MockCallee.sol";
 
 abstract contract Kernel_executeUserOp is BTTModifiers {
-    bool internal _validationHookSet;
+    bool internal _validationScopedExecutionHookSet;
     bool internal _transientHookSet;
     bool internal _innerExecutionSucceeds;
 
@@ -33,7 +33,7 @@ abstract contract Kernel_executeUserOp is BTTModifiers {
     }
 
     modifier givenTheValidationHookIsSet() {
-        _validationHookSet = true;
+        _validationScopedExecutionHookSet = true;
         _innerExecutionSucceeds = true;
         _;
     }
@@ -86,7 +86,7 @@ abstract contract Kernel_executeUserOp is BTTModifiers {
     }
 
     modifier givenNoValidationHookIsSet() {
-        _validationHookSet = false;
+        _validationScopedExecutionHookSet = false;
         _innerExecutionSucceeds = true;
         _;
     }
@@ -136,7 +136,7 @@ abstract contract Kernel_executeUserOp is BTTModifiers {
     }
 
     modifier givenAValidationHookIsSetInTransientStorage() {
-        _validationHookSet = true;
+        _validationScopedExecutionHookSet = true;
         _transientHookSet = true;
         _innerExecutionSucceeds = true;
         _;

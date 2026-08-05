@@ -38,7 +38,7 @@ contract KernelAccessControlHalmos is SymTest, Test {
         address caller = address(uint160(uint256(keccak256("caller"))));
         vm.startPrank(caller);
         vm.expectRevert(Unauthorized.selector);
-        kernel.installModule(4, address(new MockExecutor()), abi.encode(hex"", hex""));
+        kernel.installModule(2, address(new MockExecutor()), abi.encode(hex"", hex""));
         vm.stopPrank();
     }
 

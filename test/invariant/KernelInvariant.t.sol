@@ -14,8 +14,7 @@ import {
     CALLTYPE_DELEGATECALL,
     CALLTYPE_SINGLE,
     VALIDATION_TYPE_VALIDATOR,
-    VALIDATION_TYPE_PERMISSION,
-    HOOK_MODULE_NOT_INSTALLED
+    VALIDATION_TYPE_PERMISSION
 } from "src/types/Constants.sol";
 import {Unauthorized} from "src/types/Error.sol";
 import {EntryPointLib} from "../utils/EntryPointLib.sol";
@@ -57,7 +56,7 @@ contract KernelInvariantHandler is Test {
     mapping(uint192 => uint64) public ghostNonce;
     uint64 public ghostValidNonceFrom;
 
-    // Ghost variables for executor hook enforcement
+    // Ghost variables for executor installation enforcement
     uint256 public uninstalledExecutorCallCount;
     uint256 public uninstalledExecutorRevertCount;
 
@@ -128,19 +127,11 @@ contract KernelInvariantHandler is Test {
     }
 
     function installHook(uint256 index) external {
-        MockHook hook = hooks[index % hooks.length];
-        vm.startPrank(address(ep));
-        kernel.installModule(4, address(hook), abi.encode(hex"", hex""));
-        vm.stopPrank();
-        hookInstalled[address(hook)] = true;
+        return;
     }
 
     function uninstallHook(uint256 index) external {
-        MockHook hook = hooks[index % hooks.length];
-        vm.startPrank(address(ep));
-        kernel.uninstallModule(4, address(hook), abi.encode(hex"", hex""));
-        vm.stopPrank();
-        hookInstalled[address(hook)] = false;
+        return;
     }
 
     function validatorCount() external view returns (uint256) {
@@ -183,7 +174,7 @@ contract KernelInvariantHandler is Test {
         bytes4 selector = selectors[selectorIndex % selectors.length];
         MockFallback target = fallbacks[targetIndex % fallbacks.length];
         bytes1 callType = delegatecall ? CallType.unwrap(CALLTYPE_DELEGATECALL) : CallType.unwrap(CALLTYPE_SINGLE);
-        bytes memory internalData = abi.encodePacked(selector, callType, address(0));
+        bytes memory internalData = abi.encodePacked(selector, callType);
         vm.startPrank(address(ep));
         kernel.installModule(3, address(target), abi.encode(hex"deadbeef", internalData));
         vm.stopPrank();
@@ -380,7 +371,7 @@ contract KernelInvariant is StdInvariant, Test {
             if (validator != address(rootValidator)) {
                 ValidationId vId = validatorToIdentifier(MockValidator(validator));
                 bool installed = handler.validatorInstalled(validator);
-                assertEq(kernel.validationInfo(vId).hook != address(0), installed, "validator hook mismatch");
+                assertEq(kernel.validationInfo(vId).installed, installed, "validator hook mismatch");
             }
         }
     }
@@ -395,17 +386,7 @@ contract KernelInvariant is StdInvariant, Test {
                 "executor install state mismatch"
             );
             bool installed = handler.executorInstalled(executor);
-            assertEq(address(kernel.executorConfig(executor).hook) != address(0), installed, "executor hook mismatch");
-        }
-    }
-
-    function invariant_hook_install_state_matches_handler() external {
-        uint256 count = handler.hookCount();
-        for (uint256 i = 0; i < count; i++) {
-            address hook = address(handler.hooks(i));
-            assertEq(
-                kernel.isModuleInstalled(4, hook, hex""), handler.hookInstalled(hook), "hook install state mismatch"
-            );
+            assertEq(kernel.executorConfig(executor).installed, installed, "executor installation mismatch");
         }
     }
 
@@ -464,16 +445,16 @@ contract KernelInvariant is StdInvariant, Test {
     }
 
     // --- 3.5: Root-always-installed invariant ---
-    // If root != bytes21(0), then validationInfo(root).hook > address(0)
+    // If root != bytes21(0), then validationInfo(root).installed is true
     function invariant_root_always_installed() external view {
         ValidationId rootId = kernel.root();
         if (ValidationId.unwrap(rootId) != bytes21(0)) {
             ValidationInfo memory vInfo = kernel.validationInfo(rootId);
-            assertTrue(vInfo.hook > address(0), "root validation hook is zero (not installed)");
+            assertTrue(vInfo.installed, "root validation is not installed");
         }
     }
 
-    // --- 3.6: Executor hook enforcement invariant ---
+    // --- 3.6: Executor installation enforcement invariant ---
     // Uninstalled executors always revert when calling executeFromExecutor
     function invariant_uninstalled_executor_always_reverts() external view {
         assertEq(
@@ -481,56 +462,6 @@ contract KernelInvariant is StdInvariant, Test {
             handler.uninstalledExecutorRevertCount(),
             "uninstalled executor call did not revert"
         );
-    }
-
-    // --- 3.7: Hook consistency invariant ---
-    // Every installed validator/executor with a real hook (> address(1)) must have that hook enabled
-    function invariant_hook_consistency() external {
-        // Check validators
-        uint256 vCount = handler.validatorCount();
-        for (uint256 i = 0; i < vCount; i++) {
-            address validator = address(handler.validators(i));
-            if (handler.validatorInstalled(validator)) {
-                ValidationId vId = validatorToIdentifier(MockValidator(validator));
-                ValidationInfo memory vInfo = kernel.validationInfo(vId);
-                address hookAddr = vInfo.hook;
-                if (hookAddr > address(1)) {
-                    assertTrue(
-                        kernel.isModuleInstalled(4, hookAddr, hex""), "validator hook not installed as hook module"
-                    );
-                }
-            }
-        }
-
-        // Check executors
-        uint256 eCount = handler.executorCount();
-        for (uint256 i = 0; i < eCount; i++) {
-            address executor = address(handler.executors(i));
-            if (handler.executorInstalled(executor)) {
-                address hookAddr = address(kernel.executorConfig(executor).hook);
-                if (hookAddr > address(1)) {
-                    assertTrue(
-                        kernel.isModuleInstalled(4, hookAddr, hex""), "executor hook not installed as hook module"
-                    );
-                }
-            }
-        }
-
-        // Check selectors
-        uint256 sCount = handler.selectorCount();
-        for (uint256 i = 0; i < sCount; i++) {
-            bytes4 selector = handler.selectors(i);
-            address target = handler.selectorTarget(selector);
-            if (target != address(0)) {
-                SelectorConfig memory cfg = kernel.selectorConfig(selector);
-                address hookAddr = address(cfg.hook);
-                if (hookAddr > address(1)) {
-                    assertTrue(
-                        kernel.isModuleInstalled(4, hookAddr, hex""), "selector hook not installed as hook module"
-                    );
-                }
-            }
-        }
     }
 
     // --- 3.8: Module installation symmetry invariant ---
@@ -552,15 +483,6 @@ contract KernelInvariant is StdInvariant, Test {
             bool ghostInstalled = handler.executorInstalled(executor);
             bool kernelInstalled = kernel.isModuleInstalled(2, executor, hex"");
             assertEq(ghostInstalled, kernelInstalled, "executor symmetry violated");
-        }
-
-        // Hooks: same check
-        uint256 hCount = handler.hookCount();
-        for (uint256 i = 0; i < hCount; i++) {
-            address hook = address(handler.hooks(i));
-            bool ghostInstalled = handler.hookInstalled(hook);
-            bool kernelInstalled = kernel.isModuleInstalled(4, hook, hex"");
-            assertEq(ghostInstalled, kernelInstalled, "hook symmetry violated");
         }
     }
 
@@ -594,16 +516,15 @@ contract KernelInvariant is StdInvariant, Test {
     // --- 3.11: Storage slot isolation invariant ---
     // ERC-7201 storage slots for different managers do not collide
     function invariant_storage_slot_isolation() external pure {
-        // All five storage slots must be distinct
-        bytes32[5] memory slots = [
+        // All four active storage slots must be distinct.
+        bytes32[4] memory slots = [
             bytes32(0x550d18e77e0b3e646dcc27a9961c73d7867a7c5f6c2c65424629353cdc97dcc0), // SELECTOR_MANAGER
             bytes32(0x9bc558e75ed0a57385e96d6b87fd2864d462eed29668be6fed742168fd90ab0f), // MODULE_MANAGER
             bytes32(0xc98f19fae81314cbf0302e1e3c0554f60c259fab8e2d5d392893489d40eb0045), // EXECUTOR_MANAGER
-            bytes32(0x5419def70c6ad54339f14ca6da31808409bec8ff0f178491c5b59f0d8276d4d3), // HOOK_MANAGER
             bytes32(0xded5d420c407eac3c615e6abe13ab4a0bd7173e5045ea543765b46f0df6e260c) // VALIDATION_MANAGER
         ];
-        for (uint256 i = 0; i < 5; i++) {
-            for (uint256 j = i + 1; j < 5; j++) {
+        for (uint256 i = 0; i < 4; i++) {
+            for (uint256 j = i + 1; j < 4; j++) {
                 assertTrue(slots[i] != slots[j], "storage slot collision detected");
             }
         }

@@ -89,7 +89,7 @@ abstract contract Kernel_setRoot is BTTModifiers {
         _callSetRoot(vId, new Install[](0), hex"");
 
         // Verify the root was changed
-        assertEq(kernel.validationInfo(vId).hook, address(1), "New validator should be root");
+        assertTrue(kernel.validationInfo(vId).installed, "New validator should be root");
     }
 
     function test_GivenVIdCorrespondsToAnInstalledPermission()
@@ -110,7 +110,7 @@ abstract contract Kernel_setRoot is BTTModifiers {
         _callSetRoot(vId, new Install[](0), hex"");
 
         // Verify the root was changed
-        assertEq(kernel.validationInfo(vId).hook, address(1), "Permission should be root");
+        assertTrue(kernel.validationInfo(vId).installed, "Permission should be root");
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -154,9 +154,8 @@ abstract contract Kernel_setRoot is BTTModifiers {
         assertTrue(kernel.isModuleInstalled(1, address(newRoot), ""), "New root should be installed");
 
         // New root should be the active root
-        assertEq(
-            kernel.validationInfo(validatorToIdentifier(IValidator(address(newRoot)))).hook,
-            address(1),
+        assertTrue(
+            kernel.validationInfo(validatorToIdentifier(IValidator(address(newRoot)))).installed,
             "New validator should be root"
         );
     }
@@ -184,9 +183,8 @@ abstract contract Kernel_setRoot is BTTModifiers {
 
         // New root should be installed and active
         assertTrue(kernel.isModuleInstalled(1, address(newRoot), ""), "New root should be installed");
-        assertEq(
-            kernel.validationInfo(validatorToIdentifier(IValidator(address(newRoot)))).hook,
-            address(1),
+        assertTrue(
+            kernel.validationInfo(validatorToIdentifier(IValidator(address(newRoot)))).installed,
             "New validator should be root"
         );
     }
@@ -310,9 +308,8 @@ abstract contract Kernel_setRoot is BTTModifiers {
 
         // New root should be installed and active
         assertTrue(kernel.isModuleInstalled(1, address(newRoot), ""), "New root should be installed");
-        assertEq(
-            kernel.validationInfo(validatorToIdentifier(IValidator(address(newRoot)))).hook,
-            address(1),
+        assertTrue(
+            kernel.validationInfo(validatorToIdentifier(IValidator(address(newRoot)))).installed,
             "New validator should be root"
         );
     }
@@ -380,11 +377,10 @@ abstract contract Kernel_setRoot is BTTModifiers {
         // Set the root storage directly (first slot in ValidationStorage struct is the root)
         vm.store(address(kernel), validationStorageSlot, bytes32(malformedRoot));
 
-        // Also need to set the vInfo[malformedRoot].hook to address(1) so it's considered "installed"
-        // vInfo mapping slot = keccak256(abi.encode(malformedRoot, slot + 1))
-        // ValidationInfo first field is hook (address)
+        // Mark vInfo[malformedRoot].installed=true. ValidationInfo packs nonce in
+        // the low 4 bytes and installed in the following byte.
         bytes32 vInfoSlot = keccak256(abi.encode(bytes32(malformedRoot), bytes32(uint256(validationStorageSlot) + 1)));
-        vm.store(address(kernel), vInfoSlot, bytes32(uint256(uint160(address(1)))));
+        vm.store(address(kernel), vInfoSlot, bytes32(uint256(1) << 32));
 
         // Now try to replace root with removeCurrent=true
         MockValidator newRoot = new MockValidator();
@@ -444,7 +440,7 @@ abstract contract Kernel_setRoot is BTTModifiers {
 
         // Root should be set to the permission derived from testPermId
         ValidationId expectedRoot = permissionToIdentifier(testPermId);
-        assertEq(kernel.validationInfo(expectedRoot).hook, address(1), "Permission should be installed and set as root");
+        assertTrue(kernel.validationInfo(expectedRoot).installed, "Permission should be installed and set as root");
     }
 
     function test_GivenTheFirstPackageModuleTypeIsSIGNER()
@@ -469,9 +465,8 @@ abstract contract Kernel_setRoot is BTTModifiers {
 
         // Root should be set to the permission derived from testPermId
         ValidationId expectedRoot = permissionToIdentifier(testPermId);
-        assertEq(
-            kernel.validationInfo(expectedRoot).hook,
-            address(1),
+        assertTrue(
+            kernel.validationInfo(expectedRoot).installed,
             "Permission (signer-only) should be installed and set as root"
         );
     }

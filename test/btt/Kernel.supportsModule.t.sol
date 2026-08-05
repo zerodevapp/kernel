@@ -24,7 +24,7 @@ abstract contract Kernel_supportsModule is BTTModifiers {
     }
 
     function test_GivenModuleTypeIdIs4Hook() external {
-        assertTrue(kernel.supportsModule(4), "Should support Hook (type 4)");
+        assertFalse(kernel.supportsModule(4), "Should not support generic Hook (type 4)");
     }
 
     function test_GivenModuleTypeIdIs5Policy() external {
@@ -35,9 +35,15 @@ abstract contract Kernel_supportsModule is BTTModifiers {
         assertTrue(kernel.supportsModule(6), "Should support Signer (type 6)");
     }
 
-    function test_GivenModuleTypeIdIs7OrGreater() external {
+    function test_GivenModuleTypeIdIs11ScopedExecutionHook() external {
+        assertTrue(kernel.supportsModule(11), "Should support ScopedExecutionHook (type 11)");
+    }
+
+    function test_GivenUnsupportedModuleType() external {
         assertFalse(kernel.supportsModule(7), "Should not support moduleType 7");
         assertFalse(kernel.supportsModule(8), "Should not support moduleType 8");
+        assertFalse(kernel.supportsModule(10), "Should not support moduleType 10");
+        assertFalse(kernel.supportsModule(12), "Should not support moduleType 12");
         assertFalse(kernel.supportsModule(100), "Should not support moduleType 100");
     }
 }

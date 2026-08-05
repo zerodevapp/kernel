@@ -48,8 +48,7 @@
  *
  *   1. Structural invariant from commits 0921b25 + ce185f6
  *        For any non-root vId, NOT( _allowedSelector(vId,
- *        executeUserOp.selector) AND vInfo[vId].hook ==
- *        HOOK_MODULE_INSTALLED_NO_HOOK ).
+ *        executeUserOp.selector) AND vInfo[vId].installed AND vInfo[vId].scopedExecutionHook == address(0) ).
  *      Established by `_grantAccess` rejecting the executeUserOp grant
  *      for non-root vIds and by `_setRoot` bumping the old root's nonce
  *      on rotation. This invariant rules out the fast-path branch
@@ -193,7 +192,8 @@
 methods {
     // Harness storage accessors.
     function harness_vInfoNonce(bytes21)              external returns (uint32)  envfree;
-    function harness_vInfoHook(bytes21)               external returns (address) envfree;
+    function harness_vInfoInstalled(bytes21) external returns (bool) envfree;
+    function harness_vInfoScopedExecutionHook(bytes21) external returns (address) envfree;
     function harness_allowedNonce(bytes21, bytes4)    external returns (uint32)  envfree;
     function harness_allowedSelector(bytes21, bytes4) external returns (bool)    envfree;
     function harness_root()                           external returns (bytes21) envfree;
@@ -205,8 +205,6 @@ methods {
     function harness_VT_ROOT()                external returns (bytes1)  envfree;
     function harness_VT_VALIDATOR()           external returns (bytes1)  envfree;
     function harness_VT_PERMISSION()          external returns (bytes1)  envfree;
-    function harness_HOOK_NOT_INSTALLED()     external returns (address) envfree;
-    function harness_HOOK_INSTALLED_NO_HOOK() external returns (address) envfree;
     function harness_executeUserOpSelector()  external returns (bytes4)  envfree;
     function harness_isEnableMode(uint256)    external returns (bool)    envfree;
     function harness_isReplayableMode(uint256) external returns (bool)   envfree;
@@ -242,10 +240,6 @@ methods {
         internal returns (bytes32) => CONSTANT;
     function Lib4337.intersectValidationData(uint256, uint256) internal returns (uint256) => NONDET;
 
-    // _hookEnabled is read in the non-empty branch of _initializeValidation,
-    // which is not reachable from validateUserOp / executeUserOp on the non-
-    // enable path. Summarise anyway for consistency with PhaseCWriterLocal.
-    function HookManager._hookEnabled(address) internal returns (bool) => NONDET;
 }
 
 // ---------------------------------------------------------------------------
@@ -264,7 +258,7 @@ methods {
 invariant nonRootCannotBypassFastPathWithExecuteUserOp(bytes21 vId)
     vId != harness_root() =>
         !(harness_allowedSelector(vId, harness_executeUserOpSelector())
-          && harness_vInfoHook(vId) == harness_HOOK_INSTALLED_NO_HOOK());
+          && (harness_vInfoInstalled(vId) && harness_vInfoScopedExecutionHook(vId) == 0));
 
 // ---------------------------------------------------------------------------
 // Storage-shape hypothesis: `allowed[v][sel] <= vInfo[v].nonce`. See

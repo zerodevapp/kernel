@@ -8,7 +8,7 @@
  *
  *   For any vId != $.root:
  *       NOT ( _allowedSelector(vId, executeUserOp.selector)
- *             AND vInfo[vId].hook == HOOK_MODULE_INSTALLED_NO_HOOK )
+ *             AND vInfo[vId].installed && vInfo[vId].scopedExecutionHook == address(0) )
  *
  * jointly enforced by:
  *   - commit 0921b25 -- `_grantAccess` rejects executeUserOp.selector for
@@ -42,7 +42,7 @@
  *     * _grantAccess              -- pure storage writes, no external calls
  *     * _setRoot(vId)             -- pure storage writes
  *     * _uninstallValidation      -- single storage write
- *     * _initializeValidation     -- calls _hookEnabled (view-only) and
+ *     * _initializeValidation     -- updates validation state and calls
  *                                    _grantAccess (covered by Rule #1)
  *
  *   The conjunction of the four writer-local rules implies the global
@@ -50,12 +50,12 @@
  *     - $.allowed[*][*] is written ONLY by _grantAccess.
  *     - $.vInfo[*].nonce is incremented ONLY by _grantAccess, _setRoot
  *       (rotation), and _initializeValidation (empty-data path).
- *     - $.vInfo[*].hook is written ONLY by _uninstallValidation and
+ *     - $.vInfo[*].installed is written ONLY by _uninstallValidation and
  *       _initializeValidation.
  *     - $.root is written ONLY by _setRoot.
  *   Verified by manual grep over src/ on 2026-05-21. No other code path
  *   touches those slots. Constructor / initialize establishes the base
- *   state where allowed[*][*] == 0 and vInfo[*].hook == 0 universally,
+ *   state where allowed[*][*] == 0 and vInfo[*].installed == 0 universally,
  *   trivially satisfying the property.
  *
  * VICTIM-vId FRAMING
@@ -91,13 +91,11 @@
 methods {
     // Read-only state accessors.
     function harness_vInfoNonce(bytes21)              external returns (uint32)  envfree;
-    function harness_vInfoHook(bytes21)               external returns (address) envfree;
+    function harness_vInfoInstalled(bytes21) external returns (bool) envfree;
+    function harness_vInfoScopedExecutionHook(bytes21) external returns (address) envfree;
     function harness_allowedNonce(bytes21, bytes4)    external returns (uint32)  envfree;
     function harness_allowedSelector(bytes21, bytes4) external returns (bool)    envfree;
     function harness_root()                           external returns (bytes21) envfree;
-
-    function harness_HOOK_NOT_INSTALLED()     external returns (address) envfree;
-    function harness_HOOK_INSTALLED_NO_HOOK() external returns (address) envfree;
     function harness_executeUserOpSelector()  external returns (bytes4)  envfree;
 
     // The four writer wrappers (Phase C Round 2 harness additions).
@@ -124,21 +122,12 @@ methods {
         internal returns (bytes32) => CONSTANT;
     function Lib4337.intersectValidationData(uint256, uint256) internal returns (uint256) => NONDET;
 
-    // _hookEnabled is called only from _initializeValidation's non-empty
-    // path to gate hook acceptance. It is a pure view function over
-    // HookStorage (a separate namespaced slot); it cannot write
-    // ValidationStorage. The concrete implementation lives in HookManager;
-    // the call in ValidationManager dispatches to it via virtual override.
-    // Without a NONDET summary the inlining may add unnecessary search;
-    // with NONDET both branches (hook accepted / rejected) are explored.
-    // IHook is an interface type; CVL requires the underlying EVM type (address).
-    function HookManager._hookEnabled(address) internal returns (bool) => NONDET;
 }
 
 // ---------------------------------------------------------------------------
 // Predicate: the "fast-path bypass conjunction" for victimVid.
 //   isBypassable(v) == _allowedSelector(v, executeUserOp.selector)
-//                      AND vInfo[v].hook == HOOK_MODULE_INSTALLED_NO_HOOK
+//                      AND vInfo[v].installed && vInfo[v].scopedExecutionHook == address(0)
 //
 // The global property says: for victimVid != $.root, NOT isBypassable(victimVid).
 // Each writer-local rule says: any call to that writer that started from a
@@ -147,7 +136,7 @@ methods {
 // ---------------------------------------------------------------------------
 definition isBypassable(bytes21 v) returns bool =
     harness_allowedSelector(v, harness_executeUserOpSelector())
-    && harness_vInfoHook(v) == harness_HOOK_INSTALLED_NO_HOOK();
+    && (harness_vInfoInstalled(v) && harness_vInfoScopedExecutionHook(v) == 0);
 
 // ---------------------------------------------------------------------------
 // Storage-shape invariant: `allowed[v][sel] <= vInfo[v].nonce` for every
@@ -279,16 +268,16 @@ rule setRootPreservesNonBypass(
 // RULE 3 -- _uninstallValidation preserves non-bypass for non-root vIds.
 //
 // _uninstallValidation writes:
-//   $.vInfo[targetVid].hook = HOOK_MODULE_NOT_INSTALLED
+//   $.vInfo[targetVid].installed = false
 //
 // The function reverts if targetVid == $.root (CannotUninstallRoot), so a
 // successful call leaves $.root unchanged.
 //
 // Effect on isBypassable(victimVid):
-//   * If victimVid == targetVid: post-state hook is HOOK_MODULE_NOT_INSTALLED,
-//     which is not HOOK_MODULE_INSTALLED_NO_HOOK, so the conjunction's
+//   * If victimVid == targetVid: post-state hook is installed == false,
+//     which is not a zero scopedExecutionHook, so the conjunction's
 //     second conjunct is false. Property holds.
-//   * If victimVid != targetVid: vInfo[victimVid].hook,
+//   * If victimVid != targetVid: vInfo[victimVid].installed,
 //     allowed[victimVid][*], and vInfo[victimVid].nonce are all unchanged.
 //     Property holds by pre-condition.
 // ===========================================================================
@@ -321,7 +310,7 @@ rule uninstallValidationPreservesNonBypass(
 // _initializeValidation has two branches based on _internalData.length:
 //
 //   (A) Empty data:
-//         $.vInfo[targetVid].hook = HOOK_MODULE_INSTALLED_NO_HOOK
+//         $.vInfo[targetVid].scopedExecutionHook = address(0)
 //         $.vInfo[targetVid].nonce += 1
 //       The nonce bump (commits 9f9471c, ce185f6) ensures that any
 //       allowed[targetVid][sel] entries from a prior incarnation become
@@ -330,7 +319,7 @@ rule uninstallValidationPreservesNonBypass(
 //       holds for targetVid.
 //
 //   (B) Non-empty data:
-//         $.vInfo[targetVid].hook = (parsed hook from first 20 bytes,
+//         $.vInfo[targetVid].scopedExecutionHook = (parsed validation-scoped execution hook,
 //                                    possibly remapped to INSTALLED_NO_HOOK)
 //         then calls _grantAccess(targetVid, remaining selectors)
 //
@@ -342,7 +331,7 @@ rule uninstallValidationPreservesNonBypass(
 // In both branches, vInfo[victimVid] for victimVid != targetVid is
 // untouched. So the property holds for any victimVid != $.root.
 //
-// The function also reverts if vInfo[targetVid].hook is already non-zero
+// The function also reverts if vInfo[targetVid].installed is already true
 // (`OccupiedValidationId`), which restricts the writer to fresh slots.
 // ===========================================================================
 rule initializeValidationPreservesNonBypass(
