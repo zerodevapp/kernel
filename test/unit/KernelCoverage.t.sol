@@ -18,6 +18,7 @@ import {MockSigner} from "../mock/MockSigner.sol";
 import {MockFallback} from "../mock/MockFallback.sol";
 import {MockExecutor} from "../mock/MockExecutor.sol";
 import {MockCallee} from "../mock/MockCallee.sol";
+import {MockHook} from "../mock/MockHook.sol";
 import {ChainAgnosticHashHelper} from "../utils/ChainAgnosticHashHelper.sol";
 import {
     NotImplemented,
@@ -60,6 +61,8 @@ import {
     VALIDATION_TYPE_ROOT,
     VALIDATION_TYPE_VALIDATOR,
     VALIDATION_TYPE_PERMISSION,
+    MODULE_TYPE_SCOPED_EXECUTION_HOOK,
+    SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE,
     SELECTOR_MANAGER_STORAGE_SLOT
 } from "src/types/Constants.sol";
 import {validatorToIdentifier, permissionToIdentifier} from "src/lib/Utils.sol";
@@ -80,6 +83,7 @@ contract KernelCoverageTest is Test {
     MockFallback mockFallback;
     MockExecutor mockExecutor;
     MockCallee callee;
+    MockHook mockHook;
     address payable beneficiary;
     PermissionId permissionId;
     ChainAgnosticHashHelper hashHelper;
@@ -96,6 +100,7 @@ contract KernelCoverageTest is Test {
         mockFallback = new MockFallback();
         mockExecutor = new MockExecutor();
         callee = new MockCallee();
+        mockHook = new MockHook();
         beneficiary = payable(makeAddr("Beneficiary"));
         hashHelper = new ChainAgnosticHashHelper();
         permissionId = PermissionId.wrap(bytes4(keccak256(abi.encodePacked("TestPermission"))));
@@ -690,13 +695,24 @@ contract KernelCoverageTest is Test {
 
     function test_fallback_WhenCallTypeDelegatecall_ShouldDelegatecall() public {
         bytes4 testSel = MockFallback.testFunction.selector;
-        vm.prank(address(ep));
+        vm.startPrank(address(ep));
         kernel.installModule(
             MODULE_TYPE_FALLBACK, address(mockFallback), abi.encode(hex"", abi.encodePacked(testSel, bytes1(0xFF)))
         );
+        // Selectors without a scoped execution hook are EntryPoint-only; install a
+        // passthrough scoped hook so the delegatecall fallback is publicly callable.
+        kernel.installModule(
+            MODULE_TYPE_SCOPED_EXECUTION_HOOK,
+            address(mockHook),
+            abi.encode(hex"", abi.encodePacked(SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE, testSel))
+        );
+        vm.stopPrank();
 
-        // Anyone can call an installed fallback
-        uint256 result = MockFallback(address(kernel)).testFunction();
+        // Anyone can call an installed fallback that has a scoped execution hook
+        // (testFunction() is view, so use a raw non-static call to allow the hook's pre/post checks)
+        (bool success, bytes memory ret) = address(kernel).call(abi.encodePacked(testSel));
+        assertTrue(success, "Delegatecall fallback should succeed");
+        uint256 result = abi.decode(ret, (uint256));
         assertEq(result, 42, "Delegatecall fallback should return 42");
     }
 

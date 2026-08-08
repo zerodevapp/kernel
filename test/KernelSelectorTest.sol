@@ -24,6 +24,16 @@ abstract contract KernelSelectorTest is KernelTestBase {
             address(mockFallback),
             abi.encode(hex"deadbeef", abi.encodePacked(MockFallback.fallbackFunction.selector, bytes1(0x00)))
         );
+        // Selectors without a scoped execution hook are EntryPoint-only; install a
+        // passthrough scoped hook so the selector can be called by arbitrary callers.
+        kernel.installModule(
+            11,
+            address(hook),
+            abi.encode(
+                hex"deadbeef",
+                abi.encodePacked(SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE, MockFallback.fallbackFunction.selector)
+            )
+        );
         vm.stopPrank();
         vm.startPrank(newCaller);
         vm.expectEmit(address(mockFallback));
@@ -38,6 +48,26 @@ abstract contract KernelSelectorTest is KernelTestBase {
         assertTrue(
             kernel.isModuleInstalled(3, address(mockFallback), abi.encodePacked(MockFallback.fallbackFunction.selector))
         );
+    }
+
+    function test_install_selector_without_hook_is_entrypoint_only() external unitTest {
+        bytes4 selector = MockFallback.fallbackFunction.selector;
+        kernel.installModule(
+            3, address(mockFallback), abi.encode(hex"deadbeef", abi.encodePacked(selector, bytes1(0x00)))
+        );
+        vm.stopPrank();
+
+        // Selectors without a scoped execution hook are only callable by the EntryPoint.
+        address newCaller = makeAddr("Caller");
+        vm.startPrank(newCaller);
+        vm.expectRevert(InvalidSelector.selector);
+        MockFallback(address(kernel)).fallbackFunction(10);
+        vm.stopPrank();
+
+        vm.startPrank(address(ep));
+        uint256 res = MockFallback(address(kernel)).fallbackFunction(10);
+        assertEq(res, 100);
+        vm.stopPrank();
     }
 
     function test_selector_scoped_execution_hook() external unitTest {

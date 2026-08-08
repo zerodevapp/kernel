@@ -8,13 +8,14 @@ import {Kernel} from "src/Kernel.sol";
 import {KernelUUPS} from "src/KernelUUPS.sol";
 import {KernelImmutableECDSA} from "src/KernelImmutableECDSA.sol";
 import {KernelFactory} from "src/KernelFactory.sol";
-import {Install, ValidationInfo} from "src/types/Structs.sol";
-import {ERC1967_IMPLEMENTATION_SLOT} from "src/types/Constants.sol";
+import {Install, ValidationInfo, Call} from "src/types/Structs.sol";
+import {ERC1967_IMPLEMENTATION_SLOT, SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE} from "src/types/Constants.sol";
 import {ValidationId, PermissionId} from "src/types/Types.sol";
 import {validatorToIdentifier, permissionToIdentifier} from "src/lib/Utils.sol";
 import {InvalidSelector} from "src/types/Error.sol";
 import {IERC7579Account} from "src/interfaces/IERC7579Account.sol";
 import {UUPSUpgradeable} from "solady/utils/UUPSUpgradeable.sol";
+import {LibERC7579} from "solady/accounts/LibERC7579.sol";
 import {MockValidator} from "../mock/MockValidator.sol";
 import {MockExecutor} from "../mock/MockExecutor.sol";
 import {MockCallee} from "../mock/MockCallee.sol";
@@ -337,37 +338,51 @@ contract KernelIntegrationEdgeCasesTest is Test {
     // Test 4: Fallback module lifecycle
     // -----------------------------------------------------------------------
 
-    /// @notice Install a fallback module via UserOp, call it externally,
-    ///         uninstall it, verify it reverts.
+    /// @notice Install a fallback module + scoped execution hook via UserOp, call it externally,
+    ///         uninstall both, verify the call reverts.
     function test_fallbackModuleLifecycle() public {
         Kernel kernel = _deployKernel();
         MockFallback fb = new MockFallback();
+        MockHook h = new MockHook();
         rootValidator.sudoSetSuccess(true);
 
-        // Install fallback via UserOp through root
-        // Fallback internalData: [selector(4) | callType(1) | hookAddress(20)]
-        // callType 0x00 = CALLTYPE_SINGLE, hook address(1) = no hook, anyone can call
+        // Fallback internalData: [selector(4) | callType(1)]
+        // callType 0x00 = CALLTYPE_SINGLE. Selectors without a scoped execution hook are
+        // EntryPoint-only, so a scoped execution hook is installed to make it publicly callable.
         bytes4 fbSelector = MockFallback.fallbackFunction.selector;
+        bytes32 batchMode = bytes32(
+            abi.encodePacked(LibERC7579.CALLTYPE_BATCH, LibERC7579.EXECTYPE_DEFAULT, bytes4(0), bytes4(0), bytes22(0))
+        );
+
+        // Install fallback + scoped hook via a single UserOp with a batch execute
         {
             uint256 nonce = _rootNonce(address(kernel));
+            Call[] memory calls = new Call[](2);
+            calls[0] = Call({
+                to: address(kernel),
+                value: 0,
+                data: abi.encodeWithSelector(
+                    IERC7579Account.installModule.selector,
+                    uint256(3),
+                    address(fb),
+                    abi.encode(hex"deadbeef", abi.encodePacked(fbSelector, bytes1(0x00)))
+                )
+            });
+            calls[1] = Call({
+                to: address(kernel),
+                value: 0,
+                data: abi.encodeWithSelector(
+                    IERC7579Account.installModule.selector,
+                    uint256(11),
+                    address(h),
+                    abi.encode(hex"deadbeef", abi.encodePacked(SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE, fbSelector))
+                )
+            });
             PackedUserOperation memory installOp = PackedUserOperation({
                 sender: address(kernel),
                 nonce: nonce,
                 initCode: hex"",
-                callData: abi.encodeWithSelector(
-                    Kernel.execute.selector,
-                    bytes32(0),
-                    abi.encodePacked(
-                        address(kernel),
-                        uint256(0),
-                        abi.encodeWithSelector(
-                            IERC7579Account.installModule.selector,
-                            uint256(3),
-                            address(fb),
-                            abi.encode(hex"deadbeef", abi.encodePacked(fbSelector, bytes1(0x00)))
-                        )
-                    )
-                ),
+                callData: abi.encodeWithSelector(Kernel.execute.selector, batchMode, abi.encode(calls)),
                 accountGasLimits: bytes32(abi.encodePacked(uint128(2_000_000), uint128(2_000_000))),
                 preVerificationGas: 1_000_000,
                 gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
@@ -379,12 +394,18 @@ contract KernelIntegrationEdgeCasesTest is Test {
             _handleOps(ops);
         }
 
-        // Verify: fallback is installed
+        // Verify: fallback and scoped hook are installed
         assertTrue(
             kernel.isModuleInstalled(3, address(fb), abi.encodePacked(fbSelector)), "fallback should be installed"
         );
+        assertTrue(
+            kernel.isModuleInstalled(
+                11, address(h), abi.encodePacked(SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE, fbSelector)
+            ),
+            "scoped execution hook should be installed"
+        );
 
-        // Call the installed fallback externally
+        // Call the installed fallback externally (scoped hook makes it publicly callable)
         address alice = makeAddr("Alice");
         vm.prank(alice);
         (bool success, bytes memory ret) = address(kernel).call(abi.encodeWithSelector(fbSelector, uint256(5)));
@@ -392,27 +413,35 @@ contract KernelIntegrationEdgeCasesTest is Test {
         uint256 result = abi.decode(ret, (uint256));
         assertEq(result, 25, "fallbackFunction(5) should return 25 (5*5)");
 
-        // Uninstall fallback via UserOp
+        // Uninstall hook + fallback via a single UserOp with a batch execute
         {
             uint256 nonce = _rootNonce(address(kernel));
+            Call[] memory calls = new Call[](2);
+            calls[0] = Call({
+                to: address(kernel),
+                value: 0,
+                data: abi.encodeWithSelector(
+                    IERC7579Account.uninstallModule.selector,
+                    uint256(11),
+                    address(h),
+                    abi.encode(hex"", abi.encodePacked(SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE, fbSelector))
+                )
+            });
+            calls[1] = Call({
+                to: address(kernel),
+                value: 0,
+                data: abi.encodeWithSelector(
+                    IERC7579Account.uninstallModule.selector,
+                    uint256(3),
+                    address(fb),
+                    abi.encode(hex"", abi.encodePacked(fbSelector))
+                )
+            });
             PackedUserOperation memory uninstallOp = PackedUserOperation({
                 sender: address(kernel),
                 nonce: nonce,
                 initCode: hex"",
-                callData: abi.encodeWithSelector(
-                    Kernel.execute.selector,
-                    bytes32(0),
-                    abi.encodePacked(
-                        address(kernel),
-                        uint256(0),
-                        abi.encodeWithSelector(
-                            IERC7579Account.uninstallModule.selector,
-                            uint256(3),
-                            address(fb),
-                            abi.encode(hex"", abi.encodePacked(fbSelector))
-                        )
-                    )
-                ),
+                callData: abi.encodeWithSelector(Kernel.execute.selector, batchMode, abi.encode(calls)),
                 accountGasLimits: bytes32(abi.encodePacked(uint128(2_000_000), uint128(2_000_000))),
                 preVerificationGas: 1_000_000,
                 gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),

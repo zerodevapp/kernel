@@ -287,7 +287,13 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
 
         bytes4 selector = bytes4(msg.data[0:4]);
         SelectorConfig storage $ = _selectorConfig(selector);
-        require($.target != address(0), InvalidSelector());
+        // target must be initialized, and if no scoped execution hook is installed
+        // only the entry point may call it (scoped hooks gate direct access).
+        require(
+            $.target != address(0)
+                && (address($.scopedExecutionHook) != address(0) || msg.sender == address(ENTRYPOINT)),
+            InvalidSelector()
+        );
 
         IScopedExecutionHook hook = $.scopedExecutionHook;
         bytes32 id;

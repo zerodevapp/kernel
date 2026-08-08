@@ -9,9 +9,16 @@ import {KernelImmutableECDSA} from "src/KernelImmutableECDSA.sol";
 import {KernelFactory} from "src/KernelFactory.sol";
 import {MockFallback} from "../mock/MockFallback.sol";
 import {MockValidator} from "../mock/MockValidator.sol";
+import {MockHook} from "../mock/MockHook.sol";
 import {Install} from "src/types/Structs.sol";
 import {EntryPointLib} from "../utils/EntryPointLib.sol";
-import {CALLTYPE_SINGLE, MODULE_TYPE_VALIDATOR, MODULE_TYPE_FALLBACK} from "src/types/Constants.sol";
+import {
+    CALLTYPE_SINGLE,
+    MODULE_TYPE_VALIDATOR,
+    MODULE_TYPE_FALLBACK,
+    MODULE_TYPE_SCOPED_EXECUTION_HOOK,
+    SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE
+} from "src/types/Constants.sol";
 
 /// @title Gas Benchmark Tests
 /// @notice Focused gas benchmarks for specific optimization paths
@@ -21,6 +28,7 @@ contract GasBenchmarkTest is Test {
     Kernel kernel;
     MockValidator validator;
     MockFallback mockFallback;
+    MockHook mockHook;
 
     function setUp() public {
         ep = EntryPointLib.deploy();
@@ -30,6 +38,7 @@ contract GasBenchmarkTest is Test {
         factory = new KernelFactory(uups, immutableEcdsa);
         validator = new MockValidator();
         mockFallback = new MockFallback();
+        mockHook = new MockHook();
 
         // Deploy kernel via factory
         Install[] memory packages = new Install[](1);
@@ -44,6 +53,15 @@ contract GasBenchmarkTest is Test {
         // internalData format: selector(4) + callType(1)
         bytes memory internalData = abi.encodePacked(MockFallback.fallbackFunction.selector, CALLTYPE_SINGLE);
         kernel.installModule(MODULE_TYPE_FALLBACK, address(mockFallback), abi.encode(hex"", internalData));
+        // Selectors without a scoped execution hook are EntryPoint-only; installing one
+        // (MockHook is a passthrough) makes the fallback benchmark publicly callable.
+        kernel.installModule(
+            MODULE_TYPE_SCOPED_EXECUTION_HOOK,
+            address(mockHook),
+            abi.encode(
+                hex"", abi.encodePacked(SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE, MockFallback.fallbackFunction.selector)
+            )
+        );
         vm.stopPrank();
     }
 
@@ -75,7 +93,7 @@ contract GasBenchmarkTest is Test {
         vm.stopPrank();
     }
 
-    /// @notice Benchmark: installed fallback routing
+    /// @notice Benchmark: fallback routing through a scoped execution hook (required for public calls)
     function test_gasBenchmark_fallback() public {
         uint256 gasBefore = gasleft();
         MockFallback(address(kernel)).fallbackFunction(5);

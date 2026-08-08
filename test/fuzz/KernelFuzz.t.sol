@@ -22,7 +22,8 @@ import {
     MODULE_TYPE_EXECUTOR,
     MODULE_TYPE_FALLBACK,
     MODULE_TYPE_POLICY,
-    MODULE_TYPE_SIGNER
+    MODULE_TYPE_SIGNER,
+    SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE
 } from "src/types/Constants.sol";
 import {
     Unauthorized,
@@ -40,6 +41,7 @@ import {EntryPointLib} from "../utils/EntryPointLib.sol";
 import {MockValidator} from "../mock/MockValidator.sol";
 import {MockExecutor} from "../mock/MockExecutor.sol";
 import {MockFallback} from "../mock/MockFallback.sol";
+import {MockHook} from "../mock/MockHook.sol";
 import {MockPolicy} from "../mock/MockPolicy.sol";
 import {MockSigner} from "../mock/MockSigner.sol";
 import {IERC7579Account} from "src/interfaces/IERC7579Account.sol";
@@ -158,9 +160,9 @@ contract KernelFuzz is Test {
         (success);
     }
 
-    /// @dev Installed fallback selectors are callable without a generic hook.
-    function testFuzz_fallback_installedSelector_anyoneCalls(address caller) public {
-        vm.assume(caller != address(0));
+    /// @dev Installed fallback selectors without a scoped execution hook are EntryPoint-only.
+    function testFuzz_fallback_installedSelector_withoutHook_nonEpReverts(address caller) public {
+        vm.assume(caller != address(ep));
 
         bytes4 selector = MockFallback.testFunction.selector;
         bytes1 callType = CallType.unwrap(CALLTYPE_SINGLE);
@@ -170,7 +172,27 @@ contract KernelFuzz is Test {
 
         vm.prank(caller);
         (bool success,) = address(kernel).call(abi.encodePacked(selector));
-        assertTrue(success, "installed selector should be callable");
+        assertFalse(success, "unhooked selector must not be callable by non-EP callers");
+    }
+
+    /// @dev Installed fallback selectors with a scoped execution hook are callable by anyone.
+    function testFuzz_fallback_installedSelector_withHook_anyoneCalls(address caller) public {
+        vm.assume(caller != address(0));
+
+        MockHook h = new MockHook();
+        bytes4 selector = MockFallback.testFunction.selector;
+        bytes1 callType = CallType.unwrap(CALLTYPE_SINGLE);
+        bytes memory internalData = abi.encodePacked(selector, callType);
+        vm.startPrank(address(ep));
+        kernel.installModule(3, address(fallbackModule), abi.encode(hex"deadbeef", internalData));
+        kernel.installModule(
+            11, address(h), abi.encode(hex"deadbeef", abi.encodePacked(SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE, selector))
+        );
+        vm.stopPrank();
+
+        vm.prank(caller);
+        (bool success,) = address(kernel).call(abi.encodePacked(selector));
+        assertTrue(success, "hooked selector should be callable by anyone");
     }
 
     // ========= isValidSignature fuzz tests =========

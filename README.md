@@ -39,6 +39,8 @@ The 32-byte ERC-4337 nonce encodes which validator to use, giving each validator
 
 An optional type-11 scoped execution hook runs before and after execution in one of three scopes: validation, executor, or selector. Hooked non-root validations are routed through `executeUserOp`; root validations bypass hooks. Executor hooks wrap `executeFromExecutor`, and selector hooks wrap fallback selector dispatch. Selector hooks apply only to calls that reach Kernel's fallback; native Kernel function dispatch bypasses them, and built-in token-receiver selectors cannot be installed as fallback targets.
 
+**Fallback access control:** a fallback selector with no scoped execution hook installed is callable only by the EntryPoint. Installing a selector-scoped execution hook makes the selector publicly callable, with the hook gating direct access via `preCheck`/`postCheck`.
+
 `preCheck` and `postCheck` receive the same Kernel-generated `bytes32 id`. The ID layout is `[bytes1 scope][target][zero padding]`, where the target is a 21-byte ValidationId, 20-byte executor address, or 4-byte selector. `Utils.sol` exposes generation and decoding helpers for every scope.
 
 ### Signature Verification (ERC-1271 / ERC-7739)
