@@ -22,6 +22,14 @@ bytes1 constant SCOPED_EXECUTION_HOOK_VALIDATION_SCOPE = 0x01;
 bytes1 constant SCOPED_EXECUTION_HOOK_EXECUTOR_SCOPE = 0x02;
 bytes1 constant SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE = 0x03;
 
+address constant SELECTOR_NOT_INSTALLED = address(0);
+address constant SCOPED_EXECUTION_HOOK_NOT_INSTALLED = address(0);
+
+uint256 constant SCOPED_EXECUTION_HOOK_TARGET_OFFSET = 1;
+uint256 constant SCOPED_EXECUTION_HOOK_VALIDATION_DATA_LENGTH = 22;
+uint256 constant SCOPED_EXECUTION_HOOK_EXECUTOR_DATA_LENGTH = 21;
+uint256 constant SCOPED_EXECUTION_HOOK_SELECTOR_DATA_LENGTH = 5;
+
 // note : ROOT == FALLBACK, they do indicate same value but to have different meanings in different context
 // FALLBACK - usually used when using 7702 validation logic
 // ROOT - mostly used when identifying that you are using root validation on userOp.nonce

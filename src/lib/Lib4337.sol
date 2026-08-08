@@ -5,7 +5,11 @@ import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOper
 import {UserOperationLib} from "account-abstraction/core/UserOperationLib.sol";
 import {Eip7702Support} from "account-abstraction/core/Eip7702Support.sol";
 import {IERC5267} from "../interfaces/IERC5267.sol";
-import {DOMAIN_TYPEHASH_SANS_CHAIN_ID} from "../types/Constants.sol";
+import {
+    DOMAIN_TYPEHASH_SANS_CHAIN_ID,
+    SIG_VALIDATION_FAILED_UINT,
+    SIG_VALIDATION_SUCCESS_UINT
+} from "../types/Constants.sol";
 import {ValidityFormatMismatch} from "../types/Error.sol";
 
 library Lib4337 {
@@ -32,7 +36,7 @@ library Lib4337 {
     }
 
     function checkValidation(uint256 validationData) internal view returns (bool) {
-        if (validationData == 0) {
+        if (validationData == SIG_VALIDATION_SUCCESS_UINT) {
             return true;
         }
         (uint48 vAfter, uint48 vUntil, address res) = Lib4337.parseValidationData(validationData);
@@ -45,7 +49,7 @@ library Lib4337 {
             current = block.timestamp;
         }
         // Canonical EntryPoint v0.9 interval: (validAfter, validUntil].
-        return res == address(0) && current > vAfter && current <= vUntil;
+        return uint160(res) == SIG_VALIDATION_SUCCESS_UINT && current > vAfter && current <= vUntil;
     }
 
     /// @dev Variant of `_hashTypedData` that excludes the chain ID.
@@ -83,7 +87,7 @@ library Lib4337 {
         pure
         returns (uint256 resValidationData)
     {
-        if (preValidationData == 0 || validationRes == 0) {
+        if (preValidationData == SIG_VALIDATION_SUCCESS_UINT || validationRes == SIG_VALIDATION_SUCCESS_UINT) {
             return preValidationData | validationRes;
         }
 
@@ -101,17 +105,18 @@ library Lib4337 {
         uint160 preAgg = uint160(preValidationData);
         uint160 resAgg = uint160(validationRes);
 
-        uint160 finalAgg = (preAgg == 1 || resAgg == 1)
-            ? 1  // Any failure
-            : (preAgg == 0 && resAgg == 0)
-                ? 0  // Both success
-                : (preAgg > 1 && resAgg == 0)
+        uint160 finalAgg = (preAgg == uint160(SIG_VALIDATION_FAILED_UINT)
+                || resAgg == uint160(SIG_VALIDATION_FAILED_UINT))
+            ? uint160(SIG_VALIDATION_FAILED_UINT)  // Any failure
+            : (preAgg == uint160(SIG_VALIDATION_SUCCESS_UINT) && resAgg == uint160(SIG_VALIDATION_SUCCESS_UINT))
+                ? uint160(SIG_VALIDATION_SUCCESS_UINT)  // Both success
+                : (preAgg > uint160(SIG_VALIDATION_FAILED_UINT) && resAgg == uint160(SIG_VALIDATION_SUCCESS_UINT))
                     ? preAgg  // Preserve aggregator
-                    : (preAgg == 0 && resAgg > 1)
+                    : (preAgg == uint160(SIG_VALIDATION_SUCCESS_UINT) && resAgg > uint160(SIG_VALIDATION_FAILED_UINT))
                         ? resAgg  // Use new aggregator
                         : (preAgg == resAgg)
                             ? preAgg  // Same aggregator
-                            : 1; // Conflict or unknown
+                            : uint160(SIG_VALIDATION_FAILED_UINT); // Conflict or unknown
 
         // Extract raw time bounds
         uint48 validUntil1 = uint48(preValidationData >> 160);
@@ -131,7 +136,7 @@ library Lib4337 {
         // ValidityFormatMismatch revert — so the check is skipped. A neutral [0, max] range
         // carries no restriction and no format and is likewise exempt (its normalized validUntil
         // has MODE_BIT set, which would otherwise misclassify it as a block range).
-        if (finalAgg != 1) {
+        if (finalAgg != SIG_VALIDATION_FAILED_UINT) {
             bool preNeutral = validAfter1 == 0 && validUntil1 == type(uint48).max;
             bool resNeutral = validAfter2 == 0 && validUntil2 == type(uint48).max;
             // Block number format: both validAfter and validUntil have the highest bit set.

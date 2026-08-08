@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {EXECUTOR_MANAGER_STORAGE_SLOT} from "../types/Constants.sol";
+import {EXECUTOR_MANAGER_STORAGE_SLOT, SCOPED_EXECUTION_HOOK_NOT_INSTALLED} from "../types/Constants.sol";
 import {IExecutor} from "../interfaces/IERC7579Modules.sol";
 import {ExecutorStorage, ExecutorConfig} from "../types/Structs.sol";
 import {InvalidDataLength, ScopedExecutionHookStillInstalled} from "../types/Error.sol";
@@ -37,7 +37,10 @@ abstract contract ExecutorManager {
     function _uninstallExecutor(address _executor, bytes calldata _internalData, bool) internal {
         require(_internalData.length == 0, InvalidDataLength());
         ExecutorConfig storage config = _executorConfig(IExecutor(_executor));
-        require(address(config.scopedExecutionHook) == address(0), ScopedExecutionHookStillInstalled());
+        require(
+            address(config.scopedExecutionHook) == SCOPED_EXECUTION_HOOK_NOT_INSTALLED,
+            ScopedExecutionHookStillInstalled()
+        );
         config.installed = false;
     }
 }

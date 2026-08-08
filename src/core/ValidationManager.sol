@@ -33,7 +33,8 @@ import {
     MODULE_TYPE_POLICY,
     MODULE_TYPE_SIGNER,
     SIG_VALIDATION_FAILED_UINT,
-    SIG_VALIDATION_SUCCESS_UINT
+    SIG_VALIDATION_SUCCESS_UINT,
+    SCOPED_EXECUTION_HOOK_NOT_INSTALLED
 } from "../types/Constants.sol";
 import {PermissionSignature, ValidationStorage, ValidationInfo, Install} from "../types/Structs.sol";
 import {Lib4337} from "../lib/Lib4337.sol";
@@ -199,7 +200,10 @@ abstract contract ValidationManager {
         if (getType(vId) == VALIDATION_TYPE_PERMISSION) {
             require(info.signer != address(0), InvalidScopedExecutionHookTarget());
         }
-        require(address(info.scopedExecutionHook) == address(0), ScopedExecutionHookAlreadyInstalled());
+        require(
+            address(info.scopedExecutionHook) == SCOPED_EXECUTION_HOOK_NOT_INSTALLED,
+            ScopedExecutionHookAlreadyInstalled()
+        );
         info.scopedExecutionHook = IScopedExecutionHook(_hook);
     }
 
@@ -228,7 +232,10 @@ abstract contract ValidationManager {
     function _uninstallValidation(ValidationId _vId) internal {
         ValidationStorage storage $ = _validationStorage();
         require($.root != _vId, CannotUninstallRoot());
-        require(address($.vInfo[_vId].scopedExecutionHook) == address(0), ScopedExecutionHookStillInstalled());
+        require(
+            address($.vInfo[_vId].scopedExecutionHook) == SCOPED_EXECUTION_HOOK_NOT_INSTALLED,
+            ScopedExecutionHookStillInstalled()
+        );
         $.vInfo[_vId].installed = false;
     }
 
@@ -243,7 +250,7 @@ abstract contract ValidationManager {
     function _uninstallScopedExecutionHookWithVid(address _hook, ValidationId vId) internal {
         ValidationInfo storage info = _validationStorage().vInfo[vId];
         require(address(info.scopedExecutionHook) == _hook, InvalidScopedExecutionHookTarget());
-        info.scopedExecutionHook = IScopedExecutionHook(address(0));
+        info.scopedExecutionHook = IScopedExecutionHook(SCOPED_EXECUTION_HOOK_NOT_INSTALLED);
     }
 
     /// @notice Uninstalls a policy module. Policies must be uninstalled in reverse order (LIFO).
@@ -280,7 +287,9 @@ abstract contract ValidationManager {
     /// @param vId The validation identifier the signer belongs to.
     function _uninstallSignerWithVid(address _signer, ValidationId vId) internal {
         ValidationInfo storage $ = _validationStorage().vInfo[vId];
-        require(address($.scopedExecutionHook) == address(0), ScopedExecutionHookStillInstalled());
+        require(
+            address($.scopedExecutionHook) == SCOPED_EXECUTION_HOOK_NOT_INSTALLED, ScopedExecutionHookStillInstalled()
+        );
         require($.policies.length == 0, InvalidPermissionUninstallOrder());
         require($.signer == _signer, InvalidPermissionId());
         $.signer = address(0);
@@ -419,7 +428,7 @@ abstract contract ValidationManager {
         // Require a properly-encoded `uint256` (32 bytes) return. A codeless / non-conforming
         // validator returns success with empty returndata, which would otherwise decode to 0
         // (SIG_VALIDATION_SUCCESS) and authorise any signature.
-        validationData = (success && ret.length == 32) ? abi.decode(ret, (uint256)) : 1;
+        validationData = (success && ret.length == 32) ? abi.decode(ret, (uint256)) : SIG_VALIDATION_FAILED_UINT;
     }
 
     /// @notice Validates a userOp using a permission (policies + signer).

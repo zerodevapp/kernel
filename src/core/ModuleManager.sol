@@ -36,7 +36,13 @@ import {
     MODULE_TYPE_SCOPED_EXECUTION_HOOK,
     SCOPED_EXECUTION_HOOK_VALIDATION_SCOPE,
     SCOPED_EXECUTION_HOOK_EXECUTOR_SCOPE,
-    SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE
+    SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE,
+    SELECTOR_NOT_INSTALLED,
+    SCOPED_EXECUTION_HOOK_NOT_INSTALLED,
+    SCOPED_EXECUTION_HOOK_TARGET_OFFSET,
+    SCOPED_EXECUTION_HOOK_VALIDATION_DATA_LENGTH,
+    SCOPED_EXECUTION_HOOK_EXECUTOR_DATA_LENGTH,
+    SCOPED_EXECUTION_HOOK_SELECTOR_DATA_LENGTH
 } from "../types/Constants.sol";
 import {EfficientHashLib} from "solady/utils/EfficientHashLib.sol";
 
@@ -142,8 +148,10 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, SelectorM
         require(installSuccess && hook.code.length > 0, ModuleInstallFailed());
         bytes1 scope = _scopedExecutionHookScope(internalData);
         if (scope == SCOPED_EXECUTION_HOOK_VALIDATION_SCOPE) {
-            require(internalData.length == 22, InvalidDataLength());
-            ValidationId vId = ValidationId.wrap(bytes21(internalData[1:22]));
+            require(internalData.length == SCOPED_EXECUTION_HOOK_VALIDATION_DATA_LENGTH, InvalidDataLength());
+            ValidationId vId = ValidationId.wrap(
+                bytes21(internalData[SCOPED_EXECUTION_HOOK_TARGET_OFFSET:SCOPED_EXECUTION_HOOK_VALIDATION_DATA_LENGTH])
+            );
             ValidationType vType = getType(vId);
             require(
                 vType == VALIDATION_TYPE_VALIDATOR || vType == VALIDATION_TYPE_PERMISSION,
@@ -151,18 +159,31 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, SelectorM
             );
             _installValidationScopedExecutionHook(hook, vId, installSuccess);
         } else if (scope == SCOPED_EXECUTION_HOOK_EXECUTOR_SCOPE) {
-            require(internalData.length == 21, InvalidDataLength());
-            IExecutor executor = IExecutor(address(bytes20(internalData[1:21])));
+            require(internalData.length == SCOPED_EXECUTION_HOOK_EXECUTOR_DATA_LENGTH, InvalidDataLength());
+            IExecutor executor = IExecutor(
+                address(
+                    bytes20(
+                        internalData[SCOPED_EXECUTION_HOOK_TARGET_OFFSET:SCOPED_EXECUTION_HOOK_EXECUTOR_DATA_LENGTH]
+                    )
+                )
+            );
             ExecutorConfig storage config = _executorConfig(executor);
             require(config.installed, InvalidScopedExecutionHookTarget());
-            require(address(config.scopedExecutionHook) == address(0), ScopedExecutionHookAlreadyInstalled());
+            require(
+                address(config.scopedExecutionHook) == SCOPED_EXECUTION_HOOK_NOT_INSTALLED,
+                ScopedExecutionHookAlreadyInstalled()
+            );
             config.scopedExecutionHook = IScopedExecutionHook(hook);
         } else if (scope == SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE) {
-            require(internalData.length == 5, InvalidDataLength());
-            bytes4 selector = bytes4(internalData[1:5]);
+            require(internalData.length == SCOPED_EXECUTION_HOOK_SELECTOR_DATA_LENGTH, InvalidDataLength());
+            bytes4 selector =
+                bytes4(internalData[SCOPED_EXECUTION_HOOK_TARGET_OFFSET:SCOPED_EXECUTION_HOOK_SELECTOR_DATA_LENGTH]);
             SelectorConfig storage config = _selectorConfig(selector);
-            require(config.target != address(0), InvalidScopedExecutionHookTarget());
-            require(address(config.scopedExecutionHook) == address(0), ScopedExecutionHookAlreadyInstalled());
+            require(config.target != SELECTOR_NOT_INSTALLED, InvalidScopedExecutionHookTarget());
+            require(
+                address(config.scopedExecutionHook) == SCOPED_EXECUTION_HOOK_NOT_INSTALLED,
+                ScopedExecutionHookAlreadyInstalled()
+            );
             config.scopedExecutionHook = IScopedExecutionHook(hook);
         } else {
             revert InvalidScopedExecutionHookTarget();
@@ -173,18 +194,35 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, SelectorM
     function _uninstallScopedExecutionHook(address hook, bytes calldata internalData, bool) internal {
         bytes1 scope = _scopedExecutionHookScope(internalData);
         if (scope == SCOPED_EXECUTION_HOOK_VALIDATION_SCOPE) {
-            require(internalData.length == 22, InvalidDataLength());
-            _uninstallScopedExecutionHookWithVid(hook, ValidationId.wrap(bytes21(internalData[1:22])));
+            require(internalData.length == SCOPED_EXECUTION_HOOK_VALIDATION_DATA_LENGTH, InvalidDataLength());
+            _uninstallScopedExecutionHookWithVid(
+                hook,
+                ValidationId.wrap(
+                    bytes21(
+                        internalData[SCOPED_EXECUTION_HOOK_TARGET_OFFSET:SCOPED_EXECUTION_HOOK_VALIDATION_DATA_LENGTH]
+                    )
+                )
+            );
         } else if (scope == SCOPED_EXECUTION_HOOK_EXECUTOR_SCOPE) {
-            require(internalData.length == 21, InvalidDataLength());
-            ExecutorConfig storage config = _executorConfig(IExecutor(address(bytes20(internalData[1:21]))));
+            require(internalData.length == SCOPED_EXECUTION_HOOK_EXECUTOR_DATA_LENGTH, InvalidDataLength());
+            ExecutorConfig storage config = _executorConfig(
+                IExecutor(
+                    address(
+                        bytes20(
+                            internalData[SCOPED_EXECUTION_HOOK_TARGET_OFFSET:SCOPED_EXECUTION_HOOK_EXECUTOR_DATA_LENGTH]
+                        )
+                    )
+                )
+            );
             require(address(config.scopedExecutionHook) == hook, InvalidScopedExecutionHookTarget());
-            config.scopedExecutionHook = IScopedExecutionHook(address(0));
+            config.scopedExecutionHook = IScopedExecutionHook(SCOPED_EXECUTION_HOOK_NOT_INSTALLED);
         } else if (scope == SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE) {
-            require(internalData.length == 5, InvalidDataLength());
-            SelectorConfig storage config = _selectorConfig(bytes4(internalData[1:5]));
+            require(internalData.length == SCOPED_EXECUTION_HOOK_SELECTOR_DATA_LENGTH, InvalidDataLength());
+            SelectorConfig storage config = _selectorConfig(
+                bytes4(internalData[SCOPED_EXECUTION_HOOK_TARGET_OFFSET:SCOPED_EXECUTION_HOOK_SELECTOR_DATA_LENGTH])
+            );
             require(address(config.scopedExecutionHook) == hook, InvalidScopedExecutionHookTarget());
-            config.scopedExecutionHook = IScopedExecutionHook(address(0));
+            config.scopedExecutionHook = IScopedExecutionHook(SCOPED_EXECUTION_HOOK_NOT_INSTALLED);
         } else {
             revert InvalidScopedExecutionHookTarget();
         }
@@ -199,18 +237,27 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, SelectorM
         if (context.length == 0) return false;
         bytes1 scope = bytes1(context[0]);
         if (scope == SCOPED_EXECUTION_HOOK_VALIDATION_SCOPE) {
-            if (context.length != 22) return false;
-            ValidationId vId = ValidationId.wrap(bytes21(context[1:22]));
+            if (context.length != SCOPED_EXECUTION_HOOK_VALIDATION_DATA_LENGTH) return false;
+            ValidationId vId = ValidationId.wrap(
+                bytes21(context[SCOPED_EXECUTION_HOOK_TARGET_OFFSET:SCOPED_EXECUTION_HOOK_VALIDATION_DATA_LENGTH])
+            );
             return address(_validationStorage().vInfo[vId].scopedExecutionHook) == hook;
         }
         if (scope == SCOPED_EXECUTION_HOOK_EXECUTOR_SCOPE) {
-            if (context.length != 21) return false;
-            address executor = address(bytes20(context[1:21]));
+            if (context.length != SCOPED_EXECUTION_HOOK_EXECUTOR_DATA_LENGTH) return false;
+            address executor = address(
+                bytes20(context[SCOPED_EXECUTION_HOOK_TARGET_OFFSET:SCOPED_EXECUTION_HOOK_EXECUTOR_DATA_LENGTH])
+            );
             return address(_executorConfig(IExecutor(executor)).scopedExecutionHook) == hook;
         }
         if (scope == SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE) {
-            if (context.length != 5) return false;
-            return address(_selectorConfig(bytes4(context[1:5])).scopedExecutionHook) == hook;
+            if (context.length != SCOPED_EXECUTION_HOOK_SELECTOR_DATA_LENGTH) return false;
+            return address(
+                _selectorConfig(
+                bytes4(context[SCOPED_EXECUTION_HOOK_TARGET_OFFSET:SCOPED_EXECUTION_HOOK_SELECTOR_DATA_LENGTH])
+            )
+                .scopedExecutionHook
+            ) == hook;
         }
         return false;
     }

@@ -52,7 +52,10 @@ import {
     MODULE_TYPE_FALLBACK,
     MODULE_TYPE_POLICY,
     MODULE_TYPE_SIGNER,
-    MODULE_TYPE_SCOPED_EXECUTION_HOOK
+    MODULE_TYPE_SCOPED_EXECUTION_HOOK,
+    SELECTOR_NOT_INSTALLED,
+    SCOPED_EXECUTION_HOOK_NOT_INSTALLED,
+    SIG_VALIDATION_FAILED_UINT
 } from "./types/Constants.sol";
 import {
     ValidationStorage,
@@ -165,7 +168,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
             validationData = _verifyInstallSignatureRaw(enableReplayable, sig.nonce, sig.packages, sig.enableSignature);
             // EntryPoint owns validity-window enforcement. Reject hard signature failures before
             // mutating state; EntryPoint rolls back installs for all other invalid results.
-            if (uint160(validationData) == 1) {
+            if (uint160(validationData) == SIG_VALIDATION_FAILED_UINT) {
                 return validationData;
             }
             _checkAndIncrementNonce(sig.nonce);
@@ -178,7 +181,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         if (vType != VALIDATION_TYPE_ROOT) {
             ValidationInfo storage info = $.vInfo[vId];
             require(info.installed, InvalidVid(vId));
-            bool hasScopedExecutionHook = address(info.scopedExecutionHook) != address(0);
+            bool hasScopedExecutionHook = address(info.scopedExecutionHook) != SCOPED_EXECUTION_HOOK_NOT_INSTALLED;
             // Validation-scoped hooks must wrap execution even when the outer selector is directly allowed.
             if (hasScopedExecutionHook || !_allowedSelector(vId, callDataSelector)) {
                 require(
@@ -211,7 +214,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         (ValidationId vId, IScopedExecutionHook hook) = _validationScopedExecutionHook(userOpHash);
         bytes32 hookId;
         bytes memory context;
-        if (address(hook) != address(0)) {
+        if (address(hook) != SCOPED_EXECUTION_HOOK_NOT_INSTALLED) {
             hookId = _validationScopedExecutionHookId(vId);
             context = hook.preCheck(hookId, msg.sender, msg.value, userOp.callData[4:]);
         }
@@ -222,7 +225,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
                 revert(add(ret, 0x20), mload(ret))
             }
         }
-        if (address(hook) != address(0)) {
+        if (address(hook) != SCOPED_EXECUTION_HOOK_NOT_INSTALLED) {
             hook.postCheck(hookId, context);
         }
     }
@@ -257,12 +260,12 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         IScopedExecutionHook hook = config.scopedExecutionHook;
         bytes32 id;
         bytes memory context;
-        if (address(hook) != address(0)) {
+        if (address(hook) != SCOPED_EXECUTION_HOOK_NOT_INSTALLED) {
             id = executorScopedExecutionHookId(msg.sender);
             context = hook.preCheck(id, msg.sender, msg.value, msg.data);
         }
         returnData = _execute(mode, executionData);
-        if (address(hook) != address(0)) {
+        if (address(hook) != SCOPED_EXECUTION_HOOK_NOT_INSTALLED) {
             hook.postCheck(id, context);
         }
     }
@@ -290,15 +293,16 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         // target must be initialized, and if no scoped execution hook is installed
         // only the entry point may call it (scoped hooks gate direct access).
         require(
-            $.target != address(0)
-                && (address($.scopedExecutionHook) != address(0) || msg.sender == address(ENTRYPOINT)),
+            $.target != SELECTOR_NOT_INSTALLED
+                && (address($.scopedExecutionHook) != SCOPED_EXECUTION_HOOK_NOT_INSTALLED
+                    || msg.sender == address(ENTRYPOINT)),
             InvalidSelector()
         );
 
         IScopedExecutionHook hook = $.scopedExecutionHook;
         bytes32 id;
         bytes memory context;
-        if (address(hook) != address(0)) {
+        if (address(hook) != SCOPED_EXECUTION_HOOK_NOT_INSTALLED) {
             id = selectorScopedExecutionHookId(selector);
             context = hook.preCheck(id, msg.sender, msg.value, msg.data);
         }
@@ -316,7 +320,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         } else {
             res = _getReturn();
         }
-        if (address(hook) != address(0)) {
+        if (address(hook) != SCOPED_EXECUTION_HOOK_NOT_INSTALLED) {
             hook.postCheck(id, context);
         }
     }
@@ -382,7 +386,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
             ValidationInfo memory vInfo = _validationStorage().vInfo[vId];
             if (vType == VALIDATION_TYPE_VALIDATOR) {
                 bytes calldata validatorUninstallData = uninstallData;
-                if (address(vInfo.scopedExecutionHook) != address(0)) {
+                if (address(vInfo.scopedExecutionHook) != SCOPED_EXECUTION_HOOK_NOT_INSTALLED) {
                     ValidationUninstallData calldata data;
                     assembly {
                         data := uninstallData.offset
@@ -408,7 +412,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
                     data := uninstallData.offset
                 }
                 bytes[] calldata uninstallDataArr = data.uninstallData;
-                uint256 hookOffset = address(vInfo.scopedExecutionHook) == address(0) ? 0 : 1;
+                uint256 hookOffset = address(vInfo.scopedExecutionHook) == SCOPED_EXECUTION_HOOK_NOT_INSTALLED ? 0 : 1;
                 require(uninstallDataArr.length == vInfo.policies.length + 1 + hookOffset, InvalidDataLength());
                 if (hookOffset == 1) {
                     // forge-lint: disable-next-line(unchecked-call)
