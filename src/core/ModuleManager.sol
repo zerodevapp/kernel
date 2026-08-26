@@ -89,6 +89,16 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, SelectorM
         }
     }
 
+    /// @dev Raw (non-nested) ERC-1271 exists so a 7702 account matches the signing behavior of the
+    ///      EOA it delegates from. Only the fallback signer is account-bound by construction: its
+    ///      key *is* the account address. Installed validators and permissions are not, so they are
+    ///      excluded here and must go through the nested EIP-712 flow, which binds the signature to
+    ///      this account's domain. Dispatching the raw hash to them would let a signature accepted
+    ///      by one account replay against every other account sharing the module.
+    function _erc1271Raw(bytes32 hash, bytes calldata signature) internal view override returns (bool) {
+        return _erc1271RawAllowed() && _verifyFallbackSignature(hash, signature);
+    }
+
     function _erc1271IsValidSignatureNowCalldata(bytes32 hash, bytes calldata signature)
         internal
         view

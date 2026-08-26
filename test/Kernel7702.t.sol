@@ -7,7 +7,7 @@ import {Kernel7702} from "src/Kernel7702.sol";
 import {Kernel} from "src/Kernel.sol";
 import {Install} from "src/types/Structs.sol";
 import {ValidationId} from "src/types/Types.sol";
-import {ERC1271_MAGICVALUE} from "src/types/Constants.sol";
+import {ERC1271_MAGICVALUE, ERC1271_INVALID} from "src/types/Constants.sol";
 import {InvalidValidationType} from "src/types/Error.sol";
 import {validatorToIdentifier} from "src/lib/Utils.sol";
 import {IValidator} from "src/interfaces/IERC7579Modules.sol";
@@ -75,12 +75,17 @@ contract Kernel7702Test is KernelTest {
         assertEq(kernel.isValidSignature(hash, signature), ERC1271_MAGICVALUE);
     }
 
-    function test_7702_structured_root_compact_signature(bytes32 hash) external {
+    /// @dev Raw ERC-1271 accepts bare ECDSA signatures only. A validation-type prefix (even the
+    ///      root type) always routes through the nested EIP-712 path, where a signature over the
+    ///      unwrapped hash no longer matches. Prefixed raw signatures were dropped when raw mode
+    ///      was restricted to the fallback signer: dispatching prefixed raw hashes through the
+    ///      validation-layer parser let signatures replay across accounts sharing a module.
+    function test_7702_structured_root_compact_signature_is_rejected(bytes32 hash) external {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, hash);
         bytes32 vs = bytes32(uint256(s) | (uint256(v - 27) << 255));
         bytes memory signature = abi.encodePacked(bytes1(0x00), r, vs);
         assertEq(signature.length, 65);
-        assertEq(kernel.isValidSignature(hash, signature), ERC1271_MAGICVALUE);
+        assertEq(kernel.isValidSignature(hash, signature), ERC1271_INVALID);
     }
 
     function test_7702_raw_signature_invalid() external {
