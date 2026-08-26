@@ -393,19 +393,20 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
                     }
                     require(data.uninstallData.length == 2, InvalidDataLength());
                     validatorUninstallData = data.uninstallData[0];
+                    _uninstallScopedExecutionHookWithVid(address(vInfo.scopedExecutionHook), vId);
                     // forge-lint: disable-next-line(unchecked-call)
                     address(vInfo.scopedExecutionHook)
                         .call(abi.encodeWithSelector(IModule.onUninstall.selector, data.uninstallData[1]));
-                    _uninstallScopedExecutionHookWithVid(address(vInfo.scopedExecutionHook), vId);
                 }
-                (bool success,) = address(getValidator(vId))
-                    .call(abi.encodeWithSelector(IModule.onUninstall.selector, validatorUninstallData));
                 _uninstallValidator(
                     address(getValidator(vId)),
                     // passing in validatorUninstallData here to use calldata, but it's never used
                     validatorUninstallData,
-                    success
+                    true
                 );
+                // forge-lint: disable-next-line(unchecked-call)
+                address(getValidator(vId))
+                    .call(abi.encodeWithSelector(IModule.onUninstall.selector, validatorUninstallData));
             } else if (vType == VALIDATION_TYPE_PERMISSION) {
                 ValidationUninstallData calldata data;
                 assembly {
@@ -415,6 +416,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
                 uint256 hookOffset = address(vInfo.scopedExecutionHook) == SCOPED_EXECUTION_HOOK_NOT_INSTALLED ? 0 : 1;
                 require(uninstallDataArr.length == vInfo.policies.length + 1 + hookOffset, InvalidDataLength());
                 if (hookOffset == 1) {
+                    _uninstallScopedExecutionHookWithVid(address(vInfo.scopedExecutionHook), vId);
                     // forge-lint: disable-next-line(unchecked-call)
                     address(vInfo.scopedExecutionHook)
                         .call(
@@ -422,23 +424,22 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
                                 IModule.onUninstall.selector, uninstallDataArr[vInfo.policies.length + 1]
                             )
                         );
-                    _uninstallScopedExecutionHookWithVid(address(vInfo.scopedExecutionHook), vId);
                 }
                 // uninstall policies first
                 // NOTE : success is not checked on purpose as we are focusing on removing not actually calling onUninstall
                 unchecked {
                     for (uint256 i = vInfo.policies.length; i > 0; i--) {
+                        _uninstallPolicyWithVid(vInfo.policies[i - 1], vId);
                         // forge-lint: disable-next-line(unchecked-call)
                         vInfo.policies[i
                                 - 1].call(abi.encodeWithSelector(IModule.onUninstall.selector, uninstallDataArr[i - 1]));
-                        _uninstallPolicyWithVid(vInfo.policies[i - 1], vId);
                     }
                 }
 
+                _uninstallSignerWithVid(vInfo.signer, vId);
                 // forge-lint: disable-next-line(unchecked-call)
                 vInfo.signer
                     .call(abi.encodeWithSelector(IModule.onUninstall.selector, uninstallDataArr[vInfo.policies.length]));
-                _uninstallSignerWithVid(vInfo.signer, vId);
             } else {
                 revert InvalidRootValidation();
             }

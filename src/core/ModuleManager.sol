@@ -364,7 +364,11 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, SelectorM
         hook(module, internalData, success);
     }
 
-    /// @notice Calls a module's onUninstall and passes the result to the type-specific handler.
+    /// @notice Revokes a module via the type-specific handler, then calls its onUninstall.
+    /// @dev Authority is cleared BEFORE the callback: `executeFromExecutor` authorizes on the
+    ///      executor's `installed` flag alone, so a callback fired first could reenter it while
+    ///      still installed and with its scoped hook already removed. Every uninstall handler
+    ///      ignores the success flag, so the callback result is not observed.
     /// @param module The module address.
     /// @param data Data forwarded to onUninstall.
     /// @param internalData Internal configuration data forwarded to the handler.
@@ -375,8 +379,9 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, SelectorM
         bytes calldata internalData,
         function(address, bytes calldata, bool) hook
     ) internal {
-        (bool success,) = module.call(abi.encodeWithSelector(IModule.onUninstall.selector, data));
-        hook(module, internalData, success);
+        hook(module, internalData, true);
+        // forge-lint: disable-next-line(unchecked-call)
+        module.call(abi.encodeWithSelector(IModule.onUninstall.selector, data));
     }
 
     /// @notice Verifies an install signature, increments the nonce, and returns success.
