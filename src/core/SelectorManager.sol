@@ -13,7 +13,8 @@ import {
     ModuleInstallFailed,
     InvalidSelectorTarget,
     InvalidDataLength,
-    ScopedExecutionHookStillInstalled
+    ScopedExecutionHookStillInstalled,
+    ModuleNotInstalled
 } from "../types/Error.sol";
 import {SelectorConfig, SelectorStorage} from "../types/Structs.sol";
 
@@ -54,9 +55,12 @@ abstract contract SelectorManager {
     }
 
     /// @notice Uninstalls a fallback selector handler.
-    function _uninstallSelector(address, bytes calldata _internalData, bool) internal {
+    function _uninstallSelector(address _module, bytes calldata _internalData, bool) internal {
         require(_internalData.length == 4, InvalidDataLength());
         SelectorConfig storage $ = _selectorConfig(bytes4(_internalData[0:4]));
+        // TOB-KERNEL-12 (same class): the module argument must match the selector's installed
+        // target, so an unrelated module never receives the onUninstall callback for this selector.
+        require($.target == _module, ModuleNotInstalled());
         require(
             address($.scopedExecutionHook) == SCOPED_EXECUTION_HOOK_NOT_INSTALLED, ScopedExecutionHookStillInstalled()
         );

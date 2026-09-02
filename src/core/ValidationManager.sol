@@ -243,6 +243,9 @@ abstract contract ValidationManager {
     /// @param _validator The validator module address.
     function _uninstallValidator(address _validator, bytes calldata, bool) internal {
         ValidationId vId = validatorToIdentifier(IValidator(_validator));
+        // TOB-KERNEL-12 (same class): reject uninstalling a validator that is not installed, so the
+        // target address never receives a spurious onUninstall callback.
+        require(_validationStorage().vInfo[vId].installed, InvalidVid(vId));
         _uninstallValidation(vId);
     }
 

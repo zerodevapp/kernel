@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import {EXECUTOR_MANAGER_STORAGE_SLOT, SCOPED_EXECUTION_HOOK_NOT_INSTALLED} from "../types/Constants.sol";
 import {IExecutor} from "../interfaces/IERC7579Modules.sol";
 import {ExecutorStorage, ExecutorConfig} from "../types/Structs.sol";
-import {InvalidDataLength, ScopedExecutionHookStillInstalled} from "../types/Error.sol";
+import {InvalidDataLength, ScopedExecutionHookStillInstalled, ModuleNotInstalled} from "../types/Error.sol";
 
 /// @title ExecutorManager
 /// @author taek <leekt216@gmail.com>
@@ -37,6 +37,9 @@ abstract contract ExecutorManager {
     function _uninstallExecutor(address _executor, bytes calldata _internalData, bool) internal {
         require(_internalData.length == 0, InvalidDataLength());
         ExecutorConfig storage config = _executorConfig(IExecutor(_executor));
+        // TOB-KERNEL-12: without this check, any installed module (e.g. the root validator) could
+        // be routed through the executor uninstall path, firing its onUninstall under a wrong type.
+        require(config.installed, ModuleNotInstalled());
         require(
             address(config.scopedExecutionHook) == SCOPED_EXECUTION_HOOK_NOT_INSTALLED,
             ScopedExecutionHookStillInstalled()

@@ -115,6 +115,11 @@ error ValidityFormatMismatch();
 ///         delegatecall, bypassing the selector allow-list.
 error InvalidSelectorGrant();
 
+/// @notice Thrown when uninstalling a module that is not installed under the given module type.
+///         Without this check, a caller could route an installed module of one type through
+///         another type's uninstall handler and fire its onUninstall with mismatched semantics.
+error ModuleNotInstalled();
+
 /// @notice Thrown when a fallback selector install is attempted with the zero address as target.
 ///         Downstream dispatch rejects zero-target with `InvalidSelector`, so allowing the write
 ///         would silently drop the caller's intent; this enforces the invariant at the install boundary.
