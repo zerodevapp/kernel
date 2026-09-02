@@ -11,7 +11,13 @@ import {MockSigner} from "../mock/MockSigner.sol";
 import {IValidator} from "src/interfaces/IERC7579Modules.sol";
 import {validatorToIdentifier, permissionToIdentifier} from "src/lib/Utils.sol";
 import {PermissionId} from "src/types/Types.sol";
-import {Unauthorized, NotImplemented, InvalidPermissionUninstallOrder, InvalidPermissionId} from "src/types/Error.sol";
+import {
+    Unauthorized,
+    NotImplemented,
+    InvalidPermissionUninstallOrder,
+    InvalidPermissionId,
+    InvalidVid
+} from "src/types/Error.sol";
 
 /// @title Kernel.uninstallModule BTT Tests
 /// @notice Tests for uninstallModule following Branching Tree Technique
@@ -69,17 +75,14 @@ abstract contract Kernel_uninstallModule is BTTModifiers {
         whenTheCallerIsTheEntryPointOrSelfUninstall
         givenModuleTypeIsValidatorUninstall
     {
-        // it should be a no-op and leave root unchanged
+        // it should revert with InvalidVid (TOB-KERNEL-12: no onUninstall callback may reach a
+        // module that is not installed under the given type)
         MockValidator mockValidator = new MockValidator();
 
-        // Validator is NOT installed - uninstall should be a no-op
-        kernel.uninstallModule(1, address(mockValidator), abi.encode(hex"", hex""));
-
-        // Verify it remains uninstalled (hook is still address(0))
-        assertFalse(
-            kernel.validationInfo(validatorToIdentifier(IValidator(address(mockValidator)))).installed,
-            "Validator should remain uninstalled"
+        vm.expectRevert(
+            abi.encodeWithSelector(InvalidVid.selector, validatorToIdentifier(IValidator(address(mockValidator))))
         );
+        kernel.uninstallModule(1, address(mockValidator), abi.encode(hex"", hex""));
     }
 
     function test_GivenModuleTypeIsValidatorUninstall()
