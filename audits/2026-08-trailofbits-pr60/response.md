@@ -13,15 +13,15 @@ Response branch: `feat/permission-hook-module-type`
 | TOB-KERNEL-6 | Replayable mode violates ERC-7562 | Informational | **Acknowledged** |
 | TOB-KERNEL-7 | Root permission policy removal | Medium | **Fixed** — `498a61e` |
 | TOB-KERNEL-8 | Shared scoped-hook deinitialization | Low | **Acknowledged** |
-| TOB-KERNEL-9 | In-flight scoped-hook removal | Medium | **Fixed** — `73e64bb` |
+| TOB-KERNEL-9 | In-flight scoped-hook removal | Medium | **Acknowledged** |
 | TOB-KERNEL-10 | Unchecked initData decoding | Medium | **Fixed** — `d92c9a2` |
 | TOB-KERNEL-11 | Ignored executor callback failures | Medium | **Acknowledged** (documented in code) |
 | TOB-KERNEL-12 | Missing executor installation check | Medium | **Fixed** — `bac0d4b` |
-| TOB-KERNEL-13 | Unbound userOpHash in executeUserOp | Low | **Fixed** — `6fabfea` |
+| TOB-KERNEL-13 | Unbound userOpHash in executeUserOp | Low | **Fixed** — `b42fa9a` |
 
 Every fix ships with a regression test named for its window (`test/unit/`): `Erc1271AccountBinding`,
 `ExecutorRevocation`, `PolicyRootUninstall`, `WrongTypeUninstall`, `SetRootTeardownOrder`,
-`HookFrameGuard`, `InstallDataBounds`, `ExecuteUserOpBinding`.
+`InstallDataBounds`, `ExecuteUserOpBinding`.
 
 ## Fix notes
 
@@ -34,9 +34,6 @@ Every fix ships with a regression test named for its window (`test/unit/`): `Erc
   `onUninstall` fires). Callback failures never block removal.
 - **TOB-7** — `_uninstallPolicy` now enforces `CannotUninstallRoot`, matching validators and
   signers. Root policy changes require an explicit root rotation.
-- **TOB-9** — a transient `hookFrameDepth` counter brackets every hook-protected frame
-  (`executeUserOp`, `executeFromExecutor`, fallback); scoped-hook removal reverts with
-  `ScopedExecutionHookFrameActive` while nonzero.
 - **TOB-10** — `installModule`/`uninstallModule` route through `_decodeModuleData`, which requires
   both dynamic fields of `InstallModuleDataFormat` to lie entirely within the declared `initData`.
 - **TOB-12** — `_uninstallExecutor` requires `installed`; same-class checks added to
@@ -74,8 +71,15 @@ Every fix ships with a regression test named for its window (`test/unit/`): `Erc
 - **TOB-8 (shared scoped hooks)** — hooks receive a per-attachment `id` in `preCheck`/`postCheck`
   and are expected to key their state by `(account, id)`; a hook written to that contract is
   unaffected by an account-wide `onUninstall` for a sibling attachment. We document the reuse
-  contract instead of adding per-hook attachment refcounting. Note that TOB-9's frame guard already
-  prevents the in-flight variant of this issue.
+  contract instead of adding per-hook attachment refcounting.
+- **TOB-9 (in-flight scoped-hook removal)** — acknowledged; an earlier candidate fix (a transient
+  frame counter blocking scoped-hook removal mid-frame) was dropped as not worth the complexity.
+  Reaching this issue requires the hook itself to approve a protected call into the account's own
+  module-management surface (`uninstallModule`), and a scoped hook that permits account self-calls
+  is unconstrained by construction — such a call can equally remove the hook in a separate,
+  fully-authorized operation. Hook-author requirement (documented): scoped hooks MUST reject
+  protected calls that target the account itself unless they specifically intend to allow
+  self-administration.
 - **TOB-11 (executor install ignores onInstall)** — intentional, now documented at the site
   (`ExecutorManager._installExecutor`): executors may be EOAs or contracts that do not implement
   `IModule`, so lifecycle callbacks are best-effort for this module type. The exploitable half of
