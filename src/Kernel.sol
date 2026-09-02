@@ -107,6 +107,16 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
     /// @dev Parses the nonce to determine validation mode and type, optionally installs modules
     ///      via enable-mode signatures, then delegates to the appropriate validator.
     ///      Nonce layout (32 bytes): `[1 byte vMode | 1 byte vType | 20 bytes vId | 2 bytes nonceKey | 8 bytes seq]`.
+    /// @dev SECURITY (TOB-KERNEL-3, acknowledged): the authority's installed status is checked here,
+    ///      during validation, and is not re-verified at execution time. EntryPoint validates every
+    ///      operation in a bundle before executing any of them, so a validator uninstall or root
+    ///      replacement that executes earlier in a handleOps bundle does not invalidate a later
+    ///      operation in that same bundle, which was already validated against the now-revoked
+    ///      authority. Revocation is therefore final against operations in subsequent bundles, not
+    ///      within the revoking bundle — equivalent to the revocation simply being ordered last.
+    ///      Time-sensitive revocations (e.g. of a compromised key) should assume the revoked
+    ///      authority can act until the revoking transaction is mined, as with any front-runnable
+    ///      revocation.
     /// @param userOp The packed user operation to validate.
     /// @param userOpHash The hash of the user operation as computed by the entry point.
     /// @param missingAccountFunds The amount of funds the account must prefund to the entry point.

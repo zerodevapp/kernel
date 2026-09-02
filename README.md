@@ -381,6 +381,17 @@ Key settings in `foundry.toml`:
 
 See [CHANGELOG_AUDIT.md](./CHANGELOG_AUDIT.md) for the full audit changelog covering all changes since the last audit.
 
+### Known limitations
+
+- **Revocation finality within a bundle** (TOB-KERNEL-3, acknowledged): Kernel checks that the
+  selected validator or root is installed during `validateUserOp` and does not re-verify it at
+  execution time. Because the EntryPoint validates every operation in a bundle before executing any
+  of them, a validator uninstall or root replacement that executes earlier in a `handleOps` bundle
+  does not invalidate a later operation in that same bundle, which was already validated against
+  the now-revoked authority. This grants no authority beyond what the revoked key already held and
+  is equivalent to the revocation being ordered after the attacker's transaction; treat revocations
+  of compromised keys as racing the key until the revoking transaction is mined.
+
 ## License
 
 MIT

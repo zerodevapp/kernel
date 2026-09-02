@@ -53,7 +53,10 @@ Every fix ships with a regression test named for its window (`test/unit/`): `Erc
   transaction with the still-valid authority ahead of it, which no ERC-4337 account can prevent.
   Revocation finality is therefore bounded by transaction ordering, not by the bundle mechanics.
   The proposed per-`userOpHash` authorization epoch would add a storage write to every operation
-  without changing that bound. Won't fix.
+  without changing that bound. Won't fix. Documented per reviewer request (README "Known
+  limitations" and the `validateUserOp` NatSpec): a validator uninstall or root replacement that
+  executes earlier in a `handleOps` bundle does not invalidate a later operation in that same
+  bundle, which was already validated against the now-revoked authority.
 - **TOB-4 (signed-install front-running)** — the attacker gains no authority: replaying the signed
   install through the standalone route installs exactly the modules the owner signed; the impact is
   griefing (the victim's pending enable-mode operation fails and the bundle may revert). We accept
