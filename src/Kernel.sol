@@ -347,11 +347,40 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
     /// @param initData ABI-encoded `InstallModuleDataFormat` containing install data and internal configuration.
     function installModule(uint256 moduleType, address module, bytes calldata initData) external payable override {
         _onlyEntryPointOrSelf();
-        InstallModuleDataFormat calldata imdf;
+        InstallModuleDataFormat calldata imdf = _decodeModuleData(initData);
+        _installModule(moduleType, module, imdf.installData, imdf.internalData);
+    }
+
+    /// @dev TOB-KERNEL-10: the assembly cast alone does not bind the struct's dynamic fields to the
+    ///      declared `initData` bounds — attacker-chosen head offsets could point past it into other
+    ///      calldata, so an authority that approved the declared bytes would authorize different
+    ///      bytes than Kernel consumes. Require both fields to lie entirely within `initData`.
+    function _decodeModuleData(bytes calldata initData) private pure returns (InstallModuleDataFormat calldata imdf) {
+        require(initData.length >= 0x40, InvalidDataLength());
         assembly {
             imdf := initData.offset
         }
-        _installModule(moduleType, module, imdf.installData, imdf.internalData);
+        bytes calldata installData = imdf.installData;
+        bytes calldata internalData = imdf.internalData;
+        uint256 initStart;
+        uint256 initEnd;
+        uint256 aStart;
+        uint256 aLength;
+        uint256 bStart;
+        uint256 bLength;
+        assembly {
+            initStart := initData.offset
+            initEnd := add(initData.offset, initData.length)
+            aStart := installData.offset
+            aLength := installData.length
+            bStart := internalData.offset
+            bLength := internalData.length
+        }
+        require(
+            aStart >= initStart && aStart <= initEnd && aLength <= initEnd - aStart && bStart >= initStart
+                && bStart <= initEnd && bLength <= initEnd - bStart,
+            InvalidDataLength()
+        );
     }
 
     /// @notice Uninstalls a single module per ERC-7579.
@@ -360,10 +389,7 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
     /// @param initData ABI-encoded `InstallModuleDataFormat` containing uninstall data and internal configuration.
     function uninstallModule(uint256 moduleType, address module, bytes calldata initData) external payable override {
         _onlyEntryPointOrSelf();
-        InstallModuleDataFormat calldata imdf;
-        assembly {
-            imdf := initData.offset
-        }
+        InstallModuleDataFormat calldata imdf = _decodeModuleData(initData);
         _uninstallModule(moduleType, module, imdf.installData, imdf.internalData);
     }
 
