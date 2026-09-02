@@ -411,18 +411,20 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
             ValidationType vType = getType(vId);
             ValidationInfo memory vInfo = _validationStorage().vInfo[vId];
             if (vType == VALIDATION_TYPE_VALIDATOR) {
+                // TOB-KERNEL-2: two-phase removal — revoke ALL authorization state first, then run
+                // cleanup callbacks, so no callback ever observes the old root partially dismantled.
                 bytes calldata validatorUninstallData = uninstallData;
-                if (address(vInfo.scopedExecutionHook) != SCOPED_EXECUTION_HOOK_NOT_INSTALLED) {
+                bytes calldata hookUninstallData = uninstallData;
+                bool hasHook = address(vInfo.scopedExecutionHook) != SCOPED_EXECUTION_HOOK_NOT_INSTALLED;
+                if (hasHook) {
                     ValidationUninstallData calldata data;
                     assembly {
                         data := uninstallData.offset
                     }
                     require(data.uninstallData.length == 2, InvalidDataLength());
                     validatorUninstallData = data.uninstallData[0];
+                    hookUninstallData = data.uninstallData[1];
                     _uninstallScopedExecutionHookWithVid(address(vInfo.scopedExecutionHook), vId);
-                    // forge-lint: disable-next-line(unchecked-call)
-                    address(vInfo.scopedExecutionHook)
-                        .call(abi.encodeWithSelector(IModule.onUninstall.selector, data.uninstallData[1]));
                 }
                 _uninstallValidator(
                     address(getValidator(vId)),
@@ -430,6 +432,11 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
                     validatorUninstallData,
                     true
                 );
+                if (hasHook) {
+                    // forge-lint: disable-next-line(unchecked-call)
+                    address(vInfo.scopedExecutionHook)
+                        .call(abi.encodeWithSelector(IModule.onUninstall.selector, hookUninstallData));
+                }
                 // forge-lint: disable-next-line(unchecked-call)
                 address(getValidator(vId))
                     .call(abi.encodeWithSelector(IModule.onUninstall.selector, validatorUninstallData));
@@ -441,8 +448,23 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
                 bytes[] calldata uninstallDataArr = data.uninstallData;
                 uint256 hookOffset = address(vInfo.scopedExecutionHook) == SCOPED_EXECUTION_HOOK_NOT_INSTALLED ? 0 : 1;
                 require(uninstallDataArr.length == vInfo.policies.length + 1 + hookOffset, InvalidDataLength());
+                // TOB-KERNEL-2: two-phase removal. Phase 1 revokes ALL authorization state before
+                // any external callback runs — otherwise a policy's onUninstall could observe the
+                // permission still installed with fewer (or zero) policies and reenter ERC-1271
+                // with signer-only authorization the removed policies would have rejected.
                 if (hookOffset == 1) {
                     _uninstallScopedExecutionHookWithVid(address(vInfo.scopedExecutionHook), vId);
+                }
+                unchecked {
+                    for (uint256 i = vInfo.policies.length; i > 0; i--) {
+                        _uninstallPolicyWithVid(vInfo.policies[i - 1], vId);
+                    }
+                }
+                _uninstallSignerWithVid(vInfo.signer, vId);
+
+                // Phase 2: cleanup callbacks.
+                // NOTE : success is not checked on purpose as we are focusing on removing not actually calling onUninstall
+                if (hookOffset == 1) {
                     // forge-lint: disable-next-line(unchecked-call)
                     address(vInfo.scopedExecutionHook)
                         .call(
@@ -451,18 +473,13 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
                             )
                         );
                 }
-                // uninstall policies first
-                // NOTE : success is not checked on purpose as we are focusing on removing not actually calling onUninstall
                 unchecked {
                     for (uint256 i = vInfo.policies.length; i > 0; i--) {
-                        _uninstallPolicyWithVid(vInfo.policies[i - 1], vId);
                         // forge-lint: disable-next-line(unchecked-call)
                         vInfo.policies[i
                                 - 1].call(abi.encodeWithSelector(IModule.onUninstall.selector, uninstallDataArr[i - 1]));
                     }
                 }
-
-                _uninstallSignerWithVid(vInfo.signer, vId);
                 // forge-lint: disable-next-line(unchecked-call)
                 vInfo.signer
                     .call(abi.encodeWithSelector(IModule.onUninstall.selector, uninstallDataArr[vInfo.policies.length]));
