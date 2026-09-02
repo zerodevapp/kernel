@@ -29,7 +29,13 @@ abstract contract ExecutorManager {
     /// @notice Installs an executor module.
     function _installExecutor(address _executor, bytes calldata _internalData, bool) internal {
         require(_internalData.length == 0, InvalidDataLength());
-        // Executor installation intentionally does not depend on onInstall success.
+        // Executor installation intentionally does not depend on onInstall success (acknowledged in
+        // TOB-KERNEL-11): executors may be 7702-delegated EOAs or contracts that do not implement
+        // IModule, whose onUninstall/onInstall calls revert on the unknown selector. (A plain EOA is
+        // NOT the reason — calls to codeless addresses always succeed.) The trade-off: reinstalling
+        // a STATEFUL executor whose onInstall reverts re-activates its previous state, so installers
+        // of stateful executors must verify the onInstall effects themselves. Revocation is
+        // unaffected: uninstall clears `installed` regardless of callback outcome.
         _executorConfig(IExecutor(_executor)).installed = true;
     }
 
