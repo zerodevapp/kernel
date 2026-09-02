@@ -77,9 +77,8 @@ Every fix ships with a regression test named for its window (`test/unit/`): `Erc
   contract instead of adding per-hook attachment refcounting. Note that TOB-9's frame guard already
   prevents the in-flight variant of this issue.
 - **TOB-11 (executor install ignores onInstall)** — intentional, now documented at the site
-  (`ExecutorManager._installExecutor`): executors may be 7702-delegated EOAs or non-`IModule`
-  contracts whose `onInstall` reverts on the unknown selector. (A plain EOA does not need the
-  exemption — calls to codeless addresses succeed.) The exploitable half of the reported chain is
-  closed by `ded1250` (revocation is unconditional); the remaining trade-off — reinstalling a
-  stateful executor whose `onInstall` reverts re-activates its previous state — is accepted and
-  placed on the installer.
+  (`ExecutorManager._installExecutor`): executors may be EOAs or contracts that do not implement
+  `IModule`, so lifecycle callbacks are best-effort for this module type. The exploitable half of
+  the reported chain is closed by `ded1250` (revocation is unconditional); the remaining
+  trade-off — reinstalling a stateful executor whose `onInstall` reverts re-activates its previous
+  state — is accepted and placed on the installer.
