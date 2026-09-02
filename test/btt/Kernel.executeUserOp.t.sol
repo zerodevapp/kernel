@@ -14,7 +14,7 @@ abstract contract Kernel_executeUserOp is BTTModifiers {
     bool internal _transientHookSet;
     bool internal _innerExecutionSucceeds;
 
-    function test_WhenTheCallerIsNotTheEntryPointOrSelf() external {
+    function test_WhenTheCallerIsNotTheEntryPoint() external {
         // it should revert with Unauthorized error
         vm.stopPrank();
         address randomCaller = makeAddr("randomCaller");
@@ -26,7 +26,7 @@ abstract contract Kernel_executeUserOp is BTTModifiers {
         kernel.executeUserOp(op, bytes32(0));
     }
 
-    modifier whenTheCallerIsTheEntryPointOrSelf() {
+    modifier whenTheCallerIsTheEntryPoint() {
         vm.stopPrank();
         vm.startPrank(address(ep));
         _;
@@ -38,11 +38,7 @@ abstract contract Kernel_executeUserOp is BTTModifiers {
         _;
     }
 
-    function test_GivenTheValidationHookIsSet()
-        external
-        whenTheCallerIsTheEntryPointOrSelf
-        givenTheValidationHookIsSet
-    {
+    function test_GivenTheValidationHookIsSet() external whenTheCallerIsTheEntryPoint givenTheValidationHookIsSet {
         // it should call preHook with the callData
         // Note: Hooks are set via transient storage during validateUserOp
         // This test verifies executeUserOp works when called from EntryPoint
@@ -55,11 +51,7 @@ abstract contract Kernel_executeUserOp is BTTModifiers {
         assertEq(callee.bar(), 1, "Execution should succeed with hook set");
     }
 
-    function test_WhenTheInnerDelegatecallSucceeds()
-        external
-        whenTheCallerIsTheEntryPointOrSelf
-        givenTheValidationHookIsSet
-    {
+    function test_WhenTheInnerDelegatecallSucceeds() external whenTheCallerIsTheEntryPoint givenTheValidationHookIsSet {
         // it should call postHook with the context
         vm.stopPrank();
         vm.startPrank(address(ep));
@@ -70,11 +62,7 @@ abstract contract Kernel_executeUserOp is BTTModifiers {
         assertEq(callee.bar(), 1, "Inner delegatecall should succeed and postHook called");
     }
 
-    function test_WhenTheInnerDelegatecallReverts()
-        external
-        whenTheCallerIsTheEntryPointOrSelf
-        givenTheValidationHookIsSet
-    {
+    function test_WhenTheInnerDelegatecallReverts() external whenTheCallerIsTheEntryPoint givenTheValidationHookIsSet {
         // it should propagate the revert
         vm.stopPrank();
         vm.startPrank(address(ep));
@@ -93,7 +81,7 @@ abstract contract Kernel_executeUserOp is BTTModifiers {
 
     function test_WhenTheInnerDelegatecallSucceeds_GivenNoValidationHookIsSet()
         external
-        whenTheCallerIsTheEntryPointOrSelf
+        whenTheCallerIsTheEntryPoint
         givenNoValidationHookIsSet
     {
         // it should return successfully
@@ -108,7 +96,7 @@ abstract contract Kernel_executeUserOp is BTTModifiers {
 
     function test_WhenTheInnerDelegatecallReverts_GivenNoValidationHookIsSet()
         external
-        whenTheCallerIsTheEntryPointOrSelf
+        whenTheCallerIsTheEntryPoint
         givenNoValidationHookIsSet
     {
         // it should propagate the revert
@@ -121,7 +109,7 @@ abstract contract Kernel_executeUserOp is BTTModifiers {
         kernel.executeUserOp(op, bytes32(0));
     }
 
-    function test_GivenNoValidationHookIsSetInTransientStorage() external whenTheCallerIsTheEntryPointOrSelf {
+    function test_GivenNoValidationHookIsSetInTransientStorage() external whenTheCallerIsTheEntryPoint {
         // it should skip the preHook call
         // it should execute the inner callData via delegatecall
         // it should skip the postHook call
@@ -144,7 +132,7 @@ abstract contract Kernel_executeUserOp is BTTModifiers {
 
     function test_GivenAValidationHookIsSetInTransientStorage()
         external
-        whenTheCallerIsTheEntryPointOrSelf
+        whenTheCallerIsTheEntryPoint
         givenAValidationHookIsSetInTransientStorage
     {
         // it should call preHook on the hook contract with callData
@@ -161,7 +149,7 @@ abstract contract Kernel_executeUserOp is BTTModifiers {
 
     function test_GivenPreHookReverts()
         external
-        whenTheCallerIsTheEntryPointOrSelf
+        whenTheCallerIsTheEntryPoint
         givenAValidationHookIsSetInTransientStorage
     {
         // it should propagate the revert
@@ -177,7 +165,7 @@ abstract contract Kernel_executeUserOp is BTTModifiers {
 
     function test_GivenPreHookSucceeds()
         external
-        whenTheCallerIsTheEntryPointOrSelf
+        whenTheCallerIsTheEntryPoint
         givenAValidationHookIsSetInTransientStorage
     {
         // it should execute the inner callData via delegatecall
@@ -192,7 +180,7 @@ abstract contract Kernel_executeUserOp is BTTModifiers {
 
     function test_GivenTheInnerExecutionReverts()
         external
-        whenTheCallerIsTheEntryPointOrSelf
+        whenTheCallerIsTheEntryPoint
         givenAValidationHookIsSetInTransientStorage
     {
         // it should propagate the revert message
@@ -212,7 +200,7 @@ abstract contract Kernel_executeUserOp is BTTModifiers {
 
     function test_GivenTheInnerExecutionSucceeds()
         external
-        whenTheCallerIsTheEntryPointOrSelf
+        whenTheCallerIsTheEntryPoint
         givenAValidationHookIsSetInTransientStorage
         givenTheInnerExecutionSucceeds
     {
@@ -228,7 +216,7 @@ abstract contract Kernel_executeUserOp is BTTModifiers {
 
     function test_GivenPostHookReverts()
         external
-        whenTheCallerIsTheEntryPointOrSelf
+        whenTheCallerIsTheEntryPoint
         givenAValidationHookIsSetInTransientStorage
         givenTheInnerExecutionSucceeds
     {
@@ -244,7 +232,7 @@ abstract contract Kernel_executeUserOp is BTTModifiers {
 
     function test_GivenPostHookSucceeds()
         external
-        whenTheCallerIsTheEntryPointOrSelf
+        whenTheCallerIsTheEntryPoint
         givenAValidationHookIsSetInTransientStorage
         givenTheInnerExecutionSucceeds
     {
@@ -258,7 +246,7 @@ abstract contract Kernel_executeUserOp is BTTModifiers {
         assertEq(callee.bar(), 1, "Execution should complete successfully");
     }
 
-    function test_WhenTheInnerCallDataIsExecuteWithDelegatecall() external whenTheCallerIsTheEntryPointOrSelf {
+    function test_WhenTheInnerCallDataIsExecuteWithDelegatecall() external whenTheCallerIsTheEntryPoint {
         // it should delegatecall to the target
         // it should return the delegatecall result
         vm.stopPrank();

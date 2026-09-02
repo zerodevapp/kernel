@@ -147,7 +147,12 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
         // Block recursive validation both directly and through the executeUserOp wrapper.
         require(callDataSelector != this.validateUserOp.selector, UnauthorizedCallData());
         if (callDataSelector == this.executeUserOp.selector && userOp.callData.length >= 8) {
-            require(bytes4(userOp.callData[4:8]) != this.validateUserOp.selector, UnauthorizedCallData());
+            bytes4 innerSelector = bytes4(userOp.callData[4:8]);
+            require(innerSelector != this.validateUserOp.selector, UnauthorizedCallData());
+            // TOB-KERNEL-13: a nested executeUserOp would be delegatecalled with an attacker-chosen
+            // userOpHash (msg.sender stays the EntryPoint), loading no transient hook context and
+            // skipping the validation-scoped execution hook for the nested calldata.
+            require(innerSelector != this.executeUserOp.selector, UnauthorizedCallData());
         }
         /*
          userOp.nonce = vMode | vType | vId
@@ -209,8 +214,13 @@ abstract contract Kernel is ModuleManager, ExecutionManager, IERC7579Account {
     ///      Authorization relies entirely on `validateUserOp` having approved the outer UserOp.
     /// @param userOp The packed user operation containing the execution calldata.
     /// @param userOpHash The hash of the user operation, used to retrieve the transient validation hook.
+    /// @dev TOB-KERNEL-13: EntryPoint-only. A self-call path would let already-executing account
+    ///      calldata reenter with an arbitrary `userOpHash` that maps to no transient hook context,
+    ///      skipping the validation-scoped execution hook for the nested calldata. The delegatecall
+    ///      variant of the same bypass (wrapping executeUserOp inside executeUserOp, which keeps
+    ///      `msg.sender == ENTRYPOINT`) is rejected in `_processUserOp`.
     function executeUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash) external payable {
-        _onlyEntryPointOrSelf();
+        _onlyEntryPoint();
         (ValidationId vId, IScopedExecutionHook hook) = _validationScopedExecutionHook(userOpHash);
         bytes32 hookId;
         bytes memory context;
