@@ -258,6 +258,12 @@ abstract contract ValidationManager {
     /// @param _internalData Data with PermissionId in the first 4 bytes.
     function _uninstallPolicy(address _policy, bytes calldata _internalData, bool) internal {
         ValidationId vId = permissionToIdentifier(PermissionId.wrap(bytes4(_internalData[0:4])));
+        // Match the root protection applied to validators and signers (TOB-KERNEL-7): stripping a
+        // policy from the current root permission would leave the root signer unconstrained. Root
+        // policy changes must go through an explicit root rotation instead. The check lives here
+        // and not in _uninstallPolicyWithVid because setRoot teardown legitimately removes the old
+        // root's policies after rotating the root away from it.
+        require(_validationStorage().root != vId, CannotUninstallRoot());
         _uninstallPolicyWithVid(_policy, vId);
     }
 
