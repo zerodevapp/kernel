@@ -24,7 +24,7 @@ Kernel_installModule
     │                   └── it should revert with NotInstalled error
     ├── given moduleType is Executor
     │   ├── when onInstall reverts
-    │   │   └── it should NOT revert and still mark the executor as installed
+    │   │   └── it should revert with ModuleInstallFailed error
     │   ├── when onInstall succeeds
     │   │   ├── it should mark the executor as installed
     │   │   ├── it should set the hook from internalData or address1 if empty

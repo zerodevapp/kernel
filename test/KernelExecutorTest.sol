@@ -31,11 +31,19 @@ abstract contract KernelExecutorTest is KernelTestBase {
         assertTrue(kernel.isModuleInstalled(2, newEx, hex""));
     }
 
-    function test_install_executor_oninstall_fail() external unitTest {
+    function test_install_executor_eoa_can_execute() external {
         address newEx = makeAddr("New Executor");
+        assertEq(newEx.code.length, 0);
+        vm.prank(address(ep));
         kernel.installModule(2, newEx, abi.encode(hex"", ""));
         assertTrue(kernel.executorConfig(newEx).installed);
         assertTrue(kernel.isModuleInstalled(2, newEx, hex""));
+
+        vm.prank(newEx);
+        kernel.executeFromExecutor(
+            bytes32(0), abi.encodePacked(address(callee), uint256(0), abi.encodeWithSelector(MockCallee.foo.selector))
+        );
+        assertEq(callee.bar(), 1);
     }
 
     function test_install_executor_rejects_legacy_hook_data() external unitTest {
@@ -52,7 +60,7 @@ abstract contract KernelExecutorTest is KernelTestBase {
         assertFalse(kernel.executorConfig(newEx).installed);
     }
 
-    function test_uninstall_executor_onuninstall_fail() external unitTest {
+    function test_uninstall_executor_eoa() external unitTest {
         address newEx = makeAddr("New Executor");
         kernel.installModule(2, newEx, abi.encode(hex"", ""));
         assertTrue(kernel.executorConfig(newEx).installed);

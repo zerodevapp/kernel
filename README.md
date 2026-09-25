@@ -197,6 +197,15 @@ abi.encode(InstallModuleDataFormat({
 | Signer (6) | `[bytes4 permissionId][bytes4 selector₁]...` |
 | Scoped Execution Hook (11) | `[bytes1 scope][target]` (validation: 21-byte ValidationId; executor: 20-byte address; selector: 4-byte selector) |
 
+**Executor lifecycle:** installation requires the low-level `onInstall` call to succeed; a failed
+callback reverts with `ModuleInstallFailed` before granting executor authority. Plain EOAs remain
+supported because calling an address without code succeeds. Contract executors must accept the
+callback and correctly initialize their authorization state; contracts that reject `onInstall`
+cannot be installed. Uninstallation revokes Kernel authority before calling `onUninstall`, and
+failed cleanup does not block removal. Reinstalling after failed cleanup still requires a
+successful `onInstall`, preventing a failed installation from reactivating stale authorization
+(TOB-KERNEL-11).
+
 Execution-hook scopes are `0x01` for validation, `0x02` for executor, and `0x03` for selector.
 
 **callType** for fallback (type 3):

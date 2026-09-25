@@ -90,8 +90,10 @@ contract KernelCoverageTest is Test {
 
     function setUp() public {
         ep = EntryPointLib.deploy();
-        uups = new KernelUUPS(ep);
-        KernelImmutableECDSA immutableEcdsa = new KernelImmutableECDSA(ep);
+        // Load implementation artifacts to avoid solc's assembly limit for this large test fixture.
+        uups = KernelUUPS(payable(deployCode("KernelUUPS.sol:KernelUUPS", abi.encode(ep))));
+        KernelImmutableECDSA immutableEcdsa =
+            KernelImmutableECDSA(payable(deployCode("KernelImmutableECDSA.sol:KernelImmutableECDSA", abi.encode(ep))));
         factory = new KernelFactory(uups, immutableEcdsa);
         rootValidator = new MockValidator();
         newValidator = new MockValidator();

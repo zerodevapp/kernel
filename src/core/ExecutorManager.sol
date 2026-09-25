@@ -4,7 +4,12 @@ pragma solidity ^0.8.0;
 import {EXECUTOR_MANAGER_STORAGE_SLOT, SCOPED_EXECUTION_HOOK_NOT_INSTALLED} from "../types/Constants.sol";
 import {IExecutor} from "../interfaces/IERC7579Modules.sol";
 import {ExecutorStorage, ExecutorConfig} from "../types/Structs.sol";
-import {InvalidDataLength, ScopedExecutionHookStillInstalled, ModuleNotInstalled} from "../types/Error.sol";
+import {
+    InvalidDataLength,
+    ScopedExecutionHookStillInstalled,
+    ModuleNotInstalled,
+    ModuleInstallFailed
+} from "../types/Error.sol";
 
 /// @title ExecutorManager
 /// @author taek <leekt216@gmail.com>
@@ -27,14 +32,12 @@ abstract contract ExecutorManager {
     }
 
     /// @notice Installs an executor module.
-    function _installExecutor(address _executor, bytes calldata _internalData, bool) internal {
+    function _installExecutor(address _executor, bytes calldata _internalData, bool installSuccess) internal {
         require(_internalData.length == 0, InvalidDataLength());
-        // Executor installation intentionally does not depend on onInstall success (acknowledged in
-        // TOB-KERNEL-11): executors may be EOAs or contracts that do not implement IModule, so the
-        // lifecycle callbacks are best-effort for this module type. The trade-off: reinstalling a
-        // STATEFUL executor whose onInstall reverts re-activates its previous state, so installers
-        // of stateful executors must verify the onInstall effects themselves. Revocation is
-        // unaffected: uninstall clears `installed` regardless of callback outcome.
+        // TOB-KERNEL-11: a failed onInstall must not reactivate authorization left in module
+        // storage by a failed onUninstall. Plain EOAs remain supported: the low-level call to an
+        // address without code succeeds. Removal still revokes authority even if cleanup fails.
+        require(installSuccess, ModuleInstallFailed());
         _executorConfig(IExecutor(_executor)).installed = true;
     }
 

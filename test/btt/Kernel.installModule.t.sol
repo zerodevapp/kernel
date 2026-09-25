@@ -115,13 +115,10 @@ abstract contract Kernel_installModule is BTTModifiers {
     }
 
     function test_WhenOnInstallReverts() external whenTheCallerIsTheEntryPointOrSelf givenModuleTypeIsExecutor {
-        // it should NOT revert and still mark the executor as installed
         MockRevertingExecutor revertingExecutor = new MockRevertingExecutor();
 
-        // Executor install does NOT revert even if onInstall reverts
+        vm.expectRevert(ModuleInstallFailed.selector);
         kernel.installModule(2, address(revertingExecutor), abi.encode(hex"", hex""));
-
-        assertTrue(kernel.isModuleInstalled(2, address(revertingExecutor), ""), "Executor should be installed anyway");
     }
 
     function test_WhenOnInstallSucceeds_GivenModuleTypeIsExecutor()
@@ -473,12 +470,10 @@ abstract contract Kernel_installModule is BTTModifiers {
         whenTheCallerIsTheEntryPointOrSelf
         givenModuleTypeIsExecutor
     {
-        // it should NOT revert and still mark the executor as installed
         MockRevertingExecutor revertingExecutor = new MockRevertingExecutor();
 
+        vm.expectRevert(ModuleInstallFailed.selector);
         kernel.installModule(2, address(revertingExecutor), abi.encode(hex"", hex""));
-
-        assertTrue(kernel.isModuleInstalled(2, address(revertingExecutor), ""), "Executor should be installed anyway");
     }
 
     function test_WhenOnInstallSucceeds_Executor()
