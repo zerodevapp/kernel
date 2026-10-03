@@ -11,7 +11,6 @@ import {MockValidator} from "../mock/MockValidator.sol";
 import {MockExecutor} from "../mock/MockExecutor.sol";
 import {MockPolicy} from "../mock/MockPolicy.sol";
 import {MockSigner} from "../mock/MockSigner.sol";
-import {MockHook} from "../mock/MockHook.sol";
 import {IValidator} from "src/interfaces/IERC7579Modules.sol";
 import {PermissionId} from "src/types/Types.sol";
 import {validatorToIdentifier, permissionToIdentifier} from "src/lib/Utils.sol";
@@ -96,9 +95,8 @@ abstract contract Kernel_initialize is BTTModifiers {
         assertTrue(newKernel.isModuleInstalled(1, address(mockValidator), ""), "Validator should be installed");
 
         // Check root is set (hook should be address(1) for root)
-        assertEq(
-            newKernel.validationInfo(validatorToIdentifier(IValidator(address(mockValidator)))).hook,
-            address(1),
+        assertTrue(
+            newKernel.validationInfo(validatorToIdentifier(IValidator(address(mockValidator)))).installed,
             "Validator should be set as root"
         );
     }
@@ -139,10 +137,8 @@ abstract contract Kernel_initialize is BTTModifiers {
         );
 
         // Permission should be set as root (hook should be address(1))
-        assertEq(
-            newKernel.validationInfo(permissionToIdentifier(testPermId)).hook,
-            address(1),
-            "Permission should be set as root"
+        assertTrue(
+            newKernel.validationInfo(permissionToIdentifier(testPermId)).installed, "Permission should be set as root"
         );
     }
 
@@ -183,25 +179,21 @@ abstract contract Kernel_initialize is BTTModifiers {
         factory.deploy(packages, 1005);
     }
 
-    function test_GivenSubsequentPackagesContainExecutorsHooksOrFallbacks()
+    function test_GivenSubsequentPackagesContainExecutors()
         external
         givenTheAccountHasNotBeenInitialized
         whenPackagesArrayHasOneOrMoreElements
     {
         MockValidator mockValidator = new MockValidator();
         MockExecutor mockExecutor = new MockExecutor();
-        MockHook mockHook = new MockHook();
 
-        Install[] memory packages = new Install[](3);
+        Install[] memory packages = new Install[](2);
         packages[0] = Install({moduleType: 1, module: address(mockValidator), moduleData: hex"", internalData: hex""});
         packages[1] = Install({moduleType: 2, module: address(mockExecutor), moduleData: hex"", internalData: hex""});
-        packages[2] = Install({moduleType: 4, module: address(mockHook), moduleData: hex"", internalData: hex""});
 
         Kernel newKernel = Kernel(payable(factory.deploy(packages, 1004)));
 
-        // All modules should be installed
         assertTrue(newKernel.isModuleInstalled(1, address(mockValidator), ""), "Validator should be installed");
         assertTrue(newKernel.isModuleInstalled(2, address(mockExecutor), ""), "Executor should be installed");
-        assertTrue(newKernel.isModuleInstalled(4, address(mockHook), ""), "Hook should be installed");
     }
 }

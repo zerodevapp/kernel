@@ -6,7 +6,7 @@ Kernel_uninstallModule
     │   ├── given the validator is installed Uninstall
     │   │   └── it should clear validator hook state
     │   └── given the validator is not installed Uninstall
-    │       └── it should be a no-op and leave root unchanged
+    │       └── it should revert with InvalidVid error
     ├── given moduleType is Executor Uninstall
     │   └── it should clear executor hook
     ├── given moduleType is Fallback Uninstall

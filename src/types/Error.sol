@@ -9,14 +9,8 @@ error ImplementationNotDeployed();
 /// @notice Thrown when a module's onInstall callback fails.
 error ModuleInstallFailed();
 
-/// @notice Thrown when a validator cannot be found in the install packages during stateless verification.
-error InvalidValidator();
-
 /// @notice Thrown when an unsupported module type is encountered.
 error NotImplemented();
-
-/// @notice Thrown when a required module (hook) is not installed.
-error NotInstalled();
 
 /// @notice Thrown when an install-mode signature fails verification.
 error InstallSignatureVerificationFailed();
@@ -45,6 +39,15 @@ error OccupiedValidationId();
 /// @notice Thrown when policies are not uninstalled in reverse order (LIFO).
 error InvalidPermissionUninstallOrder();
 
+/// @notice Thrown when removing a target before its scoped execution hook.
+error ScopedExecutionHookStillInstalled();
+
+/// @notice Thrown when a scoped-execution-hook scope or target is invalid or not installed.
+error InvalidScopedExecutionHookTarget();
+
+/// @notice Thrown when a scoped execution hook is already installed for a target.
+error ScopedExecutionHookAlreadyInstalled();
+
 /// @notice Thrown when a permission ID does not match the expected signer or policy configuration.
 error InvalidPermissionId();
 
@@ -63,7 +66,7 @@ error CannotUninstallRoot();
 /// @notice Thrown when a signature is invalid or has the wrong number of sub-signatures.
 error InvalidSignature();
 
-/// @notice Thrown when a ValidationId is not installed (hook == address(0)).
+/// @notice Thrown when a ValidationId is not installed.
 /// @param vId The invalid validation identifier.
 error InvalidVid(ValidationId vId);
 
@@ -75,9 +78,6 @@ error PermissionInstallNotFinished();
 
 /// @notice Thrown when policies and signer within a batch use inconsistent PermissionIds.
 error InvalidPermissionInstall();
-
-/// @notice Thrown when the last signature in a stateless permission verification is not from a signer module.
-error LastSignatureShouldBeSigner();
 
 /// @notice Thrown when a zero-address signer is provided to the ECDSA factory.
 error InvalidSigner();
@@ -114,6 +114,11 @@ error ValidityFormatMismatch();
 ///         non-root validation would let it invoke arbitrary kernel functions via the inner
 ///         delegatecall, bypassing the selector allow-list.
 error InvalidSelectorGrant();
+
+/// @notice Thrown when uninstalling a module that is not installed under the given module type.
+///         Without this check, a caller could route an installed module of one type through
+///         another type's uninstall handler and fire its onUninstall with mismatched semantics.
+error ModuleNotInstalled();
 
 /// @notice Thrown when a fallback selector install is attempted with the zero address as target.
 ///         Downstream dispatch rejects zero-target with `InvalidSelector`, so allowing the write

@@ -12,18 +12,17 @@
  *
  * SPEC PER vType
  *   1. vType == VALIDATION_TYPE_VALIDATOR (0x01):
- *        resolves `v = vId`, requires `vInfo[vId].hook > HOOK_MODULE_NOT_INSTALLED`,
+ *        resolves `v = vId`, requires `vInfo[vId].installed`,
  *        and routes to `_validateUserOpValidator`.
  *   2. vType == VALIDATION_TYPE_PERMISSION (0x02):
- *        resolves `v = vId`, requires `vInfo[vId].hook > HOOK_MODULE_NOT_INSTALLED`,
+ *        resolves `v = vId`, requires `vInfo[vId].installed`,
  *        and routes to `_validateUserOpPermission`.
  *   3. vType == VALIDATION_TYPE_ROOT (0x00):
  *        a) if `$.root == 0`: returns `(0, _validateUserOpFallback)` WITHOUT
  *           checking the hook (the production invariant `$.root == 0 =>
  *           _fallbackValidatorAvailable()` is enforced by `_setRoot`, not by
  *           `_checkValidation`).
- *        b) otherwise: resolves `v = $.root`, requires `vInfo[$.root].hook >
- *           HOOK_MODULE_NOT_INSTALLED`, and routes by `getType($.root)`
+ *        b) otherwise: resolves `v = $.root`, requires `vInfo[$.root].installed`, and routes by `getType($.root)`
  *           (VALIDATOR -> validator, PERMISSION -> permission).
  *   4. There is NO separate VALIDATION_TYPE_FALLBACK branch:
  *      `VALIDATION_TYPE_FALLBACK == VALIDATION_TYPE_ROOT == 0x00`. Both alias
@@ -79,7 +78,8 @@ methods {
         external returns (uint256);
 
     // State accessors.
-    function harness_vInfoHook(bytes21)         external returns (address) envfree;
+    function harness_vInfoInstalled(bytes21) external returns (bool) envfree;
+    function harness_vInfoScopedExecutionHook(bytes21) external returns (address) envfree;
     function harness_root()                     external returns (bytes21) envfree;
     function harness_getType(bytes21)           external returns (bytes1)  envfree;
     function harness_fallbackAvailable()        external returns (bool)    envfree;
@@ -89,9 +89,6 @@ methods {
     function harness_VT_VALIDATOR()           external returns (bytes1) envfree;
     function harness_VT_PERMISSION()          external returns (bytes1) envfree;
     function harness_VT_FALLBACK()            external returns (bytes1) envfree;
-    function harness_HOOK_NOT_INSTALLED()     external returns (address) envfree;
-    function harness_HOOK_INSTALLED_NO_HOOK() external returns (address) envfree;
-
     // --- Per-function summaries that return DISTINCT sentinels ---
     // These are the SOLE observation channel for which function `_checkValidation`
     // routed to. The harness wrapper invokes the returned pointer with dummy
@@ -115,20 +112,20 @@ methods {
 //
 // Precondition:
 //   vType == VALIDATION_TYPE_VALIDATOR
-//   vInfo[vId].hook > HOOK_MODULE_NOT_INSTALLED   (installed)
+//   vInfo[vId].installed   (installed)
 //
 // Postcondition: harness_checkValidationResolvedV(vType, vId) == vId
 //
 // The hook precondition matches the production require:
-//   require(info.hook > HOOK_MODULE_NOT_INSTALLED, InvalidVid(v));
-// HOOK_MODULE_NOT_INSTALLED is address(0); HOOK_MODULE_INSTALLED_NO_HOOK is
+//   require(info.installed, InvalidVid(v));
+// installed == false is address(0); a zero scopedExecutionHook is
 // address(1). "Installed" means hook is any non-zero address.
 //
 // Expected outcome: PASS.
 // ===========================================================================
 rule routeValidatorResolvesV(bytes21 vId) {
     bytes1 vType = harness_VT_VALIDATOR();
-    require harness_vInfoHook(vId) != harness_HOOK_NOT_INSTALLED();
+    require harness_vInfoInstalled(vId);
     bytes21 v = harness_checkValidationResolvedV(vType, vId);
     assert v == vId, "VALIDATOR branch should resolve v = vId";
 }
@@ -144,7 +141,7 @@ rule routeValidatorResolvesV(bytes21 vId) {
 rule routeValidatorRoutesValidator(bytes21 vId) {
     env e;
     bytes1 vType = harness_VT_VALIDATOR();
-    require harness_vInfoHook(vId) != harness_HOOK_NOT_INSTALLED();
+    require harness_vInfoInstalled(vId);
     uint256 route = harness_invokeCheckValidationRoute(e, vType, vId);
     assert route == ROUTE_VALIDATOR(),
         "VALIDATOR branch should route to _validateUserOpValidator";
@@ -155,7 +152,7 @@ rule routeValidatorRoutesValidator(bytes21 vId) {
 //
 // Precondition:
 //   vType == VALIDATION_TYPE_PERMISSION
-//   vInfo[vId].hook > HOOK_MODULE_NOT_INSTALLED
+//   vInfo[vId].installed
 //
 // Postcondition: harness_checkValidationResolvedV == vId
 //
@@ -163,7 +160,7 @@ rule routeValidatorRoutesValidator(bytes21 vId) {
 // ===========================================================================
 rule routePermissionResolvesV(bytes21 vId) {
     bytes1 vType = harness_VT_PERMISSION();
-    require harness_vInfoHook(vId) != harness_HOOK_NOT_INSTALLED();
+    require harness_vInfoInstalled(vId);
     bytes21 v = harness_checkValidationResolvedV(vType, vId);
     assert v == vId, "PERMISSION branch should resolve v = vId";
 }
@@ -179,7 +176,7 @@ rule routePermissionResolvesV(bytes21 vId) {
 rule routePermissionRoutesPermission(bytes21 vId) {
     env e;
     bytes1 vType = harness_VT_PERMISSION();
-    require harness_vInfoHook(vId) != harness_HOOK_NOT_INSTALLED();
+    require harness_vInfoInstalled(vId);
     uint256 route = harness_invokeCheckValidationRoute(e, vType, vId);
     assert route == ROUTE_PERMISSION(),
         "PERMISSION branch should route to _validateUserOpPermission";
@@ -191,7 +188,7 @@ rule routePermissionRoutesPermission(bytes21 vId) {
 // Precondition:
 //   vType == VALIDATION_TYPE_ROOT
 //   $.root != bytes21(0)
-//   vInfo[$.root].hook > HOOK_MODULE_NOT_INSTALLED
+//   vInfo[$.root].installed
 //   getType($.root) ∈ {VALIDATOR, PERMISSION}
 //
 // Postcondition:
@@ -205,7 +202,7 @@ rule routeRootResolvesV {
 
     bytes21 currentRoot = harness_root();
     require currentRoot != to_bytes21(0);
-    require harness_vInfoHook(currentRoot) != harness_HOOK_NOT_INSTALLED();
+    require harness_vInfoInstalled(currentRoot);
     bytes1 rootType = harness_getType(currentRoot);
     require rootType == harness_VT_VALIDATOR() || rootType == harness_VT_PERMISSION();
 
@@ -230,7 +227,7 @@ rule routeRootOfValidatorRoutesValidator {
 
     bytes21 currentRoot = harness_root();
     require currentRoot != to_bytes21(0);
-    require harness_vInfoHook(currentRoot) != harness_HOOK_NOT_INSTALLED();
+    require harness_vInfoInstalled(currentRoot);
     require harness_getType(currentRoot) == harness_VT_VALIDATOR();
 
     uint256 route = harness_invokeCheckValidationRoute(e, vTypeRoot, anyVid);
@@ -252,7 +249,7 @@ rule routeRootOfPermissionRoutesPermission {
 
     bytes21 currentRoot = harness_root();
     require currentRoot != to_bytes21(0);
-    require harness_vInfoHook(currentRoot) != harness_HOOK_NOT_INSTALLED();
+    require harness_vInfoInstalled(currentRoot);
     require harness_getType(currentRoot) == harness_VT_PERMISSION();
 
     uint256 route = harness_invokeCheckValidationRoute(e, vTypeRoot, anyVid);
@@ -324,11 +321,11 @@ rule routeRootZeroRoutesFallback {
 //
 // Precondition:
 //   vType ∈ {VALIDATION_TYPE_VALIDATOR, VALIDATION_TYPE_PERMISSION}
-//   vInfo[vId].hook == HOOK_MODULE_NOT_INSTALLED
+//   !vInfo[vId].installed
 //
 // Postcondition:
 //   Both probe wrappers revert (the production require:
-//     require(info.hook > HOOK_MODULE_NOT_INSTALLED, InvalidVid(v));
+//     require(info.installed, InvalidVid(v));
 //   ).
 //
 // This is the "only succeeds when the routed validation is installed" half
@@ -340,7 +337,7 @@ rule routeRevertsWhenNotInstalled(bytes21 vId, bool useValidator) {
     env e;
     bytes1 vType = useValidator ? harness_VT_VALIDATOR() : harness_VT_PERMISSION();
 
-    require harness_vInfoHook(vId) == harness_HOOK_NOT_INSTALLED();
+    require !harness_vInfoInstalled(vId);
 
     harness_invokeCheckValidationRoute@withrevert(e, vType, vId);
     assert lastReverted,
@@ -390,7 +387,7 @@ rule fallbackRoutedOnlyWhenRootZero(bytes1 vType, bytes21 vId) {
 rule sanityValidatorRouteReachable {
     env e;
     bytes21 vId;
-    require harness_vInfoHook(vId) != harness_HOOK_NOT_INSTALLED();
+    require harness_vInfoInstalled(vId);
     uint256 route = harness_invokeCheckValidationRoute(e, harness_VT_VALIDATOR(), vId);
     satisfy route == ROUTE_VALIDATOR();
 }
@@ -398,7 +395,7 @@ rule sanityValidatorRouteReachable {
 rule sanityPermissionRouteReachable {
     env e;
     bytes21 vId;
-    require harness_vInfoHook(vId) != harness_HOOK_NOT_INSTALLED();
+    require harness_vInfoInstalled(vId);
     uint256 route = harness_invokeCheckValidationRoute(e, harness_VT_PERMISSION(), vId);
     satisfy route == ROUTE_PERMISSION();
 }

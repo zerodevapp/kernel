@@ -30,12 +30,9 @@ import {
     InvalidVid
 } from "src/types/Error.sol";
 import {
-    HOOK_MODULE_NOT_INSTALLED,
-    HOOK_MODULE_INSTALLED_NO_HOOK,
     MODULE_TYPE_VALIDATOR,
     MODULE_TYPE_EXECUTOR,
     MODULE_TYPE_FALLBACK,
-    MODULE_TYPE_HOOK,
     MODULE_TYPE_POLICY,
     MODULE_TYPE_SIGNER,
     CALLTYPE_SINGLE,
@@ -44,7 +41,7 @@ import {
     SELECTOR_MANAGER_STORAGE_SLOT
 } from "src/types/Constants.sol";
 import {validatorToIdentifier, permissionToIdentifier} from "src/lib/Utils.sol";
-import {IValidator, IHook, IExecutor} from "src/interfaces/IERC7579Modules.sol";
+import {IValidator, IExecutor} from "src/interfaces/IERC7579Modules.sol";
 import {IERC7579Account} from "src/interfaces/IERC7579Account.sol";
 import {LibERC7579} from "solady/accounts/LibERC7579.sol";
 
@@ -118,7 +115,7 @@ contract RevertPathsTest is Test {
         // Verify it's installed
         ValidationId vId = validatorToIdentifier(IValidator(address(newValidator)));
         ValidationInfo memory vInfo = kernel.validationInfo(vId);
-        assertTrue(vInfo.hook != HOOK_MODULE_NOT_INSTALLED);
+        assertTrue(vInfo.installed);
 
         // Act & Assert: try to install the SAME validator again (same ValidationId) without uninstalling
         vm.expectRevert(OccupiedValidationId.selector);
@@ -162,7 +159,7 @@ contract RevertPathsTest is Test {
         // Build inner signature: mode(1) + type(1) + validator(20) + validatorSig
         // First set the valid sig on the mock
         newValidator.sudoSetValidSig(hex"aabbccdd");
-        bytes memory innerSig = abi.encodePacked(bytes1(0x00), bytes1(0x01), address(newValidator), hex"aabbccdd");
+        bytes memory innerSig = abi.encodePacked(bytes1(0x01), address(newValidator), hex"aabbccdd");
 
         // ERC-6492 sentinel = 0x6492...6492
         // The sentinel is: mul(0x6492, div(not(shr(address(), address())), 0xffff))
@@ -262,38 +259,6 @@ contract RevertPathsTest is Test {
 
     // =========================================================================
     // 3.16 - Executor with real hook
-    // =========================================================================
-
-    function test_executorWithHook_WhenExecutorInstalledWithHook_ShouldRunHookOnExecution() public {
-        vm.startPrank(address(ep));
-
-        // Step 1: Install hook
-        kernel.installModule(MODULE_TYPE_HOOK, address(hook), abi.encode(hex"deadbeef", ""));
-
-        // Step 2: Install executor referencing the hook
-        kernel.installModule(
-            MODULE_TYPE_EXECUTOR, address(mockExecutor), abi.encode(hex"deadbeef", abi.encodePacked(address(hook)))
-        );
-        vm.stopPrank();
-
-        // Verify executor config has the hook
-        ExecutorConfig memory config = kernel.executorConfig(address(mockExecutor));
-        assertEq(address(config.hook), address(hook), "Executor config should reference the hook");
-
-        // Step 3: Execute from executor and verify hook runs
-        // Before execution, hook pre/post should not have been called yet
-        assertFalse(hook.preHookCalled(), "Pre-hook should not have been called yet");
-        assertFalse(hook.postHookCalled(), "Post-hook should not have been called yet");
-
-        // Execute via the executor
-        vm.prank(address(mockExecutor));
-        kernel.executeFromExecutor(bytes32(0), abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector));
-
-        // Assert: hook was called
-        assertTrue(hook.preHookCalled(), "Pre-hook should have been called");
-        assertTrue(hook.postHookCalled(), "Post-hook should have been called");
-        assertEq(callee.bar(), 1, "Callee should have been called");
-    }
 
     // =========================================================================
     // 3.17 - InvalidCallType in fallback
@@ -313,32 +278,17 @@ contract RevertPathsTest is Test {
         kernel.installModule(
             MODULE_TYPE_FALLBACK,
             address(mockFallback),
-            abi.encode(
-                hex"deadbeef",
-                abi.encodePacked(
-                    testSelector,
-                    bytes1(0x00), // CALLTYPE_SINGLE
-                    address(0) // no hook, will be set to address(0)
-                )
-            )
+            abi.encode(hex"deadbeef", abi.encodePacked(testSelector, bytes1(0x00)))
         );
 
         // Verify fallback is installed
         SelectorConfig memory config = kernel.selectorConfig(testSelector);
         assertEq(config.target, address(mockFallback));
 
-        // Now corrupt the callType in storage to an invalid value
-        // SelectorConfig layout: hook (20 bytes) | target (20 bytes) | callType (1 byte)
-        // SelectorStorage is at SELECTOR_MANAGER_STORAGE_SLOT, mapped by bytes4 selector
-        // Slot = keccak256(abi.encode(selector, SELECTOR_MANAGER_STORAGE_SLOT))
+        // Now corrupt the callType in storage to an invalid value.
+        // SelectorConfig packs target (20 bytes) and callType (1 byte) into the mapping value slot.
         bytes32 selectorSlot = keccak256(abi.encode(bytes32(testSelector), SELECTOR_MANAGER_STORAGE_SLOT));
-
-        // The SelectorConfig is stored across two slots:
-        // slot 0: hook (address, 20 bytes, right-aligned in slot)
-        // slot 1: target (address, 20 bytes) | callType (bytes1, 1 byte)
-        // target is in the low 20 bytes of slot+1, callType is in byte 20
-        bytes32 slot1 = bytes32(uint256(selectorSlot) + 1);
-        bytes32 currentVal = vm.load(address(kernel), slot1);
+        bytes32 currentVal = vm.load(address(kernel), selectorSlot);
 
         // Clear and set a bad callType (0x02, which is neither 0x00 nor 0xFF)
         // The layout for slot1: [unused bytes][callType 1byte][target 20bytes]
@@ -351,11 +301,9 @@ contract RevertPathsTest is Test {
         val = val & ~(uint256(0xFF) << 160);
         // Set callType to 0x02
         val = val | (uint256(0x02) << 160);
-        vm.store(address(kernel), slot1, bytes32(val));
+        vm.store(address(kernel), selectorSlot, bytes32(val));
 
         // Act & Assert: calling the fallback selector should revert with InvalidCallType
-        // We need to call from entrypoint since hook is address(0) which means HOOK_MODULE_NOT_INSTALLED
-        // and the fallback requires either target != 0 AND (hook != NOT_INSTALLED OR sender == entrypoint)
         vm.prank(address(ep));
         vm.expectRevert(InvalidCallType.selector);
         MockFallback(address(kernel)).testFunction();
@@ -379,7 +327,7 @@ contract RevertPathsTest is Test {
             moduleType: MODULE_TYPE_VALIDATOR,
             module: address(enabledValidator),
             moduleData: hex"",
-            internalData: abi.encodePacked(address(0), Kernel.execute.selector)
+            internalData: abi.encodePacked(Kernel.execute.selector)
         });
 
         // Compute the enable signature digest (replayable = true)
@@ -429,6 +377,6 @@ contract RevertPathsTest is Test {
         // The validator should now be installed
         ValidationInfo memory vInfo =
             kernel.validationInfo(validatorToIdentifier(IValidator(address(enabledValidator))));
-        assertEq(vInfo.hook, HOOK_MODULE_INSTALLED_NO_HOOK, "Enabled validator should be installed");
+        assertTrue(vInfo.installed, "Enabled validator should be installed");
     }
 }

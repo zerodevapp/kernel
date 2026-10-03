@@ -40,6 +40,10 @@ contract Staker is Ownable, EIP712 {
     /// @param _factory The factory address to approve or revoke.
     /// @param approval True to approve, false to revoke.
     function approveFactory(address _factory, bool approval) external payable onlyOwner {
+        // Advance the per-factory nonce so any outstanding signed approval is invalidated,
+        // even when `approval` already matches the stored value. Otherwise a revoked factory
+        // could be re-approved by replaying a previously signed, never-consumed approval.
+        nonces[_factory]++;
         approved[_factory] = approval;
         emit FactoryApprovalChanged(_factory, approval);
     }

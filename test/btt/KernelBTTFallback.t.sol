@@ -71,9 +71,5 @@ contract KernelBTT_Fallback_Test is Kernel_fallback {
         isMock = true;
         is7702 = false;
         isImmutable = false;
-
-        // Install hook for hook tests
-        vm.prank(address(ep));
-        kernel.installModule(4, address(hook), abi.encode(hex"", hex""));
     }
 }

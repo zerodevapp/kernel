@@ -350,4 +350,62 @@ contract StakerTest is Test {
         staker.approveFactoryWithSignature(factory, false, abi.encodePacked(r, s, v));
         assertEq(staker.approved(factory), false);
     }
+
+    function _signApproval(address factory, bool approval, uint256 nonce) internal view returns (bytes memory) {
+        address addr = address(staker);
+        bytes32 structHash = EfficientHashLib.hash(
+            uint256(APPROVE_FACTORY_STRUCT_HASH), uint256(uint160(factory)), approval ? 1 : 0, nonce
+        );
+        bytes32 digest;
+        string memory name = "Staker";
+        string memory version = "0.0.1";
+        /// @solidity memory-safe-assembly
+        assembly {
+            let m := mload(0x40)
+            mstore(0x00, _DOMAIN_TYPEHASH_SANS_CHAIN_ID)
+            mstore(0x20, keccak256(add(name, 0x20), mload(name)))
+            mstore(0x40, keccak256(add(version, 0x20), mload(version)))
+            mstore(0x60, addr)
+            mstore(0x20, keccak256(0x00, 0x80))
+            mstore(0x00, 0x1901)
+            mstore(0x40, structHash)
+            digest := keccak256(0x1e, 0x42)
+            mstore(0x40, m)
+            mstore(0x60, 0)
+        }
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
+        return abi.encodePacked(r, s, v);
+    }
+
+    // Regression (audit M-02): a direct owner change must advance the per-factory nonce so an
+    // outstanding, never-consumed signed approval cannot resurrect a revoked factory.
+    function test_direct_revoke_invalidates_signed_approval() external {
+        address factory = makeAddr("factory");
+
+        // Owner signs an approval at nonce 0 but never submits it.
+        bytes memory staleApproval = _signApproval(factory, true, 0);
+        assertEq(staker.nonces(factory), 0);
+
+        // Owner revokes directly. With the fix this advances the nonce.
+        vm.prank(owner);
+        staker.approveFactory(factory, false);
+        assertEq(staker.approved(factory), false);
+        assertEq(staker.nonces(factory), 1, "M-02: direct change must advance the nonce");
+
+        // Replaying the stale nonce-0 signature must now fail instead of re-approving.
+        vm.expectRevert(InvalidSignature.selector);
+        staker.approveFactoryWithSignature(factory, true, staleApproval);
+        assertEq(staker.approved(factory), false, "M-02: revoked factory must stay revoked");
+    }
+
+    // The direct approval path must bump the nonce even when the value is unchanged.
+    function test_direct_approve_advances_nonce_even_when_unchanged() external {
+        address factory = makeAddr("factory");
+        vm.startPrank(owner);
+        staker.approveFactory(factory, true);
+        assertEq(staker.nonces(factory), 1);
+        staker.approveFactory(factory, true); // no-op value, still advances
+        assertEq(staker.nonces(factory), 2);
+        vm.stopPrank();
+    }
 }

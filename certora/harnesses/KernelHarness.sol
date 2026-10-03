@@ -6,9 +6,9 @@ import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOper
 import {KernelUUPS} from "src/KernelUUPS.sol";
 import {ValidationId, ValidationType, ValidationMode, PermissionId} from "src/types/Types.sol";
 import {ValidationInfo, ValidationStorage} from "src/types/Structs.sol";
-import {IHook, IExecutor} from "src/interfaces/IERC7579Modules.sol";
+import {IScopedExecutionHook, IExecutor} from "src/interfaces/IERC7579Modules.sol";
 import {CallType} from "src/types/Types.sol";
-import {ExecutorStorage, SelectorStorage, HookStorage} from "src/types/Structs.sol";
+import {ExecutorStorage, SelectorStorage} from "src/types/Structs.sol";
 import {parseNonce, getType, permissionToIdentifier} from "src/lib/Utils.sol";
 import {
     VALIDATION_TYPE_ROOT,
@@ -16,10 +16,7 @@ import {
     VALIDATION_TYPE_PERMISSION,
     VALIDATION_MANAGER_STORAGE_SLOT,
     EXECUTOR_MANAGER_STORAGE_SLOT,
-    SELECTOR_MANAGER_STORAGE_SLOT,
-    HOOK_MANAGER_STORAGE_SLOT,
-    HOOK_MODULE_NOT_INSTALLED,
-    HOOK_MODULE_INSTALLED_NO_HOOK
+    SELECTOR_MANAGER_STORAGE_SLOT
 } from "src/types/Constants.sol";
 
 /// @title KernelHarness — Certora-only wrapper exposing internal views.
@@ -41,8 +38,12 @@ contract KernelHarness is KernelUUPS {
         return _vs().vInfo[ValidationId.wrap(vId)].nonce;
     }
 
-    function harness_vInfoHook(bytes21 vId) external view returns (address) {
-        return _vs().vInfo[ValidationId.wrap(vId)].hook;
+    function harness_vInfoInstalled(bytes21 vId) external view returns (bool) {
+        return _vs().vInfo[ValidationId.wrap(vId)].installed;
+    }
+
+    function harness_vInfoScopedExecutionHook(bytes21 vId) external view returns (address) {
+        return address(_vs().vInfo[ValidationId.wrap(vId)].scopedExecutionHook);
     }
 
     function harness_allowedNonce(bytes21 vId, bytes4 sel) external view returns (uint32) {
@@ -108,12 +109,14 @@ contract KernelHarness is KernelUUPS {
         return ValidationMode.unwrap(vMode);
     }
 
-    function harness_validationHook(bytes32 userOpHash) external view returns (address) {
-        IHook h;
-        assembly {
-            h := tload(userOpHash)
-        }
-        return address(h);
+    function harness_validationScopedExecutionHook(bytes32 userOpHash) external view returns (address) {
+        (, IScopedExecutionHook hook) = _validationScopedExecutionHook(userOpHash);
+        return address(hook);
+    }
+
+    function harness_validationScopedExecutionHookVId(bytes32 userOpHash) external view returns (bytes21) {
+        (ValidationId vId,) = _validationScopedExecutionHook(userOpHash);
+        return ValidationId.unwrap(vId);
     }
 
     // ------------------------------------------------------------------
@@ -130,14 +133,6 @@ contract KernelHarness is KernelUUPS {
 
     function harness_VT_PERMISSION() external pure returns (bytes1) {
         return ValidationType.unwrap(VALIDATION_TYPE_PERMISSION);
-    }
-
-    function harness_HOOK_NOT_INSTALLED() external pure returns (address) {
-        return HOOK_MODULE_NOT_INSTALLED;
-    }
-
-    function harness_HOOK_INSTALLED_NO_HOOK() external pure returns (address) {
-        return HOOK_MODULE_INSTALLED_NO_HOOK;
     }
 
     function harness_executeUserOpSelector() external pure returns (bytes4) {
@@ -240,7 +235,7 @@ contract KernelHarness is KernelUUPS {
     //   3. _uninstallValidation(_vId)                    -- ValidationManager.sol:210
     //   4. _initializeValidation(vId, _internalData)     -- ValidationManager.sol:125
     //
-    // No other path writes $.allowed, $.vInfo[*].nonce, $.vInfo[*].hook, or
+    // No other path writes $.allowed, $.vInfo[*].nonce, $.vInfo[*].installed, or
     // $.root. Public entry points (installModule, executeUserOp, etc.) reach
     // these writers via internal call chains, but the writers themselves are
     // the only place where the relevant storage slots are mutated.
@@ -263,29 +258,21 @@ contract KernelHarness is KernelUUPS {
     }
 
     // ------------------------------------------------------------------
-    // Module-storage accessors (Phase 2 — ExecutorManager / SelectorManager /
-    // HookManager). Mirror the production storage layout reads so CVL can
+    // Module-storage accessors (Phase 2 — ExecutorManager / SelectorManager).
+    // Mirror the production storage layout reads so CVL can
     // observe the per-slot post-state of each module writer.
     // ------------------------------------------------------------------
 
-    function harness_executorHook(address executor) external view returns (address) {
-        return address(_es().executorConfig[IExecutor(executor)].hook);
+    function harness_executorInstalled(address executor) external view returns (bool) {
+        return _es().executorConfig[IExecutor(executor)].installed;
     }
 
     function harness_selectorTarget(bytes4 selector) external view returns (address) {
         return _ss().selectorConfig[selector].target;
     }
 
-    function harness_selectorHook(bytes4 selector) external view returns (address) {
-        return address(_ss().selectorConfig[selector].hook);
-    }
-
     function harness_selectorCallType(bytes4 selector) external view returns (bytes1) {
         return CallType.unwrap(_ss().selectorConfig[selector].callType);
-    }
-
-    function harness_hookEnabled(address hook) external view returns (bool) {
-        return _hs().enabled[hook];
     }
 
     /// @notice Returns `bytes4(_internalData[0:4])` -- the selector key
@@ -306,11 +293,7 @@ contract KernelHarness is KernelUUPS {
     //   2. _uninstallExecutor(_executor, _, _)                           -- ExecutorManager.sol:54
     //   3. _installSelector(_module, _internalData, _installSuccess)     -- SelectorManager.sol:45
     //   4. _uninstallSelector(_, _internalData, _)                       -- SelectorManager.sol:62
-    //   5. _installHook(_hook, _internalData, _installSuccess)           -- HookManager.sol:36
-    //   6. _uninstallHook(_hook, _, _)                                   -- HookManager.sol:45
-    //
-    // No other code path writes ExecutorStorage, SelectorStorage, or
-    // HookStorage in src/. Verified by grep on 2026-05-24.
+    // No other code path writes ExecutorStorage or SelectorStorage.
     // ------------------------------------------------------------------
 
     function harness_installExecutor(address executor, bytes calldata internalData, bool installSuccess) external {
@@ -327,14 +310,6 @@ contract KernelHarness is KernelUUPS {
 
     function harness_uninstallSelector(address module, bytes calldata internalData, bool installSuccess) external {
         _uninstallSelector(module, internalData, installSuccess);
-    }
-
-    function harness_installHook(address hook, bytes calldata internalData, bool installSuccess) external {
-        _installHook(hook, internalData, installSuccess);
-    }
-
-    function harness_uninstallHook(address hook, bytes calldata internalData, bool installSuccess) external {
-        _uninstallHook(hook, internalData, installSuccess);
     }
 
     // ------------------------------------------------------------------
@@ -422,13 +397,6 @@ contract KernelHarness is KernelUUPS {
 
     function _ss() internal pure returns (SelectorStorage storage $) {
         bytes32 slot = SELECTOR_MANAGER_STORAGE_SLOT;
-        assembly {
-            $.slot := slot
-        }
-    }
-
-    function _hs() internal pure returns (HookStorage storage $) {
-        bytes32 slot = HOOK_MANAGER_STORAGE_SLOT;
         assembly {
             $.slot := slot
         }

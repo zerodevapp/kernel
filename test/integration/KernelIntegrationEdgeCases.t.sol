@@ -8,13 +8,14 @@ import {Kernel} from "src/Kernel.sol";
 import {KernelUUPS} from "src/KernelUUPS.sol";
 import {KernelImmutableECDSA} from "src/KernelImmutableECDSA.sol";
 import {KernelFactory} from "src/KernelFactory.sol";
-import {Install, ValidationInfo} from "src/types/Structs.sol";
-import {ERC1967_IMPLEMENTATION_SLOT} from "src/types/Constants.sol";
+import {Install, ValidationInfo, Call} from "src/types/Structs.sol";
+import {ERC1967_IMPLEMENTATION_SLOT, SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE} from "src/types/Constants.sol";
 import {ValidationId, PermissionId} from "src/types/Types.sol";
 import {validatorToIdentifier, permissionToIdentifier} from "src/lib/Utils.sol";
 import {InvalidSelector} from "src/types/Error.sol";
 import {IERC7579Account} from "src/interfaces/IERC7579Account.sol";
 import {UUPSUpgradeable} from "solady/utils/UUPSUpgradeable.sol";
+import {LibERC7579} from "solady/accounts/LibERC7579.sol";
 import {MockValidator} from "../mock/MockValidator.sol";
 import {MockExecutor} from "../mock/MockExecutor.sol";
 import {MockCallee} from "../mock/MockCallee.sol";
@@ -181,7 +182,7 @@ contract KernelIntegrationEdgeCasesTest is Test {
             moduleType: 1,
             module: address(newValidator),
             moduleData: hex"",
-            internalData: abi.encodePacked(address(0), Kernel.execute.selector)
+            internalData: abi.encodePacked(Kernel.execute.selector)
         });
 
         // Root validator signs the install digest
@@ -236,9 +237,9 @@ contract KernelIntegrationEdgeCasesTest is Test {
 
         // Install all 3 via entrypoint with execute selector access
         vm.startPrank(address(ep));
-        kernel.installModule(1, address(v1), abi.encode(hex"", abi.encodePacked(address(0), Kernel.execute.selector)));
-        kernel.installModule(1, address(v2), abi.encode(hex"", abi.encodePacked(address(0), Kernel.execute.selector)));
-        kernel.installModule(1, address(v3), abi.encode(hex"", abi.encodePacked(address(0), Kernel.execute.selector)));
+        kernel.installModule(1, address(v1), abi.encode(hex"", abi.encodePacked(Kernel.execute.selector)));
+        kernel.installModule(1, address(v2), abi.encode(hex"", abi.encodePacked(Kernel.execute.selector)));
+        kernel.installModule(1, address(v3), abi.encode(hex"", abi.encodePacked(Kernel.execute.selector)));
         vm.stopPrank();
 
         assertTrue(kernel.isModuleInstalled(1, address(v1), hex""), "v1 should be installed");
@@ -337,37 +338,51 @@ contract KernelIntegrationEdgeCasesTest is Test {
     // Test 4: Fallback module lifecycle
     // -----------------------------------------------------------------------
 
-    /// @notice Install a fallback module via UserOp, call it externally,
-    ///         uninstall it, verify it reverts.
+    /// @notice Install a fallback module + scoped execution hook via UserOp, call it externally,
+    ///         uninstall both, verify the call reverts.
     function test_fallbackModuleLifecycle() public {
         Kernel kernel = _deployKernel();
         MockFallback fb = new MockFallback();
+        MockHook h = new MockHook();
         rootValidator.sudoSetSuccess(true);
 
-        // Install fallback via UserOp through root
-        // Fallback internalData: [selector(4) | callType(1) | hookAddress(20)]
-        // callType 0x00 = CALLTYPE_SINGLE, hook address(1) = no hook, anyone can call
+        // Fallback internalData: [selector(4) | callType(1)]
+        // callType 0x00 = CALLTYPE_SINGLE. Selectors without a scoped execution hook are
+        // EntryPoint-only, so a scoped execution hook is installed to make it publicly callable.
         bytes4 fbSelector = MockFallback.fallbackFunction.selector;
+        bytes32 batchMode = bytes32(
+            abi.encodePacked(LibERC7579.CALLTYPE_BATCH, LibERC7579.EXECTYPE_DEFAULT, bytes4(0), bytes4(0), bytes22(0))
+        );
+
+        // Install fallback + scoped hook via a single UserOp with a batch execute
         {
             uint256 nonce = _rootNonce(address(kernel));
+            Call[] memory calls = new Call[](2);
+            calls[0] = Call({
+                to: address(kernel),
+                value: 0,
+                data: abi.encodeWithSelector(
+                    IERC7579Account.installModule.selector,
+                    uint256(3),
+                    address(fb),
+                    abi.encode(hex"deadbeef", abi.encodePacked(fbSelector, bytes1(0x00)))
+                )
+            });
+            calls[1] = Call({
+                to: address(kernel),
+                value: 0,
+                data: abi.encodeWithSelector(
+                    IERC7579Account.installModule.selector,
+                    uint256(11),
+                    address(h),
+                    abi.encode(hex"deadbeef", abi.encodePacked(SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE, fbSelector))
+                )
+            });
             PackedUserOperation memory installOp = PackedUserOperation({
                 sender: address(kernel),
                 nonce: nonce,
                 initCode: hex"",
-                callData: abi.encodeWithSelector(
-                    Kernel.execute.selector,
-                    bytes32(0),
-                    abi.encodePacked(
-                        address(kernel),
-                        uint256(0),
-                        abi.encodeWithSelector(
-                            IERC7579Account.installModule.selector,
-                            uint256(3),
-                            address(fb),
-                            abi.encode(hex"deadbeef", abi.encodePacked(fbSelector, bytes1(0x00), bytes20(address(1))))
-                        )
-                    )
-                ),
+                callData: abi.encodeWithSelector(Kernel.execute.selector, batchMode, abi.encode(calls)),
                 accountGasLimits: bytes32(abi.encodePacked(uint128(2_000_000), uint128(2_000_000))),
                 preVerificationGas: 1_000_000,
                 gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
@@ -379,12 +394,18 @@ contract KernelIntegrationEdgeCasesTest is Test {
             _handleOps(ops);
         }
 
-        // Verify: fallback is installed
+        // Verify: fallback and scoped hook are installed
         assertTrue(
             kernel.isModuleInstalled(3, address(fb), abi.encodePacked(fbSelector)), "fallback should be installed"
         );
+        assertTrue(
+            kernel.isModuleInstalled(
+                11, address(h), abi.encodePacked(SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE, fbSelector)
+            ),
+            "scoped execution hook should be installed"
+        );
 
-        // Call the fallback externally (hook=address(1) means anyone can call)
+        // Call the installed fallback externally (scoped hook makes it publicly callable)
         address alice = makeAddr("Alice");
         vm.prank(alice);
         (bool success, bytes memory ret) = address(kernel).call(abi.encodeWithSelector(fbSelector, uint256(5)));
@@ -392,27 +413,35 @@ contract KernelIntegrationEdgeCasesTest is Test {
         uint256 result = abi.decode(ret, (uint256));
         assertEq(result, 25, "fallbackFunction(5) should return 25 (5*5)");
 
-        // Uninstall fallback via UserOp
+        // Uninstall hook + fallback via a single UserOp with a batch execute
         {
             uint256 nonce = _rootNonce(address(kernel));
+            Call[] memory calls = new Call[](2);
+            calls[0] = Call({
+                to: address(kernel),
+                value: 0,
+                data: abi.encodeWithSelector(
+                    IERC7579Account.uninstallModule.selector,
+                    uint256(11),
+                    address(h),
+                    abi.encode(hex"", abi.encodePacked(SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE, fbSelector))
+                )
+            });
+            calls[1] = Call({
+                to: address(kernel),
+                value: 0,
+                data: abi.encodeWithSelector(
+                    IERC7579Account.uninstallModule.selector,
+                    uint256(3),
+                    address(fb),
+                    abi.encode(hex"", abi.encodePacked(fbSelector))
+                )
+            });
             PackedUserOperation memory uninstallOp = PackedUserOperation({
                 sender: address(kernel),
                 nonce: nonce,
                 initCode: hex"",
-                callData: abi.encodeWithSelector(
-                    Kernel.execute.selector,
-                    bytes32(0),
-                    abi.encodePacked(
-                        address(kernel),
-                        uint256(0),
-                        abi.encodeWithSelector(
-                            IERC7579Account.uninstallModule.selector,
-                            uint256(3),
-                            address(fb),
-                            abi.encode(hex"", abi.encodePacked(fbSelector))
-                        )
-                    )
-                ),
+                callData: abi.encodeWithSelector(Kernel.execute.selector, batchMode, abi.encode(calls)),
                 accountGasLimits: bytes32(abi.encodePacked(uint128(2_000_000), uint128(2_000_000))),
                 preVerificationGas: 1_000_000,
                 gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
@@ -441,99 +470,6 @@ contract KernelIntegrationEdgeCasesTest is Test {
 
     /// @notice Hook reverts mid-execution, verify state is fully rolled back
     ///         (no partial effects from the execution).
-    function test_hookFailurePropagation() public {
-        Kernel kernel = _deployKernel();
-
-        // Install hook
-        MockHook hook = new MockHook();
-        vm.startPrank(address(ep));
-        kernel.installModule(4, address(hook), abi.encode(hex"deadbeef", ""));
-        vm.stopPrank();
-
-        // Install a new validator WITH the hook
-        MockValidator hookedValidator = new MockValidator();
-        vm.startPrank(address(ep));
-        kernel.installModule(
-            1, address(hookedValidator), abi.encode(hex"", abi.encodePacked(address(hook), Kernel.execute.selector))
-        );
-        vm.stopPrank();
-
-        // Verify initial state
-        assertEq(callee.bar(), 0, "callee.bar should start at 0");
-        assertFalse(hook.preHookCalled(), "preHook should not have been called yet");
-        assertFalse(hook.postHookCalled(), "postHook should not have been called yet");
-
-        // Set postHook to revert -- execution will succeed but postCheck will revert
-        // This causes the entire executeUserOp inner call to revert, rolling back callee.foo()
-        hook.setRevertOnPostHook(true);
-
-        // Build UserOp with the hooked validator
-        // Must use executeUserOp as outer selector since the validator has a hook
-        uint256 nonce =
-            _encodeNonce(false, false, false, bytes1(0x01), bytes20(address(hookedValidator)), address(kernel));
-        PackedUserOperation memory op = PackedUserOperation({
-            sender: address(kernel),
-            nonce: nonce,
-            initCode: hex"",
-            callData: abi.encodePacked(
-                Kernel.executeUserOp.selector,
-                abi.encodeWithSelector(
-                    Kernel.execute.selector,
-                    bytes32(0),
-                    abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
-                )
-            ),
-            accountGasLimits: bytes32(abi.encodePacked(uint128(2_000_000), uint128(2_000_000))),
-            preVerificationGas: 1_000_000,
-            gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
-            paymasterAndData: hex"",
-            signature: hex""
-        });
-        hookedValidator.sudoSetSuccess(true);
-
-        PackedUserOperation[] memory ops = new PackedUserOperation[](1);
-        ops[0] = op;
-
-        // The EntryPoint will catch the inner revert -- UserOp validation passes,
-        // but the execution phase (executeUserOp) reverts, so no state changes from execute.
-        _handleOps(ops);
-
-        // callee.foo() was rolled back because postHook reverted
-        assertEq(callee.bar(), 0, "callee.bar should still be 0 -- hook revert rolled back execution");
-
-        // Now fix the hook and try again -- should work
-        hook.setRevertOnPostHook(false);
-        hook.resetState();
-
-        uint256 nonce2 =
-            _encodeNonce(false, false, false, bytes1(0x01), bytes20(address(hookedValidator)), address(kernel));
-        PackedUserOperation memory op2 = PackedUserOperation({
-            sender: address(kernel),
-            nonce: nonce2,
-            initCode: hex"",
-            callData: abi.encodePacked(
-                Kernel.executeUserOp.selector,
-                abi.encodeWithSelector(
-                    Kernel.execute.selector,
-                    bytes32(0),
-                    abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
-                )
-            ),
-            accountGasLimits: bytes32(abi.encodePacked(uint128(2_000_000), uint128(2_000_000))),
-            preVerificationGas: 1_000_000,
-            gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
-            paymasterAndData: hex"",
-            signature: hex""
-        });
-        hookedValidator.sudoSetSuccess(true);
-
-        PackedUserOperation[] memory ops2 = new PackedUserOperation[](1);
-        ops2[0] = op2;
-        _handleOps(ops2);
-
-        assertEq(callee.bar(), 1, "callee.bar should be 1 after hook fixed");
-    }
-
     // -----------------------------------------------------------------------
     // Test 6: Cross-chain replay test
     // -----------------------------------------------------------------------
@@ -603,133 +539,4 @@ contract KernelIntegrationEdgeCasesTest is Test {
 
     /// @notice UUPS upgrade via UserOp, then verify all previously installed modules
     ///         still function correctly.
-    function test_upgradeAndModulePersistence() public {
-        Kernel kernel = _deployKernel();
-        rootValidator.sudoSetSuccess(true);
-
-        // Install additional modules before upgrade
-        MockValidator extraValidator = new MockValidator();
-        MockExecutor executor = new MockExecutor();
-        MockHook hook = new MockHook();
-        MockFallback fb = new MockFallback();
-        bytes4 fbSelector = MockFallback.testFunction.selector;
-
-        vm.startPrank(address(ep));
-        kernel.installModule(4, address(hook), abi.encode(hex"deadbeef", ""));
-        kernel.installModule(
-            1, address(extraValidator), abi.encode(hex"", abi.encodePacked(address(0), Kernel.execute.selector))
-        );
-        kernel.installModule(2, address(executor), abi.encode(hex"deadbeef", ""));
-        kernel.installModule(
-            3, address(fb), abi.encode(hex"deadbeef", abi.encodePacked(fbSelector, bytes1(0x00), bytes20(address(1))))
-        );
-        vm.stopPrank();
-
-        // Verify all modules are installed before upgrade
-        assertTrue(kernel.isModuleInstalled(1, address(rootValidator), hex""), "root validator before upgrade");
-        assertTrue(kernel.isModuleInstalled(1, address(extraValidator), hex""), "extra validator before upgrade");
-        assertTrue(kernel.isModuleInstalled(2, address(executor), hex""), "executor before upgrade");
-        assertTrue(kernel.isModuleInstalled(4, address(hook), hex""), "hook before upgrade");
-        assertTrue(kernel.isModuleInstalled(3, address(fb), abi.encodePacked(fbSelector)), "fallback before upgrade");
-
-        // Record current implementation
-        bytes32 implBefore = vm.load(address(kernel), ERC1967_IMPLEMENTATION_SLOT);
-        assertEq(address(uint160(uint256(implBefore))), address(uups), "initial impl should be uups");
-
-        // Deploy a new implementation and upgrade via UserOp
-        KernelUUPS newImpl = new KernelUUPS(ep);
-        {
-            uint256 nonce = _rootNonce(address(kernel));
-            PackedUserOperation memory upgradeOp = PackedUserOperation({
-                sender: address(kernel),
-                nonce: nonce,
-                initCode: hex"",
-                callData: abi.encodeWithSelector(
-                    Kernel.execute.selector,
-                    bytes32(0),
-                    abi.encodePacked(
-                        address(kernel),
-                        uint256(0),
-                        abi.encodeWithSelector(UUPSUpgradeable.upgradeToAndCall.selector, address(newImpl), hex"")
-                    )
-                ),
-                accountGasLimits: bytes32(abi.encodePacked(uint128(2_000_000), uint128(2_000_000))),
-                preVerificationGas: 1_000_000,
-                gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
-                paymasterAndData: hex"",
-                signature: hex""
-            });
-            PackedUserOperation[] memory ops = new PackedUserOperation[](1);
-            ops[0] = upgradeOp;
-            _handleOps(ops);
-        }
-
-        // Verify upgrade happened
-        bytes32 implAfter = vm.load(address(kernel), ERC1967_IMPLEMENTATION_SLOT);
-        assertEq(address(uint160(uint256(implAfter))), address(newImpl), "impl should be newImpl after upgrade");
-        assertEq(kernel.accountId(), "kernel.v0.4", "accountId should still work");
-
-        // Verify ALL modules still installed after upgrade
-        assertTrue(kernel.isModuleInstalled(1, address(rootValidator), hex""), "root validator after upgrade");
-        assertTrue(kernel.isModuleInstalled(1, address(extraValidator), hex""), "extra validator after upgrade");
-        assertTrue(kernel.isModuleInstalled(2, address(executor), hex""), "executor after upgrade");
-        assertTrue(kernel.isModuleInstalled(4, address(hook), hex""), "hook after upgrade");
-        assertTrue(kernel.isModuleInstalled(3, address(fb), abi.encodePacked(fbSelector)), "fallback after upgrade");
-
-        // Verify root validator still works via UserOp
-        {
-            uint256 nonce = _rootNonce(address(kernel));
-            PackedUserOperation memory op = _buildCallFooOp(address(kernel), nonce);
-            PackedUserOperation[] memory ops = new PackedUserOperation[](1);
-            ops[0] = op;
-            _handleOps(ops);
-        }
-        assertEq(callee.bar(), 1, "root UserOp should work after upgrade");
-
-        // Verify extra validator still works
-        extraValidator.sudoSetSuccess(true);
-        {
-            uint256 nonce =
-                _encodeNonce(false, false, false, bytes1(0x01), bytes20(address(extraValidator)), address(kernel));
-            PackedUserOperation memory op = _buildCallFooOp(address(kernel), nonce);
-            PackedUserOperation[] memory ops = new PackedUserOperation[](1);
-            ops[0] = op;
-            _handleOps(ops);
-        }
-        assertEq(callee.bar(), 2, "extra validator UserOp should work after upgrade");
-
-        // Verify executor still works after upgrade
-        {
-            bytes memory innerCallData = abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector);
-            bytes memory sudoDoExecCall =
-                abi.encodeWithSelector(MockExecutor.sudoDoExec.selector, address(kernel), bytes32(0), innerCallData);
-
-            uint256 nonce = _rootNonce(address(kernel));
-            PackedUserOperation memory op = PackedUserOperation({
-                sender: address(kernel),
-                nonce: nonce,
-                initCode: hex"",
-                callData: abi.encodeWithSelector(
-                    Kernel.execute.selector, bytes32(0), abi.encodePacked(address(executor), uint256(0), sudoDoExecCall)
-                ),
-                accountGasLimits: bytes32(abi.encodePacked(uint128(2_000_000), uint128(2_000_000))),
-                preVerificationGas: 1_000_000,
-                gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
-                paymasterAndData: hex"",
-                signature: hex""
-            });
-            PackedUserOperation[] memory ops = new PackedUserOperation[](1);
-            ops[0] = op;
-            _handleOps(ops);
-        }
-        assertEq(callee.bar(), 3, "executor callback should work after upgrade");
-
-        // Verify fallback still works after upgrade
-        address alice = makeAddr("Alice");
-        vm.prank(alice);
-        (bool success, bytes memory ret) = address(kernel).call(abi.encodeWithSelector(fbSelector));
-        assertTrue(success, "fallback call should succeed after upgrade");
-        uint256 fbResult = abi.decode(ret, (uint256));
-        assertEq(fbResult, 42, "testFunction() should still return 42 after upgrade");
-    }
 }

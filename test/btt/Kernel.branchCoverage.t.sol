@@ -31,7 +31,6 @@ import {
     InstallSignatureVerificationFailed,
     InvalidPermissionInstall,
     PermissionInstallNotFinished,
-    NotInstalled,
     OccupiedValidationId
 } from "src/types/Error.sol";
 
@@ -82,9 +81,8 @@ abstract contract Kernel_branchCoverage is BTTModifiers {
         assertEq(validationData, 0, "Enable mode with replayable enable sig should succeed");
 
         // Verify the validator was installed
-        assertEq(
-            kernel.validationInfo(validatorToIdentifier(IValidator(address(newValidator)))).hook,
-            address(1),
+        assertTrue(
+            kernel.validationInfo(validatorToIdentifier(IValidator(address(newValidator)))).installed,
             "Validator should be installed via replayable enable"
         );
     }
@@ -161,43 +159,6 @@ abstract contract Kernel_branchCoverage is BTTModifiers {
 
     /// @notice Tests _processUserOp when selector is allowed but hook!=address(1) and callData
     ///         uses executeUserOp wrapper — the hook storage path
-    /// @dev Covers _setValidationHook + _allowedSelector branch with hook set
-    function test_processUserOp_validatorWithHookAndAllowedSelector() external {
-        vm.stopPrank();
-        vm.startPrank(address(ep));
-
-        // Install hook
-        kernel.installModule(4, address(hook), abi.encode(hex"", hex""));
-
-        // Install validator with hook and allowed selector
-        kernel.installModule(
-            1, address(newValidator), abi.encode(hex"", abi.encodePacked(address(hook), Kernel.execute.selector))
-        );
-
-        PackedUserOperation memory op = PackedUserOperation({
-            sender: address(kernel),
-            nonce: encodeNonce(false, false, false, bytes1(0x01), bytes20(address(newValidator))),
-            initCode: hex"",
-            callData: abi.encodePacked(
-                Kernel.executeUserOp.selector,
-                abi.encodeWithSelector(
-                    Kernel.execute.selector,
-                    bytes32(0),
-                    abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
-                )
-            ),
-            accountGasLimits: bytes32(abi.encodePacked(uint128(1000000), uint128(1000000))),
-            preVerificationGas: 0,
-            gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
-            paymasterAndData: hex"",
-            signature: hex""
-        });
-        op.signature = _validatorSignUserOp(op, true, false);
-        bytes32 userOpHash = ep.getUserOpHash(op);
-
-        uint256 validationData = kernel.validateUserOp(op, userOpHash, 0);
-        assertEq(validationData, 0, "Validator with hook and allowed selector should succeed");
-    }
 
     /// @notice Tests permission validation where selector is directly allowed and hook=address(1)
     /// @dev Covers the no-op branch for permission type with allowed selector
@@ -408,7 +369,7 @@ abstract contract Kernel_branchCoverage is BTTModifiers {
         kernel.setRoot(packages, false, hex"");
 
         ValidationId expectedRoot = permissionToIdentifier(testPermId);
-        assertEq(kernel.validationInfo(expectedRoot).hook, address(1), "Root should be set from policy's permissionId");
+        assertTrue(kernel.validationInfo(expectedRoot).installed, "Root should be set from policy's permissionId");
     }
 
     /// @notice Tests _setRoot(Install) with MODULE_TYPE_SIGNER as first package
@@ -429,7 +390,7 @@ abstract contract Kernel_branchCoverage is BTTModifiers {
         kernel.setRoot(packages, false, hex"");
 
         ValidationId expectedRoot = permissionToIdentifier(testPermId);
-        assertEq(kernel.validationInfo(expectedRoot).hook, address(1), "Root should be set from signer's permissionId");
+        assertTrue(kernel.validationInfo(expectedRoot).installed, "Root should be set from signer's permissionId");
     }
 
     /// @notice Tests _setRoot(ValidationId) with an invalid type (not validator, not permission)
@@ -707,51 +668,15 @@ abstract contract Kernel_branchCoverage is BTTModifiers {
         kernel.installModule(1, address(testValidator), abi.encode(hex"", hex""));
 
         // Validator should be installed but with no allowed selectors
-        assertEq(
-            kernel.validationInfo(validatorToIdentifier(IValidator(address(testValidator)))).hook,
-            address(1),
+        assertTrue(
+            kernel.validationInfo(validatorToIdentifier(IValidator(address(testValidator)))).installed,
             "Validator with empty internalData should have hook=address(1)"
         );
     }
 
     /// @notice Tests _initializeValidation when hook is address(0) in internalData
-    /// @dev Covers hook == HOOK_MODULE_NOT_INSTALLED => HOOK_MODULE_INSTALLED_NO_HOOK mapping
-    function test_initializeValidation_hookAddress0MapsToAddress1() external {
-        vm.stopPrank();
-        vm.startPrank(address(ep));
-
-        MockValidator testValidator = new MockValidator();
-        // internalData starts with address(0) as hook
-        kernel.installModule(
-            1, address(testValidator), abi.encode(hex"", abi.encodePacked(address(0), Kernel.execute.selector))
-        );
-
-        // Hook should be set to address(1) (HOOK_MODULE_INSTALLED_NO_HOOK)
-        assertEq(
-            kernel.validationInfo(validatorToIdentifier(IValidator(address(testValidator)))).hook,
-            address(1),
-            "Hook address(0) should map to address(1)"
-        );
-    }
 
     /// @notice Tests _initializeValidation when hook is address(1) in internalData
-    /// @dev Covers hook == HOOK_MODULE_INSTALLED_NO_HOOK case
-    function test_initializeValidation_hookAddress1Stays() external {
-        vm.stopPrank();
-        vm.startPrank(address(ep));
-
-        MockValidator testValidator = new MockValidator();
-        // internalData starts with address(1)
-        kernel.installModule(
-            1, address(testValidator), abi.encode(hex"", abi.encodePacked(address(1), Kernel.execute.selector))
-        );
-
-        assertEq(
-            kernel.validationInfo(validatorToIdentifier(IValidator(address(testValidator)))).hook,
-            address(1),
-            "Hook address(1) should stay address(1)"
-        );
-    }
 
     /// @notice Tests that OccupiedValidationId is thrown when trying to install a validator twice
     /// @dev Covers the require in _initializeValidation
@@ -917,7 +842,7 @@ abstract contract Kernel_branchCoverage is BTTModifiers {
             moduleType: 1,
             module: address(newValidator),
             moduleData: hex"",
-            internalData: abi.encodePacked(address(0), Kernel.execute.selector)
+            internalData: abi.encodePacked(Kernel.execute.selector)
         });
 
         bytes memory enableSignature = enableSig(5, true, false, packages, _rootSignHash);
@@ -987,21 +912,18 @@ abstract contract Kernel_branchCoverage is BTTModifiers {
         assertTrue(kernel.supportsModule(1), "Should support type 1 (validator)");
         assertTrue(kernel.supportsModule(2), "Should support type 2 (executor)");
         assertTrue(kernel.supportsModule(3), "Should support type 3 (fallback)");
-        assertTrue(kernel.supportsModule(4), "Should support type 4 (hook)");
+        assertFalse(kernel.supportsModule(4), "Should not support generic hook type 4");
+        assertTrue(kernel.supportsModule(11), "Should support scoped execution hook type 11");
         assertTrue(kernel.supportsModule(5), "Should support type 5 (policy)");
         assertTrue(kernel.supportsModule(6), "Should support type 6 (signer)");
         assertFalse(kernel.supportsModule(0), "Should NOT support type 0");
         assertFalse(kernel.supportsModule(7), "Should NOT support type 7");
     }
 
-    /// @notice Tests isModuleInstalled for MODULE_TYPE_HOOK
+    /// @notice Tests isModuleInstalled for unsupported generic hook type 4
     function test_isModuleInstalled_hookType() external {
-        vm.stopPrank();
-        vm.startPrank(address(ep));
-
-        kernel.installModule(4, address(hook), abi.encode(hex"", hex""));
-
-        assertTrue(kernel.isModuleInstalled(4, address(hook), ""), "Hook should be installed");
+        vm.expectRevert();
+        kernel.isModuleInstalled(4, address(hook), "");
     }
 
     /// @notice Tests isModuleInstalled for unsupported module type
@@ -1066,9 +988,7 @@ abstract contract Kernel_branchCoverage is BTTModifiers {
         vm.startPrank(address(ep));
 
         bytes4 testSelector = MockFallback.getCaller.selector;
-        kernel.installModule(
-            3, address(mockFallback), abi.encode(hex"", abi.encodePacked(testSelector, bytes1(0x00), address(1)))
-        );
+        kernel.installModule(3, address(mockFallback), abi.encode(hex"", abi.encodePacked(testSelector, bytes1(0x00))));
 
         assertTrue(
             kernel.isModuleInstalled(3, address(mockFallback), abi.encodePacked(testSelector)),
@@ -1080,7 +1000,7 @@ abstract contract Kernel_branchCoverage is BTTModifiers {
     function test_validationInfo_returnsData() external view {
         // Root validator should have hook=address(1) and no policies
         ValidationId rootVid = validatorToIdentifier(IValidator(address(rootValidator)));
-        assertEq(kernel.validationInfo(rootVid).hook, address(1), "Root validator should have hook=address(1)");
+        assertTrue(kernel.validationInfo(rootVid).installed, "Root validator should have hook=address(1)");
     }
 
     /// @notice Tests root() view function

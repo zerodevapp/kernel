@@ -5,21 +5,13 @@ import {LibString} from "solady/utils/LibString.sol";
 import {LibClone} from "solady/utils/LibClone.sol";
 import {ERC1271_MAGICVALUE, ERC1271_INVALID} from "src/types/Constants.sol";
 import {BTTModifiers} from "./BTTModifiers.sol";
-import {Install} from "src/types/Structs.sol";
 import {Kernel} from "src/Kernel.sol";
-import {
-    InvalidValidationType,
-    InvalidValidator,
-    InvalidPermissionId,
-    InvalidNonce,
-    InvalidVid
-} from "src/types/Error.sol";
+import {InvalidValidationType, InvalidVid} from "src/types/Error.sol";
 import {ValidationId, validatorToIdentifier, permissionToIdentifier} from "src/lib/Utils.sol";
 import {IValidator} from "src/interfaces/IERC7579Modules.sol";
 import {MockPolicy} from "../mock/MockPolicy.sol";
 import {MockSigner} from "../mock/MockSigner.sol";
 import {PermissionId} from "src/types/Types.sol";
-import {MockValidator} from "../mock/MockValidator.sol";
 
 /// @title Kernel.isValidSignature BTT Tests
 /// @notice Tests for isValidSignature following Branching Tree Technique
@@ -28,7 +20,6 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
     // State variables for isValidSignature branch tracking
     // Note: _validationType and _isTypedDataSign are inherited from BTTModifiers
     bytes32 internal _testHash;
-    bool internal _enableMode;
     bool internal _isExplicitContentsName;
     bool internal _isReplayableSignature;
 
@@ -41,264 +32,6 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
     modifier whenHashIsNotERC7739_MAGIC_HASH() {
         _testHash = keccak256("test"); // Set non-magic hash
         _;
-    }
-
-    modifier givenTheSignatureModeByteIndicatesEnableMode() {
-        _enableMode = true;
-        _;
-    }
-
-    function test_GivenTheValidationTypeIsROOT()
-        external
-        whenHashIsNotERC7739_MAGIC_HASH
-        givenTheSignatureModeByteIndicatesEnableMode
-    {
-        // it should revert with InvalidValidationType error
-        bytes32 messageHash = keccak256("Hello world");
-        (bytes32 contentsHash, bytes memory sig) =
-            _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _rootSignHash, false, true);
-
-        Install[] memory packages = new Install[](1);
-        packages[0] = Install({moduleType: 1, module: address(newValidator), moduleData: hex"", internalData: hex""});
-
-        uint8 uMode = 0;
-        uMode += 2 ** 3; // enable mode flag
-
-        // ROOT validation type (0x00) is not allowed with enable mode
-        bytes memory sigWithEnable = abi.encodePacked(
-            uMode,
-            bytes1(0x00), // ROOT validation type
-            bytes20(0), // No validator address for root
-            abi.encode(uint256(0), packages, enableSig(0, true, false, packages, _rootSignHash), sig)
-        );
-
-        vm.expectRevert(InvalidValidationType.selector);
-        kernel.isValidSignature(_toContentsHash(contentsHash), sigWithEnable);
-    }
-
-    function test_GivenTheEnableNonceIsInvalid()
-        external
-        whenHashIsNotERC7739_MAGIC_HASH
-        givenTheSignatureModeByteIndicatesEnableMode
-    {
-        // it should revert with InvalidNonce error
-        // Note: isValidSignature is a view function, so nonces are validated but not consumed.
-        // To test invalid nonce, we use nonce 1 when stored nonce is 0 (invalid because seq != stored).
-        bytes32 messageHash = keccak256("Hello world");
-        (bytes32 contentsHash, bytes memory sig) =
-            _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _validatorSignHash, false, true);
-
-        Install[] memory packages = new Install[](1);
-        packages[0] = Install({moduleType: 1, module: address(newValidator), moduleData: hex"", internalData: hex""});
-
-        uint8 uMode = 0;
-        uMode += 2 ** 3; // enable mode flag
-
-        // Use nonce 1 when stored nonce is 0 - this is invalid
-        bytes memory sigWithEnable = abi.encodePacked(
-            uMode,
-            bytes1(0x01),
-            newValidator,
-            abi.encode(uint256(1), packages, enableSig(1, true, false, packages, _rootSignHash), sig)
-        );
-
-        vm.expectRevert(InvalidNonce.selector);
-        kernel.isValidSignature(_toContentsHash(contentsHash), sigWithEnable);
-    }
-
-    function test_GivenTheEnableSignatureIsInvalid()
-        external
-        whenHashIsNotERC7739_MAGIC_HASH
-        givenTheSignatureModeByteIndicatesEnableMode
-    {
-        // it should return ERC1271_INVALID
-        bytes32 messageHash = keccak256("Hello world");
-        (bytes32 contentsHash, bytes memory sig) =
-            _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _validatorSignHash, false, true);
-
-        Install[] memory packages = new Install[](1);
-        packages[0] = Install({moduleType: 1, module: address(newValidator), moduleData: hex"", internalData: hex""});
-
-        uint8 uMode = 0;
-        uMode += 2 ** 3; // enable mode flag
-
-        // Use invalid root signature for enable
-        bytes memory sigWithEnable = abi.encodePacked(
-            uMode,
-            bytes1(0x01),
-            newValidator,
-            abi.encode(uint256(0), packages, enableSig(0, false, false, packages, _rootSignHash), sig)
-        );
-
-        bytes4 res = kernel.isValidSignature(_toContentsHash(contentsHash), sigWithEnable);
-        assertEq(res, ERC1271_INVALID, "Enable mode with invalid signature should return INVALID");
-    }
-
-    modifier givenTheEnableSignatureIsValid() {
-        require(_enableMode, "Enable mode should be set");
-        _;
-    }
-
-    function test_GivenTheEnableSignatureIsValid()
-        external
-        whenHashIsNotERC7739_MAGIC_HASH
-        givenTheSignatureModeByteIndicatesEnableMode
-    {
-        // it should install the packages from the signature
-        // it should continue with the remaining signature validation
-        bytes32 messageHash = keccak256("Hello world");
-        (bytes32 contentsHash, bytes memory sig) =
-            _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _validatorSignHash, false, true);
-
-        Install[] memory packages = new Install[](1);
-        packages[0] = Install({moduleType: 1, module: address(newValidator), moduleData: hex"", internalData: hex""});
-
-        uint8 uMode = 0;
-        uMode += 2 ** 3; // enable mode flag
-
-        bytes memory sigWithEnable = abi.encodePacked(
-            uMode,
-            bytes1(0x01),
-            newValidator,
-            abi.encode(uint256(0), packages, enableSig(0, true, false, packages, _rootSignHash), sig)
-        );
-
-        bytes4 res = kernel.isValidSignature(_toContentsHash(contentsHash), sigWithEnable);
-        assertEq(res, ERC1271_MAGICVALUE, "Enable mode with valid signature should return MAGICVALUE");
-    }
-
-    function test_GivenTheValidatorPackageIsMissing()
-        external
-        whenHashIsNotERC7739_MAGIC_HASH
-        givenTheSignatureModeByteIndicatesEnableMode
-        givenTheEnableSignatureIsValid
-    {
-        // it should revert with InvalidValidator error
-        bytes32 messageHash = keccak256("Hello world");
-        (bytes32 contentsHash, bytes memory sig) =
-            _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _validatorSignHash, false, true);
-
-        // Create packages that don't include the validator specified in the signature
-        MockValidator wrongValidator = new MockValidator();
-        Install[] memory packages = new Install[](1);
-        packages[0] = Install({moduleType: 1, module: address(wrongValidator), moduleData: hex"", internalData: hex""});
-
-        uint8 uMode = 0;
-        uMode += 2 ** 3; // enable mode flag
-
-        // The signature specifies newValidator but packages install wrongValidator
-        bytes memory sigWithEnable = abi.encodePacked(
-            uMode,
-            bytes1(0x01),
-            newValidator, // This validator is NOT in the packages
-            abi.encode(uint256(0), packages, enableSig(0, true, false, packages, _rootSignHash), sig)
-        );
-
-        vm.expectRevert(InvalidValidator.selector);
-        kernel.isValidSignature(_toContentsHash(contentsHash), sigWithEnable);
-    }
-
-    function test_GivenThePermissionSignaturesAreInconsistent()
-        external
-        whenHashIsNotERC7739_MAGIC_HASH
-        givenTheSignatureModeByteIndicatesEnableMode
-        givenTheEnableSignatureIsValid
-    {
-        // it should revert with InvalidPermissionId error
-        bytes32 messageHash = keccak256("Hello world");
-        (bytes32 contentsHash, bytes memory sig) =
-            _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _permissionSignHash, false, true);
-
-        // Create packages with inconsistent permissionIds
-        MockPolicy mockPolicy = new MockPolicy();
-        MockSigner mockSigner = new MockSigner();
-        PermissionId permId1 = PermissionId.wrap(bytes4(keccak256("permId1")));
-        PermissionId permId2 = PermissionId.wrap(bytes4(keccak256("permId2"))); // Different!
-
-        // Set up the mock policy to pass validation so we can reach the permissionId consistency check
-        mockPolicy.sudoSetPass(address(kernel), bytes32(PermissionId.unwrap(permId1)), true);
-
-        Install[] memory packages = new Install[](2);
-        packages[0] = Install({
-            moduleType: 5, module: address(mockPolicy), moduleData: hex"", internalData: abi.encodePacked(permId1)
-        });
-        packages[1] = Install({
-            moduleType: 6,
-            module: address(mockSigner),
-            moduleData: hex"",
-            internalData: abi.encodePacked(permId2) // Different permissionId!
-        });
-
-        uint8 uMode = 0;
-        uMode += 2 ** 3; // enable mode flag
-
-        bytes memory sigWithEnable = abi.encodePacked(
-            uMode,
-            bytes1(0x02), // PERMISSION validation type
-            permId1,
-            abi.encode(uint256(0), packages, enableSig(0, true, false, packages, _rootSignHash), sig)
-        );
-
-        vm.expectRevert(InvalidPermissionId.selector);
-        kernel.isValidSignature(_toContentsHash(contentsHash), sigWithEnable);
-    }
-
-    function test_GivenEnableModeIsReplayable()
-        external
-        whenHashIsNotERC7739_MAGIC_HASH
-        givenTheSignatureModeByteIndicatesEnableMode
-    {
-        // it should verify the enable signature without chainId
-        // it should allow cross-chain enable mode
-        bytes32 messageHash = keccak256("Hello world");
-        (bytes32 contentsHash, bytes memory sig) =
-            _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _validatorSignHash, false, true);
-
-        Install[] memory packages = new Install[](1);
-        packages[0] = Install({moduleType: 1, module: address(newValidator), moduleData: hex"", internalData: hex""});
-
-        uint8 uMode = 0;
-        uMode += 2 ** 3; // enable mode flag
-        uMode += 2 ** 2; // replayable flag
-
-        bytes memory sigWithEnable = abi.encodePacked(
-            uMode,
-            bytes1(0x01),
-            newValidator,
-            abi.encode(uint256(0), packages, enableSig(0, true, true, packages, _rootSignHash), sig)
-        );
-
-        bytes4 res = kernel.isValidSignature(_toContentsHash(contentsHash), sigWithEnable);
-        assertEq(res, ERC1271_MAGICVALUE, "Replayable enable mode should validate");
-    }
-
-    function test_GivenEnableModeIsNotReplayable()
-        external
-        whenHashIsNotERC7739_MAGIC_HASH
-        givenTheSignatureModeByteIndicatesEnableMode
-    {
-        // it should verify the enable signature with chainId
-        // it should fail on different chains
-        bytes32 messageHash = keccak256("Hello world");
-        (bytes32 contentsHash, bytes memory sig) =
-            _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _validatorSignHash, false, true);
-
-        Install[] memory packages = new Install[](1);
-        packages[0] = Install({moduleType: 1, module: address(newValidator), moduleData: hex"", internalData: hex""});
-
-        uint8 uMode = 0;
-        uMode += 2 ** 3; // enable mode flag
-        // NOT replayable (no replayable flag)
-
-        bytes memory sigWithEnable = abi.encodePacked(
-            uMode,
-            bytes1(0x01),
-            newValidator,
-            abi.encode(uint256(0), packages, enableSig(0, true, false, packages, _rootSignHash), sig)
-        );
-
-        bytes4 res = kernel.isValidSignature(_toContentsHash(contentsHash), sigWithEnable);
-        assertEq(res, ERC1271_MAGICVALUE, "Non-replayable enable mode should validate on same chain");
     }
 
     modifier givenTheValidationTypeIsROOT() {
@@ -322,7 +55,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         (bytes32 contentsHash, bytes memory sig) =
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _rootSignHash, false, true);
 
-        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0), bytes1(0), sig));
+        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0), sig));
         assertEq(ret, ERC1271_MAGICVALUE, "Valid root signature should return MAGICVALUE");
     }
 
@@ -337,7 +70,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         (bytes32 contentsHash, bytes memory sig) =
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _rootSignHash, false, false);
 
-        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0), bytes1(0), sig));
+        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0), sig));
         assertEq(ret, ERC1271_INVALID, "Invalid root signature should return INVALID");
     }
 
@@ -357,7 +90,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         bytes32 personalHash = _toErc1271HashPersonalSign(messageHash);
         bytes memory sig = _rootSignHash(personalHash, true);
 
-        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0), bytes1(0), sig));
+        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0), sig));
         assertEq(ret, ERC1271_MAGICVALUE, "PersonalSign should wrap hash and validate");
     }
 
@@ -372,7 +105,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         bytes32 personalHash = _toErc1271HashPersonalSign(messageHash);
         bytes memory sig = _rootSignHash(personalHash, true);
 
-        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0), bytes1(0), sig));
+        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0), sig));
         assertEq(ret, ERC1271_MAGICVALUE, "Valid root PersonalSign should return MAGICVALUE");
     }
 
@@ -387,7 +120,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         bytes32 personalHash = _toErc1271HashPersonalSign(messageHash);
         bytes memory sig = _rootSignHash(personalHash, false);
 
-        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0), bytes1(0), sig));
+        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0), sig));
         assertEq(ret, ERC1271_INVALID, "Invalid root PersonalSign should return INVALID");
     }
 
@@ -401,7 +134,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         (bytes32 contentsHash, bytes memory sig) =
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _rootSignHash, false, true);
 
-        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0), bytes1(0), sig));
+        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0), sig));
         assertEq(ret, ERC1271_MAGICVALUE, "Full TypedDataSign structure should validate");
     }
 
@@ -426,8 +159,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _validatorSignHash, false, true);
 
         bytes4 ret = kernel.isValidSignature(
-            _toContentsHash(contentsHash),
-            abi.encodePacked(bytes1(0), bytes1(0x01), bytes20(address(newValidator)), sig)
+            _toContentsHash(contentsHash), abi.encodePacked(bytes1(0x01), bytes20(address(newValidator)), sig)
         );
         assertEq(ret, ERC1271_MAGICVALUE, "Valid validator signature should return MAGICVALUE");
     }
@@ -448,8 +180,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _validatorSignHash, false, false);
 
         bytes4 ret = kernel.isValidSignature(
-            _toContentsHash(contentsHash),
-            abi.encodePacked(bytes1(0), bytes1(0x01), bytes20(address(newValidator)), sig)
+            _toContentsHash(contentsHash), abi.encodePacked(bytes1(0x01), bytes20(address(newValidator)), sig)
         );
         assertEq(ret, ERC1271_INVALID, "Invalid validator signature should return INVALID");
     }
@@ -469,9 +200,8 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         bytes32 personalHash = _toErc1271HashPersonalSign(messageHash);
         bytes memory sig = _validatorSignHash(personalHash, true);
 
-        bytes4 ret = kernel.isValidSignature(
-            messageHash, abi.encodePacked(bytes1(0), bytes1(0x01), bytes20(address(newValidator)), sig)
-        );
+        bytes4 ret =
+            kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0x01), bytes20(address(newValidator)), sig));
         assertEq(ret, ERC1271_MAGICVALUE, "Valid validator PersonalSign should return MAGICVALUE");
     }
 
@@ -490,9 +220,8 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         bytes32 personalHash = _toErc1271HashPersonalSign(messageHash);
         bytes memory sig = _validatorSignHash(personalHash, false);
 
-        bytes4 ret = kernel.isValidSignature(
-            messageHash, abi.encodePacked(bytes1(0), bytes1(0x01), bytes20(address(newValidator)), sig)
-        );
+        bytes4 ret =
+            kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0x01), bytes20(address(newValidator)), sig));
         assertEq(ret, ERC1271_INVALID, "Invalid validator PersonalSign should return INVALID");
     }
 
@@ -517,9 +246,8 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         (bytes32 contentsHash, bytes memory sig) =
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _permissionSignHash, false, true);
 
-        bytes4 ret = kernel.isValidSignature(
-            _toContentsHash(contentsHash), abi.encodePacked(bytes1(0), bytes1(0x02), permissionId, sig)
-        );
+        bytes4 ret =
+            kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0x02), permissionId, sig));
         assertEq(ret, ERC1271_MAGICVALUE, "Valid permission should return MAGICVALUE");
     }
 
@@ -540,9 +268,8 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         (bytes32 contentsHash, bytes memory sig) =
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _permissionSignHash, false, false);
 
-        bytes4 ret = kernel.isValidSignature(
-            _toContentsHash(contentsHash), abi.encodePacked(bytes1(0), bytes1(0x02), permissionId, sig)
-        );
+        bytes4 ret =
+            kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0x02), permissionId, sig));
         assertEq(ret, ERC1271_INVALID, "Failed policy should return INVALID");
     }
 
@@ -563,9 +290,8 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         (bytes32 contentsHash, bytes memory sig) =
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _permissionSignHash, false, false);
 
-        bytes4 ret = kernel.isValidSignature(
-            _toContentsHash(contentsHash), abi.encodePacked(bytes1(0), bytes1(0x02), permissionId, sig)
-        );
+        bytes4 ret =
+            kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0x02), permissionId, sig));
         assertEq(ret, ERC1271_INVALID, "Invalid signer should return INVALID");
     }
 
@@ -585,7 +311,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         bytes32 personalHash = _toErc1271HashPersonalSign(messageHash);
         bytes memory sig = _permissionSignHash(personalHash, true);
 
-        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0), bytes1(0x02), permissionId, sig));
+        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0x02), permissionId, sig));
         assertEq(ret, ERC1271_MAGICVALUE, "Valid permission PersonalSign should return MAGICVALUE");
     }
 
@@ -606,7 +332,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         permissionRevertIndex = 0; // policy fails
         bytes memory sig = _permissionSignHash(personalHash, false);
 
-        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0), bytes1(0x02), permissionId, sig));
+        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0x02), permissionId, sig));
         assertEq(ret, ERC1271_INVALID, "Failed policy/signer should return INVALID");
     }
 
@@ -617,7 +343,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         bytes memory sig = _permissionSignHash(personalHash, true);
 
         vm.expectRevert(InvalidValidationType.selector);
-        kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0), bytes1(0xee), permissionId, sig));
+        kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0xee), permissionId, sig));
     }
 
     function test_GivenTheSignatureIsWrappedWithERC6492Sentinel() external whenHashIsNotERC7739_MAGIC_HASH {
@@ -626,7 +352,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         (bytes32 contentsHash, bytes memory innerSig) =
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _rootSignHash, false, true);
 
-        bytes memory fullInnerSig = abi.encodePacked(bytes1(0), bytes1(0), innerSig);
+        bytes memory fullInnerSig = abi.encodePacked(bytes1(0), innerSig);
 
         // Wrap with ERC6492 sentinel: abi.encode(address, bytes, bytes) ++ sentinel
         // The sentinel is 0x6492...6492
@@ -659,7 +385,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         (bytes32 contentsHash, bytes memory sig) =
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "MyContents", _rootSignHash, true, true);
 
-        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0), bytes1(0), sig));
+        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0), sig));
         assertEq(ret, ERC1271_MAGICVALUE, "Valid explicit contentsName should return MAGICVALUE");
     }
 
@@ -673,7 +399,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         (bytes32 contentsHash, bytes memory sig) =
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "MyContents", _rootSignHash, true, false);
 
-        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0), bytes1(0), sig));
+        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0), sig));
         assertEq(ret, ERC1271_INVALID, "Invalid explicit contentsName should return INVALID");
     }
 
@@ -693,7 +419,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         (bytes32 contentsHash, bytes memory sig) =
             _erc1271SignatureReplayableExplicit(messageHash, "C(bytes32 stuff)", "MyContents", _rootSignHash, true);
 
-        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0), bytes1(0), sig));
+        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0), sig));
         assertEq(ret, ERC1271_MAGICVALUE, "Valid replayable explicit contentsName should return MAGICVALUE");
     }
 
@@ -707,7 +433,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         (bytes32 contentsHash, bytes memory sig) =
             _erc1271SignatureReplayableExplicit(messageHash, "C(bytes32 stuff)", "MyContents", _rootSignHash, false);
 
-        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0), bytes1(0), sig));
+        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0), sig));
         assertEq(ret, ERC1271_INVALID, "Invalid replayable explicit contentsName should return INVALID");
     }
 
@@ -721,7 +447,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         // Signature won't match TypedDataSign reconstruction, falls to PersonalSign.
         // PersonalSign wraps hash and calls _erc1271IsValidSignatureNowCalldata.
         // ROOT type with root=0 triggers _verifyFallbackSignature -> returns false.
-        bytes4 ret = uninit.isValidSignature(messageHash, abi.encodePacked(bytes1(0), bytes1(0), bytes32(0)));
+        bytes4 ret = uninit.isValidSignature(messageHash, abi.encodePacked(bytes1(0), bytes32(0)));
         assertEq(ret, ERC1271_INVALID, "Uninitialized kernel should return INVALID via fallback");
     }
 
@@ -740,7 +466,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         (bytes32 contentsHash, bytes memory sig) =
             _erc1271SignatureReplayable(messageHash, "C(bytes32 stuff)", _rootSignHash, true);
 
-        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0), bytes1(0), sig));
+        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0), sig));
         assertEq(ret, ERC1271_MAGICVALUE, "Valid replayable TypedDataSign should return MAGICVALUE");
     }
 
@@ -754,7 +480,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         (bytes32 contentsHash, bytes memory sig) =
             _erc1271SignatureReplayable(messageHash, "C(bytes32 stuff)", _rootSignHash, false);
 
-        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0), bytes1(0), sig));
+        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0), sig));
         assertEq(ret, ERC1271_INVALID, "Invalid replayable TypedDataSign should return INVALID");
     }
     /*//////////////////////////////////////////////////////////////
@@ -791,7 +517,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         (bytes32 contentsHash, bytes memory sig) =
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _rootSignHash, false, true);
 
-        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0), bytes1(0), sig));
+        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0), sig));
 
         assertEq(ret, ERC1271_MAGICVALUE, "Valid root signature should return MAGICVALUE");
     }
@@ -808,7 +534,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         (bytes32 contentsHash, bytes memory sig) =
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _rootSignHash, false, false);
 
-        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0), bytes1(0), sig));
+        bytes4 ret = kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0), sig));
 
         assertEq(ret, ERC1271_INVALID, "Invalid root signature should return INVALID");
     }
@@ -825,7 +551,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         bytes32 personalHash = _toErc1271HashPersonalSign(messageHash);
         bytes memory sig = _rootSignHash(personalHash, true);
 
-        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0), bytes1(0), sig));
+        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0), sig));
 
         assertEq(ret, ERC1271_MAGICVALUE, "Valid root PersonalSign should return MAGICVALUE");
     }
@@ -842,7 +568,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         bytes32 personalHash = _toErc1271HashPersonalSign(messageHash);
         bytes memory sig = _rootSignHash(personalHash, false);
 
-        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0), bytes1(0), sig));
+        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0), sig));
 
         assertEq(ret, ERC1271_INVALID, "Invalid root PersonalSign should return INVALID");
     }
@@ -868,8 +594,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         ValidationId vId = validatorToIdentifier(IValidator(address(newValidator)));
         vm.expectRevert(abi.encodeWithSelector(InvalidVid.selector, vId));
         kernel.isValidSignature(
-            _toContentsHash(contentsHash),
-            abi.encodePacked(bytes1(0), bytes1(0x01), bytes20(address(newValidator)), sig)
+            _toContentsHash(contentsHash), abi.encodePacked(bytes1(0x01), bytes20(address(newValidator)), sig)
         );
     }
 
@@ -887,8 +612,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _validatorSignHash, false, true);
 
         bytes4 ret = kernel.isValidSignature(
-            _toContentsHash(contentsHash),
-            abi.encodePacked(bytes1(0), bytes1(0x01), bytes20(address(newValidator)), sig)
+            _toContentsHash(contentsHash), abi.encodePacked(bytes1(0x01), bytes20(address(newValidator)), sig)
         );
 
         assertEq(ret, ERC1271_MAGICVALUE, "Valid validator signature should return MAGICVALUE");
@@ -908,8 +632,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _validatorSignHash, false, false);
 
         bytes4 ret = kernel.isValidSignature(
-            _toContentsHash(contentsHash),
-            abi.encodePacked(bytes1(0), bytes1(0x01), bytes20(address(newValidator)), sig)
+            _toContentsHash(contentsHash), abi.encodePacked(bytes1(0x01), bytes20(address(newValidator)), sig)
         );
 
         assertEq(ret, ERC1271_INVALID, "Invalid validator signature should return INVALID");
@@ -928,9 +651,8 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         bytes32 personalHash = _toErc1271HashPersonalSign(messageHash);
         bytes memory sig = _validatorSignHash(personalHash, true);
 
-        bytes4 ret = kernel.isValidSignature(
-            messageHash, abi.encodePacked(bytes1(0), bytes1(0x01), bytes20(address(newValidator)), sig)
-        );
+        bytes4 ret =
+            kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0x01), bytes20(address(newValidator)), sig));
 
         assertEq(ret, ERC1271_MAGICVALUE, "Valid validator PersonalSign should return MAGICVALUE");
     }
@@ -953,9 +675,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
 
         ValidationId vId = permissionToIdentifier(permissionId);
         vm.expectRevert(abi.encodeWithSelector(InvalidVid.selector, vId));
-        kernel.isValidSignature(
-            _toContentsHash(contentsHash), abi.encodePacked(bytes1(0), bytes1(0x02), permissionId, sig)
-        );
+        kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0x02), permissionId, sig));
     }
 
     /// @notice it should return ERC1271_INVALID when any policy fails
@@ -970,9 +690,8 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         (bytes32 contentsHash, bytes memory sig) =
             _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _permissionSignHash, false, false);
 
-        bytes4 ret = kernel.isValidSignature(
-            _toContentsHash(contentsHash), abi.encodePacked(bytes1(0), bytes1(0x02), permissionId, sig)
-        );
+        bytes4 ret =
+            kernel.isValidSignature(_toContentsHash(contentsHash), abi.encodePacked(bytes1(0x02), permissionId, sig));
 
         assertEq(ret, ERC1271_INVALID, "Failed policy should return INVALID");
     }
@@ -990,7 +709,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         bytes32 personalHash = _toErc1271HashPersonalSign(messageHash);
         bytes memory sig = _permissionSignHash(personalHash, true);
 
-        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0), bytes1(0x02), permissionId, sig));
+        bytes4 ret = kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0x02), permissionId, sig));
 
         assertEq(ret, ERC1271_MAGICVALUE, "Valid permission PersonalSign should return MAGICVALUE");
     }
@@ -1006,106 +725,7 @@ abstract contract Kernel_isValidSignature is BTTModifiers {
         bytes memory sig = _permissionSignHash(personalHash, true);
 
         vm.expectRevert(InvalidValidationType.selector);
-        kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0), bytes1(0xee), permissionId, sig));
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                        ENABLE MODE TESTS
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice it should install packages and validate when enable mode signature is valid
-    function test_isValidSignature_WhenEnableModeWithValidSignature()
-        external
-        unitTest
-        givenHashIsNotERC7739MagicHash
-        givenSignatureModeIndicatesEnableMode
-        givenValidationTypeIsValidator
-    {
-        bytes32 messageHash = keccak256("Hello world");
-        (bytes32 contentsHash, bytes memory sig) =
-            _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _validatorSignHash, false, true);
-
-        Install[] memory packages = new Install[](1);
-        packages[0] = Install({moduleType: 1, module: address(newValidator), moduleData: hex"", internalData: hex""});
-
-        uint8 uMode = 0;
-        uMode += 2 ** 3; // enable mode flag
-
-        bytes memory sigWithEnable = abi.encodePacked(
-            uMode,
-            bytes1(0x01),
-            newValidator,
-            abi.encode(uint256(0), packages, enableSig(0, true, false, packages, _rootSignHash), sig)
-        );
-
-        bytes4 res = kernel.isValidSignature(_toContentsHash(contentsHash), sigWithEnable);
-
-        assertEq(res, ERC1271_MAGICVALUE, "Enable mode with valid signature should return MAGICVALUE");
-    }
-
-    /// @notice it should return ERC1271_INVALID when enable mode signature is invalid
-    function test_isValidSignature_WhenEnableModeWithInvalidSignature()
-        external
-        unitTest
-        givenHashIsNotERC7739MagicHash
-        givenSignatureModeIndicatesEnableMode
-        givenValidationTypeIsValidator
-    {
-        bytes32 messageHash = keccak256("Hello world");
-        (bytes32 contentsHash, bytes memory sig) =
-            _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _validatorSignHash, false, false);
-
-        Install[] memory packages = new Install[](1);
-        packages[0] = Install({moduleType: 1, module: address(newValidator), moduleData: hex"", internalData: hex""});
-
-        uint8 uMode = 0;
-        uMode += 2 ** 3; // enable mode flag
-
-        bytes memory sigWithEnable = abi.encodePacked(
-            uMode,
-            bytes1(0x01),
-            newValidator,
-            abi.encode(uint256(0), packages, enableSig(0, true, false, packages, _rootSignHash), sig)
-        );
-
-        bytes4 res = kernel.isValidSignature(_toContentsHash(contentsHash), sigWithEnable);
-
-        assertEq(res, ERC1271_INVALID, "Enable mode with invalid signature should return INVALID");
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                        REPLAYABLE MODE TESTS
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice it should allow cross-chain enable mode with replayable signature
-    function test_WhenEnableModeReplayable_CrossChainValid() external unitTest givenHashIsNotERC7739MagicHash {
-        bytes32 messageHash = keccak256("Hello world");
-        (bytes32 contentsHash, bytes memory sig) =
-            _erc1271Signature(messageHash, "C(bytes32 stuff)", "", _validatorSignHash, false, true);
-
-        Install[] memory packages = new Install[](1);
-        packages[0] = Install({moduleType: 1, module: address(newValidator), moduleData: hex"", internalData: hex""});
-
-        uint8 uMode = 0;
-        uMode += 2 ** 3; // enable mode flag
-        uMode += 2 ** 2; // replayable flag
-
-        bytes memory sigWithEnable = abi.encodePacked(
-            uMode,
-            bytes1(0x01),
-            newValidator,
-            abi.encode(uint256(0), packages, enableSig(0, true, true, packages, _rootSignHash), sig)
-        );
-
-        bytes4 res = kernel.isValidSignature(_toContentsHash(contentsHash), sigWithEnable);
-        assertEq(res, ERC1271_MAGICVALUE, "Replayable enable mode should validate");
-
-        // Simulate different chain by changing chainId (if not mock)
-        if (!isMock) {
-            vm.chainId(1000);
-            res = kernel.isValidSignature(_toContentsHash(contentsHash), sigWithEnable);
-            assertEq(res, ERC1271_MAGICVALUE, "Replayable should work on different chain");
-        }
+        kernel.isValidSignature(messageHash, abi.encodePacked(bytes1(0xee), permissionId, sig));
     }
 
     /*//////////////////////////////////////////////////////////////

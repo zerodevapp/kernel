@@ -108,9 +108,8 @@ contract KernelFactory_Test is Test {
         Kernel account = factory.deploy(packages, 0);
 
         // Verify root validator is installed
-        assertEq(
-            account.validationInfo(validatorToIdentifier(IValidator(address(rootValidator)))).hook,
-            address(1),
+        assertTrue(
+            account.validationInfo(validatorToIdentifier(IValidator(address(rootValidator)))).installed,
             "Root validator should be installed"
         );
     }

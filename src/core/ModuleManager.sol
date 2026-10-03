@@ -1,35 +1,26 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {IHook, IExecutor, IModule, IValidator, IStatelessValidatorWithSender} from "../interfaces/IERC7579Modules.sol";
+import {IModule, IValidator, IExecutor, IScopedExecutionHook} from "../interfaces/IERC7579Modules.sol";
 import {ValidationManager} from "./ValidationManager.sol";
 import {ExecutorManager} from "./ExecutorManager.sol";
-import {HookManager} from "./HookManager.sol";
 import {SelectorManager} from "./SelectorManager.sol";
 import {ERC1271} from "../lib/ERC1271.sol";
 import {
     InvalidValidationType,
     InvalidNonce,
-    InvalidValidator,
-    InvalidPermissionId,
-    InvalidSignature,
     NotImplemented,
-    Unauthorized,
     PermissionInstallNotFinished,
-    LastSignatureShouldBeSigner
+    InvalidDataLength,
+    InvalidScopedExecutionHookTarget,
+    ScopedExecutionHookAlreadyInstalled,
+    ModuleInstallFailed
 } from "../types/Error.sol";
 import {ModuleInstalled, ModuleUninstalled} from "../types/Events.sol";
-import {Install, EnableModeSignature, ModuleStorage, PermissionSignature} from "../types/Structs.sol";
-import {
-    ValidationId,
-    ValidationMode,
-    ValidationType,
-    PermissionId,
-    isEnable,
-    isEnableReplayable
-} from "../types/Types.sol";
+import {Install, ModuleStorage, ExecutorConfig, SelectorConfig} from "../types/Structs.sol";
+import {ValidationId, ValidationType, PermissionId} from "../types/Types.sol";
 import {Lib4337} from "../lib/Lib4337.sol";
-import {getType, getValidator, getPermissionId, validatorToIdentifier, permissionToIdentifier} from "../lib/Utils.sol";
+import {getType, validatorToIdentifier, permissionToIdentifier} from "../lib/Utils.sol";
 import {
     MODULE_MANAGER_STORAGE_SLOT,
     VALIDATION_TYPE_ROOT,
@@ -40,27 +31,26 @@ import {
     MODULE_TYPE_VALIDATOR,
     MODULE_TYPE_EXECUTOR,
     MODULE_TYPE_FALLBACK,
-    MODULE_TYPE_HOOK,
     MODULE_TYPE_POLICY,
     MODULE_TYPE_SIGNER,
-    HOOK_MODULE_NOT_INSTALLED
+    MODULE_TYPE_SCOPED_EXECUTION_HOOK,
+    SCOPED_EXECUTION_HOOK_VALIDATION_SCOPE,
+    SCOPED_EXECUTION_HOOK_EXECUTOR_SCOPE,
+    SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE,
+    SELECTOR_NOT_INSTALLED,
+    SCOPED_EXECUTION_HOOK_NOT_INSTALLED,
+    SCOPED_EXECUTION_HOOK_TARGET_OFFSET,
+    SCOPED_EXECUTION_HOOK_VALIDATION_DATA_LENGTH,
+    SCOPED_EXECUTION_HOOK_EXECUTOR_DATA_LENGTH,
+    SCOPED_EXECUTION_HOOK_SELECTOR_DATA_LENGTH
 } from "../types/Constants.sol";
 import {EfficientHashLib} from "solady/utils/EfficientHashLib.sol";
 
 /// @title ModuleManager
 /// @author taek <leekt216@gmail.com>
-/// @notice Composes validation, executor, hook, and selector managers; handles module installation,
+/// @notice Composes validation, executor, and selector managers; handles module installation,
 ///         enable-mode signature verification, nonce management, and ERC-1271 signature flows.
-abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManager, SelectorManager, ERC1271 {
-    /// @dev Modifier that wraps executor calls with their configured hook's pre/post checks.
-    modifier executorHook() {
-        IHook hook = _executorConfig(IExecutor(msg.sender)).hook;
-        require(address(hook) != HOOK_MODULE_NOT_INSTALLED, Unauthorized());
-        bytes memory hookData = _preHook(hook, msg.data);
-        _;
-        _postHook(hook, hookData);
-    }
-
+abstract contract ModuleManager is ValidationManager, ExecutorManager, SelectorManager, ERC1271 {
     /// @dev Override this function to integrate an ERC-7484 module registry check.
     function _installModuleCheck(uint256 moduleType, address module) internal virtual {}
 
@@ -93,19 +83,20 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         return (uint256(key) << 64) + seq;
     }
 
-    function _hookEnabled(IHook _hook)
-        internal
-        view
-        override(ValidationManager, ExecutorManager, HookManager, SelectorManager)
-        returns (bool)
-    {
-        return HookManager._hookEnabled(_hook);
-    }
-
     function _moduleStorage() internal pure returns (ModuleStorage storage $) {
         assembly {
             $.slot := MODULE_MANAGER_STORAGE_SLOT
         }
+    }
+
+    /// @dev Raw (non-nested) ERC-1271 exists so a 7702 account matches the signing behavior of the
+    ///      EOA it delegates from. Only the fallback signer is account-bound by construction: its
+    ///      key *is* the account address. Installed validators and permissions are not, so they are
+    ///      excluded here and must go through the nested EIP-712 flow, which binds the signature to
+    ///      this account's domain. Dispatching the raw hash to them would let a signature accepted
+    ///      by one account replay against every other account sharing the module.
+    function _erc1271Raw(bytes32 hash, bytes calldata signature) internal view override returns (bool) {
+        return _erc1271RawAllowed() && _verifyFallbackSignature(hash, signature);
     }
 
     function _erc1271IsValidSignatureNowCalldata(bytes32 hash, bytes calldata signature)
@@ -114,47 +105,26 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         override
         returns (bool result)
     {
-        // check if fallback signature is allowed
-        if (_erc1271RawAllowed()) {
-            result = _verifyFallbackSignature(hash, signature);
+        bool rawAllowed = _erc1271RawAllowed();
+        if (rawAllowed && _verifyFallbackSignature(hash, signature)) return true;
+        if (signature.length == 0) return false;
+        ValidationType vType = ValidationType.wrap(bytes1(signature[0]));
+        ValidationId vId;
+        if (vType == VALIDATION_TYPE_ROOT) {
+            vId = _validationStorage().root;
+            signature = signature[1:];
+        } else if (vType == VALIDATION_TYPE_VALIDATOR) {
+            if (signature.length < 21) return false;
+            vId = validatorToIdentifier(IValidator(address(bytes20(signature[1:21]))));
+            signature = signature[21:];
+        } else if (vType == VALIDATION_TYPE_PERMISSION) {
+            if (signature.length < 5) return false;
+            vId = permissionToIdentifier(PermissionId.wrap(bytes4(signature[1:5])));
+            signature = signature[5:];
+        } else {
+            revert InvalidValidationType();
         }
-        if (!result) {
-            ValidationMode vMode = ValidationMode.wrap(bytes1(signature[0]));
-            ValidationType vType = ValidationType.wrap(bytes1(signature[1]));
-            ValidationId vId;
-            if (vType == VALIDATION_TYPE_ROOT) {
-                vId = _validationStorage().root;
-                signature = signature[2:];
-            } else if (vType == VALIDATION_TYPE_VALIDATOR) {
-                vId = validatorToIdentifier(IValidator(address(bytes20(signature[2:22]))));
-                signature = signature[22:];
-            } else if (vType == VALIDATION_TYPE_PERMISSION) {
-                vId = permissionToIdentifier(PermissionId.wrap(bytes4(signature[2:6])));
-                signature = signature[6:];
-            } else {
-                revert InvalidValidationType();
-            }
-            uint256 validationData;
-            if (isEnable(vMode)) {
-                require(vType != VALIDATION_TYPE_ROOT, InvalidValidationType());
-                bool enableReplayable = isEnableReplayable(vMode);
-                EnableModeSignature calldata sig;
-                assembly {
-                    sig := signature.offset
-                }
-                if (!Lib4337.checkValidation(
-                        _verifyInstallSignatureRaw(enableReplayable, sig.nonce, sig.packages, sig.enableSignature)
-                    )) {
-                    // if enable sig is invalid, short circuit
-                    return false;
-                }
-                _checkNonce(sig.nonce);
-                return _verifyStatelessSignature(sig.packages, vId, hash, sig.userOpSignature);
-            } else {
-                validationData = _verifySignature(vId, msg.sender, hash, signature);
-            }
-            result = Lib4337.checkValidation(validationData);
-        }
+        result = Lib4337.checkValidation(_verifySignature(vId, msg.sender, hash, signature));
     }
 
     /// @notice Computes the EIP-712 hash of an array of Install packages.
@@ -181,8 +151,129 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         return EfficientHashLib.hash(buffer);
     }
 
+    /// @notice Installs a scoped execution hook for a validation, executor, or selector.
+    /// @dev internalData is `[scope | target]`: 22 bytes for a ValidationId,
+    ///      21 bytes for an executor address, or 5 bytes for a selector.
+    function _installScopedExecutionHook(address hook, bytes calldata internalData, bool installSuccess) internal {
+        require(installSuccess && hook.code.length > 0, ModuleInstallFailed());
+        bytes1 scope = _scopedExecutionHookScope(internalData);
+        if (scope == SCOPED_EXECUTION_HOOK_VALIDATION_SCOPE) {
+            require(internalData.length == SCOPED_EXECUTION_HOOK_VALIDATION_DATA_LENGTH, InvalidDataLength());
+            ValidationId vId = ValidationId.wrap(
+                bytes21(internalData[SCOPED_EXECUTION_HOOK_TARGET_OFFSET:SCOPED_EXECUTION_HOOK_VALIDATION_DATA_LENGTH])
+            );
+            ValidationType vType = getType(vId);
+            require(
+                vType == VALIDATION_TYPE_VALIDATOR || vType == VALIDATION_TYPE_PERMISSION,
+                InvalidScopedExecutionHookTarget()
+            );
+            _installValidationScopedExecutionHook(hook, vId, installSuccess);
+        } else if (scope == SCOPED_EXECUTION_HOOK_EXECUTOR_SCOPE) {
+            require(internalData.length == SCOPED_EXECUTION_HOOK_EXECUTOR_DATA_LENGTH, InvalidDataLength());
+            IExecutor executor = IExecutor(
+                address(
+                    bytes20(
+                        internalData[SCOPED_EXECUTION_HOOK_TARGET_OFFSET:SCOPED_EXECUTION_HOOK_EXECUTOR_DATA_LENGTH]
+                    )
+                )
+            );
+            ExecutorConfig storage config = _executorConfig(executor);
+            require(config.installed, InvalidScopedExecutionHookTarget());
+            require(
+                address(config.scopedExecutionHook) == SCOPED_EXECUTION_HOOK_NOT_INSTALLED,
+                ScopedExecutionHookAlreadyInstalled()
+            );
+            config.scopedExecutionHook = IScopedExecutionHook(hook);
+        } else if (scope == SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE) {
+            require(internalData.length == SCOPED_EXECUTION_HOOK_SELECTOR_DATA_LENGTH, InvalidDataLength());
+            bytes4 selector =
+                bytes4(internalData[SCOPED_EXECUTION_HOOK_TARGET_OFFSET:SCOPED_EXECUTION_HOOK_SELECTOR_DATA_LENGTH]);
+            SelectorConfig storage config = _selectorConfig(selector);
+            require(config.target != SELECTOR_NOT_INSTALLED, InvalidScopedExecutionHookTarget());
+            require(
+                address(config.scopedExecutionHook) == SCOPED_EXECUTION_HOOK_NOT_INSTALLED,
+                ScopedExecutionHookAlreadyInstalled()
+            );
+            config.scopedExecutionHook = IScopedExecutionHook(hook);
+        } else {
+            revert InvalidScopedExecutionHookTarget();
+        }
+    }
+
+    /// @notice Uninstalls a scoped execution hook from a validation, executor, or selector.
+    function _uninstallScopedExecutionHook(address hook, bytes calldata internalData, bool) internal {
+        bytes1 scope = _scopedExecutionHookScope(internalData);
+        if (scope == SCOPED_EXECUTION_HOOK_VALIDATION_SCOPE) {
+            require(internalData.length == SCOPED_EXECUTION_HOOK_VALIDATION_DATA_LENGTH, InvalidDataLength());
+            _uninstallScopedExecutionHookWithVid(
+                hook,
+                ValidationId.wrap(
+                    bytes21(
+                        internalData[SCOPED_EXECUTION_HOOK_TARGET_OFFSET:SCOPED_EXECUTION_HOOK_VALIDATION_DATA_LENGTH]
+                    )
+                )
+            );
+        } else if (scope == SCOPED_EXECUTION_HOOK_EXECUTOR_SCOPE) {
+            require(internalData.length == SCOPED_EXECUTION_HOOK_EXECUTOR_DATA_LENGTH, InvalidDataLength());
+            ExecutorConfig storage config = _executorConfig(
+                IExecutor(
+                    address(
+                        bytes20(
+                            internalData[SCOPED_EXECUTION_HOOK_TARGET_OFFSET:SCOPED_EXECUTION_HOOK_EXECUTOR_DATA_LENGTH]
+                        )
+                    )
+                )
+            );
+            require(address(config.scopedExecutionHook) == hook, InvalidScopedExecutionHookTarget());
+            config.scopedExecutionHook = IScopedExecutionHook(SCOPED_EXECUTION_HOOK_NOT_INSTALLED);
+        } else if (scope == SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE) {
+            require(internalData.length == SCOPED_EXECUTION_HOOK_SELECTOR_DATA_LENGTH, InvalidDataLength());
+            SelectorConfig storage config = _selectorConfig(
+                bytes4(internalData[SCOPED_EXECUTION_HOOK_TARGET_OFFSET:SCOPED_EXECUTION_HOOK_SELECTOR_DATA_LENGTH])
+            );
+            require(address(config.scopedExecutionHook) == hook, InvalidScopedExecutionHookTarget());
+            config.scopedExecutionHook = IScopedExecutionHook(SCOPED_EXECUTION_HOOK_NOT_INSTALLED);
+        } else {
+            revert InvalidScopedExecutionHookTarget();
+        }
+    }
+
+    function _scopedExecutionHookScope(bytes calldata internalData) private pure returns (bytes1 scope) {
+        require(internalData.length > 0, InvalidDataLength());
+        scope = bytes1(internalData[0]);
+    }
+
+    function _isScopedExecutionHookInstalled(address hook, bytes calldata context) internal view returns (bool) {
+        if (context.length == 0) return false;
+        bytes1 scope = bytes1(context[0]);
+        if (scope == SCOPED_EXECUTION_HOOK_VALIDATION_SCOPE) {
+            if (context.length != SCOPED_EXECUTION_HOOK_VALIDATION_DATA_LENGTH) return false;
+            ValidationId vId = ValidationId.wrap(
+                bytes21(context[SCOPED_EXECUTION_HOOK_TARGET_OFFSET:SCOPED_EXECUTION_HOOK_VALIDATION_DATA_LENGTH])
+            );
+            return address(_validationStorage().vInfo[vId].scopedExecutionHook) == hook;
+        }
+        if (scope == SCOPED_EXECUTION_HOOK_EXECUTOR_SCOPE) {
+            if (context.length != SCOPED_EXECUTION_HOOK_EXECUTOR_DATA_LENGTH) return false;
+            address executor = address(
+                bytes20(context[SCOPED_EXECUTION_HOOK_TARGET_OFFSET:SCOPED_EXECUTION_HOOK_EXECUTOR_DATA_LENGTH])
+            );
+            return address(_executorConfig(IExecutor(executor)).scopedExecutionHook) == hook;
+        }
+        if (scope == SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE) {
+            if (context.length != SCOPED_EXECUTION_HOOK_SELECTOR_DATA_LENGTH) return false;
+            return address(
+                _selectorConfig(
+                bytes4(context[SCOPED_EXECUTION_HOOK_TARGET_OFFSET:SCOPED_EXECUTION_HOOK_SELECTOR_DATA_LENGTH])
+            )
+                .scopedExecutionHook
+            ) == hook;
+        }
+        return false;
+    }
+
     /// @notice Routes a module installation to the appropriate type-specific handler.
-    /// @param moduleType The module type (1=validator, 2=executor, 3=fallback, 4=hook, 5=policy, 6=signer).
+    /// @param moduleType The module type (1=validator, 2=executor, 3=fallback, 5=policy, 6=signer, 11=scoped execution hook).
     /// @param module The module address.
     /// @param moduleData Data forwarded to the module's onInstall callback.
     /// @param internalData Kernel-internal configuration data (format varies by module type).
@@ -197,12 +288,12 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
             hook = _installExecutor;
         } else if (moduleType == MODULE_TYPE_FALLBACK) {
             hook = _installSelector;
-        } else if (moduleType == MODULE_TYPE_HOOK) {
-            hook = _installHook;
         } else if (moduleType == MODULE_TYPE_POLICY) {
             hook = _installPolicy;
         } else if (moduleType == MODULE_TYPE_SIGNER) {
             hook = _installSigner;
+        } else if (moduleType == MODULE_TYPE_SCOPED_EXECUTION_HOOK) {
+            hook = _installScopedExecutionHook;
         } else {
             revert NotImplemented();
         }
@@ -228,12 +319,12 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
             hook = _uninstallExecutor;
         } else if (moduleType == MODULE_TYPE_FALLBACK) {
             hook = _uninstallSelector;
-        } else if (moduleType == MODULE_TYPE_HOOK) {
-            hook = _uninstallHook;
         } else if (moduleType == MODULE_TYPE_POLICY) {
             hook = _uninstallPolicy;
         } else if (moduleType == MODULE_TYPE_SIGNER) {
             hook = _uninstallSigner;
+        } else if (moduleType == MODULE_TYPE_SCOPED_EXECUTION_HOOK) {
+            hook = _uninstallScopedExecutionHook;
         } else {
             revert NotImplemented();
         }
@@ -273,7 +364,11 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         hook(module, internalData, success);
     }
 
-    /// @notice Calls a module's onUninstall and passes the result to the type-specific handler.
+    /// @notice Revokes a module via the type-specific handler, then calls its onUninstall.
+    /// @dev Authority is cleared BEFORE the callback: `executeFromExecutor` authorizes on the
+    ///      executor's `installed` flag alone, so a callback fired first could reenter it while
+    ///      still installed and with its scoped hook already removed. Every uninstall handler
+    ///      ignores the success flag, so the callback result is not observed.
     /// @param module The module address.
     /// @param data Data forwarded to onUninstall.
     /// @param internalData Internal configuration data forwarded to the handler.
@@ -284,8 +379,9 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         bytes calldata internalData,
         function(address, bytes calldata, bool) hook
     ) internal {
-        (bool success,) = module.call(abi.encodeWithSelector(IModule.onUninstall.selector, data));
-        hook(module, internalData, success);
+        hook(module, internalData, true);
+        // forge-lint: disable-next-line(unchecked-call)
+        module.call(abi.encodeWithSelector(IModule.onUninstall.selector, data));
     }
 
     /// @notice Verifies an install signature, increments the nonce, and returns success.
@@ -372,71 +468,5 @@ abstract contract ModuleManager is ValidationManager, ExecutorManager, HookManag
         bytes32 digest =
             hashTypedData(EfficientHashLib.hash(INSTALL_PACKAGES_STRUCT_HASH, bytes32(_nonce), _installHash(packages)));
         return _verifySignature(vId, address(this), digest, signature);
-    }
-
-    /// @notice Verifies a stateless signature for enable-mode ERC-1271 flows.
-    /// @dev Locates the validator/permission modules in the packages and calls their stateless verify.
-    /// @param packages The install packages containing the modules to verify against.
-    /// @param vId The validation identifier to use.
-    /// @param hash The hash to verify.
-    /// @param signature The signature bytes.
-    /// @return True if the stateless signature verification succeeds.
-    function _verifyStatelessSignature(
-        Install[] calldata packages,
-        ValidationId vId,
-        bytes32 hash,
-        bytes calldata signature
-    ) internal view returns (bool) {
-        ValidationType vType = getType(vId);
-        if (vType == VALIDATION_TYPE_VALIDATOR) {
-            IValidator validator = getValidator(vId);
-            uint256 i;
-            for (i; i < packages.length; i++) {
-                Install calldata pkg = packages[i];
-                if (pkg.moduleType == MODULE_TYPE_VALIDATOR && pkg.module == address(validator)) {
-                    break;
-                }
-            }
-            require(i < packages.length, InvalidValidator());
-            return IStatelessValidatorWithSender(address(validator))
-                .validateSignatureWithDataWithSender(msg.sender, hash, signature, packages[i].moduleData);
-        } else if (vType == VALIDATION_TYPE_PERMISSION) {
-            PermissionId pId = getPermissionId(vId);
-            PermissionSignature calldata permissionSig;
-            assembly {
-                permissionSig := signature.offset
-            }
-            require(permissionSig.signatures.length > 0, InvalidSignature());
-            uint256 sigIdx;
-            for (uint256 i; i < packages.length; i++) {
-                Install calldata pkg = packages[i];
-                // Restrict matching to policy (5) / signer (6) modules. Otherwise a
-                // package of a different module type (e.g. selector type 3 or hook type 4)
-                // whose internalData happens to start with `pId` would be enrolled into the
-                // permission's signature chain.
-                if (PermissionId.wrap(bytes4(pkg.internalData)) == pId && (pkg.moduleType == 5 || pkg.moduleType == 6))
-                {
-                    if (sigIdx == permissionSig.signatures.length - 1) {
-                        require(pkg.moduleType == MODULE_TYPE_SIGNER, LastSignatureShouldBeSigner());
-                        require(IModule(pkg.module).isModuleType(MODULE_TYPE_SIGNER), LastSignatureShouldBeSigner());
-                    }
-                    bool res = IStatelessValidatorWithSender(pkg.module)
-                        .validateSignatureWithDataWithSender(
-                            msg.sender,
-                            hash,
-                            permissionSig.signatures[sigIdx],
-                            pkg.moduleData // NOTE: not passing the permissionId as stateless does not need any permissionId
-                        );
-                    if (!res) {
-                        return false;
-                    }
-                    sigIdx++;
-                }
-            }
-            require(sigIdx == permissionSig.signatures.length, InvalidPermissionId());
-            return true;
-        } else {
-            revert InvalidValidationType();
-        }
     }
 }

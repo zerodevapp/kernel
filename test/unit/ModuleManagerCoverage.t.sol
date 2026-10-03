@@ -27,7 +27,6 @@ import {
     NotImplemented,
     Unauthorized,
     ModuleInstallFailed,
-    NotInstalled,
     InstallSignatureVerificationFailed,
     InvalidSigner,
     ImplementationNotDeployed,
@@ -41,12 +40,9 @@ import {
     InvalidSelectorTarget
 } from "src/types/Error.sol";
 import {
-    HOOK_MODULE_NOT_INSTALLED,
-    HOOK_MODULE_INSTALLED_NO_HOOK,
     MODULE_TYPE_VALIDATOR,
     MODULE_TYPE_EXECUTOR,
     MODULE_TYPE_FALLBACK,
-    MODULE_TYPE_HOOK,
     MODULE_TYPE_POLICY,
     MODULE_TYPE_SIGNER,
     CALLTYPE_SINGLE,
@@ -59,7 +55,7 @@ import {
     VALIDATION_TYPE_PERMISSION
 } from "src/types/Constants.sol";
 import {validatorToIdentifier, permissionToIdentifier} from "src/lib/Utils.sol";
-import {IValidator, IHook, IExecutor} from "src/interfaces/IERC7579Modules.sol";
+import {IValidator, IExecutor} from "src/interfaces/IERC7579Modules.sol";
 import {IERC7579Account} from "src/interfaces/IERC7579Account.sol";
 import {LibERC7579} from "solady/accounts/LibERC7579.sol";
 
@@ -151,7 +147,6 @@ contract ModuleManagerCoverageTest is Test {
         newValidator.sudoSetValidSig(hex"aabb");
 
         bytes memory signature = abi.encodePacked(
-            bytes1(0x00), // mode: standard
             bytes1(0x01), // type: validator
             address(newValidator),
             hex"aabb"
@@ -168,7 +163,6 @@ contract ModuleManagerCoverageTest is Test {
         bytes32 testHash = keccak256("validator test");
 
         bytes memory signature = abi.encodePacked(
-            bytes1(0x00),
             bytes1(0x01),
             address(newValidator),
             hex"ccdd" // not valid
@@ -212,7 +206,6 @@ contract ModuleManagerCoverageTest is Test {
         signatures[1] = hex"beef";
 
         bytes memory signature = abi.encodePacked(
-            bytes1(0x00), // mode: standard
             bytes1(0x02), // type: permission
             permissionId,
             abi.encode(signatures)
@@ -229,7 +222,6 @@ contract ModuleManagerCoverageTest is Test {
     function test_isValidSignature_WhenInvalidValidationType_ShouldRevertWithInvalidValidationType() public {
         bytes32 testHash = keccak256("test");
         bytes memory signature = abi.encodePacked(
-            bytes1(0x00),
             bytes1(0x03), // invalid type
             hex"00000000000000000000000000000000000000000000"
         );
@@ -265,7 +257,7 @@ contract ModuleManagerCoverageTest is Test {
         bytes[] memory signatures = new bytes[](1);
         signatures[0] = hex"dead";
 
-        bytes memory signature = abi.encodePacked(bytes1(0x00), bytes1(0x02), permissionId, abi.encode(signatures));
+        bytes memory signature = abi.encodePacked(bytes1(0x02), permissionId, abi.encode(signatures));
 
         vm.expectRevert(InvalidSignature.selector);
         kernel.isValidSignature(testHash, signature);
@@ -306,9 +298,7 @@ contract ModuleManagerCoverageTest is Test {
         vm.prank(address(ep));
         vm.expectRevert(ModuleInstallFailed.selector);
         kernel.installModule(
-            MODULE_TYPE_FALLBACK,
-            revertingFallback,
-            abi.encode(hex"", abi.encodePacked(testSel, bytes1(0x00), address(1)))
+            MODULE_TYPE_FALLBACK, revertingFallback, abi.encode(hex"", abi.encodePacked(testSel, bytes1(0x00)))
         );
     }
 
@@ -319,30 +309,11 @@ contract ModuleManagerCoverageTest is Test {
         // CALLTYPE_DELEGATECALL does not require onInstall success
         vm.prank(address(ep));
         kernel.installModule(
-            MODULE_TYPE_FALLBACK,
-            revertingFallback,
-            abi.encode(hex"", abi.encodePacked(testSel, bytes1(0xFF), address(1)))
+            MODULE_TYPE_FALLBACK, revertingFallback, abi.encode(hex"", abi.encodePacked(testSel, bytes1(0xFF)))
         );
 
         SelectorConfig memory config = kernel.selectorConfig(testSel);
         assertEq(config.target, revertingFallback, "Fallback should be installed despite onInstall failure");
-    }
-
-    // =========================================================================
-    // NotInstalled — install fallback with non-installed hook
-    // =========================================================================
-
-    function test_installFallback_WhenHookNotInstalled_ShouldRevertWithNotInstalled() public {
-        address fakeHook = makeAddr("NotAHook");
-        bytes4 testSel = MockFallback.testFunction.selector;
-
-        vm.prank(address(ep));
-        vm.expectRevert(NotInstalled.selector);
-        kernel.installModule(
-            MODULE_TYPE_FALLBACK,
-            address(mockFallback),
-            abi.encode(hex"", abi.encodePacked(testSel, bytes1(0x00), fakeHook))
-        );
     }
 
     // =========================================================================
@@ -359,7 +330,7 @@ contract ModuleManagerCoverageTest is Test {
         vm.prank(address(ep));
         vm.expectRevert(InvalidSelectorTarget.selector);
         kernel.installModule(
-            MODULE_TYPE_FALLBACK, address(0), abi.encode(hex"", abi.encodePacked(testSel, bytes1(0xFF), address(1)))
+            MODULE_TYPE_FALLBACK, address(0), abi.encode(hex"", abi.encodePacked(testSel, bytes1(0xFF)))
         );
     }
 
@@ -372,9 +343,7 @@ contract ModuleManagerCoverageTest is Test {
         vm.startPrank(address(ep));
 
         kernel.installModule(
-            MODULE_TYPE_FALLBACK,
-            address(mockFallback),
-            abi.encode(hex"", abi.encodePacked(testSel, bytes1(0x00), address(1)))
+            MODULE_TYPE_FALLBACK, address(mockFallback), abi.encode(hex"", abi.encodePacked(testSel, bytes1(0x00)))
         );
 
         SelectorConfig memory config = kernel.selectorConfig(testSel);
@@ -391,17 +360,6 @@ contract ModuleManagerCoverageTest is Test {
 
     // =========================================================================
     // Uninstall hook
-    // =========================================================================
-
-    function test_uninstallHook_ShouldDisableHook() public {
-        vm.startPrank(address(ep));
-        kernel.installModule(MODULE_TYPE_HOOK, address(hook), abi.encode(hex"", hex""));
-        assertTrue(kernel.isModuleInstalled(MODULE_TYPE_HOOK, address(hook), hex""), "Hook should be installed");
-
-        kernel.uninstallModule(MODULE_TYPE_HOOK, address(hook), abi.encode(hex"", hex""));
-        assertFalse(kernel.isModuleInstalled(MODULE_TYPE_HOOK, address(hook), hex""), "Hook should be uninstalled");
-        vm.stopPrank();
-    }
 
     // =========================================================================
     // Uninstall executor
@@ -565,7 +523,7 @@ contract ModuleManagerCoverageTest is Test {
             moduleType: MODULE_TYPE_VALIDATOR,
             module: address(enabledValidator),
             moduleData: hex"",
-            internalData: abi.encodePacked(address(0), Kernel.execute.selector)
+            internalData: abi.encodePacked(Kernel.execute.selector)
         });
 
         // Compute enable signature digest (non-replayable)
@@ -610,66 +568,6 @@ contract ModuleManagerCoverageTest is Test {
 
     // =========================================================================
     // UserOp with validation hook — executeUserOp path
-    // =========================================================================
-
-    function test_processUserOp_WhenNonRootValidationWithHook_ShouldRouteViaExecuteUserOp() public {
-        vm.startPrank(address(ep));
-
-        // Install hook
-        kernel.installModule(MODULE_TYPE_HOOK, address(hook), abi.encode(hex"", hex""));
-
-        // Install validator with hook and allowed selector = execute
-        kernel.installModule(
-            MODULE_TYPE_VALIDATOR,
-            address(newValidator),
-            abi.encode(hex"", abi.encodePacked(address(hook), Kernel.execute.selector))
-        );
-        vm.stopPrank();
-
-        newValidator.sudoSetSuccess(true);
-
-        uint192 key = uint192(
-            bytes24(
-                abi.encodePacked(
-                    uint8(0x00),
-                    bytes1(0x01), // validator type
-                    bytes20(address(newValidator)),
-                    bytes2(0x0000)
-                )
-            )
-        );
-        uint256 nonce = ep.getNonce(address(kernel), key);
-
-        // When validation has a hook, _processUserOp requires:
-        //   callData[0:4] == executeUserOp.selector
-        //   callData[4:8] == an allowed selector (Kernel.execute.selector)
-        // The inner call data (execute call) is placed at callData[4:]
-        bytes memory executeCallData = abi.encodeWithSelector(
-            Kernel.execute.selector, bytes32(0), abi.encodePacked(address(callee), uint256(0), MockCallee.foo.selector)
-        );
-        // Wrap: executeUserOp.selector ++ executeCallData (raw, not ABI-encoded as bytes)
-        bytes memory outerCallData = abi.encodePacked(Kernel.executeUserOp.selector, executeCallData);
-
-        PackedUserOperation[] memory ops = new PackedUserOperation[](1);
-        ops[0] = PackedUserOperation({
-            sender: address(kernel),
-            nonce: nonce,
-            initCode: hex"",
-            callData: outerCallData,
-            accountGasLimits: bytes32(abi.encodePacked(uint128(2000000), uint128(2000000))),
-            preVerificationGas: 1000000,
-            gasFees: bytes32(abi.encodePacked(uint128(1), uint128(1))),
-            paymasterAndData: hex"",
-            signature: hex""
-        });
-
-        vm.prank(beneficiary, beneficiary);
-        ep.handleOps(ops, beneficiary);
-
-        assertEq(callee.bar(), 1, "Hooked validator path should succeed");
-        assertTrue(hook.preHookCalled(), "Hook preCheck should have been called");
-        assertTrue(hook.postHookCalled(), "Hook postCheck should have been called");
-    }
 
     // =========================================================================
     // intersectValidationData in _processUserOp — enable returns time-bounded result
@@ -686,7 +584,7 @@ contract ModuleManagerCoverageTest is Test {
             moduleType: MODULE_TYPE_VALIDATOR,
             module: address(enabledValidator),
             moduleData: hex"",
-            internalData: abi.encodePacked(address(0), Kernel.execute.selector)
+            internalData: abi.encodePacked(Kernel.execute.selector)
         });
 
         // Set rootValidator with custom validation data (time bounds)
@@ -736,23 +634,6 @@ contract ModuleManagerCoverageTest is Test {
     }
 
     // =========================================================================
-    // Hook install with empty internalData
-    // =========================================================================
-
-    function test_installHook_WhenOnInstallFailsAndEmptyInternalData_ShouldRevertWithModuleInstallFailed() public {
-        address revertingHook = address(new RevertingOnInstallHook());
-        vm.prank(address(ep));
-        vm.expectRevert(ModuleInstallFailed.selector);
-        kernel.installModule(MODULE_TYPE_HOOK, revertingHook, abi.encode(hex"", hex""));
-    }
-
-    function test_installHook_WhenOnInstallFailsAndNonEmptyInternalData_ShouldSucceed() public {
-        address revertingHook = address(new RevertingOnInstallHook());
-        vm.prank(address(ep));
-        // Non-empty internalData skips the require(_installSuccess) check
-        kernel.installModule(MODULE_TYPE_HOOK, revertingHook, abi.encode(hex"", hex"01"));
-        assertTrue(kernel.isModuleInstalled(MODULE_TYPE_HOOK, revertingHook, hex""), "Hook should be installed");
-    }
 
     // =========================================================================
     // Executor install without internalData
@@ -763,60 +644,10 @@ contract ModuleManagerCoverageTest is Test {
         kernel.installModule(MODULE_TYPE_EXECUTOR, address(mockExecutor), abi.encode(hex"", hex""));
 
         ExecutorConfig memory config = kernel.executorConfig(address(mockExecutor));
-        assertEq(address(config.hook), HOOK_MODULE_INSTALLED_NO_HOOK, "Executor should have no hook (address(1))");
-    }
-
-    function test_installExecutor_WhenInternalDataIsAddress0_ShouldInstallWithNoHook() public {
-        vm.prank(address(ep));
-        kernel.installModule(
-            MODULE_TYPE_EXECUTOR, address(mockExecutor), abi.encode(hex"", abi.encodePacked(address(0)))
-        );
-
-        ExecutorConfig memory config = kernel.executorConfig(address(mockExecutor));
-        assertEq(
-            address(config.hook), HOOK_MODULE_INSTALLED_NO_HOOK, "Hook address(0) should be converted to address(1)"
-        );
-    }
-
-    function test_installExecutor_WhenInternalDataIsAddress1_ShouldInstallWithNoHook() public {
-        vm.prank(address(ep));
-        kernel.installModule(
-            MODULE_TYPE_EXECUTOR, address(mockExecutor), abi.encode(hex"", abi.encodePacked(address(1)))
-        );
-
-        ExecutorConfig memory config = kernel.executorConfig(address(mockExecutor));
-        assertEq(address(config.hook), HOOK_MODULE_INSTALLED_NO_HOOK, "Hook address(1) should remain address(1)");
+        assertTrue(config.installed);
     }
 
     // =========================================================================
-    // Validator install with hook=address(0) and hook=address(1)
-    // =========================================================================
-
-    function test_installValidator_WhenHookAddress0_ShouldSetHookToAddress1() public {
-        vm.prank(address(ep));
-        kernel.installModule(
-            MODULE_TYPE_VALIDATOR,
-            address(newValidator),
-            abi.encode(hex"", abi.encodePacked(address(0), Kernel.execute.selector))
-        );
-
-        ValidationId vId = validatorToIdentifier(IValidator(address(newValidator)));
-        ValidationInfo memory info = kernel.validationInfo(vId);
-        assertEq(info.hook, HOOK_MODULE_INSTALLED_NO_HOOK, "Hook address(0) should be mapped to address(1)");
-    }
-
-    function test_installValidator_WhenHookAddress1_ShouldKeepAddress1() public {
-        vm.prank(address(ep));
-        kernel.installModule(
-            MODULE_TYPE_VALIDATOR,
-            address(newValidator),
-            abi.encode(hex"", abi.encodePacked(address(1), Kernel.execute.selector))
-        );
-
-        ValidationId vId = validatorToIdentifier(IValidator(address(newValidator)));
-        ValidationInfo memory info = kernel.validationInfo(vId);
-        assertEq(info.hook, HOOK_MODULE_INSTALLED_NO_HOOK, "Hook address(1) should remain address(1)");
-    }
 
     // =========================================================================
     // Validator install with empty internalData — no selectors allowed
@@ -916,16 +747,16 @@ contract RevertingOnInstallHook {
     function onUninstall(bytes calldata) external payable {}
 
     function isModuleType(uint256 typeId) external pure returns (bool) {
-        return typeId == 4;
+        return typeId == 11;
     }
 
     function isInitialized(address) external pure returns (bool) {
         return false;
     }
 
-    function preCheck(address, uint256, bytes calldata) external payable returns (bytes memory) {
+    function preCheck(bytes32, address, uint256, bytes calldata) external payable returns (bytes memory) {
         return hex"";
     }
 
-    function postCheck(bytes calldata) external payable {}
+    function postCheck(bytes32, bytes calldata) external payable {}
 }

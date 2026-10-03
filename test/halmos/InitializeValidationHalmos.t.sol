@@ -5,32 +5,11 @@ import {Test} from "forge-std/Test.sol";
 import {SymTest} from "halmos-cheatcodes/SymTest.sol";
 
 import {ValidationManager} from "src/core/ValidationManager.sol";
-import {IHook} from "src/interfaces/IERC7579Modules.sol";
 import {ValidationStorage} from "src/types/Structs.sol";
 import {ValidationId} from "src/types/Types.sol";
 
 /// @notice Test harness exposing `_initializeValidation` and a nonce getter.
-/// @dev The override of `_hookEnabled` lets us treat hook validity symbolically.
 contract InitializeValidationHarness is ValidationManager {
-    // Symbolic toggle used by the test to either allow any hook or simulate a
-    // disabled hook. Halmos can branch on this if the test exposes it.
-    bool public hookAlwaysEnabled;
-
-    function setHookAlwaysEnabled(bool v) external {
-        hookAlwaysEnabled = v;
-    }
-
-    function _hookEnabled(
-        IHook /*_hook*/
-    )
-        internal
-        view
-        override
-        returns (bool)
-    {
-        return hookAlwaysEnabled;
-    }
-
     /// @notice Public wrapper around the internal `_initializeValidation`.
     function initializeValidation(ValidationId vId, bytes calldata _internalData) external {
         _initializeValidation(vId, _internalData);
@@ -42,17 +21,10 @@ contract InitializeValidationHarness is ValidationManager {
         return $.vInfo[vId].nonce;
     }
 
-    /// @notice Direct read of `vInfo[vId].hook`.
-    function hookOf(ValidationId vId) external view returns (address) {
+    /// @notice Manually set installation state to satisfy the OccupiedValidationId precondition.
+    function sudoSetInstalled(ValidationId vId, bool installed) external {
         ValidationStorage storage $ = _validationStorage();
-        return $.vInfo[vId].hook;
-    }
-
-    /// @notice Manually clear hook to satisfy the OccupiedValidationId precondition
-    /// without going through full install/uninstall. Used by setUp only.
-    function sudoSetHook(ValidationId vId, address h) external {
-        ValidationStorage storage $ = _validationStorage();
-        $.vInfo[vId].hook = h;
+        $.vInfo[vId].installed = installed;
     }
 
     /// @notice Manually seed the pre-state nonce so Halmos can explore arbitrary
@@ -93,8 +65,8 @@ contract InitializeValidationHalmos is SymTest, Test {
         ValidationId vId = ValidationId.wrap(bytes21(svm.createBytes32("vId")));
         uint32 preNonce = uint32(svm.createUint(32, "preNonce"));
 
-        // Precondition: slot is empty (not OccupiedValidationId).
-        harness.sudoSetHook(vId, address(0));
+        // Precondition: validation is not installed.
+        harness.sudoSetInstalled(vId, false);
         harness.sudoSetNonce(vId, preNonce);
 
         // Avoid 32-bit overflow in the post-condition arithmetic.
@@ -118,19 +90,14 @@ contract InitializeValidationHalmos is SymTest, Test {
         ValidationId vId = ValidationId.wrap(bytes21(svm.createBytes32("vId")));
         uint32 preNonce = uint32(svm.createUint(32, "preNonce"));
 
-        // Precondition: slot is empty.
-        harness.sudoSetHook(vId, address(0));
+        // Precondition: validation is not installed.
+        harness.sudoSetInstalled(vId, false);
         harness.sudoSetNonce(vId, preNonce);
 
         // Avoid 32-bit overflow.
         vm.assume(preNonce < type(uint32).max);
 
-        // Make the hook check pass for any non-sentinel hook address by
-        // enabling the symbolic-hook bypass.
-        harness.setHookAlwaysEnabled(true);
-
-        // _internalData = 20-byte hook || 4-byte selector
-        bytes memory internalData = svm.createBytes(24, "internalData");
+        bytes memory internalData = svm.createBytes(4, "internalData");
         harness.initializeValidation(vId, internalData);
 
         uint32 postNonce = harness.nonceOf(vId);

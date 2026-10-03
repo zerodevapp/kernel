@@ -115,10 +115,9 @@ contract KernelUUPS_Test is Test {
             freshKernel.isModuleInstalled(1, address(newValidator), ""), "Validator should be installed after init"
         );
 
-        // Verify it's set as root (hook should be address(1) = HOOK_MODULE_INSTALLED_NO_HOOK)
-        assertEq(
-            freshKernel.validationInfo(validatorToIdentifier(IValidator(address(newValidator)))).hook,
-            address(1),
+        // Verify it is installed and set as root
+        assertTrue(
+            freshKernel.validationInfo(validatorToIdentifier(IValidator(address(newValidator)))).installed,
             "Validator should be set as root"
         );
     }
@@ -159,9 +158,8 @@ contract KernelUUPS_Test is Test {
 
         // Verify the first package (validator) is installed as root
         assertTrue(freshKernel.isModuleInstalled(1, address(newValidator), ""), "First validator should be installed");
-        assertEq(
-            freshKernel.validationInfo(validatorToIdentifier(IValidator(address(newValidator)))).hook,
-            address(1),
+        assertTrue(
+            freshKernel.validationInfo(validatorToIdentifier(IValidator(address(newValidator)))).installed,
             "First validator should be root"
         );
 

@@ -1,7 +1,7 @@
 Kernel_executeUserOp
-├── when the caller is not the EntryPoint or self
+├── when the caller is not the EntryPoint
 │   └── it should revert with Unauthorized error
-└── when the caller is the EntryPoint or self
+└── when the caller is the EntryPoint
     ├── given the validation hook is set
     │   ├── it should call preHook with the callData
     │   ├── when the inner delegatecall succeeds

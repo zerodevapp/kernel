@@ -12,11 +12,9 @@ import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
 /// Properties under test:
 ///   1. `execute(bytes32, bytes)` is gated by `_onlyEntryPointOrSelf` — it MUST
 ///      revert for every caller that is not `ENTRYPOINT` and not `address(this)`.
-///   2. `executeFromExecutor(bytes32, bytes)` is gated by the `executorHook`
-///      modifier, which loads `_executorConfig(IExecutor(msg.sender)).hook` and
-///      requires it to be non-zero. So the function MUST revert for every caller
-///      whose executor config slot is still zero (i.e. anyone except an installed
-///      executor module).
+///   2. `executeFromExecutor(bytes32, bytes)` requires the caller's executor
+///      configuration to be installed. It MUST revert for every caller except an
+///      installed executor module.
 ///
 /// We deploy `KernelUUPS` directly (no ERC1967 proxy) — neither `execute` nor
 /// `executeFromExecutor` carries Solady's `onlyProxy` modifier, so the
@@ -32,10 +30,7 @@ contract TopLevelExecuteAcHalmos is SymTest, Test {
         entryPoint = makeAddr("EntryPoint");
         kernel = new KernelUUPS(IEntryPoint(entryPoint));
         installedExecutor = address(0xdeadbeef);
-        // Install one executor module so the success-path test for
-        // `executeFromExecutor` has a caller whose config hook is non-zero.
-        // `_installExecutor` defaults the hook to `address(1)` when no hook is
-        // supplied in `internalData`.
+        // Install one executor module for the executeFromExecutor success path.
         vm.startPrank(entryPoint);
         kernel.installModule(2, installedExecutor, abi.encode(hex"", ""));
         vm.stopPrank();
@@ -80,13 +75,10 @@ contract TopLevelExecuteAcHalmos is SymTest, Test {
 
     // --- executeFromExecutor(bytes32, bytes) -----------------------------------
 
-    /// @notice Any caller whose executor config still holds the zero hook (i.e.
-    /// not installed as an executor module) must be rejected by the
-    /// `executorHook` modifier on `executeFromExecutor`.
+    /// @notice Any caller not installed as an executor module must be rejected.
     function checkExecuteFromExecutorRevertsForUninstalledExecutor() external {
         address caller = svm.createAddress("caller");
-        // The only installed executor is `installedExecutor`. Every other address
-        // has `_executorConfig(...).hook == address(0)`, so it must be rejected.
+        // The only installed executor is `installedExecutor`.
         vm.assume(caller != installedExecutor);
 
         bytes memory executionData = _validExecutionData();
@@ -98,8 +90,7 @@ contract TopLevelExecuteAcHalmos is SymTest, Test {
         assertFalse(ok, "uninstalled executor must not be allowed to executeFromExecutor");
     }
 
-    /// @notice An installed executor module must clear the `executorHook` gate
-    /// on `executeFromExecutor`.
+    /// @notice An installed executor module may call `executeFromExecutor`.
     function checkExecuteFromExecutorSucceedsForInstalledExecutor() external {
         bytes memory executionData = _validExecutionData();
         bytes32 mode = bytes32(0);

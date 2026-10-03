@@ -37,6 +37,8 @@ contract StakerInvariantHandler is Test {
         vm.prank(owner);
         staker.approveFactory(factory, approval);
         expectedApproved[factory] = approval;
+        // Mirror Staker.approveFactory: direct approval also advances the nonce.
+        expectedNonces[factory]++;
     }
 
     function approveFactoryWithSignature(uint256 index, bool approval) external {

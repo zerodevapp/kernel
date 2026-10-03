@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.0;
 
-import {IValidator, IHook} from "src/interfaces/IERC7579Modules.sol";
+import {IValidator} from "src/interfaces/IERC7579Modules.sol";
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
 
 /// @notice Mock validator that returns empty data (misconfigured validator)
@@ -30,7 +30,7 @@ contract MockEmptyReturnValidator is IValidator {
     }
 }
 
-contract MockValidator is IValidator, IHook {
+contract MockValidator is IValidator {
     mapping(address => bool) public initialized;
     bool public success;
     uint256 public count;
@@ -39,12 +39,7 @@ contract MockValidator is IValidator, IHook {
     mapping(address => bytes) public validatorData;
     mapping(bytes32 => bool) public validSig;
 
-    bool public isHook;
     uint256 public customValidationData;
-
-    function setHook(bool _isHook) external {
-        isHook = _isHook;
-    }
 
     function sudoSetSuccess(bool _success) external {
         success = _success;
@@ -101,21 +96,5 @@ contract MockValidator is IValidator, IHook {
         } else {
             return 0xffffffff;
         }
-    }
-
-    function validateSignatureWithDataWithSender(address, bytes32, bytes calldata, bytes calldata)
-        external
-        view
-        returns (bool)
-    {
-        return success;
-    }
-
-    function preCheck(address, uint256, bytes calldata) external payable returns (bytes memory) {
-        return hex"";
-    }
-
-    function postCheck(bytes calldata) external payable {
-        return;
     }
 }

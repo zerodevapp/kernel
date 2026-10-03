@@ -3,14 +3,12 @@
 pragma solidity ^0.8.0;
 
 import {ECDSA} from "solady/utils/ECDSA.sol";
-import {IValidator, IStatelessValidatorWithSender} from "src/interfaces/IERC7579Modules.sol";
+import {IValidator} from "src/interfaces/IERC7579Modules.sol";
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
 import {
     SIG_VALIDATION_SUCCESS_UINT,
     SIG_VALIDATION_FAILED_UINT,
     MODULE_TYPE_VALIDATOR,
-    MODULE_TYPE_HOOK,
-    MODULE_TYPE_STATELESS_VALIDATOR_WITH_SENDER,
     ERC1271_MAGICVALUE,
     ERC1271_INVALID
 } from "src/types/Constants.sol";
@@ -21,7 +19,7 @@ struct ECDSAValidatorStorage {
     address owner;
 }
 
-contract ECDSAValidator is IValidator, IStatelessValidatorWithSender {
+contract ECDSAValidator is IValidator {
     event OwnerRegistered(address indexed kernel, address indexed owner);
 
     mapping(address => ECDSAValidatorStorage) public ecdsaValidatorStorage;
@@ -38,8 +36,7 @@ contract ECDSAValidator is IValidator, IStatelessValidatorWithSender {
     }
 
     function isModuleType(uint256 typeId) external pure override returns (bool) {
-        return typeId == MODULE_TYPE_VALIDATOR || typeId == MODULE_TYPE_HOOK
-            || typeId == MODULE_TYPE_STATELESS_VALIDATOR_WITH_SENDER;
+        return typeId == MODULE_TYPE_VALIDATOR;
     }
 
     function isInitialized(address smartAccount) external view override returns (bool) {
@@ -80,16 +77,5 @@ contract ECDSAValidator is IValidator, IStatelessValidatorWithSender {
             return ERC1271_INVALID;
         }
         return ERC1271_MAGICVALUE;
-    }
-
-    function validateSignatureWithDataWithSender(address, bytes32 hash, bytes calldata signature, bytes calldata data)
-        external
-        view
-        returns (bool)
-    {
-        require(data.length == 20, "Invalid Data Length");
-        // forge-lint: disable-next-line(unsafe-typecast)
-        address owner = address(bytes20(data));
-        return owner == ECDSA.tryRecoverCalldata(hash, signature);
     }
 }

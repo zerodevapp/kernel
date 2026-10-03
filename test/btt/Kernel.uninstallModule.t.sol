@@ -11,7 +11,13 @@ import {MockSigner} from "../mock/MockSigner.sol";
 import {IValidator} from "src/interfaces/IERC7579Modules.sol";
 import {validatorToIdentifier, permissionToIdentifier} from "src/lib/Utils.sol";
 import {PermissionId} from "src/types/Types.sol";
-import {Unauthorized, NotImplemented, InvalidPermissionUninstallOrder, InvalidPermissionId} from "src/types/Error.sol";
+import {
+    Unauthorized,
+    NotImplemented,
+    InvalidPermissionUninstallOrder,
+    InvalidPermissionId,
+    InvalidVid
+} from "src/types/Error.sol";
 
 /// @title Kernel.uninstallModule BTT Tests
 /// @notice Tests for uninstallModule following Branching Tree Technique
@@ -49,9 +55,8 @@ abstract contract Kernel_uninstallModule is BTTModifiers {
         kernel.installModule(1, address(mockValidator), abi.encode(hex"", hex""));
 
         // Verify it's installed
-        assertEq(
-            kernel.validationInfo(validatorToIdentifier(IValidator(address(mockValidator)))).hook,
-            address(1),
+        assertTrue(
+            kernel.validationInfo(validatorToIdentifier(IValidator(address(mockValidator)))).installed,
             "Validator should be installed"
         );
 
@@ -59,9 +64,8 @@ abstract contract Kernel_uninstallModule is BTTModifiers {
         kernel.uninstallModule(1, address(mockValidator), abi.encode(hex"", hex""));
 
         // Verify hook state is cleared
-        assertEq(
-            kernel.validationInfo(validatorToIdentifier(IValidator(address(mockValidator)))).hook,
-            address(0),
+        assertFalse(
+            kernel.validationInfo(validatorToIdentifier(IValidator(address(mockValidator)))).installed,
             "Validator hook should be cleared"
         );
     }
@@ -71,18 +75,14 @@ abstract contract Kernel_uninstallModule is BTTModifiers {
         whenTheCallerIsTheEntryPointOrSelfUninstall
         givenModuleTypeIsValidatorUninstall
     {
-        // it should be a no-op and leave root unchanged
+        // it should revert with InvalidVid (TOB-KERNEL-12: no onUninstall callback may reach a
+        // module that is not installed under the given type)
         MockValidator mockValidator = new MockValidator();
 
-        // Validator is NOT installed - uninstall should be a no-op
-        kernel.uninstallModule(1, address(mockValidator), abi.encode(hex"", hex""));
-
-        // Verify it remains uninstalled (hook is still address(0))
-        assertEq(
-            kernel.validationInfo(validatorToIdentifier(IValidator(address(mockValidator)))).hook,
-            address(0),
-            "Validator should remain uninstalled"
+        vm.expectRevert(
+            abi.encodeWithSelector(InvalidVid.selector, validatorToIdentifier(IValidator(address(mockValidator))))
         );
+        kernel.uninstallModule(1, address(mockValidator), abi.encode(hex"", hex""));
     }
 
     function test_GivenModuleTypeIsValidatorUninstall()
@@ -96,9 +96,8 @@ abstract contract Kernel_uninstallModule is BTTModifiers {
         kernel.uninstallModule(1, address(mockValidator), abi.encode(hex"", hex""));
 
         // Verify the validator is no longer installed (hook is cleared)
-        assertEq(
-            kernel.validationInfo(validatorToIdentifier(IValidator(address(mockValidator)))).hook,
-            address(0),
+        assertFalse(
+            kernel.validationInfo(validatorToIdentifier(IValidator(address(mockValidator)))).installed,
             "Validator hook should be cleared"
         );
     }
@@ -145,7 +144,7 @@ abstract contract Kernel_uninstallModule is BTTModifiers {
         // it should clear selector config for the selector
         MockFallback mockFallback = new MockFallback();
         bytes4 selector = bytes4(keccak256("testFallback()"));
-        bytes memory internalData = abi.encodePacked(selector, bytes1(0x00), address(1));
+        bytes memory internalData = abi.encodePacked(selector, bytes1(0x00));
 
         kernel.installModule(3, address(mockFallback), abi.encode(hex"", internalData));
 
@@ -170,20 +169,6 @@ abstract contract Kernel_uninstallModule is BTTModifiers {
     modifier givenModuleTypeIsHookUninstall() {
         _uninstallModuleTypeId = 4;
         _;
-    }
-
-    function test_GivenModuleTypeIsHookUninstall()
-        external
-        whenTheCallerIsTheEntryPointOrSelfUninstall
-        givenModuleTypeIsHookUninstall
-    {
-        MockHook mockHook = new MockHook();
-        kernel.installModule(4, address(mockHook), abi.encode(hex"", ""));
-
-        kernel.uninstallModule(4, address(mockHook), abi.encode(hex"", ""));
-
-        // Verify the hook is no longer enabled
-        assertFalse(kernel.isModuleInstalled(4, address(mockHook), ""), "Hook should be disabled");
     }
 
     modifier givenModuleTypeIsPolicyUninstall() {
@@ -339,10 +324,8 @@ abstract contract Kernel_uninstallModule is BTTModifiers {
             kernel.isModuleInstalled(6, address(mockSigner), abi.encodePacked(testPermId)),
             "Signer should be uninstalled"
         );
-        assertEq(
-            kernel.validationInfo(permissionToIdentifier(testPermId)).hook,
-            address(0),
-            "Permission hook should be cleared"
+        assertFalse(
+            kernel.validationInfo(permissionToIdentifier(testPermId)).installed, "Permission should be uninstalled"
         );
     }
 

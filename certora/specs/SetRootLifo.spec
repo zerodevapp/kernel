@@ -8,7 +8,7 @@
  *   current root is a VALIDATION_TYPE_PERMISSION must, after the call:
  *     - vInfo[oldRoot].policies.length == 0
  *     - vInfo[oldRoot].signer == address(0)
- *     - vInfo[oldRoot].hook == HOOK_MODULE_NOT_INSTALLED
+ *     - !vInfo[oldRoot].installed
  *
  * The Kernel.sol implementation (lines 343-385) walks the policies array in
  * LIFO order (`for (i = policies.length; i > 0; i--)`) calling
@@ -47,7 +47,8 @@
 methods {
     // Harness accessors used by the rule.
     function harness_vInfoNonce(bytes21)              external returns (uint32)  envfree;
-    function harness_vInfoHook(bytes21)               external returns (address) envfree;
+    function harness_vInfoInstalled(bytes21) external returns (bool) envfree;
+    function harness_vInfoScopedExecutionHook(bytes21) external returns (address) envfree;
     function harness_vInfoSigner(bytes21)             external returns (address) envfree;
     function harness_vInfoPoliciesLength(bytes21)     external returns (uint256) envfree;
     function harness_vInfoPolicyAt(bytes21, uint256)  external returns (address) envfree;
@@ -57,9 +58,6 @@ methods {
 
     function harness_VT_VALIDATOR()           external returns (bytes1)  envfree;
     function harness_VT_PERMISSION()          external returns (bytes1)  envfree;
-    function harness_HOOK_NOT_INSTALLED()     external returns (address) envfree;
-    function harness_HOOK_INSTALLED_NO_HOOK() external returns (address) envfree;
-
     // Disambiguate the two `setRoot` overloads on Kernel.sol so the rule can
     // call the one taking (Install[], bool, bytes). The other overload takes
     // a single ValidationId argument.
@@ -99,7 +97,7 @@ methods {
 //   Post (on success):
 //     - vInfo[oldRoot].policies.length == 0
 //     - vInfo[oldRoot].signer == 0
-//     - vInfo[oldRoot].hook == HOOK_MODULE_NOT_INSTALLED
+//     - !vInfo[oldRoot].installed
 //
 // The `loop_iter=3` config bounds the symbolic unrolling at 3 iterations.
 // `optimistic_loop=true` axiomatises termination beyond that bound. The
@@ -118,7 +116,7 @@ rule setRootClearsOldPermissionState(
     // The current root must be an installed permission-type ValidationId.
     require oldRoot != to_bytes21(0);
     require harness_getType(oldRoot) == harness_VT_PERMISSION();
-    require harness_vInfoHook(oldRoot) != harness_HOOK_NOT_INSTALLED();
+    require harness_vInfoInstalled(oldRoot);
 
     // Permission has at least one policy installed.
     require harness_vInfoPoliciesLength(oldRoot) > 0;
@@ -146,8 +144,10 @@ rule setRootClearsOldPermissionState(
         "old permission policies.length not cleared";
     assert !reverted => harness_vInfoSigner(oldRoot) == 0,
         "old permission signer not zeroed";
-    assert !reverted => harness_vInfoHook(oldRoot) == harness_HOOK_NOT_INSTALLED(),
-        "old permission hook not zeroed";
+    assert !reverted => !harness_vInfoInstalled(oldRoot),
+        "old permission remains installed";
+    assert !reverted => harness_vInfoScopedExecutionHook(oldRoot) == 0,
+        "old validation scoped execution hook not zeroed";
 }
 
 // --------------------------------------------------------------------------
@@ -164,7 +164,7 @@ rule sanitySetRootReachesSuccess(
     bytes21 oldRoot = harness_root();
     require oldRoot != to_bytes21(0);
     require harness_getType(oldRoot) == harness_VT_PERMISSION();
-    require harness_vInfoHook(oldRoot) != harness_HOOK_NOT_INSTALLED();
+    require harness_vInfoInstalled(oldRoot);
     require harness_vInfoPoliciesLength(oldRoot) > 0;
     require removeCurrent;
     require pkg.length == 1;

@@ -15,10 +15,10 @@ import {ValidationId, PermissionId, CallType} from "src/types/Types.sol";
 import {MockValidator} from "../mock/MockValidator.sol";
 import {MockPolicy} from "../mock/MockPolicy.sol";
 import {MockSigner} from "../mock/MockSigner.sol";
-import {MockHook} from "../mock/MockHook.sol";
 import {MockFallback} from "../mock/MockFallback.sol";
 import {MockExecutor} from "../mock/MockExecutor.sol";
 import {MockCallee} from "../mock/MockCallee.sol";
+import {MockHook} from "../mock/MockHook.sol";
 import {ChainAgnosticHashHelper} from "../utils/ChainAgnosticHashHelper.sol";
 import {
     NotImplemented,
@@ -38,24 +38,18 @@ import {
     InvalidSignature,
     OccupiedValidationId,
     CannotUninstallRoot,
-    NotInstalled,
     NotExecutor,
     ModuleInstallFailed,
     PermissionInstallNotFinished,
     InvalidPermissionInstall,
     InstallSignatureVerificationFailed,
-    LastSignatureShouldBeSigner,
-    InvalidValidator,
     InvalidSigner,
     ImplementationNotDeployed
 } from "src/types/Error.sol";
 import {
-    HOOK_MODULE_NOT_INSTALLED,
-    HOOK_MODULE_INSTALLED_NO_HOOK,
     MODULE_TYPE_VALIDATOR,
     MODULE_TYPE_EXECUTOR,
     MODULE_TYPE_FALLBACK,
-    MODULE_TYPE_HOOK,
     MODULE_TYPE_POLICY,
     MODULE_TYPE_SIGNER,
     CALLTYPE_SINGLE,
@@ -67,10 +61,12 @@ import {
     VALIDATION_TYPE_ROOT,
     VALIDATION_TYPE_VALIDATOR,
     VALIDATION_TYPE_PERMISSION,
+    MODULE_TYPE_SCOPED_EXECUTION_HOOK,
+    SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE,
     SELECTOR_MANAGER_STORAGE_SLOT
 } from "src/types/Constants.sol";
 import {validatorToIdentifier, permissionToIdentifier} from "src/lib/Utils.sol";
-import {IValidator, IHook, IExecutor} from "src/interfaces/IERC7579Modules.sol";
+import {IValidator, IExecutor} from "src/interfaces/IERC7579Modules.sol";
 import {IERC7579Account} from "src/interfaces/IERC7579Account.sol";
 import {LibERC7579} from "solady/accounts/LibERC7579.sol";
 
@@ -84,27 +80,29 @@ contract KernelCoverageTest is Test {
     MockValidator newValidator;
     MockPolicy policy;
     MockSigner signer;
-    MockHook hook;
     MockFallback mockFallback;
     MockExecutor mockExecutor;
     MockCallee callee;
+    MockHook mockHook;
     address payable beneficiary;
     PermissionId permissionId;
     ChainAgnosticHashHelper hashHelper;
 
     function setUp() public {
         ep = EntryPointLib.deploy();
-        uups = new KernelUUPS(ep);
-        KernelImmutableECDSA immutableEcdsa = new KernelImmutableECDSA(ep);
+        // Load implementation artifacts to avoid solc's assembly limit for this large test fixture.
+        uups = KernelUUPS(payable(deployCode("KernelUUPS.sol:KernelUUPS", abi.encode(ep))));
+        KernelImmutableECDSA immutableEcdsa =
+            KernelImmutableECDSA(payable(deployCode("KernelImmutableECDSA.sol:KernelImmutableECDSA", abi.encode(ep))));
         factory = new KernelFactory(uups, immutableEcdsa);
         rootValidator = new MockValidator();
         newValidator = new MockValidator();
         policy = new MockPolicy();
         signer = new MockSigner();
-        hook = new MockHook();
         mockFallback = new MockFallback();
         mockExecutor = new MockExecutor();
         callee = new MockCallee();
+        mockHook = new MockHook();
         beneficiary = payable(makeAddr("Beneficiary"));
         hashHelper = new ChainAgnosticHashHelper();
         permissionId = PermissionId.wrap(bytes4(keccak256(abi.encodePacked("TestPermission"))));
@@ -130,10 +128,14 @@ contract KernelCoverageTest is Test {
         assertFalse(kernel.supportsModule(0), "Module type 0 should not be supported");
     }
 
-    function test_supportsModule_WhenTypeIs1Through6_ShouldReturnTrue() public view {
-        for (uint256 i = 1; i <= 6; i++) {
-            assertTrue(kernel.supportsModule(i), "Module types 1-6 should be supported");
-        }
+    function test_supportsModule_WhenTypeIsSupported_ShouldReturnTrue() public view {
+        assertTrue(kernel.supportsModule(1));
+        assertTrue(kernel.supportsModule(2));
+        assertTrue(kernel.supportsModule(3));
+        assertFalse(kernel.supportsModule(4));
+        assertTrue(kernel.supportsModule(5));
+        assertTrue(kernel.supportsModule(6));
+        assertTrue(kernel.supportsModule(11));
     }
 
     function test_supportsModule_WhenTypeIs7_ShouldReturnFalse() public view {
@@ -216,9 +218,7 @@ contract KernelCoverageTest is Test {
         bytes4 testSel = MockFallback.testFunction.selector;
         vm.prank(address(ep));
         kernel.installModule(
-            MODULE_TYPE_FALLBACK,
-            address(mockFallback),
-            abi.encode(hex"", abi.encodePacked(testSel, bytes1(0x00), address(1)))
+            MODULE_TYPE_FALLBACK, address(mockFallback), abi.encode(hex"", abi.encodePacked(testSel, bytes1(0x00)))
         );
         assertTrue(
             kernel.isModuleInstalled(MODULE_TYPE_FALLBACK, address(mockFallback), abi.encodePacked(testSel)),
@@ -233,16 +233,6 @@ contract KernelCoverageTest is Test {
             ),
             "Fallback should not be installed"
         );
-    }
-
-    function test_isModuleInstalled_WhenHookInstalled_ShouldReturnTrue() public {
-        vm.prank(address(ep));
-        kernel.installModule(MODULE_TYPE_HOOK, address(hook), abi.encode(hex"", hex""));
-        assertTrue(kernel.isModuleInstalled(MODULE_TYPE_HOOK, address(hook), hex""), "Hook should be installed");
-    }
-
-    function test_isModuleInstalled_WhenHookNotInstalled_ShouldReturnFalse() public view {
-        assertFalse(kernel.isModuleInstalled(MODULE_TYPE_HOOK, address(hook), hex""), "Hook should not be installed");
     }
 
     function test_isModuleInstalled_WhenPolicyInstalled_ShouldReturnTrue() public {
@@ -381,7 +371,7 @@ contract KernelCoverageTest is Test {
     }
 
     // =========================================================================
-    // InvalidRootValidation — setRoot with executor/hook type module
+    // InvalidRootValidation — setRoot with executor module
     // =========================================================================
 
     function test_setRoot_WhenModuleTypeIsExecutor_ShouldRevertWithInvalidRootValidation() public {
@@ -417,7 +407,7 @@ contract KernelCoverageTest is Test {
         // Verify old root is uninstalled
         ValidationId oldVid = validatorToIdentifier(IValidator(address(rootValidator)));
         ValidationInfo memory info = kernel.validationInfo(oldVid);
-        assertEq(info.hook, HOOK_MODULE_NOT_INSTALLED, "Old root validator should be uninstalled");
+        assertFalse(info.installed, "Old root validator should be uninstalled");
 
         // Verify new root is set
         ValidationId newRoot = kernel.root();
@@ -464,7 +454,7 @@ contract KernelCoverageTest is Test {
         kernel.setRoot(newPkgs, true, abi.encode(uninstallDataArr));
 
         ValidationInfo memory info = kernel.validationInfo(permVid);
-        assertEq(info.hook, HOOK_MODULE_NOT_INSTALLED, "Old permission root should be uninstalled");
+        assertFalse(info.installed, "Old permission root should be uninstalled");
         vm.stopPrank();
     }
 
@@ -601,9 +591,7 @@ contract KernelCoverageTest is Test {
         // Install a validator with specific selectors allowed
         vm.prank(address(ep));
         kernel.installModule(
-            MODULE_TYPE_VALIDATOR,
-            address(newValidator),
-            abi.encode(hex"", abi.encodePacked(address(0), Kernel.execute.selector))
+            MODULE_TYPE_VALIDATOR, address(newValidator), abi.encode(hex"", abi.encodePacked(Kernel.execute.selector))
         );
 
         newValidator.sudoSetSuccess(true);
@@ -690,30 +678,11 @@ contract KernelCoverageTest is Test {
         MockFallback(address(kernel)).testFunction();
     }
 
-    function test_fallback_WhenHookNotInstalledAndCallerNotEntryPoint_ShouldRevertWithInvalidSelector() public {
-        // Install fallback with hook=address(0) (HOOK_MODULE_NOT_INSTALLED)
+    function test_fallback_WhenInstalled_ShouldSucceed() public {
         bytes4 testSel = MockFallback.testFunction.selector;
         vm.prank(address(ep));
         kernel.installModule(
-            MODULE_TYPE_FALLBACK,
-            address(mockFallback),
-            abi.encode(hex"", abi.encodePacked(testSel, bytes1(0x00), address(0)))
-        );
-
-        // Non-entrypoint caller should be rejected
-        address random = makeAddr("Random");
-        vm.prank(random);
-        vm.expectRevert(InvalidSelector.selector);
-        MockFallback(address(kernel)).testFunction();
-    }
-
-    function test_fallback_WhenHookNotInstalledAndCallerIsEntryPoint_ShouldSucceed() public {
-        bytes4 testSel = MockFallback.testFunction.selector;
-        vm.prank(address(ep));
-        kernel.installModule(
-            MODULE_TYPE_FALLBACK,
-            address(mockFallback),
-            abi.encode(hex"", abi.encodePacked(testSel, bytes1(0x00), address(0)))
+            MODULE_TYPE_FALLBACK, address(mockFallback), abi.encode(hex"", abi.encodePacked(testSel, bytes1(0x00)))
         );
 
         // Entrypoint caller should succeed
@@ -728,15 +697,24 @@ contract KernelCoverageTest is Test {
 
     function test_fallback_WhenCallTypeDelegatecall_ShouldDelegatecall() public {
         bytes4 testSel = MockFallback.testFunction.selector;
-        vm.prank(address(ep));
+        vm.startPrank(address(ep));
         kernel.installModule(
-            MODULE_TYPE_FALLBACK,
-            address(mockFallback),
-            abi.encode(hex"", abi.encodePacked(testSel, bytes1(0xFF), address(1)))
+            MODULE_TYPE_FALLBACK, address(mockFallback), abi.encode(hex"", abi.encodePacked(testSel, bytes1(0xFF)))
         );
+        // Selectors without a scoped execution hook are EntryPoint-only; install a
+        // passthrough scoped hook so the delegatecall fallback is publicly callable.
+        kernel.installModule(
+            MODULE_TYPE_SCOPED_EXECUTION_HOOK,
+            address(mockHook),
+            abi.encode(hex"", abi.encodePacked(SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE, testSel))
+        );
+        vm.stopPrank();
 
-        // Anyone can call (hook is address(1) = INSTALLED_NO_HOOK)
-        uint256 result = MockFallback(address(kernel)).testFunction();
+        // Anyone can call an installed fallback that has a scoped execution hook
+        // (testFunction() is view, so use a raw non-static call to allow the hook's pre/post checks)
+        (bool success, bytes memory ret) = address(kernel).call(abi.encodePacked(testSel));
+        assertTrue(success, "Delegatecall fallback should succeed");
+        uint256 result = abi.decode(ret, (uint256));
         assertEq(result, 42, "Delegatecall fallback should return 42");
     }
 
@@ -898,28 +876,6 @@ contract KernelCoverageTest is Test {
     }
 
     // =========================================================================
-    // NotInstalled — validator/executor with uninstalled hook
-    // =========================================================================
-
-    function test_installValidator_WhenHookNotInstalled_ShouldRevertWithNotInstalled() public {
-        address fakeHook = makeAddr("FakeHook");
-        vm.prank(address(ep));
-        vm.expectRevert(NotInstalled.selector);
-        kernel.installModule(
-            MODULE_TYPE_VALIDATOR,
-            address(newValidator),
-            abi.encode(hex"", abi.encodePacked(fakeHook, Kernel.execute.selector))
-        );
-    }
-
-    function test_installExecutor_WhenHookNotInstalled_ShouldRevertWithNotInstalled() public {
-        address fakeHook = makeAddr("FakeHook");
-        vm.prank(address(ep));
-        vm.expectRevert(NotInstalled.selector);
-        kernel.installModule(MODULE_TYPE_EXECUTOR, address(mockExecutor), abi.encode(hex"", abi.encodePacked(fakeHook)));
-    }
-
-    // =========================================================================
     // NotExecutor / Unauthorized — executeFromExecutor from non-executor
     // =========================================================================
 
@@ -1029,33 +985,6 @@ contract KernelCoverageTest is Test {
     }
 
     // =========================================================================
-    // Fallback with real hook — preHook and postHook execution
-    // =========================================================================
-
-    function test_fallback_WhenHookInstalled_ShouldCallPreAndPostHook() public {
-        vm.startPrank(address(ep));
-
-        // Install hook
-        kernel.installModule(MODULE_TYPE_HOOK, address(hook), abi.encode(hex"", hex""));
-
-        // Install fallback with real hook, using fallbackFunction which modifies state
-        // (testFunction is pure, triggering staticcall which fails when hook writes state)
-        bytes4 fbSel = MockFallback.fallbackFunction.selector;
-        kernel.installModule(
-            MODULE_TYPE_FALLBACK,
-            address(mockFallback),
-            abi.encode(hex"", abi.encodePacked(fbSel, bytes1(0x00), address(hook)))
-        );
-        vm.stopPrank();
-
-        // Call fallback — must be a non-view call so hooks can write state
-        uint256 result = MockFallback(address(kernel)).fallbackFunction(5);
-        assertEq(result, 25, "Fallback should return 5*5=25");
-        assertTrue(hook.preHookCalled(), "Pre-hook should have been called");
-        assertTrue(hook.postHookCalled(), "Post-hook should have been called");
-    }
-
-    // =========================================================================
     // ERC-1271 isValidSignature — root validation path
     // =========================================================================
 
@@ -1064,7 +993,6 @@ contract KernelCoverageTest is Test {
         rootValidator.sudoSetValidSig(hex"aabb");
 
         bytes memory signature = abi.encodePacked(
-            bytes1(0x00), // mode: standard
             bytes1(0x00), // type: root
             hex"aabb" // validator signature
         );
@@ -1078,7 +1006,6 @@ contract KernelCoverageTest is Test {
         // Don't set valid sig => validator will reject
 
         bytes memory signature = abi.encodePacked(
-            bytes1(0x00), // mode: standard
             bytes1(0x00), // type: root
             hex"ccdd"
         );

@@ -3,7 +3,12 @@ pragma solidity ^0.8.0;
 
 import {IValidator} from "../interfaces/IERC7579Modules.sol";
 import {ValidationMode, ValidationId, ValidationType, PermissionId} from "../types/Types.sol";
-import {VALIDATION_TYPE_PERMISSION} from "../types/Constants.sol";
+import {
+    VALIDATION_TYPE_PERMISSION,
+    SCOPED_EXECUTION_HOOK_VALIDATION_SCOPE,
+    SCOPED_EXECUTION_HOOK_EXECUTOR_SCOPE,
+    SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE
+} from "../types/Constants.sol";
 
 /// @notice Extracts the ValidationType (first byte) from a ValidationId.
 function getType(ValidationId validator) pure returns (ValidationType vType) {
@@ -46,6 +51,47 @@ function permissionToIdentifier(PermissionId permissionId) pure returns (Validat
     }
 }
 
+/// @notice Generates the scoped-execution-hook ID for a validation scope.
+/// @dev Layout: `[1-byte scope | 21-byte ValidationId | 10 zero bytes]`.
+function validationScopedExecutionHookId(ValidationId vId) pure returns (bytes32) {
+    return bytes32(SCOPED_EXECUTION_HOOK_VALIDATION_SCOPE) | (bytes32(ValidationId.unwrap(vId)) >> 8);
+}
+
+/// @notice Generates the scoped-execution-hook ID for an executor scope.
+/// @dev Layout: `[1-byte scope | 20-byte executor | 11 zero bytes]`.
+function executorScopedExecutionHookId(address executor) pure returns (bytes32) {
+    return bytes32(SCOPED_EXECUTION_HOOK_EXECUTOR_SCOPE) | (bytes32(bytes20(executor)) >> 8);
+}
+
+/// @notice Generates the scoped-execution-hook ID for a selector scope.
+/// @dev Layout: `[1-byte scope | 4-byte selector | 27 zero bytes]`.
+function selectorScopedExecutionHookId(bytes4 selector) pure returns (bytes32) {
+    return bytes32(SCOPED_EXECUTION_HOOK_SELECTOR_SCOPE) | (bytes32(selector) >> 8);
+}
+
+/// @notice Extracts the one-byte scope from a scoped-execution-hook ID.
+function getScopedExecutionHookScope(bytes32 id) pure returns (bytes1) {
+    return bytes1(id);
+}
+
+/// @notice Extracts a ValidationId from a validation-scoped execution-hook ID.
+/// @dev Callers should verify getScopedExecutionHookScope(id) first.
+function getScopedExecutionHookValidationId(bytes32 id) pure returns (ValidationId) {
+    return ValidationId.wrap(bytes21(id << 8));
+}
+
+/// @notice Extracts an executor address from an executor-scoped execution-hook ID.
+/// @dev Callers should verify getScopedExecutionHookScope(id) first.
+function getScopedExecutionHookExecutor(bytes32 id) pure returns (address) {
+    return address(bytes20(id << 8));
+}
+
+/// @notice Extracts a selector from a selector-scoped execution-hook ID.
+/// @dev Callers should verify getScopedExecutionHookScope(id) first.
+function getScopedExecutionHookSelector(bytes32 id) pure returns (bytes4) {
+    return bytes4(id << 8);
+}
+
 /// @notice Parses a 256-bit ERC-4337 nonce into validation mode, type, and identifier.
 /// @dev Nonce layout (32 bytes, big-endian):
 ///      ```
@@ -63,4 +109,3 @@ function parseNonce(uint256 nonce) pure returns (ValidationMode vMode, Validatio
         vId = ValidationId.wrap(bytes21(bytes32(nonce << 8)));
     }
 }
-
