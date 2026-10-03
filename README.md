@@ -388,8 +388,6 @@ Key settings in `foundry.toml`:
 
 ## Security
 
-See [CHANGELOG_AUDIT.md](./CHANGELOG_AUDIT.md) for the full audit changelog covering all changes since the last audit.
-
 ### Known limitations
 
 - **Revocation finality within a bundle** (TOB-KERNEL-3, acknowledged): Kernel checks that the
